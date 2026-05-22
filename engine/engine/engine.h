@@ -37,6 +37,7 @@ public:
     uint64_t frame_count() const { return frame_count_; }
 
     ScriptVM& GetScriptVM();
+    evpp::EventLoop* GetEventLoop() const { return loop_.get(); }
 
 private:
     void FrameLoop();

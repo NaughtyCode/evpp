@@ -14,10 +14,12 @@ void ExportAll(ScriptVM& vm);
 // Per-module entry points (also callable individually)
 void ExportLog(ScriptVM& vm);
 void ExportTimer(ScriptVM& vm);
+void ExportNet(ScriptVM& vm);
 
-// Shutdown: cancel all Lua-owned timers, release Lua references.
+// Shutdown: cancel all Lua-owned objects, release Lua references.
 // Call before destroying the ScriptVM.
 void ShutdownTimerBindings();
+void ShutdownNetBindings();
 
 } // namespace script
 } // namespace engine

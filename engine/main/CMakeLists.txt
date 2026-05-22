@@ -67,6 +67,8 @@ set(SCRIPT_SOURCES
     ../script/log_bind.h
     ../script/timer_bind.cc
     ../script/timer_bind.h
+    ../script/net_bind.cc
+    ../script/net_bind.h
 )
 source_group("engine\\script" FILES ${SCRIPT_SOURCES})
 

@@ -4,6 +4,7 @@
 #include "engine/core/log/log_macros.h"
 #include "engine/script/log_bind.h"
 #include "engine/script/timer_bind.h"
+#include "engine/script/net_bind.h"
 #include "engine/vm/vm.h"
 
 namespace engine {
@@ -15,6 +16,7 @@ void ExportAll(ScriptVM& vm) {
 
     ExportLog(vm);
     ExportTimer(vm);
+    ExportNet(vm);
 
     ENGINE_LOG_INFO(logger, "ScriptBind: all APIs exported");
 }
