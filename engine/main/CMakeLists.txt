@@ -16,6 +16,7 @@ endif (UNIX)
 add_executable(engine_main
     main.cc
     ../core/log/log.cc
+    ../engine/engine.cc
 )
 
 target_link_libraries(engine_main ${LIBRARIES})

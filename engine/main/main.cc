@@ -1,7 +1,5 @@
-#include <csignal>
-#include <memory>
-#include <string>
 #include <iostream>
+#include <string>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -13,11 +11,9 @@
 #include <winsock2.h>
 #endif
 
-#include <evpp/event_loop.h>
-#include <evpp/event_watcher.h>
-
 #include "engine/core/log/log.h"
 #include "engine/core/log/log_macros.h"
+#include "engine/engine/engine.h"
 
 namespace {
 
@@ -51,39 +47,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    engine::InitLogger(log_dir);
-
-    auto* logger = engine::GetLogger();
-    ENGINE_LOG_INFO(logger, "engine starting up, log_dir=[{}]", log_dir);
-
-    evpp::EventLoop loop;
-
-    auto sigint_watcher = std::make_unique<evpp::SignalEventWatcher>(
-        SIGINT, &loop, [&loop]() {
-            ENGINE_LOG_INFO(engine::GetLogger(), "SIGINT received, stopping...");
-            loop.Stop();
-        });
-    sigint_watcher->Init();
-    sigint_watcher->AsyncWait();
-
-#ifndef _WIN32
-    auto sigterm_watcher = std::make_unique<evpp::SignalEventWatcher>(
-        SIGTERM, &loop, [&loop]() {
-            ENGINE_LOG_INFO(engine::GetLogger(), "SIGTERM received, stopping...");
-            loop.Stop();
-        });
-    sigterm_watcher->Init();
-    sigterm_watcher->AsyncWait();
-#endif
-
-    ENGINE_LOG_INFO(logger, "entering main loop");
-    loop.Run();
-    ENGINE_LOG_INFO(logger, "main loop exited");
-
-    sigint_watcher.reset();
-#ifndef _WIN32
-    sigterm_watcher.reset();
-#endif
+    auto& engine = engine::Engine::Instance();
+    engine.Init(log_dir);
+    engine.Run();
 
     engine::ShutdownLogger();
     return 0;
