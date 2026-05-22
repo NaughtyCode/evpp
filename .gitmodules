@@ -7,3 +7,6 @@
 [submodule "3rdparty/gflags"]
 	path = 3rdparty/gflags
 	url = https://github.com/gflags/gflags.git
+[submodule "3rdparty/quill"]
+	path = 3rdparty/quill
+	url = https://github.com/odygrd/quill.git
