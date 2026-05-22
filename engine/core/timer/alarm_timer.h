@@ -159,7 +159,7 @@ public:
         }
 
         alarm->expires_ = start_time;
-        alarm->state_ = kStateEnqueued_l;
+        alarm->state_ = Alarm::kStateEnqueued;
         queue_.add(alarm);
         stats_.armed_count++;
     }
@@ -176,8 +176,9 @@ public:
         if (alarm->is_armed()) {
             remove_locked(alarm);
         }
-        alarm->state_ = kStateEnqueued_l;
+        alarm->state_ = Alarm::kStateEnqueued;
         queue_.add(alarm);
+        stats_.armed_count++;
     }
 
     //-----------------------------------------------------------------
@@ -189,7 +190,7 @@ public:
         std::lock_guard<std::recursive_mutex> lock(mutex_);
         if (!alarm->is_armed()) return false;
         remove_locked(alarm);
-        alarm->state_ = 0;  // kStateInactive
+        alarm->state_ = Alarm::kStateInactive;
         stats_.cancel_count++;
         return true;
     }
@@ -199,7 +200,7 @@ public:
         std::lock_guard<std::recursive_mutex> lock(mutex_);
         if (!alarm->is_armed()) return false;
         remove_locked(alarm);
-        alarm->state_ = 0;  // kStateInactive
+        alarm->state_ = Alarm::kStateInactive;
         stats_.cancel_count++;
         return true;
     }
@@ -336,8 +337,6 @@ private:
     TimePoint suspend_time_{0};
     Duration total_sleep_dur_{0};
     mutable std::recursive_mutex mutex_;
-
-    static constexpr int kStateEnqueued_l = 1;
 };
 
 } // namespace engine

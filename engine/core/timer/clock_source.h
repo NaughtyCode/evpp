@@ -288,7 +288,7 @@ public:
 
     // Get current time from the active clock source
     TimePoint now() const {
-        // Lock-free read in common case
+        std::lock_guard<std::mutex> lock(mutex_);
         return current_source_->read();
     }
 
@@ -332,19 +332,20 @@ public:
     void record_suspend(TimePoint t) { suspend_time_ = t; }
 
     Duration total_sleep_duration() const {
-        return total_sleep_duration_.load();
+        std::lock_guard<std::mutex> lock(mutex_);
+        return total_sleep_duration_;
     }
 
     void add_sleep_duration(Duration d) {
-        total_sleep_duration_.store(
-            total_sleep_duration_.load() + d);
+        std::lock_guard<std::mutex> lock(mutex_);
+        total_sleep_duration_ += d;
     }
 
     // Inject a sleep offset (for testing or time adjustment)
     void inject_sleep_time(Duration delta) {
-        sleep_offset_ = sleep_offset_ + delta;
-        total_sleep_duration_.store(
-            total_sleep_duration_.load() + delta);
+        std::lock_guard<std::mutex> lock(mutex_);
+        sleep_offset_ += delta;
+        total_sleep_duration_ += delta;
     }
 
     // Resolution of current clock
@@ -379,7 +380,7 @@ private:
     std::atomic<bool> suspended_{false};
     TimePoint suspend_time_{0};
     Duration sleep_offset_{0};
-    std::atomic<Duration> total_sleep_duration_{Duration::zero()};
+    Duration total_sleep_duration_{0};
 };
 
 } // namespace engine

@@ -129,8 +129,9 @@ private:
 
     lua_State* L_ = nullptr;
 
-    // Keep callback objects alive (stored as lightuserdata keys in registry).
-    std::vector<LuaCallback> callbacks_;
+    // Keep callback objects alive at stable addresses (lightuserdata
+    // pointers captured by Lua closures must not dangle across reallocations).
+    std::vector<std::unique_ptr<LuaCallback>> callbacks_;
 };
 
 //=============================================================================

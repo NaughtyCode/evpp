@@ -225,7 +225,9 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         int idx = jiffies_ % kLvlSize;
         auto expired = collect_expired_locked(idx);
-        stats_.record_expire(0);
+        for (size_t i = 0; i < expired.size(); ++i) {
+            stats_.record_expire(0);
+        }
         ++jiffies_;
         cascade_all_locked();
         return expired;

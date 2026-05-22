@@ -258,13 +258,12 @@ void TimerManager::start_timer_relative(TimerId id, Duration relative_time, Time
     auto* entry = get_entry(id);
     if (!entry || entry->kind != TimerEntry::Kind::kHrTimer) return;
     TimePoint expiry = time_add(now(), relative_time);
-    // Clear kRelative flag since we've already computed the absolute expiry.
-    // Preserve kRepeating from the timer's existing mode set during creation.
-    TimerMode new_mode = static_cast<TimerMode>(
-        static_cast<uint32_t>(mode) & ~static_cast<uint32_t>(TimerMode::kRelative));
-    if (mode_is_repeating(entry->hrtimer->mode())) {
-        new_mode = new_mode | TimerMode::kRepeating;
-    }
+    // Start from the timer's stored mode (preserves kSoft/kHard/kPinned/kDeferrable/kRepeating).
+    // Only override the absolute/relative bit: we've already computed absolute expiry.
+    TimerMode new_mode = entry->hrtimer->mode();
+    new_mode = static_cast<TimerMode>(
+        static_cast<uint32_t>(new_mode) & ~static_cast<uint32_t>(TimerMode::kRelative));
+    new_mode = new_mode | TimerMode::kAbsolute;
     hrtimer_mgr_->start(entry->hrtimer, expiry, new_mode);
 }
 
@@ -324,7 +323,7 @@ Duration TimerManager::timer_remaining(TimerId id) const {
             return Duration(hrtimer_mgr_->get_remaining(entry->hrtimer, now()).count());
         case TimerEntry::Kind::kWheelTimer:
             if (!wheel_->timer_pending(entry->wheel_timer)) return Duration::max();
-            return Duration((wheel_->next_expiry_ms() - wheel_->current_jiffy()) * kNsPerMs);
+            return time_sub(entry->wheel_timer->expires(), now());
         case TimerEntry::Kind::kAlarm:
             return alarm_mgr_->expires_remaining(entry->alarm);
     }

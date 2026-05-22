@@ -234,8 +234,9 @@ const char* ScriptVM::LuaVersion() {
 void ScriptVM::RegisterCallback(std::string_view name, LuaCallback callback) {
     if (!L_) return;
 
-    callbacks_.push_back(std::move(callback));
-    auto* ptr = &callbacks_.back();
+    auto cb = std::make_unique<LuaCallback>(std::move(callback));
+    auto* ptr = cb.get();
+    callbacks_.push_back(std::move(cb));
 
     lua_pushlightuserdata(L_, ptr);
     lua_pushcclosure(L_, &ScriptVM::CallbackTrampoline, 1);

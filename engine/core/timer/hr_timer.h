@@ -393,14 +393,15 @@ public:
             // Handle restart request
             if (result == TimerResult::kRestart) {
                 stats_.record_restart();
-                // Only re-arm if the callback didn't already re-arm it
-                // (e.g. via an explicit start() during the callback).
                 if (timer->is_repeating() && !timer->is_queued()) {
+                    // Auto-re-arm: callback didn't already start() this timer
                     timer->state_ = TimerState::kArmed;
                     queue_.add(timer);
-                } else if (!timer->is_repeating()) {
+                } else if (!timer->is_repeating() && !timer->is_queued()) {
+                    // Non-repeating timer: callback didn't re-arm, so mark inactive
                     timer->state_ = TimerState::kInactive;
                 }
+                // else: timer was re-armed by callback — leave state as-is
             } else if (result == TimerResult::kNoRestart) {
                 timer->state_ = TimerState::kInactive;
             }
