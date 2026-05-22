@@ -10,12 +10,14 @@
 
 #include <quill/Logger.h>
 
+#include "engine/engine_export.h"
+
 namespace engine {
 
-quill::Logger* GetLogger(const std::string& name = "root");
+ENGINE_API quill::Logger* GetLogger(const std::string& name = "root");
 
-void InitLogger(const std::string& log_dir);
+ENGINE_API void InitLogger(const std::string& log_dir);
 
-void ShutdownLogger();
+ENGINE_API void ShutdownLogger();
 
 } // namespace engine

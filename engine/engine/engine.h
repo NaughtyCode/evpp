@@ -5,6 +5,8 @@
 #include <memory>
 #include <string>
 
+#include "engine/engine_export.h"
+
 namespace evpp {
 class EventLoop;
 }
@@ -13,7 +15,7 @@ namespace engine {
 
 class ScriptVM;
 
-class Engine {
+class ENGINE_API Engine {
 public:
     static Engine& Instance();
 

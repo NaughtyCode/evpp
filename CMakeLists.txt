@@ -89,7 +89,15 @@ message (STATUS "THRIFT_LIBRARY " ${THRIFT_LIBRARY})
 add_subdirectory (evpp)
 add_subdirectory (apps)
 add_subdirectory (labs)
-add_subdirectory (engine/main)
+add_subdirectory (engine)
+
+# ── Main entry point ──────────────────────────────────────────────
+add_executable(main main.cc)
+set_target_properties(main PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+target_link_libraries(main engine)
+if (WIN32)
+    target_link_libraries(main ws2_32)
+endif()
 
 if (NOT EVPP_VCPKG_BUILD)
     add_subdirectory (test)

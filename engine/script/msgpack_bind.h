@@ -1,5 +1,7 @@
 #pragma once
 
+#include "engine/engine_export.h"
+
 namespace engine {
 
 class ScriptVM;
@@ -15,7 +17,7 @@ namespace script {
 //
 // The "cmsgpack_safe" module has the same API but wraps every call in
 // pcall: on error it returns (nil, errmsg) instead of raising.
-void ExportMsgPack(ScriptVM& vm);
+ENGINE_API void ExportMsgPack(ScriptVM& vm);
 
 } // namespace script
 } // namespace engine

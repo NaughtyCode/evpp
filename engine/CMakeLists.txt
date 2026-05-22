@@ -1,7 +1,16 @@
+cmake_minimum_required(VERSION 3.10)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# ENGINE_BUILD triggers dllexport in engine_export.h.
+# Consumers who link against this library do NOT define this
+# and will get dllimport on Windows / no-op elsewhere.
+add_definitions(-DENGINE_BUILD)
+
 include_directories(${PROJECT_SOURCE_DIR}/3rdparty/quill/include)
+include_directories(${PROJECT_SOURCE_DIR}/3rdparty/lua)
+include_directories(${PROJECT_SOURCE_DIR})  # for "engine/xxx.h" includes
 
 if (MSVC)
     add_definitions(-D_WIN32_WINNT=0x0A00)
@@ -22,79 +31,86 @@ source_group("3rdparty\\lua" FILES ${LUA_SOURCES})
 
 # ── Log module ────────────────────────────────────────────────────
 set(LOG_SOURCES
-    ../core/log/log.cc
-    ../core/log/log.h
-    ../core/log/log_levels.h
-    ../core/log/log_config.h
-    ../core/log/log_context.h
-    ../core/log/log_macros.h
+    core/log/log.cc
+    core/log/log.h
+    core/log/log_levels.h
+    core/log/log_config.h
+    core/log/log_context.h
+    core/log/log_macros.h
 )
 source_group("engine\\core\\log" FILES ${LOG_SOURCES})
 
 # ── Timer module ──────────────────────────────────────────────────
 set(TIMER_SOURCES
-    ../core/timer/timer_manager.cc
-    ../core/timer/timer_manager.h
-    ../core/timer/timer.h
-    ../core/timer/timer_core.h
-    ../core/timer/timer_queue.h
-    ../core/timer/clock_source.h
-    ../core/timer/hr_timer.h
-    ../core/timer/timer_wheel.h
-    ../core/timer/alarm_timer.h
+    core/timer/timer_manager.cc
+    core/timer/timer_manager.h
+    core/timer/timer.h
+    core/timer/timer_core.h
+    core/timer/timer_queue.h
+    core/timer/clock_source.h
+    core/timer/hr_timer.h
+    core/timer/timer_wheel.h
+    core/timer/alarm_timer.h
 )
 source_group("engine\\core\\timer" FILES ${TIMER_SOURCES})
 
 # ── Engine module ─────────────────────────────────────────────────
 set(ENGINE_SOURCES
-    ../engine/engine.cc
-    ../engine/engine.h
+    engine/engine.cc
+    engine/engine.h
 )
 source_group("engine\\engine" FILES ${ENGINE_SOURCES})
 
 # ── VM module ────────────────────────────────────────────────────
 set(VM_SOURCES
-    ../vm/vm.cc
-    ../vm/vm.h
+    vm/vm.cc
+    vm/vm.h
 )
 source_group("engine\\vm" FILES ${VM_SOURCES})
 
 # ── Script bindings ──────────────────────────────────────────────
 set(SCRIPT_SOURCES
-    ../script/script_bind.cc
-    ../script/script_bind.h
-    ../script/log_bind.cc
-    ../script/log_bind.h
-    ../script/timer_bind.cc
-    ../script/timer_bind.h
-    ../script/net_bind.cc
-    ../script/net_bind.h
-    ../script/msgpack_bind.cc
-    ../script/msgpack_bind.h
+    script/script_bind.cc
+    script/script_bind.h
+    script/log_bind.cc
+    script/log_bind.h
+    script/timer_bind.cc
+    script/timer_bind.h
+    script/net_bind.cc
+    script/net_bind.h
+    script/msgpack_bind.cc
+    script/msgpack_bind.h
 )
 source_group("engine\\script" FILES ${SCRIPT_SOURCES})
 
-# ── Main entry ────────────────────────────────────────────────────
-source_group("" FILES main.cc)
+# ── Export header ─────────────────────────────────────────────────
+set(EXPORT_HEADER
+    engine_export.h
+)
+source_group("engine" FILES ${EXPORT_HEADER})
 
-include_directories(${PROJECT_SOURCE_DIR}/3rdparty/lua)
-
-add_executable(engine_main
-    main.cc
+add_library(engine SHARED
     ${LUA_SOURCES}
     ${LOG_SOURCES}
     ${TIMER_SOURCES}
     ${ENGINE_SOURCES}
     ${VM_SOURCES}
     ${SCRIPT_SOURCES}
+    ${EXPORT_HEADER}
 )
 
-target_link_libraries(engine_main ${LIBRARIES})
+target_include_directories(engine PUBLIC
+    ${PROJECT_SOURCE_DIR}
+    ${PROJECT_SOURCE_DIR}/3rdparty/quill/include
+    ${PROJECT_SOURCE_DIR}/3rdparty/lua
+)
 
-# Copy resources directory to output directory after build
-add_custom_command(TARGET engine_main POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${PROJECT_SOURCE_DIR}/resources"
-    "$<TARGET_FILE_DIR:engine_main>/resources"
-    COMMENT "Copying resources/ to output directory..."
+target_link_libraries(engine ${LIBRARIES})
+
+# Copy engine DLL to bin directory so main.exe can find it at runtime
+add_custom_command(TARGET engine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "$<TARGET_FILE:engine>"
+    "${PROJECT_SOURCE_DIR}/artifacts/bin/$<CONFIG>/$<TARGET_FILE_NAME:engine>"
+    COMMENT "Copying engine.dll to bin/"
 )

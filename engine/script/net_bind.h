@@ -1,5 +1,7 @@
 #pragma once
 
+#include "engine/engine_export.h"
+
 namespace engine {
 
 class ScriptVM;
@@ -32,10 +34,10 @@ namespace script {
 //   net.http.get(url, on_response)    -- on_response(code, body)
 //   net.http.post(url, body, on_response)
 //
-void ExportNet(ScriptVM& vm);
+ENGINE_API void ExportNet(ScriptVM& vm);
 
 // Cancel all network objects and release Lua function references.
-void ShutdownNetBindings();
+ENGINE_API void ShutdownNetBindings();
 
 } // namespace script
 } // namespace engine

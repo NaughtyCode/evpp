@@ -6,6 +6,8 @@
 #include <string_view>
 #include <vector>
 
+#include "engine/engine_export.h"
+
 extern "C" {
 #include "3rdparty/lua/lua.h"
 #include "3rdparty/lua/lauxlib.h"
@@ -22,7 +24,7 @@ namespace engine {
 // debug hooks, etc.
 //=============================================================================
 
-class ScriptVM {
+class ENGINE_API ScriptVM {
 public:
     //=================================================================
     // Construction / destruction
