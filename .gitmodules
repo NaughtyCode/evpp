@@ -13,3 +13,6 @@
 [submodule "3rdparty/glaze"]
 	path = 3rdparty/glaze
 	url = https://github.com/stephenberry/glaze.git
+[submodule "3rdparty/mysql"]
+	path = 3rdparty/mysql
+	url = https://github.com/boostorg/mysql.git
