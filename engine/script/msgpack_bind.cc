@@ -1,6 +1,5 @@
 #include "engine/script/msgpack_bind.h"
 
-#include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -99,10 +98,15 @@ void PushUnsigned(lua_State* L, uint64_t n) {
 
 // ============================================================================
 // Test whether a lua_Number is exactly representable as int64.
+// Guarded to avoid UB from casting inf / NaN / out-of-range values.
+// -2^63 and 2^63 are exactly representable as double (powers of 2), so the
+// bounds check is exact. Values in [-2^63, 2^63) are always safe to cast.
 // ============================================================================
 
 inline bool IsInt64Equivalent(lua_Number x) noexcept {
-    return !std::isinf(x) && static_cast<int64_t>(x) == x;
+    if (!std::isfinite(x)) return false;
+    if (x < -9223372036854775808.0 || x >= 9223372036854775808.0) return false;
+    return static_cast<int64_t>(x) == x;
 }
 
 // ============================================================================
@@ -663,6 +667,8 @@ int l_msgpack_pack(lua_State* L) {
     if (nargs == 0) {
         return luaL_argerror(L, 0, "MessagePack pack needs input.");
     }
+
+    luaL_checkstack(L, nargs, "Too many arguments for MessagePack pack.");
 
     EncodeBuf buf;
     for (int i = 1; i <= nargs; ++i) {
