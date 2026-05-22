@@ -98,6 +98,9 @@ std::atomic<int64_t> g_next_client_id{1};
 // ── l_net_client_connect(host_port, on_connect, on_message, on_close) → id ──
 int l_net_client_connect(lua_State* L) {
     const char* addr = luaL_checkstring(L, 1);
+    if (!*addr) {
+        return luaL_error(L, "address must not be empty");
+    }
 
     auto* loop = Engine::Instance().GetEventLoop();
     if (!loop) {
@@ -258,9 +261,17 @@ struct ServerCtx {
 std::unordered_map<int64_t, std::shared_ptr<ServerCtx>> g_servers;
 std::atomic<int64_t> g_next_server_id{1};
 
+// Guards HTTP callbacks from firing after engine shutdown.
+// Set to false in ShutdownNetBindings; HTTP callbacks check this before
+// touching the Lua state (which may have been destroyed).
+std::atomic<bool> g_net_alive{true};
+
 // ── l_net_server_listen(host_port, on_connect, on_message, on_close) → id ──
 int l_net_server_listen(lua_State* L) {
     const char* addr = luaL_checkstring(L, 1);
+    if (!*addr) {
+        return luaL_error(L, "address must not be empty");
+    }
 
     auto* loop = Engine::Instance().GetEventLoop();
     if (!loop) {
@@ -363,6 +374,7 @@ int l_net_server_send(lua_State* L) {
 
     // Search all servers for this conn_id
     for (auto& [sid, ctx] : g_servers) {
+        (void)sid;
         auto ci = ctx->conns.find(conn_id);
         if (ci != ctx->conns.end()) {
             if (ci->second->IsConnected()) {
@@ -382,6 +394,7 @@ int l_net_server_close_conn(lua_State* L) {
     auto conn_id = static_cast<uint64_t>(raw_conn_id);
 
     for (auto& [sid, ctx] : g_servers) {
+        (void)sid;
         auto ci = ctx->conns.find(conn_id);
         if (ci != ctx->conns.end()) {
             auto* logger = GetLogger();
@@ -453,6 +466,7 @@ int l_net_http_get(lua_State* L) {
         loop, url, evpp::Duration(10.0));  // 10s timeout
 
     req->Execute([L, ref](const std::shared_ptr<evpp::httpc::Response>& resp) {
+        if (!g_net_alive.load()) return;
         if (ref == LUA_NOREF) return;
         if (resp) {
             std::string body(resp->body().data(), resp->body().size());
@@ -485,6 +499,7 @@ int l_net_http_post(lua_State* L) {
         loop, url, std::string(body, body_len), evpp::Duration(10.0));
 
     req->Execute([L, ref](const std::shared_ptr<evpp::httpc::Response>& resp) {
+        if (!g_net_alive.load()) return;
         if (ref == LUA_NOREF) return;
         if (resp) {
             std::string body_str(resp->body().data(), resp->body().size());
@@ -541,12 +556,26 @@ void ExportNet(ScriptVM& vm) {
 void ShutdownNetBindings() {
     auto* logger = GetLogger();
 
-    // Shutdown all clients
+    // Prevent any in-flight HTTP callbacks from touching a freed Lua state.
+    g_net_alive.store(false);
+
+    // Shutdown all clients — disconnect first, then release Lua refs
     for (auto& [cid, ctx] : g_clients) {
+        (void)cid;
+        ctx->client->Disconnect();
         if (ctx->L) {
-            if (ctx->on_connect_ref != LUA_NOREF) luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_connect_ref);
-            if (ctx->on_message_ref != LUA_NOREF) luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_message_ref);
-            if (ctx->on_close_ref != LUA_NOREF)   luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_close_ref);
+            if (ctx->on_connect_ref != LUA_NOREF) {
+                luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_connect_ref);
+                ctx->on_connect_ref = LUA_NOREF;
+            }
+            if (ctx->on_message_ref != LUA_NOREF) {
+                luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_message_ref);
+                ctx->on_message_ref = LUA_NOREF;
+            }
+            if (ctx->on_close_ref != LUA_NOREF) {
+                luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_close_ref);
+                ctx->on_close_ref = LUA_NOREF;
+            }
         }
     }
     size_t client_count = g_clients.size();
@@ -554,11 +583,21 @@ void ShutdownNetBindings() {
 
     // Shutdown all servers
     for (auto& [sid, ctx] : g_servers) {
+        (void)sid;
         ctx->server->Stop();
         if (ctx->L) {
-            if (ctx->on_connect_ref != LUA_NOREF) luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_connect_ref);
-            if (ctx->on_message_ref != LUA_NOREF) luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_message_ref);
-            if (ctx->on_close_ref != LUA_NOREF)   luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_close_ref);
+            if (ctx->on_connect_ref != LUA_NOREF) {
+                luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_connect_ref);
+                ctx->on_connect_ref = LUA_NOREF;
+            }
+            if (ctx->on_message_ref != LUA_NOREF) {
+                luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_message_ref);
+                ctx->on_message_ref = LUA_NOREF;
+            }
+            if (ctx->on_close_ref != LUA_NOREF) {
+                luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_close_ref);
+                ctx->on_close_ref = LUA_NOREF;
+            }
         }
         ctx->conns.clear();
     }
