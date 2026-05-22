@@ -144,7 +144,7 @@ int l_timer_cancel(lua_State* L) {
 
     luaL_unref(L, LUA_REGISTRYINDEX, it->second->ref);
     it->second->ref = LUA_NOREF;
-    TimerManager::instance().cancel_timer(id);
+    TimerManager::instance().destroy_timer(id);
     g_timer_ctxs.erase(it);
 
     auto* logger = GetLogger();
@@ -185,7 +185,7 @@ void ShutdownTimerBindings() {
 
     size_t count = g_timer_ctxs.size();
     for (auto& [id, ctx] : g_timer_ctxs) {
-        TimerManager::instance().cancel_timer(id);
+        TimerManager::instance().destroy_timer(id);
         if (ctx->ref != LUA_NOREF && ctx->L) {
             luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->ref);
         }

@@ -547,10 +547,21 @@ int l_net_server_stop(lua_State* L) {
     auto ctx = it->second;
     ctx->server->Stop();
 
-    // Release Lua callbacks
+    // Release server-wide Lua callbacks
     if (ctx->on_connect_ref != LUA_NOREF) luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_connect_ref);
     if (ctx->on_message_ref != LUA_NOREF) luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
     if (ctx->on_close_ref != LUA_NOREF)   luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_close_ref);
+    // Release per-connection callback refs
+    for (auto& [conn_id, ref] : ctx->conn_on_message_refs) {
+        (void)conn_id;
+        if (ref != LUA_NOREF) luaL_unref(L, LUA_REGISTRYINDEX, ref);
+    }
+    ctx->conn_on_message_refs.clear();
+    for (auto& [conn_id, ref] : ctx->conn_on_close_refs) {
+        (void)conn_id;
+        if (ref != LUA_NOREF) luaL_unref(L, LUA_REGISTRYINDEX, ref);
+    }
+    ctx->conn_on_close_refs.clear();
     ctx->conns.clear();
     g_servers.erase(it);
 

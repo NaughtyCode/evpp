@@ -404,9 +404,9 @@ public:
                 } else if (!was_repeating && !timer->is_queued()) {
                     timer->state_ = TimerState::kInactive;
                 }
-            } else if (result == TimerResult::kNoRestart) {
-                timer->state_ = TimerState::kInactive;
             }
+            // For kNoRestart: don't touch timer — the callback may have
+            // freed it. Cleanup is the callback owner's responsibility.
         }
 
         return processed;
