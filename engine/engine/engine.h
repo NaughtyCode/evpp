@@ -46,6 +46,7 @@ private:
     std::chrono::milliseconds frame_interval_{33};
     bool running_{false};
     uint64_t frame_count_{0};
+    uint64_t last_slow_frame_log_{0};
 
     std::unique_ptr<ScriptVM> script_vm_;
 };

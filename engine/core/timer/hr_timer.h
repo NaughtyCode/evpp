@@ -375,6 +375,11 @@ public:
             queue_.remove(timer);
             timer->state_ = TimerState::kFiring;
 
+            // Capture state before callback — the callback may destroy the
+            // timer, so we must not access timer-> after it returns.
+            TimerMode captured_mode = timer->mode_;
+            bool was_repeating = mode_is_repeating(captured_mode);
+
             // Unlock during callback to avoid deadlocks
             TimerResult result;
             {
@@ -390,18 +395,15 @@ public:
 
             processed++;
 
-            // Handle restart request
+            // Handle restart request (uses captured state in case timer was freed)
             if (result == TimerResult::kRestart) {
                 stats_.record_restart();
-                if (timer->is_repeating() && !timer->is_queued()) {
-                    // Auto-re-arm: callback didn't already start() this timer
+                if (was_repeating && !timer->is_queued()) {
                     timer->state_ = TimerState::kArmed;
                     queue_.add(timer);
-                } else if (!timer->is_repeating() && !timer->is_queued()) {
-                    // Non-repeating timer: callback didn't re-arm, so mark inactive
+                } else if (!was_repeating && !timer->is_queued()) {
                     timer->state_ = TimerState::kInactive;
                 }
-                // else: timer was re-armed by callback — leave state as-is
             } else if (result == TimerResult::kNoRestart) {
                 timer->state_ = TimerState::kInactive;
             }

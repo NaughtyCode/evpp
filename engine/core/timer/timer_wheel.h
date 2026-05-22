@@ -225,8 +225,10 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         int idx = jiffies_ % kLvlSize;
         auto expired = collect_expired_locked(idx);
+        TimePoint now = Duration(jiffies_.load() * kNsPerMs);
         for (size_t i = 0; i < expired.size(); ++i) {
-            stats_.record_expire(0);
+            int64_t lat = time_delta_ns(now, expired[i]->expires());
+            stats_.record_expire(lat);
         }
         ++jiffies_;
         cascade_all_locked();
@@ -239,8 +241,10 @@ public:
         for (int64_t i = 0; i < num_jiffies; ++i) {
             int idx = jiffies_ % kLvlSize;
             auto batch = collect_expired_locked(idx);
+            TimePoint now = Duration(jiffies_.load() * kNsPerMs);
             for (size_t j = 0; j < batch.size(); ++j) {
-                stats_.record_expire(0);
+                int64_t lat = time_delta_ns(now, batch[j]->expires());
+                stats_.record_expire(lat);
             }
             all_expired.insert(all_expired.end(), batch.begin(), batch.end());
             ++jiffies_;

@@ -133,14 +133,11 @@ void Engine::FrameLoop() {
     }
 
     if (elapsed > frame_interval_ * 2) {
-        // Rate-limit manually to avoid LOG_*_LIMIT macros which use block-scope
-        // thread_local that MSVC 14.50+ rejects.
-        static uint64_t last_slow_frame_warning = 0;
-        if (frame_count_ - last_slow_frame_warning > 30) {
+        if (frame_count_ - last_slow_frame_log_ > 30) {
             ENGINE_LOG_DEBUG(GetLogger(),
                              "frame [{}] took [{}ms] (slow)",
                              frame_count_, elapsed.count());
-            last_slow_frame_warning = frame_count_;
+            last_slow_frame_log_ = frame_count_;
         }
     }
 }

@@ -161,7 +161,7 @@ public:
         alarm->expires_ = start_time;
         alarm->state_ = Alarm::kStateEnqueued;
         queue_.add(alarm);
-        stats_.armed_count++;
+        stats_.record_arm();
     }
 
     void start_relative(Alarm* alarm, Duration relative_time) {
@@ -178,7 +178,7 @@ public:
         }
         alarm->state_ = Alarm::kStateEnqueued;
         queue_.add(alarm);
-        stats_.armed_count++;
+        stats_.record_arm();
     }
 
     //-----------------------------------------------------------------
@@ -188,10 +188,11 @@ public:
     bool try_to_cancel(Alarm* alarm) {
         assert(alarm);
         std::lock_guard<std::recursive_mutex> lock(mutex_);
+        if (alarm->state_ == Alarm::kStateFiring) return false;
         if (!alarm->is_armed()) return false;
         remove_locked(alarm);
         alarm->state_ = Alarm::kStateInactive;
-        stats_.cancel_count++;
+        stats_.record_cancel();
         return true;
     }
 
@@ -201,7 +202,7 @@ public:
         if (!alarm->is_armed()) return false;
         remove_locked(alarm);
         alarm->state_ = Alarm::kStateInactive;
-        stats_.cancel_count++;
+        stats_.record_cancel();
         return true;
     }
 
@@ -278,8 +279,7 @@ public:
             int64_t latency = time_delta_ns(now, alarm->expires());
             alarm->fire(now);
 
-            stats_.fired_count++;
-            if (latency > stats_.max_latency_ns) stats_.max_latency_ns = latency;
+            stats_.record_fire(latency);
             fired.push_back({alarm, now, latency});
         }
         return fired;
@@ -313,6 +313,10 @@ public:
         uint64_t fired_count   = 0;
         uint64_t cancel_count  = 0;
         int64_t  max_latency_ns = 0;
+
+        void record_arm()               { ++armed_count; }
+        void record_fire(int64_t lat)   { ++fired_count; if (lat > max_latency_ns) max_latency_ns = lat; }
+        void record_cancel()            { ++cancel_count; }
     };
 
     const AlarmStats& stats() const { return stats_; }

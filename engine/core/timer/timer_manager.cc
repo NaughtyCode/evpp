@@ -91,9 +91,24 @@ TimerManager::UpdateResult TimerManager::update(TimePoint current_time) {
     result = update_wheel(result);
     result = update_alarms(result, current_time);
 
-    // Calculate next event time
+    // Calculate next event time (minimum across all subsystems)
     int64_t next_hr = hrtimer_mgr_->next_event_ns(current_time);
     if (next_hr < 0) next_hr = 0;
+
+    int64_t next_wheel = wheel_->next_expiry_ms();
+    if (next_wheel < INT64_MAX) {
+        int64_t wheel_ns = (next_wheel - wheel_->current_jiffy()) * kNsPerMs;
+        if (wheel_ns < 0) wheel_ns = 0;
+        if (wheel_ns < next_hr) next_hr = wheel_ns;
+    }
+
+    TimePoint alarm_next = alarm_mgr_->next_expiry();
+    if (alarm_next != kTimeMax) {
+        int64_t alarm_ns = time_delta_ns(alarm_next, current_time);
+        if (alarm_ns < 0) alarm_ns = 0;
+        if (alarm_ns < next_hr) next_hr = alarm_ns;
+    }
+
     result.next_event_ns = next_hr;
 
     result.total_fired = result.hrtimers_fired +
@@ -364,7 +379,7 @@ void TimerManager::destroy_timer(TimerId id) {
     std::lock_guard<std::mutex> lock(entries_mutex_);
     auto it = entries_.find(id);
     if (it != entries_.end()) {
-        entries_.erase(it);  // TimerEntry destructor cleans up the inner timer node
+        entries_.erase(it);
     }
 }
 
