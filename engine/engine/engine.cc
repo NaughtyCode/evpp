@@ -52,6 +52,8 @@ void Engine::Init(const std::string& log_dir, const std::string& scripts_dir) {
     script_vm_ = std::make_unique<ScriptVM>();
     ENGINE_LOG_INFO(logger, "lua vm initialized, version=[{}]", ScriptVM::LuaVersion());
 
+    script::ExportAll(*script_vm_);
+
     if (!scripts_dir.empty()) {
         size_t failed = script_vm_->DoDirectory(scripts_dir);
         if (failed > 0) {
@@ -60,8 +62,6 @@ void Engine::Init(const std::string& log_dir, const std::string& scripts_dir) {
         }
         script_vm_->InitScript();
     }
-
-    script::ExportAll(*script_vm_);
 }
 
 void Engine::Run() {
