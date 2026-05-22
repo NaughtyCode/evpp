@@ -3,6 +3,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include_directories(${PROJECT_SOURCE_DIR}/3rdparty/quill/include)
 
+if (MSVC)
+    add_definitions(-D_WIN32_WINNT=0x0A00)
+endif()
+
 if (UNIX)
     set(LIBRARIES evpp_concurrentqueue event glog pthread)
 else (UNIX)
