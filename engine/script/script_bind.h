@@ -15,6 +15,7 @@ void ExportAll(ScriptVM& vm);
 void ExportLog(ScriptVM& vm);
 void ExportTimer(ScriptVM& vm);
 void ExportNet(ScriptVM& vm);
+void ExportMsgPack(ScriptVM& vm);
 
 // Shutdown: cancel all Lua-owned objects, release Lua references.
 // Call before destroying the ScriptVM.

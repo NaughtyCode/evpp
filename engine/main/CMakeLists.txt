@@ -69,6 +69,8 @@ set(SCRIPT_SOURCES
     ../script/timer_bind.h
     ../script/net_bind.cc
     ../script/net_bind.h
+    ../script/msgpack_bind.cc
+    ../script/msgpack_bind.h
 )
 source_group("engine\\script" FILES ${SCRIPT_SOURCES})
 
