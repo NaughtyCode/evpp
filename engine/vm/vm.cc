@@ -1,5 +1,6 @@
 #include "engine/vm/vm.h"
 
+#include <chrono>
 #include <filesystem>
 
 #include "engine/core/log/log.h"
@@ -8,16 +9,34 @@
 namespace engine {
 
 ScriptVM::ScriptVM() {
+    auto* logger = GetLogger();
+    ENGINE_LOG_INFO(logger, "ScriptVM: creating lua state...");
+
     L_ = luaL_newstate();
-    if (L_) {
-        luaL_openlibs(L_);
+    if (!L_) {
+        ENGINE_LOG_FATAL(logger, "ScriptVM: luaL_newstate() returned nullptr");
+        return;
     }
+
+    luaL_openlibs(L_);
+    ENGINE_LOG_INFO(logger, "ScriptVM: lua state created, version=[{}], "
+                    "base libs loaded (basic/coroutine/table/io/os/string/"
+                    "math/utf8/debug/package)", LUA_VERSION);
+
+    int mem_kb = lua_gc(L_, LUA_GCCOUNT, 0);
+    ENGINE_LOG_INFO(logger, "ScriptVM: initial memory usage [{} KB]", mem_kb);
 }
 
 ScriptVM::~ScriptVM() {
     if (L_) {
+        int mem_kb = lua_gc(L_, LUA_GCCOUNT, 0);
+        auto* logger = GetLogger();
+        ENGINE_LOG_INFO(logger, "ScriptVM: closing lua state, "
+                        "final memory usage [{} KB], registered callbacks [{}]",
+                        mem_kb, callbacks_.size());
         lua_close(L_);
         L_ = nullptr;
+        ENGINE_LOG_INFO(logger, "ScriptVM: lua state closed");
     }
 }
 
@@ -54,13 +73,21 @@ void ScriptVM::CallGlobalFunction(std::string_view name) {
     int rc = lua_pcall(L_, 0, 0, 0);
     if (rc != LUA_OK) {
         auto* logger = GetLogger();
-        ENGINE_LOG_ERROR(logger, "ScriptVM::{} error: [{}]",
-                         name, lua_tostring(L_, -1));
+        if (name == "UpdateScript") {
+            ENGINE_LOG_DEBUG_LIMIT(std::chrono::seconds(5), logger,
+                                   "ScriptVM: [{}] error: [{}]",
+                                   name, lua_tostring(L_, -1));
+        } else {
+            ENGINE_LOG_ERROR(logger, "ScriptVM: [{}] error: [{}]",
+                             name, lua_tostring(L_, -1));
+        }
         lua_pop(L_, 1);
     }
 }
 
 void ScriptVM::InitScript() {
+    auto* logger = GetLogger();
+    ENGINE_LOG_INFO(logger, "ScriptVM: === InitScript phase ===");
     CallGlobalFunction("InitScript");
 }
 
@@ -69,6 +96,8 @@ void ScriptVM::UpdateScript() {
 }
 
 void ScriptVM::DestroyScript() {
+    auto* logger = GetLogger();
+    ENGINE_LOG_INFO(logger, "ScriptVM: === DestroyScript phase ===");
     CallGlobalFunction("DestroyScript");
 }
 
@@ -105,6 +134,9 @@ bool ScriptVM::DoString(std::string_view script,
         return false;
     }
 
+    auto* logger = GetLogger();
+    ENGINE_LOG_INFO(logger, "ScriptVM::DoString [{}]: [{} bytes] OK",
+                    chunk_name, script.size());
     return true;
 }
 
@@ -114,10 +146,12 @@ bool ScriptVM::DoFile(const std::string& filename, std::string* error_out) {
         return false;
     }
 
+    auto* logger = GetLogger();
+    ENGINE_LOG_INFO(logger, "ScriptVM::DoFile loading [{}]...", filename);
+
     int rc = luaL_loadfilex(L_, filename.c_str(), nullptr);
     if (rc != LUA_OK) {
         const char* msg = lua_tostring(L_, -1);
-        auto* logger = GetLogger();
         ENGINE_LOG_ERROR(logger, "ScriptVM::DoFile load error [{}]: [{}]",
                          filename, msg);
         if (error_out) *error_out = msg;
@@ -128,7 +162,6 @@ bool ScriptVM::DoFile(const std::string& filename, std::string* error_out) {
     rc = lua_pcall(L_, 0, 0, 0);
     if (rc != LUA_OK) {
         const char* msg = lua_tostring(L_, -1);
-        auto* logger = GetLogger();
         ENGINE_LOG_ERROR(logger, "ScriptVM::DoFile run error [{}]: [{}]",
                          filename, msg);
         if (error_out) *error_out = msg;
@@ -136,6 +169,7 @@ bool ScriptVM::DoFile(const std::string& filename, std::string* error_out) {
         return false;
     }
 
+    ENGINE_LOG_INFO(logger, "ScriptVM::DoFile [{}] OK", filename);
     return true;
 }
 
@@ -143,7 +177,10 @@ size_t ScriptVM::DoDirectory(const std::string& dir_path) {
     if (!L_) return 0;
 
     size_t failures = 0;
+    size_t loaded = 0;
     auto* logger = GetLogger();
+
+    ENGINE_LOG_INFO(logger, "ScriptVM::DoDirectory scanning [{}]...", dir_path);
 
     std::error_code ec;
     auto status = std::filesystem::status(dir_path, ec);
@@ -164,11 +201,15 @@ size_t ScriptVM::DoDirectory(const std::string& dir_path) {
         auto filepath = entry.path().string();
         ENGINE_LOG_INFO(logger, "ScriptVM::DoDirectory loading [{}]", filepath);
 
-        if (!DoFile(filepath)) {
+        if (DoFile(filepath)) {
+            ++loaded;
+        } else {
             ++failures;
         }
     }
 
+    ENGINE_LOG_INFO(logger, "ScriptVM::DoDirectory [{}] done: "
+                    "[{}] loaded, [{}] failed", dir_path, loaded, failures);
     return failures;
 }
 
@@ -180,17 +221,25 @@ void ScriptVM::RegisterFunction(std::string_view name, lua_CFunction func) {
     if (!L_) return;
     lua_pushcfunction(L_, func);
     lua_setglobal(L_, name.data());
+    auto* logger = GetLogger();
+    ENGINE_LOG_DEBUG(logger, "ScriptVM: registered C function [{}]", name);
 }
 
 void ScriptVM::RegisterFunctions(const luaL_Reg* functions) {
     if (!L_ || !functions) return;
 
+    size_t count = 0;
     lua_pushglobaltable(L_);
     for (const luaL_Reg* r = functions; r->name != nullptr; ++r) {
         lua_pushcfunction(L_, r->func);
         lua_setfield(L_, -2, r->name);
+        ++count;
     }
     lua_pop(L_, 1);
+
+    auto* logger = GetLogger();
+    ENGINE_LOG_DEBUG(logger, "ScriptVM: registered [{}] C functions from array",
+                    count);
 }
 
 void ScriptVM::RegisterModule(std::string_view name, const luaL_Reg* functions) {
@@ -198,6 +247,9 @@ void ScriptVM::RegisterModule(std::string_view name, const luaL_Reg* functions) 
 
     luaL_newlib(L_, functions);
     lua_setglobal(L_, name.data());
+
+    auto* logger = GetLogger();
+    ENGINE_LOG_INFO(logger, "ScriptVM: registered module [{}]", name);
 }
 
 void ScriptVM::RegisterModuleOpen(std::string_view name, lua_CFunction openf,
@@ -206,6 +258,10 @@ void ScriptVM::RegisterModuleOpen(std::string_view name, lua_CFunction openf,
 
     luaL_requiref(L_, name.data(), openf, make_global ? 1 : 0);
     lua_pop(L_, 1);
+
+    auto* logger = GetLogger();
+    ENGINE_LOG_INFO(logger, "ScriptVM: registered module [{}] (openf, global=[{}])",
+                    name, make_global);
 }
 
 //=================================================================
@@ -241,6 +297,10 @@ void ScriptVM::RegisterCallback(std::string_view name, LuaCallback callback) {
     lua_pushlightuserdata(L_, ptr);
     lua_pushcclosure(L_, &ScriptVM::CallbackTrampoline, 1);
     lua_setglobal(L_, name.data());
+
+    auto* logger = GetLogger();
+    ENGINE_LOG_INFO(logger, "ScriptVM: registered callback [{}] (total callbacks: [{}])",
+                    name, callbacks_.size());
 }
 
 int ScriptVM::CallbackTrampoline(lua_State* L) {

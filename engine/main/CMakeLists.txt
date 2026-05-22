@@ -74,3 +74,11 @@ add_executable(engine_main
 )
 
 target_link_libraries(engine_main ${LIBRARIES})
+
+# Copy resources directory to output directory after build
+add_custom_command(TARGET engine_main POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${PROJECT_SOURCE_DIR}/resources"
+    "$<TARGET_FILE_DIR:engine_main>/resources"
+    COMMENT "Copying resources/ to output directory..."
+)

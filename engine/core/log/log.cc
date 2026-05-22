@@ -1,5 +1,10 @@
 #include "engine/core/log/log.h"
 
+#include <chrono>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
+
 #include <quill/Backend.h>
 #include <quill/Frontend.h>
 #include <quill/sinks/ConsoleSink.h>
@@ -8,6 +13,24 @@
 #include "engine/core/log/log_config.h"
 
 namespace engine {
+
+namespace {
+
+std::string now_timestamp() {
+    auto now = std::chrono::system_clock::now();
+    auto t = std::chrono::system_clock::to_time_t(now);
+    std::tm tm = {};
+#ifdef _WIN32
+    localtime_s(&tm, &t);
+#else
+    localtime_r(&t, &tm);
+#endif
+    std::ostringstream oss;
+    oss << std::put_time(&tm, "%Y%m%d_%H%M%S");
+    return oss.str();
+}
+
+} // namespace
 
 quill::Logger* GetLogger(const std::string& name) {
     return quill::Frontend::get_logger(name);
@@ -25,7 +48,7 @@ void InitLogger(const std::string& log_dir) {
     file_cfg.set_rotation_max_file_size(100 * 1024 * 1024);
     file_cfg.set_max_backup_files(10);
     auto sink = quill::Frontend::create_or_get_sink<quill::RotatingFileSink>(
-        log_path + "/engine.log", file_cfg);
+        log_path + "/engine_" + now_timestamp() + ".log", file_cfg);
 #else
     auto sink = quill::Frontend::create_or_get_sink<quill::ConsoleSink>("console");
 #endif
