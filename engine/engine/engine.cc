@@ -20,6 +20,7 @@
 
 #include "engine/core/log/log.h"
 #include "engine/core/log/log_macros.h"
+#include "engine/core/timer/timer_manager.h"
 
 namespace engine {
 
@@ -36,6 +37,9 @@ void Engine::Init(const std::string& log_dir) {
 
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "engine initializing, log_dir=[{}]", log_dir);
+
+    TimerManager::create_instance();
+    ENGINE_LOG_INFO(logger, "timer manager initialized");
 
     loop_ = std::make_unique<evpp::EventLoop>();
 }
@@ -74,6 +78,9 @@ void Engine::Run() {
     loop_->Run();
     ENGINE_LOG_INFO(logger, "main loop exited, frame_count=[{}]", frame_count_);
 
+    TimerManager::destroy_instance();
+    ENGINE_LOG_INFO(logger, "timer manager shut down");
+
     frame_timer->Cancel();
     sigint_watcher.reset();
 #ifndef _WIN32
@@ -95,6 +102,8 @@ void Engine::FrameLoop() {
     last_frame_time_ = now;
 
     ++frame_count_;
+
+    TimerManager::instance().update();
 
     if (elapsed > frame_interval_ * 2) {
         // Rate-limit manually to avoid LOG_*_LIMIT macros which use block-scope
