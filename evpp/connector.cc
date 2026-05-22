@@ -139,7 +139,7 @@ void Connector::HandleWrite() {
 
     assert(status_ == kConnecting);
     int err = 0;
-    socklen_t len = sizeof(len);
+    socklen_t len = sizeof(err);
     if (getsockopt(chan_->fd(), SOL_SOCKET, SO_ERROR, (char*)&err, (socklen_t*)&len) != 0) {
         err = errno;
         LOG_ERROR << "getsockopt failed err=" << err << " " << strerror(err);

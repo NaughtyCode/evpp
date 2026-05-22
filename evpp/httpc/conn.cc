@@ -72,7 +72,9 @@ bool Conn::Init() {
         LOG_ERROR << "bufferevent creation failed.";
         return false;
     }
-    bufferevent_openssl_set_allow_dirty_shutdown(bufferevent_, 1);
+    if (enable_ssl()) {
+        bufferevent_openssl_set_allow_dirty_shutdown(bufferevent_, 1);
+    }
     evhttp_conn_ = evhttp_connection_base_bufferevent_new(loop_->event_base(), NULL, bufferevent_, host_.c_str(), port_);
 #else
     evhttp_conn_ = evhttp_connection_base_new(loop_->event_base(), nullptr, host_.c_str(), port_);

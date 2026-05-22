@@ -48,6 +48,14 @@ EventLoop::~EventLoop() {
         evbase_ = nullptr;
     }
 
+#ifdef H_HAVE_BOOST
+    if (pending_functors_) {
+        Functor* f = nullptr;
+        while (pending_functors_->pop(f)) {
+            delete f;
+        }
+    }
+#endif
     delete pending_functors_;
     pending_functors_ = nullptr;
 }

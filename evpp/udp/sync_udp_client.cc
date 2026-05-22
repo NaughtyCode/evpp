@@ -17,7 +17,7 @@ Client::~Client(void) {
 }
 
 bool Client::Connect(const struct sockaddr_in& addr) {
-    memcpy(&remote_addr_, &addr, sizeof(remote_addr_));
+    memcpy(&remote_addr_, &addr, sizeof(addr));
     return Connect();
 }
 
@@ -38,7 +38,7 @@ bool Client::Connect(const char* addr/*host:port*/) {
 }
 
 bool Client::Connect(const struct sockaddr& addr) {
-    memcpy(&remote_addr_, &addr, sizeof(remote_addr_));
+    memcpy(&remote_addr_, &addr, sizeof(addr));
     return Connect();
 }
 
@@ -47,7 +47,7 @@ bool Client::Connect() {
     sock::SetReuseAddr(sockfd_);
 
     struct sockaddr* addr = reinterpret_cast<struct sockaddr*>(&remote_addr_);
-    socklen_t addrlen = sizeof(*addr);
+    socklen_t addrlen = sizeof(remote_addr_);
     int ret = ::connect(sockfd_, addr, addrlen);
 
     if (ret != 0) {
@@ -78,7 +78,7 @@ std::string Client::DoRequest(const std::string& data, uint32_t timeout_ms) {
 
     size_t buf_size = 1472; // The UDP max payload size
     MessagePtr msg(new Message(sockfd_, buf_size));
-    socklen_t addrLen = sizeof(struct sockaddr);
+    socklen_t addrLen = sizeof(struct sockaddr_storage);
     int readn = ::recvfrom(sockfd_, msg->WriteBegin(), buf_size, 0, msg->mutable_remote_addr(), &addrLen);
     int err = errno;
     if (readn >= 0) {
@@ -107,7 +107,7 @@ bool Client::Send(const char* msg, size_t len) {
     }
 
     struct sockaddr* addr = reinterpret_cast<struct sockaddr*>(&remote_addr_);
-    socklen_t addrlen = sizeof(*addr);
+    socklen_t addrlen = sizeof(remote_addr_);
     int sentn = ::sendto(sockfd(),
                          msg, len, 0,
                          addr,

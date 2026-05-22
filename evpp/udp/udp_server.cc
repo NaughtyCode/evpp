@@ -52,33 +52,33 @@ public:
 
     void Stop() {
         assert(IsRunning() || IsPaused());
-        status_ = kStopping;
+        status_.store(kStopping);
     }
 
     void Pause() {
         assert(IsRunning());
-        status_ = kPaused;
+        status_.store(kPaused);
     }
 
     void Continue() {
         assert(IsPaused());
-        status_ = kRunning;
+        status_.store(kRunning);
     }
 
     bool IsRunning() const {
-        return status_ == kRunning;
+        return status_.load() == kRunning;
     }
 
     bool IsStopped() const {
-        return status_ == kStopped;
+        return status_.load() == kStopped;
     }
 
     bool IsPaused() const {
-        return status_ == kPaused;
+        return status_.load() == kPaused;
     }
 
     void SetStatus(Status s) {
-        status_ = s;
+        status_.store(s);
     }
 
     evpp_socket_t fd() const {
@@ -97,7 +97,7 @@ private:
     Server* server_;
     int port_;
     std::shared_ptr<std::thread> thread_;
-    Status status_;
+    std::atomic<Status> status_;
 };
 
 Server::Server() : recv_buf_size_(1472) {}
@@ -220,7 +220,7 @@ void Server::RecvingLoop(RecvThread* thread) {
         // TODO use recvmmsg to improve performance
 
         MessagePtr recv_msg(new Message(thread->fd(), recv_buf_size_));
-        socklen_t addr_len = sizeof(struct sockaddr);
+        socklen_t addr_len = sizeof(struct sockaddr_storage);
         int readn = ::recvfrom(thread->fd(), (char*)recv_msg->WriteBegin(), recv_buf_size_, 0, recv_msg->mutable_remote_addr(), &addr_len);
         if (readn >= 0) {
             LOG_TRACE << "fd=" << thread->fd() << " port=" << thread->port()
@@ -259,7 +259,7 @@ void Server::RecvingLoop(RecvThread* thread) {
 
 
 /*
-Benchmark data£ºIntel(R) Xeon(R) CPU E5-2630 0 @ 2.30GHz 24 core
+Benchmark dataï¿½ï¿½Intel(R) Xeon(R) CPU E5-2630 0 @ 2.30GHz 24 core
 
 The recvfrom thread is the bottleneck, other 23 working threads' load is very very low.
 
@@ -268,7 +268,7 @@ If we need to improve the performance, there two ways to achieve it:
 2. Using RAW SOCKET
 3. Using recvmmsg/sendmmsg which can achieve 40w QPS on single thread
 
-udp message length QPS£º
+udp message length QPSï¿½ï¿½
 0.1k    9w+
 1k      9w+
 

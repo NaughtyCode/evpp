@@ -194,7 +194,7 @@ namespace evpp {
                 evconnlistener_disable(evhttp_bound_socket_get_listener(evhttp_bound_socket_));
             }
 #else
-            LOG_ERROR << "Not support!".;
+            LOG_ERROR << "Not support!";
             assert(false && "Not support");
 #endif
         }
@@ -207,7 +207,7 @@ namespace evpp {
                 evconnlistener_enable(evhttp_bound_socket_get_listener(evhttp_bound_socket_));
             }
 #else
-            LOG_ERROR << "Not support!".;
+            LOG_ERROR << "Not support!";
             assert(false && "Not support");
 #endif
         }

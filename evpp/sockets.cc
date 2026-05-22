@@ -92,6 +92,7 @@ evpp_socket_t CreateUDPServer(int port) {
     if (::bind(fd, (struct sockaddr*)&local, sizeof(struct sockaddr))) {
         int serrno = errno;
         LOG_ERROR << "socket bind error=" << serrno << " " << strerror(serrno);
+        EVUTIL_CLOSESOCKET(fd);
         return INVALID_SOCKET;
     }
 

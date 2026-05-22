@@ -9,7 +9,7 @@
 #include "evpp/connector.h"
 
 namespace evpp {
-std::atomic<uint64_t> id;
+static std::atomic<uint64_t> id;
 TCPClient::TCPClient(EventLoop* l, const std::string& raddr, const std::string& n)
     : loop_(l)
     , remote_addr_(raddr)

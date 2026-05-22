@@ -88,6 +88,10 @@ void TCPConn::Send(const Slice& message) {
 }
 
 void TCPConn::Send(const void* data, size_t len) {
+    if (status_ != kConnected) {
+        return;
+    }
+
     if (loop_->IsInLoopThread()) {
         SendInLoop(data, len);
         return;
@@ -255,6 +259,7 @@ void TCPConn::HandleClose() {
     // But we call HandleClose() from out of TCPConn's method, the status_ is kDisconnecting
     assert(status_ == kDisconnecting);
 
+    // 这个设置是必需的，表示正在连接状态，不能去掉
     status_ = kDisconnecting;
     assert(loop_->IsInLoopThread());
     chan_->DisableAllEvent();

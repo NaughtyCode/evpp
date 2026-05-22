@@ -8,7 +8,7 @@
 
 namespace evpp {
 namespace httpc {
-SSL_CTX* g_ssl_ctx = nullptr;
+static SSL_CTX* g_ssl_ctx = nullptr;
 
 bool InitSSL() {
     SSL_library_init();

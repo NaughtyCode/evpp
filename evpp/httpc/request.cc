@@ -21,6 +21,9 @@ Request::Request(EventLoop* loop, const std::string& http_url, const std::string
     //TODO performance compare
 #if LIBEVENT_VERSION_NUMBER >= 0x02001500
     struct evhttp_uri* evuri = evhttp_uri_parse(http_url.c_str());
+    if (!evuri) {
+        return;
+    }
     uri_ = evhttp_uri_get_path(evuri);
     if (uri_[0] == 0) {
         uri_ = "/";
@@ -138,6 +141,12 @@ failed:
         LOG_WARN << "this=" << this << " http request failed : " << errmsg << " retried=" << retried_ << " max retry_time=" << retry_number_ << ". Try again.";
         Retry();
         return;
+    }
+
+    // Return the connection to pool if we got it from pool and retries exhausted
+    if (pool_ && conn_) {
+        pool_->Put(conn_);
+        conn_.reset();
     }
 
     std::shared_ptr<Response> response(new Response(this, nullptr));

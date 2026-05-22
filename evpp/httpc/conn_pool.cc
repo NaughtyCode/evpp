@@ -23,14 +23,12 @@ ConnPool::~ConnPool() {
 
 ConnPtr ConnPool::Get(EventLoop* loop) {
     assert(loop->IsInLoopThread());
+    std::lock_guard<std::mutex> guard(mutex_);
     auto it = pool_.find(loop);
     if (it == pool_.end()) {
-        std::lock_guard<std::mutex> guard(mutex_);
         pool_[loop] = std::vector<ConnPtr>();
+        it = pool_.find(loop);
     }
-
-    it = pool_.find(loop);
-    assert(it != pool_.end());
 
     ConnPtr c;
     if (it->second.empty()) {
@@ -46,6 +44,7 @@ ConnPtr ConnPool::Get(EventLoop* loop) {
 void ConnPool::Put(const ConnPtr& c) {
     EventLoop* loop = c->loop();
     assert(loop->IsInLoopThread());
+    std::lock_guard<std::mutex> guard(mutex_);
     auto it = pool_.find(loop);
     assert(it != pool_.end());
     if (it->second.size() >= max_pool_size_) {
@@ -55,15 +54,13 @@ void ConnPool::Put(const ConnPtr& c) {
 }
 
 void ConnPool::Clear() {
-    if (pool_.empty()) {
-        return;
-    }
-
     std::map<EventLoop*, std::vector<ConnPtr> > map;
-    if (!pool_.empty()) {
+    {
         std::lock_guard<std::mutex> guard(mutex_);
+        if (pool_.empty()) {
+            return;
+        }
         pool_.swap(map);
-        assert(pool_.empty());
     }
 
     // Make sure delete Conn in its own EventLoop thread
