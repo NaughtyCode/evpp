@@ -128,6 +128,15 @@ void DNSResolver::AsyncDNSResolve() {
                                  , &hints
                                  , &DNSResolver::OnResolved
                                  , pp);
+    if (!dns_req_) {
+        LOG_ERROR << "evdns_getaddrinfo failed.";
+        delete pp;
+        evdns_base_free(dnsbase_, 0);
+        dnsbase_ = nullptr;
+        ClearTimer();
+        OnResolved();
+        return;
+    }
 }
 
 void DNSResolver::OnResolved(int errcode, struct addrinfo* addr) {

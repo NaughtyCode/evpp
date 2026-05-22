@@ -47,7 +47,7 @@ int EventAdd(struct event* ev, const struct timeval* timeout) {
             evmap[ev] = id;
         } else {
             LOG_ERROR << "Event " << ev << " fd=" << ev->ev_fd << " event_add twice!";
-            assert("event_add twice");
+            assert(false && "event_add twice");
         }
     }
     LOG_DEBUG << "event_add ev=" << ev << " fd=" << ev->ev_fd << " user_ptr=" << ev->ev_arg << " tid=" << std::this_thread::get_id();
@@ -62,7 +62,7 @@ int EventDel(struct event* ev) {
         auto it = evmap.find(ev);
         if (it == evmap.end()) {
             LOG_ERROR << "Event " << ev << " fd=" << ev->ev_fd << " not exist in event loop, maybe event_del twice.";
-            assert("event_del twice");
+            assert(false && "event_del twice");
         } else {
             auto id = std::this_thread::get_id();
             if (id != it->second) {

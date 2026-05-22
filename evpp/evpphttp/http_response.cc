@@ -71,7 +71,7 @@ void HttpResponse::MakeHttpResponse(const int response_code, const int64_t body_
         }
     }
     if (need_body(response_code) && header_field_value.find("Content-Type") == header_field_value.end()) {
-        buf.Append("Content-Type:text/html; charset=ISO-8859-1\r\n");
+        buf.Append("Content-Type: text/html; charset=ISO-8859-1\r\n");
     }
     for (auto & it : header_field_value) {
         buf.Append(it.first);

@@ -60,7 +60,9 @@ void Service::Stop() {
     DLOG_TRACE << "http service is stopping";
     tcp_srv_->Stop();
     listen_loop_->Stop();
-    //listen_thr_->join();
+    if (listen_thr_ && listen_thr_->joinable()) {
+        listen_thr_->join();
+    }
     callbacks_.clear();
     DLOG_TRACE << "http service stopped";
     is_stopped_ = true;
@@ -93,7 +95,7 @@ int Service::RequestHandler(const evpp::TCPConnPtr& conn, evpp::Buffer* buf, Htt
     }
     //continue
     auto expect = hr.field_value.find("Expect");
-    if (expect != hr.field_value.end() && !hr.is_send_continue() && evutil_ascii_strcasecmp(expect->first.data(), "100-continue")) {
+    if (expect != hr.field_value.end() && !hr.is_send_continue() && evutil_ascii_strcasecmp(expect->second.c_str(), "100-continue") == 0) {
         HttpResponse resp(hr);
         resp.SendReply(conn, 100/*CONTINUE*/, empty_field_value, "");
         hr.set_continue();
