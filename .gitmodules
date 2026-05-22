@@ -10,3 +10,6 @@
 [submodule "3rdparty/quill"]
 	path = 3rdparty/quill
 	url = https://github.com/odygrd/quill.git
+[submodule "3rdparty/glaze"]
+	path = 3rdparty/glaze
+	url = https://github.com/stephenberry/glaze.git
