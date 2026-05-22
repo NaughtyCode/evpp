@@ -1,7 +1,6 @@
 #pragma once
 
 #include <quill/backend/BackendOptions.h>
-#include <quill/core/FrontendOptions.h>
 
 namespace engine {
 

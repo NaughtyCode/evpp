@@ -34,7 +34,7 @@ void InitLogger(const std::string& log_dir) {
     quill::Frontend::create_or_get_logger(
         "root", {sink},
         quill::PatternFormatterOptions{
-            "%(time) [%(short_log_level)] [%(logger)] %(message)"});
+            "%(time) [%(log_level_short_code)] [%(logger)] %(message)"});
 }
 
 void ShutdownLogger() {
