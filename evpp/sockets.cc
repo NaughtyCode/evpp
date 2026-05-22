@@ -29,7 +29,7 @@ std::string strerror(int e) {
     }
 #else
     char buf[2048] = {};
-    #if (_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && ! _GNU_SOURCE
+    #if (_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && ! _GNU_SOURCE || defined(__ANDROID__)
     int rc = strerror_r(e, buf, sizeof(buf) - 1); // XSI-compliant
     if (rc == 0) {
         return std::string(buf);
