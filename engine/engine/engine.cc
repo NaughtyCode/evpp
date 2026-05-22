@@ -21,6 +21,7 @@
 #include "engine/core/log/log.h"
 #include "engine/core/log/log_macros.h"
 #include "engine/core/timer/timer_manager.h"
+#include "engine/script/script_bind.h"
 #include "engine/vm/vm.h"
 
 namespace engine {
@@ -59,6 +60,8 @@ void Engine::Init(const std::string& log_dir, const std::string& scripts_dir) {
         }
         script_vm_->InitScript();
     }
+
+    script::ExportAll(*script_vm_);
 }
 
 void Engine::Run() {
@@ -99,6 +102,7 @@ void Engine::Run() {
         script_vm_->DestroyScript();
     }
 
+    script::ShutdownTimerBindings();
     TimerManager::destroy_instance();
     ENGINE_LOG_INFO(logger, "timer manager shut down");
 

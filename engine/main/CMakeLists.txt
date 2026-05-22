@@ -59,6 +59,17 @@ set(VM_SOURCES
 )
 source_group("engine\\vm" FILES ${VM_SOURCES})
 
+# ── Script bindings ──────────────────────────────────────────────
+set(SCRIPT_SOURCES
+    ../script/script_bind.cc
+    ../script/script_bind.h
+    ../script/log_bind.cc
+    ../script/log_bind.h
+    ../script/timer_bind.cc
+    ../script/timer_bind.h
+)
+source_group("engine\\script" FILES ${SCRIPT_SOURCES})
+
 # ── Main entry ────────────────────────────────────────────────────
 source_group("" FILES main.cc)
 
@@ -71,6 +82,7 @@ add_executable(engine_main
     ${TIMER_SOURCES}
     ${ENGINE_SOURCES}
     ${VM_SOURCES}
+    ${SCRIPT_SOURCES}
 )
 
 target_link_libraries(engine_main ${LIBRARIES})

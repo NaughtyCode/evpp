@@ -4,15 +4,27 @@
 
 function InitScript()
     -- Called once when the engine starts, after all scripts are loaded.
-    -- Use this to initialize game state, register handlers, load config, etc.
+    log_info("=== InitScript ===")
+
+    -- Example: create a repeating timer that fires every 2 seconds
+    -- local tid = timer.interval(2000, function()
+    --     log_info("tick from Lua timer")
+    -- end)
+
+    -- Example: create a one-shot timeout that fires after 5 seconds
+    -- timer.timeout(5000, function()
+    --     log_info("one-shot timeout fired!")
+    -- end)
+
+    -- Example: cancel a timer
+    -- timer.cancel(tid)
 end
 
 function UpdateScript()
     -- Called every frame.
-    -- Use this for per-frame game logic, input polling, etc.
 end
 
 function DestroyScript()
     -- Called once when the engine shuts down.
-    -- Use this to persist state, close connections, release resources, etc.
+    log_info("=== DestroyScript ===")
 end
