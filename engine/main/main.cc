@@ -40,15 +40,18 @@ int main(int argc, char* argv[]) {
     WinSockGuard winsock_guard;
 
     std::string log_dir = "logs";
+    std::string scripts_dir = "resources/script";
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg.rfind("--log_dir=", 0) == 0) {
             log_dir = arg.substr(10);
+        } else if (arg.rfind("--scripts_dir=", 0) == 0) {
+            scripts_dir = arg.substr(15);
         }
     }
 
     auto& engine = engine::Engine::Instance();
-    engine.Init(log_dir);
+    engine.Init(log_dir, scripts_dir);
     engine.Run();
 
     engine::ShutdownLogger();

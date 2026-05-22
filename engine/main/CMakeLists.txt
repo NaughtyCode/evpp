@@ -13,6 +13,13 @@ else (UNIX)
     set(LIBRARIES evpp_static event glog)
 endif (UNIX)
 
+# ── Lua library (amalgamated build) ──────────────────────────────────
+set(LUA_SOURCES
+    ${PROJECT_SOURCE_DIR}/3rdparty/lua/onelua.c
+)
+set_source_files_properties(${LUA_SOURCES} PROPERTIES COMPILE_DEFINITIONS "MAKE_LIB")
+source_group("3rdparty\\lua" FILES ${LUA_SOURCES})
+
 # ── Log module ────────────────────────────────────────────────────
 set(LOG_SOURCES
     ../core/log/log.cc
@@ -45,14 +52,25 @@ set(ENGINE_SOURCES
 )
 source_group("engine\\engine" FILES ${ENGINE_SOURCES})
 
+# ── VM module ────────────────────────────────────────────────────
+set(VM_SOURCES
+    ../vm/vm.cc
+    ../vm/vm.h
+)
+source_group("engine\\vm" FILES ${VM_SOURCES})
+
 # ── Main entry ────────────────────────────────────────────────────
 source_group("" FILES main.cc)
 
+include_directories(${PROJECT_SOURCE_DIR}/3rdparty/lua)
+
 add_executable(engine_main
     main.cc
+    ${LUA_SOURCES}
     ${LOG_SOURCES}
     ${TIMER_SOURCES}
     ${ENGINE_SOURCES}
+    ${VM_SOURCES}
 )
 
 target_link_libraries(engine_main ${LIBRARIES})

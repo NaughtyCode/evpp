@@ -21,6 +21,7 @@
 #include "engine/core/log/log.h"
 #include "engine/core/log/log_macros.h"
 #include "engine/core/timer/timer_manager.h"
+#include "engine/vm/vm.h"
 
 namespace engine {
 
@@ -32,7 +33,11 @@ Engine& Engine::Instance() {
 Engine::Engine() = default;
 Engine::~Engine() = default;
 
-void Engine::Init(const std::string& log_dir) {
+ScriptVM& Engine::GetScriptVM() {
+    return *script_vm_;
+}
+
+void Engine::Init(const std::string& log_dir, const std::string& scripts_dir) {
     InitLogger(log_dir);
 
     auto* logger = GetLogger();
@@ -42,6 +47,18 @@ void Engine::Init(const std::string& log_dir) {
     ENGINE_LOG_INFO(logger, "timer manager initialized");
 
     loop_ = std::make_unique<evpp::EventLoop>();
+
+    script_vm_ = std::make_unique<ScriptVM>();
+    ENGINE_LOG_INFO(logger, "lua vm initialized, version=[{}]", ScriptVM::LuaVersion());
+
+    if (!scripts_dir.empty()) {
+        size_t failed = script_vm_->DoDirectory(scripts_dir);
+        if (failed > 0) {
+            ENGINE_LOG_WARN(logger, "scripts dir [{}]: [{}] file(s) failed to load",
+                            scripts_dir, failed);
+        }
+        script_vm_->InitScript();
+    }
 }
 
 void Engine::Run() {
@@ -78,6 +95,10 @@ void Engine::Run() {
     loop_->Run();
     ENGINE_LOG_INFO(logger, "main loop exited, frame_count=[{}]", frame_count_);
 
+    if (script_vm_) {
+        script_vm_->DestroyScript();
+    }
+
     TimerManager::destroy_instance();
     ENGINE_LOG_INFO(logger, "timer manager shut down");
 
@@ -104,6 +125,10 @@ void Engine::FrameLoop() {
     ++frame_count_;
 
     TimerManager::instance().update();
+
+    if (script_vm_) {
+        script_vm_->UpdateScript();
+    }
 
     if (elapsed > frame_interval_ * 2) {
         // Rate-limit manually to avoid LOG_*_LIMIT macros which use block-scope
