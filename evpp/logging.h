@@ -3,8 +3,8 @@
 #include "evpp/platform_config.h"
 
 #ifdef __cplusplus
-#define GOOGLE_GLOG_DLL_DECL           // 使用静态glog库时，必须定义这个
-#define GLOG_NO_ABBREVIATED_SEVERITIES // 没这个编译会出错,传说因为和Windows.h冲突
+#define GLOG_USE_GLOG_EXPORT
+#define GLOG_NO_ABBREVIATED_SEVERITIES
 
 #include <glog/logging.h>
 

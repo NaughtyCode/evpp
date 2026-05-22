@@ -36,11 +36,9 @@ set (CXX_FLAGS -DWIN32 -D_WIN32 -EHsc)
                         ${PROJECT_SOURCE_DIR}
                         ${PROJECT_SOURCE_DIR}/3rdparty/wininclude)
 
-    # On windows, Debug mode
-    link_directories(${VcpkgRoot}/debug/lib ${VcpkgRoot}/debug/lib/manual-link)
-
-    # On Windows, Release mode
-    # link_directories(${VcpkgRoot}/lib ${VcpkgRoot}/lib/manual-link)
+    # On windows, vcpkg uses different lib names for debug (eventd.lib) vs release (event.lib)
+    link_directories(${VcpkgRoot}/debug/lib ${VcpkgRoot}/debug/lib/manual-link
+                     ${VcpkgRoot}/lib ${VcpkgRoot}/lib/manual-link)
 endif (UNIX)
 
 string (REPLACE ";" " " CMAKE_CXX_FLAGS "${CXX_FLAGS}")
@@ -50,7 +48,9 @@ if (UNIX)
     SET(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -ggdb -DNDEBUG -DGOOGLE_STRIP_LOG=1")
     SET(DEPENDENT_LIBRARIES event glog pthread)
 else (UNIX)
-    SET(DEPENDENT_LIBRARIES event glog)
+    find_library(EVENT_LIBRARY event REQUIRED)
+    find_library(GLOG_LIBRARY glog REQUIRED)
+    SET(DEPENDENT_LIBRARIES ${EVENT_LIBRARY} ${GLOG_LIBRARY})
 endif (UNIX)
 
 # Set to true if https support is needed.
