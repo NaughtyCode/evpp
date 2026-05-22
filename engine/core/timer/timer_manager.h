@@ -335,7 +335,6 @@ private:
 
     // Global singleton
     static std::unique_ptr<TimerManager> instance_;
-    static std::once_flag instance_flag_;
     static std::mutex instance_mutex_;
 
     // Statistics

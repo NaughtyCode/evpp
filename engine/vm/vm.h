@@ -144,31 +144,31 @@ private:
 template <>
 inline void ScriptVM::SetGlobal(std::string_view name, int value) {
     lua_pushinteger(L_, static_cast<lua_Integer>(value));
-    lua_setglobal(L_, name.data());
+    lua_setglobal(L_, std::string(name).c_str());
 }
 
 template <>
 inline void ScriptVM::SetGlobal(std::string_view name, double value) {
     lua_pushnumber(L_, static_cast<lua_Number>(value));
-    lua_setglobal(L_, name.data());
+    lua_setglobal(L_, std::string(name).c_str());
 }
 
 template <>
 inline void ScriptVM::SetGlobal(std::string_view name, const char* value) {
     lua_pushstring(L_, value);
-    lua_setglobal(L_, name.data());
+    lua_setglobal(L_, std::string(name).c_str());
 }
 
 template <>
 inline void ScriptVM::SetGlobal(std::string_view name, std::string_view value) {
     lua_pushlstring(L_, value.data(), value.size());
-    lua_setglobal(L_, name.data());
+    lua_setglobal(L_, std::string(name).c_str());
 }
 
 template <>
 inline void ScriptVM::SetGlobal(std::string_view name, bool value) {
     lua_pushboolean(L_, value ? 1 : 0);
-    lua_setglobal(L_, name.data());
+    lua_setglobal(L_, std::string(name).c_str());
 }
 
 } // namespace engine

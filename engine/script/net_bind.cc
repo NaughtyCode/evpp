@@ -6,6 +6,7 @@
 #endif
 #endif
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -503,6 +504,24 @@ int l_net_server_close_conn(lua_State* L) {
             ENGINE_LOG_INFO(logger, "[net.server] closing conn=[{}]", raw_conn_id);
             ci->second->Close();
             ctx->conns.erase(ci);
+
+            // Clean up per-connection callback refs — the close callback
+            // won't fire for a manual close, so we must release here.
+            auto msg_it = ctx->conn_on_message_refs.find(conn_id);
+            if (msg_it != ctx->conn_on_message_refs.end()) {
+                if (msg_it->second != LUA_NOREF) {
+                    luaL_unref(L, LUA_REGISTRYINDEX, msg_it->second);
+                }
+                ctx->conn_on_message_refs.erase(msg_it);
+            }
+            auto close_it = ctx->conn_on_close_refs.find(conn_id);
+            if (close_it != ctx->conn_on_close_refs.end()) {
+                if (close_it->second != LUA_NOREF) {
+                    luaL_unref(L, LUA_REGISTRYINDEX, close_it->second);
+                }
+                ctx->conn_on_close_refs.erase(close_it);
+            }
+
             lua_pushboolean(L, 1);
             return 1;
         }
@@ -668,6 +687,11 @@ const luaL_Reg kServerFunctions[] = {
 // HTTP Client bindings
 // ======================================================================
 
+// Track HTTP callback refs so they can be released during shutdown even
+// when the request hasn't completed yet. Without this, refs held by
+// in-flight HTTP requests would leak in the Lua registry.
+std::vector<int> g_http_pending_refs;
+
 // ── l_net_http_get(url, on_response) ─────────────────────────────────────
 int l_net_http_get(lua_State* L) {
     const char* url = luaL_checkstring(L, 1);
@@ -680,12 +704,24 @@ int l_net_http_get(lua_State* L) {
 
     lua_pushvalue(L, 2);
     int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    g_http_pending_refs.push_back(ref);
 
     auto req = std::make_shared<evpp::httpc::GetRequest>(
         loop, url, evpp::Duration(10.0));  // 10s timeout
 
     req->Execute([L, ref](const std::shared_ptr<evpp::httpc::Response>& resp) {
-        if (!g_net_alive.load()) return;
+        // Always unref on any exit path; g_http_pending_refs is cleaned
+        // during ShutdownNetBindings for callbacks that never fire.
+        auto erase_ref = [&]() {
+            luaL_unref(L, LUA_REGISTRYINDEX, ref);
+            auto it = std::find(g_http_pending_refs.begin(),
+                                g_http_pending_refs.end(), ref);
+            if (it != g_http_pending_refs.end()) g_http_pending_refs.erase(it);
+        };
+        if (!g_net_alive.load()) {
+            erase_ref();
+            return;
+        }
         if (ref == LUA_NOREF) return;
         if (resp) {
             std::string body(resp->body().data(), resp->body().size());
@@ -693,7 +729,7 @@ int l_net_http_get(lua_State* L) {
         } else {
             call_lua_http_handler(L, ref, 0, "");
         }
-        luaL_unref(L, LUA_REGISTRYINDEX, ref);
+        erase_ref();
     });
 
     return 0;
@@ -713,12 +749,22 @@ int l_net_http_post(lua_State* L) {
 
     lua_pushvalue(L, 3);
     int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    g_http_pending_refs.push_back(ref);
 
     auto req = std::make_shared<evpp::httpc::PostRequest>(
         loop, url, std::string(body, body_len), evpp::Duration(10.0));
 
     req->Execute([L, ref](const std::shared_ptr<evpp::httpc::Response>& resp) {
-        if (!g_net_alive.load()) return;
+        auto erase_ref = [&]() {
+            luaL_unref(L, LUA_REGISTRYINDEX, ref);
+            auto it = std::find(g_http_pending_refs.begin(),
+                                g_http_pending_refs.end(), ref);
+            if (it != g_http_pending_refs.end()) g_http_pending_refs.erase(it);
+        };
+        if (!g_net_alive.load()) {
+            erase_ref();
+            return;
+        }
         if (ref == LUA_NOREF) return;
         if (resp) {
             std::string body_str(resp->body().data(), resp->body().size());
@@ -726,7 +772,7 @@ int l_net_http_post(lua_State* L) {
         } else {
             call_lua_http_handler(L, ref, 0, "");
         }
-        luaL_unref(L, LUA_REGISTRYINDEX, ref);
+        erase_ref();
     });
 
     return 0;
@@ -777,6 +823,30 @@ void ShutdownNetBindings() {
 
     // Prevent any in-flight HTTP callbacks from touching a freed Lua state.
     g_net_alive.store(false);
+
+    // Resolve a valid Lua state before clearing clients/servers, so we can
+    // release pending HTTP refs even after the context maps are emptied.
+    lua_State* L = nullptr;
+    for (auto& [cid, ctx] : g_clients) {
+        if (ctx->L) { L = ctx->L; break; }
+    }
+    if (!L) {
+        for (auto& [sid, ctx] : g_servers) {
+            if (ctx->L) { L = ctx->L; break; }
+        }
+    }
+
+    // Release pending HTTP callback refs before any Lua state is closed.
+    if (L && !g_http_pending_refs.empty()) {
+        for (int ref : g_http_pending_refs) {
+            if (ref != LUA_NOREF) {
+                luaL_unref(L, LUA_REGISTRYINDEX, ref);
+            }
+        }
+        size_t http_count = g_http_pending_refs.size();
+        ENGINE_LOG_INFO(logger, "ScriptBind: released [{}] pending HTTP callback(s)", http_count);
+        g_http_pending_refs.clear();
+    }
 
     // Shutdown all clients — disconnect first, then release Lua refs
     for (auto& [cid, ctx] : g_clients) {

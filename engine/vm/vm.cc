@@ -64,7 +64,7 @@ ScriptVM& ScriptVM::operator=(ScriptVM&& other) noexcept {
 void ScriptVM::CallGlobalFunction(std::string_view name) {
     if (!L_) return;
 
-    lua_getglobal(L_, name.data());
+    lua_getglobal(L_, std::string(name).c_str());
     if (lua_type(L_, -1) != LUA_TFUNCTION) {
         lua_pop(L_, 1);
         return;
@@ -220,7 +220,7 @@ size_t ScriptVM::DoDirectory(const std::string& dir_path) {
 void ScriptVM::RegisterFunction(std::string_view name, lua_CFunction func) {
     if (!L_) return;
     lua_pushcfunction(L_, func);
-    lua_setglobal(L_, name.data());
+    lua_setglobal(L_, std::string(name).c_str());
     auto* logger = GetLogger();
     ENGINE_LOG_DEBUG(logger, "ScriptVM: registered C function [{}]", name);
 }
@@ -246,7 +246,7 @@ void ScriptVM::RegisterModule(std::string_view name, const luaL_Reg* functions) 
     if (!L_) return;
 
     luaL_newlib(L_, functions);
-    lua_setglobal(L_, name.data());
+    lua_setglobal(L_, std::string(name).c_str());
 
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "ScriptVM: registered module [{}]", name);
@@ -256,7 +256,7 @@ void ScriptVM::RegisterModuleOpen(std::string_view name, lua_CFunction openf,
                             bool make_global) {
     if (!L_) return;
 
-    luaL_requiref(L_, name.data(), openf, make_global ? 1 : 0);
+    luaL_requiref(L_, std::string(name).c_str(), openf, make_global ? 1 : 0);
     lua_pop(L_, 1);
 
     auto* logger = GetLogger();
@@ -296,7 +296,7 @@ void ScriptVM::RegisterCallback(std::string_view name, LuaCallback callback) {
 
     lua_pushlightuserdata(L_, ptr);
     lua_pushcclosure(L_, &ScriptVM::CallbackTrampoline, 1);
-    lua_setglobal(L_, name.data());
+    lua_setglobal(L_, std::string(name).c_str());
 
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "ScriptVM: registered callback [{}] (total callbacks: [{}])",

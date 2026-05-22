@@ -376,31 +376,39 @@ void EncodeLuaType(lua_State* L, EncodeBuf& buf, int level) {
 // MessagePack → Lua decoding
 // ============================================================================
 
-void DecodeToLuaType(lua_State* L, DecodeCursor* c);
+void DecodeToLuaType(lua_State* L, DecodeCursor* c, int depth);
 
-void DecodeToLuaArray(lua_State* L, DecodeCursor* c, size_t len) {
+void DecodeToLuaArray(lua_State* L, DecodeCursor* c, size_t len, int depth) {
+    if (depth >= kMaxNesting) {
+        c->err = CurError::BadFmt;
+        return;
+    }
     lua_createtable(L, static_cast<int>(len), 0);
     luaL_checkstack(L, 1, "in function DecodeToLuaArray");
     for (size_t j = 0; j < len; ++j) {
         lua_pushinteger(L, static_cast<lua_Integer>(j + 1));
-        DecodeToLuaType(L, c);
+        DecodeToLuaType(L, c, depth + 1);
         if (c->err != CurError::None) return;
         lua_settable(L, -3);
     }
 }
 
-void DecodeToLuaHash(lua_State* L, DecodeCursor* c, size_t len) {
+void DecodeToLuaHash(lua_State* L, DecodeCursor* c, size_t len, int depth) {
+    if (depth >= kMaxNesting) {
+        c->err = CurError::BadFmt;
+        return;
+    }
     lua_createtable(L, 0, static_cast<int>(len));
     for (size_t i = 0; i < len; ++i) {
-        DecodeToLuaType(L, c);  // key
+        DecodeToLuaType(L, c, depth + 1);  // key
         if (c->err != CurError::None) return;
-        DecodeToLuaType(L, c);  // value
+        DecodeToLuaType(L, c, depth + 1);  // value
         if (c->err != CurError::None) return;
         lua_settable(L, -3);
     }
 }
 
-void DecodeToLuaType(lua_State* L, DecodeCursor* c) {
+void DecodeToLuaType(lua_State* L, DecodeCursor* c, int depth) {
     if (!c->Need(1)) return;
 
     luaL_checkstack(L, 1,
@@ -546,7 +554,7 @@ void DecodeToLuaType(lua_State* L, DecodeCursor* c) {
         {
             size_t l = (static_cast<size_t>(c->p[1]) << 8) | c->p[2];
             c->Consume(3);
-            DecodeToLuaArray(L, c, l);
+            DecodeToLuaArray(L, c, l, depth);
         }
         break;
     case 0xdd:  // array 32
@@ -557,7 +565,7 @@ void DecodeToLuaType(lua_State* L, DecodeCursor* c) {
                        (static_cast<size_t>(c->p[3]) << 8) |
                         static_cast<size_t>(c->p[4]);
             c->Consume(5);
-            DecodeToLuaArray(L, c, l);
+            DecodeToLuaArray(L, c, l, depth);
         }
         break;
     case 0xde:  // map 16
@@ -565,7 +573,7 @@ void DecodeToLuaType(lua_State* L, DecodeCursor* c) {
         {
             size_t l = (static_cast<size_t>(c->p[1]) << 8) | c->p[2];
             c->Consume(3);
-            DecodeToLuaHash(L, c, l);
+            DecodeToLuaHash(L, c, l, depth);
         }
         break;
     case 0xdf:  // map 32
@@ -576,7 +584,7 @@ void DecodeToLuaType(lua_State* L, DecodeCursor* c) {
                        (static_cast<size_t>(c->p[3]) << 8) |
                         static_cast<size_t>(c->p[4]);
             c->Consume(5);
-            DecodeToLuaHash(L, c, l);
+            DecodeToLuaHash(L, c, l, depth);
         }
         break;
     default:
@@ -598,12 +606,12 @@ void DecodeToLuaType(lua_State* L, DecodeCursor* c) {
             // fix array
             size_t l = c->p[0] & 0xf;
             c->Consume(1);
-            DecodeToLuaArray(L, c, l);
+            DecodeToLuaArray(L, c, l, depth);
         } else if ((c->p[0] & 0xf0) == 0x80) {
             // fix map
             size_t l = c->p[0] & 0xf;
             c->Consume(1);
-            DecodeToLuaHash(L, c, l);
+            DecodeToLuaHash(L, c, l, depth);
         } else {
             c->err = CurError::BadFmt;
         }
@@ -637,7 +645,7 @@ int UnpackFull(lua_State* L, int limit, int offset) {
 
     int cnt = 0;
     for (; c.left > 0 && cnt < limit; ++cnt) {
-        DecodeToLuaType(L, &c);
+        DecodeToLuaType(L, &c, 0);
 
         if (c.err == CurError::Eof) {
             return luaL_error(L, "Missing bytes in input.");

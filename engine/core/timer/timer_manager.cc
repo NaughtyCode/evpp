@@ -31,14 +31,18 @@ TimerManager::~TimerManager() {
 //=============================================================================
 
 std::unique_ptr<TimerManager> TimerManager::instance_;
-std::once_flag TimerManager::instance_flag_;
 std::mutex TimerManager::instance_mutex_;
 
 TimerManager& TimerManager::instance() {
-    std::call_once(instance_flag_, []() {
-        instance_ = std::unique_ptr<TimerManager>(new TimerManager());
-        instance_->initialize();
-    });
+    // Double-checked locking without call_once so destroy_instance() can
+    // safely reset the instance and allow re-creation.
+    if (!instance_) {
+        std::lock_guard<std::mutex> lock(instance_mutex_);
+        if (!instance_) {
+            instance_ = std::unique_ptr<TimerManager>(new TimerManager());
+            instance_->initialize();
+        }
+    }
     return *instance_;
 }
 
