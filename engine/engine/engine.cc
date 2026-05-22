@@ -117,6 +117,8 @@ void Engine::Shutdown() {
 }
 
 void Engine::FrameLoop() {
+    if (!running_) return;
+
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
         now - last_frame_time_);

@@ -1,17 +1,6 @@
 #include "engine/vm/vm.h"
 
-#include <cstring>
 #include <filesystem>
-
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#endif
 
 #include "engine/core/log/log.h"
 #include "engine/core/log/log_macros.h"
@@ -106,7 +95,7 @@ bool ScriptVM::DoString(std::string_view script,
         return false;
     }
 
-    rc = lua_pcall(L_, 0, LUA_MULTRET, 0);
+    rc = lua_pcall(L_, 0, 0, 0);
     if (rc != LUA_OK) {
         const char* msg = lua_tostring(L_, -1);
         auto* logger = GetLogger();
@@ -136,7 +125,7 @@ bool ScriptVM::DoFile(const std::string& filename, std::string* error_out) {
         return false;
     }
 
-    rc = lua_pcall(L_, 0, LUA_MULTRET, 0);
+    rc = lua_pcall(L_, 0, 0, 0);
     if (rc != LUA_OK) {
         const char* msg = lua_tostring(L_, -1);
         auto* logger = GetLogger();

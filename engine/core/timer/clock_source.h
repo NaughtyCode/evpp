@@ -356,16 +356,19 @@ public:
 
 private:
     void reevaluate_source() {
-        // Pick the highest-rated clock source
+        // Pick the highest-rated clock source and swap it into
+        // current_source_. Using swap avoids transferring ownership
+        // from sources_ (which would cause a double-free).
+        int best_idx = -1;
         ClockSource* best = current_source_.get();
-        for (auto& src : sources_) {
-            if (src->rating() > best->rating()) {
-                best = src.get();
+        for (size_t i = 0; i < sources_.size(); ++i) {
+            if (sources_[i]->rating() > best->rating()) {
+                best = sources_[i].get();
+                best_idx = static_cast<int>(i);
             }
         }
-        if (best != current_source_.get()) {
-            // Could log or notify about clock source change
-            current_source_.reset(best);
+        if (best_idx >= 0) {
+            current_source_.swap(sources_[best_idx]);
         }
     }
 

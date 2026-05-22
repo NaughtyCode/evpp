@@ -84,7 +84,7 @@ TimerManager::UpdateResult TimerManager::update(TimePoint current_time) {
     result.elapsed = current_time - last_update_time_;
     last_update_time_ = current_time;
 
-    auto t_start = std::chrono::high_resolution_clock::now();
+    auto t_start = std::chrono::steady_clock::now();
 
     // Process all timer subsystems
     result = update_hrtimers(result, current_time);
@@ -102,7 +102,7 @@ TimerManager::UpdateResult TimerManager::update(TimePoint current_time) {
 
     // Update statistics
     stats_.total_updates++;
-    auto t_end = std::chrono::high_resolution_clock::now();
+    auto t_end = std::chrono::steady_clock::now();
     total_update_time_ns_ += std::chrono::duration_cast<std::chrono::nanoseconds>(t_end - t_start).count();
     stats_.avg_update_time_us = static_cast<int64_t>(total_update_time_ns_ / stats_.total_updates / 1000);
 
