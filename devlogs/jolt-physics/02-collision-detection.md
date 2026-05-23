@@ -76,9 +76,9 @@ class BroadPhaseQuery {
 - **EPA** (Expanding Polytope Algorithm): 当 GJK 检测到相交后，计算穿透深度和接触点
 
 核心文件：
-- `Jolt/Physics/Collision/GJK.*`
-- `Jolt/Physics/Collision/EPA.*`
-- `Jolt/Physics/Collision/EPAPenetration.*`
+- `Jolt/Geometry/GJKClosestPoint.*` — GJK 最近点算法
+- `Jolt/Geometry/EPAPenetrationDepth.*` — EPA 穿透深度计算
+- `Jolt/Geometry/EPAConvexHullBuilder.*` — EPA 凸包构建
 
 ### Convex vs Triangles
 - `CollideConvexVsTriangles.cpp`: 凸体与三角网格碰撞

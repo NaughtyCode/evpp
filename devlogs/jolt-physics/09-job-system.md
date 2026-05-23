@@ -96,7 +96,7 @@ class JobSystemThreadPool final : public JobSystemWithBarrier {
 
 内部实现：
 - `FixedSizeFreeList<Job>`: 定长作业池
-- 无锁 SPSC 环形队列 (1024 容量，2 的幂)
+- 无锁环形作业队列 (1024 容量，2 的幂)
 - 每线程维护独立 head，共享 tail
 - `Semaphore` 信号通知工作线程
 - `mQuit` 原子标志优雅退出
