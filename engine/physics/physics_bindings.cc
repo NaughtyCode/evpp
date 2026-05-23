@@ -123,54 +123,90 @@ int LuaSetVelocity(lua_State* L) {
 }
 
 //============================================================================
-// physics.get_transform(body_id) → (x, y, z, qx, qy, qz, qw) | nil
+// physics.get_transform(body_id) → (x, y, z, qx, qy, qz, qw) | nil, err
 //============================================================================
 
 int LuaGetTransform(lua_State* L) {
     if (!CheckInit(L)) return 2;
 
-    // This is a synchronous query against the physics world.
-    // Since the Lua callback runs on the main thread after FetchResult,
-    // we read from the cached transforms in the last frame result.
-    // But we don't have direct access to PhysicsWorld from here.
-    // For now, return nil with explanation.
-
-    PushNilError(L, "get_transform: synchronous query not yet available");
-    return 2;
+    uint32_t body_id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    auto t = PhysicsSystem::Instance().GetTransform(body_id);
+    if (!t.has_value()) {
+        PushNilError(L, "body not found");
+        return 2;
+    }
+    lua_pushnumber(L, t->pos_x);
+    lua_pushnumber(L, t->pos_y);
+    lua_pushnumber(L, t->pos_z);
+    lua_pushnumber(L, t->rot_x);
+    lua_pushnumber(L, t->rot_y);
+    lua_pushnumber(L, t->rot_z);
+    lua_pushnumber(L, t->rot_w);
+    return 7;
 }
 
 //============================================================================
-// physics.get_velocity(body_id) → (vx, vy, vz) | nil
+// physics.get_velocity(body_id) → (vx, vy, vz) | nil, err
 //============================================================================
 
 int LuaGetVelocity(lua_State* L) {
     if (!CheckInit(L)) return 2;
 
-    PushNilError(L, "get_velocity: synchronous query not yet available");
-    return 2;
+    uint32_t body_id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    auto v = PhysicsSystem::Instance().GetVelocity(body_id);
+    if (!v.has_value()) {
+        PushNilError(L, "body not found");
+        return 2;
+    }
+    lua_pushnumber(L, v->x);
+    lua_pushnumber(L, v->y);
+    lua_pushnumber(L, v->z);
+    return 3;
 }
 
 //============================================================================
-// physics.is_active(body_id) → bool
+// physics.is_active(body_id) → bool | nil, err
 //============================================================================
 
 int LuaIsActive(lua_State* L) {
     if (!CheckInit(L)) return 2;
 
-    // Placeholder — synchronous query bridge to be added
-    lua_pushboolean(L, 0);
+    uint32_t body_id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    lua_pushboolean(L, PhysicsSystem::Instance().IsBodyActive(body_id) ? 1 : 0);
     return 1;
 }
 
 //============================================================================
-// physics.ray_cast(ox, oy, oz, dx, dy, dz, max_dist) → {body_id, x, y, z} | nil
+// physics.ray_cast(ox, oy, oz, dx, dy, dz, max_dist) → {body_id, x, y, z} | nil, err
 //============================================================================
 
 int LuaRayCast(lua_State* L) {
     if (!CheckInit(L)) return 2;
 
-    PushNilError(L, "ray_cast: not yet implemented");
-    return 2;
+    double ox = luaL_checknumber(L, 1);
+    double oy = luaL_checknumber(L, 2);
+    double oz = luaL_checknumber(L, 3);
+    double dx = luaL_checknumber(L, 4);
+    double dy = luaL_checknumber(L, 5);
+    double dz = luaL_checknumber(L, 6);
+    float max_dist = static_cast<float>(luaL_checknumber(L, 7));
+
+    auto hit = PhysicsSystem::Instance().RayCast(ox, oy, oz, dx, dy, dz, max_dist);
+    if (!hit.has_value()) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    lua_newtable(L);
+    lua_pushinteger(L, hit->body_id);
+    lua_setfield(L, -2, "body_id");
+    lua_pushnumber(L, hit->x);
+    lua_setfield(L, -2, "x");
+    lua_pushnumber(L, hit->y);
+    lua_setfield(L, -2, "y");
+    lua_pushnumber(L, hit->z);
+    lua_setfield(L, -2, "z");
+    return 1;
 }
 
 //============================================================================
@@ -180,12 +216,13 @@ int LuaRayCast(lua_State* L) {
 int LuaGetStats(lua_State* L) {
     if (!CheckInit(L)) return 2;
 
+    auto stats = PhysicsSystem::Instance().GetPhysicsStats();
     lua_newtable(L);
-    lua_pushinteger(L, 0);
+    lua_pushinteger(L, stats.total_bodies);
     lua_setfield(L, -2, "bodies");
-    lua_pushinteger(L, 0);
+    lua_pushinteger(L, stats.active_bodies);
     lua_setfield(L, -2, "active");
-    lua_pushinteger(L, 0);
+    lua_pushinteger(L, stats.contact_constraints);
     lua_setfield(L, -2, "collisions");
     return 1;
 }

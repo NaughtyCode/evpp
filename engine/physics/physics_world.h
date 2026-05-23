@@ -133,6 +133,15 @@ public:
     std::optional<JPH::Vec3> GetVelocity(uint32_t body_id) const;
     bool IsActive(uint32_t body_id) const;
 
+    struct RayCastHit {
+        uint32_t body_id = 0;
+        double x = 0.0, y = 0.0, z = 0.0;
+    };
+    // Cast a ray into the physics world. Returns closest hit or nullopt.
+    std::optional<RayCastHit> RayCast(const JPH::RVec3& origin,
+                                       const JPH::Vec3& direction,
+                                       float max_distance) const;
+
     struct Stats {
         uint32_t active_bodies = 0;
         uint32_t total_bodies = 0;

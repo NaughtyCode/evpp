@@ -74,6 +74,28 @@ public:
     bool ReloadThresholds();
     bool ReloadLogLevel();
 
+    // ── Synchronous queries (thread-safe via Jolt BodyLockInterface) ────
+    std::optional<BodyTransform> GetTransform(uint32_t body_id) const;
+    struct Vec3Result { float x = 0, y = 0, z = 0; };
+    std::optional<Vec3Result> GetVelocity(uint32_t body_id) const;
+    bool IsBodyActive(uint32_t body_id) const;
+
+    struct RayCastResult {
+        uint32_t body_id = 0;
+        double x = 0, y = 0, z = 0;
+    };
+    std::optional<RayCastResult> RayCast(double ox, double oy, double oz,
+                                          double dx, double dy, double dz,
+                                          float max_dist) const;
+
+    struct PhysicsStats {
+        uint32_t active_bodies = 0;
+        uint32_t total_bodies = 0;
+        int body_pairs = 0;
+        int contact_constraints = 0;
+    };
+    PhysicsStats GetPhysicsStats() const;
+
     // ── ScriptVM access ─────────────────────────────────────────────────
     ScriptVM& GetScriptVM() { return *script_vm_; }
     const ScriptVM& GetScriptVM() const { return *script_vm_; }

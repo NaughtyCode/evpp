@@ -241,6 +241,58 @@ bool PhysicsSystem::ReloadLogLevel() {
 }
 
 //============================================================================
+// Synchronous query methods — thread-safe via Jolt BodyLockInterface
+//============================================================================
+
+std::optional<BodyTransform> PhysicsSystem::GetTransform(uint32_t body_id) const {
+    if (!is_initialized_) return std::nullopt;
+    auto result = physics_thread_.GetWorld().GetTransform(body_id);
+    if (!result.has_value()) return std::nullopt;
+    BodyTransform bt;
+    bt.body_id = body_id;
+    bt.pos_x = result->first.GetX();
+    bt.pos_y = result->first.GetY();
+    bt.pos_z = result->first.GetZ();
+    bt.rot_x = result->second.GetX();
+    bt.rot_y = result->second.GetY();
+    bt.rot_z = result->second.GetZ();
+    bt.rot_w = result->second.GetW();
+    return bt;
+}
+
+std::optional<PhysicsSystem::Vec3Result> PhysicsSystem::GetVelocity(
+    uint32_t body_id) const {
+    if (!is_initialized_) return std::nullopt;
+    auto vel = physics_thread_.GetWorld().GetVelocity(body_id);
+    if (!vel.has_value()) return std::nullopt;
+    return Vec3Result{vel->GetX(), vel->GetY(), vel->GetZ()};
+}
+
+bool PhysicsSystem::IsBodyActive(uint32_t body_id) const {
+    if (!is_initialized_) return false;
+    return physics_thread_.GetWorld().IsActive(body_id);
+}
+
+std::optional<PhysicsSystem::RayCastResult> PhysicsSystem::RayCast(
+    double ox, double oy, double oz,
+    double dx, double dy, double dz,
+    float max_dist) const {
+    if (!is_initialized_) return std::nullopt;
+    auto hit = physics_thread_.GetWorld().RayCast(
+        JPH::RVec3(ox, oy, oz),
+        JPH::Vec3(static_cast<float>(dx), static_cast<float>(dy), static_cast<float>(dz)),
+        max_dist);
+    if (!hit.has_value()) return std::nullopt;
+    return RayCastResult{hit->body_id, hit->x, hit->y, hit->z};
+}
+
+PhysicsSystem::PhysicsStats PhysicsSystem::GetPhysicsStats() const {
+    if (!is_initialized_) return {};
+    auto s = physics_thread_.GetWorld().GetStats();
+    return {s.active_bodies, s.total_bodies, s.body_pairs, s.contact_constraints};
+}
+
+//============================================================================
 // UpdateScript — call Lua collision callbacks [D17.6]
 //============================================================================
 

@@ -18,6 +18,9 @@
 #include <Jolt/Physics/EPhysicsUpdateError.h>
 #include <Jolt/RegisterTypes.h>
 #include <Jolt/Physics/Collision/Shape/Shape.h>
+#include <Jolt/Physics/Collision/RayCast.h>
+#include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
 
 #include "engine/core/log/log_macros.h"
 
@@ -565,6 +568,24 @@ PhysicsWorld::Stats PhysicsWorld::GetStats() const {
         }
     }
     return s;
+}
+
+std::optional<PhysicsWorld::RayCastHit> PhysicsWorld::RayCast(
+    const JPH::RVec3& origin, const JPH::Vec3& direction,
+    float max_distance) const {
+    JPH::RRayCast ray(origin, direction);
+    JPH::RayCastResult hit;
+    if (!system_.GetNarrowPhaseQuery().CastRay(ray, hit)) {
+        return std::nullopt;
+    }
+    if (hit.mFraction > max_distance) {
+        return std::nullopt;
+    }
+    JPH::RVec3 point = ray.GetPointOnRay(hit.mFraction);
+    return RayCastHit{
+        static_cast<uint32_t>(hit.mBodyID.GetIndexAndSequenceNumber()),
+        point.GetX(), point.GetY(), point.GetZ()
+    };
 }
 
 } // namespace engine

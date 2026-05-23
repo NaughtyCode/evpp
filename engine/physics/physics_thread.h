@@ -59,6 +59,11 @@ public:
     bool IsHealthy() const { return healthy_.load(std::memory_order_acquire); }
     bool IsRunning() const { return running_.load(std::memory_order_acquire); }
 
+    // Thread-safe access to PhysicsWorld for synchronous queries.
+    // Query methods use Jolt's BodyLockInterface which handles cross-thread safety.
+    PhysicsWorld& GetWorld() { return world_; }
+    const PhysicsWorld& GetWorld() const { return world_; }
+
 private:
     // Event loop (runs on dedicated thread)
     void EventLoop();
