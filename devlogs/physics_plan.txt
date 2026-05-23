@@ -113,7 +113,8 @@ JoltPhysics 规范约束（必须遵守的引擎要求）
        - JobSystemSingleThreaded: 单线程顺序执行，无额外线程，适合调试/确定性验证
        - JobSystemThreadPool: 多线程工作窃取，并行化物理步进内各阶段，适合生产
      . 初始化参数: JobSystemThreadPool(maxJobs, maxBarriers, threadCount)
-       默认 maxJobs=2048, maxBarriers=2048, threadCount=-1(hw_concurrency-1)
+       推荐 maxJobs=2048, maxBarriers=8, threadCount=-1(hw_concurrency-1)
+       ⚠ maxBarriers 不可超过 Jolt 内部上限 cMaxPhysicsBarriers=8
      . 物理线程已独立，JobSystem 线程数应 ≤ 可用核心数 − 1（留核心给主线程）
      . 参考: jolt-physics/09-job-system.md, Jolt/Physics/PhysicsSystem.h
 
@@ -595,7 +596,7 @@ resources/physics/configs/
          (box→BoxShapeSettings, sphere→SphereShapeSettings,
           capsule→CapsuleShapeSettings, cylinder→CylinderShapeSettings,
           convex_hull→ConvexHullShapeSettings, mesh→MeshShapeSettings,
-          height_field→HeightFieldShapeSettings)
+          height_field→HeightFieldShapeSettings, plane→PlaneShapeSettings)
       2. shapeSettings.Create() → cooked JPH::Shape [J11]
       3. JPH::BodyCreationSettings(shape, pos, rot, JPH::EMotionType::Static, layer)
       4. 设置 material.friction / material.restitution
@@ -652,6 +653,8 @@ resources/physics/configs/
 
   ⚠ 仅对活跃动态刚体生成 Diff（睡眠刚体的状态不变）
   ⚠ 生成 Diff 后立即用 current 覆盖 previous（作为下一帧基线）
+  ⚠ 位置比较在 JPH::RVec3（double 精度）下进行，DiffPacket::values
+    存储为 float（网络传输精度，精度损失 < 0.1mm@1km 范围）
 
   ObjectRegistry:
     . object_id → asset_name 映射（静态体: 加载时注册, 动态体: Spawn 时注册）
@@ -675,8 +678,8 @@ resources/physics/configs/
     . PhysicsConfig config_                         — 配置副本
 
   初始化（严格按 [J2] 的 10 步顺序）:
-    bool Initialize(const PhysicsConfig&, const PhysicsLogConfig&,
-                    const std::string& assets_path):
+    bool Initialize(const PhysicsConfig&, const ThreadingConfig&,
+                    const PhysicsLogConfig&, const std::string& assets_path):
       1. JPH::RegisterDefaultAllocator()
       2. JPH::Factory::sInstance = new JPH::Factory()
       3. JPH::RegisterTypes()
@@ -717,9 +720,11 @@ resources/physics/configs/
       BodyInterface::SetLinearVelocity + 确保激活
 
     . Step(delta_time, frame_id) → PhysicsFrameResult
-      内部: system_.Update(delta_time, sub_step_count, *temp_allocator_, *job_system_)
-      [D5][D6]
-      然后: CollectTransforms() → CollectCollisionEvents() → GenerateDiffs()
+      内部: EPhysicsUpdateError err = system_.Update(delta_time, sub_step_count,
+            *temp_allocator_, *job_system_);
+      ⚠ 检查 err 返回值：非 EPhysicsUpdateError::None 时填充
+        PhysicsFrameResult::error 并跳过碰撞/变换提取 [D5][D6]
+      正常流程: CollectTransforms() → CollectCollisionEvents() → GenerateDiffs()
       封装 PhysicsFrameResult
 
     . GetTransform(body_id) → (pos, rot) | nullopt
@@ -751,7 +756,7 @@ resources/physics/configs/
           调用 engine::CreateLogger(mapped_config) 创建独立 Logger
         ⚠ engine::CreateLogger 接受 engine::LogConfig，PhysicsLogConfig
           需做字段映射转换（字段名不同但语义对应）
-      — 创建 PhysicsWorld 并初始化
+      — 创建 PhysicsWorld 并初始化（传入 config + threading + log + assets_path）
       — 启动 std::thread，进入事件循环
       — 日志文件名按日期生成（如 physics_engine_2026-05-23.log）
     void Stop()
@@ -850,10 +855,12 @@ resources/physics/configs/
     // Engine 通过此接口获取物理专用 VM，在主线程主循环中调用其 UpdateScript()
     // 物理线程崩溃/未初始化时，此 VM 仍可安全存在（仅 API 返回 nil）
 
-    // ── Lua 脚本更新（主线程调用）─────────────────────────────────
+    // ── Lua 脚本更新（主线程调用，必须在 FetchResult 之后）───────
     void UpdateScript()
-      — if (script_vm_) script_vm_->UpdateScript();
-      — 在主线程 FrameLoop 中调用，处理碰撞回调等 Lua 逻辑
+      — 内部缓存最近一次 FetchResult 的 collision_events
+      — 遍历缓存事件，调用物理专用 VM 中的 on_physics_collision 全局函数
+      — 同时调用 script_vm_->UpdateScript() 驱动 Lua 协程等
+      — ⚠ 必须在 FetchResult 之后调用（依赖缓存的事件数据）
 
 [3.2b] 创建 physics_engine_bridge.h/cc — 引擎桥接层
 
@@ -928,8 +935,8 @@ resources/physics/configs/
           ENGINE_LOG_WARN(logger, "physics system failed to initialize");
       }
       // ⚠ Initialize() 仅加载配置 + 创建 VM + 加载脚本，不启动物理线程
-      // ⚠ 宏关闭时 Initialize() 返回 false，日志一次 WARN 后降级运行
-    . 初始化失败时引擎继续运行，物理专用 VM 仍存在（API 返回 nil）
+      // ⚠ 宏关闭时 Initialize() 返回 false（无 VM 创建），日志一次 WARN 后降级运行
+    . 初始化失败时引擎继续运行（降级为无物理模拟）
     . 然后: Engine 自身 DoDirectory + InitScript（引擎脚本与物理脚本隔离）
     . ⚠ 物理线程在此处不启动，上层在适当时机调用
       PhysicsEngineBridge::Instance().Start() 才启动物理模拟
@@ -941,22 +948,20 @@ resources/physics/configs/
         TimerManager::instance().update();
 
         // [D17.1][D17.2] 触发物理模拟（若已 Start；宏关时为空操作）
-        // fixed_delta_time = PhysicsConfig::fixed_delta_time（Engine 初始化时缓存）
         PhysicsEngineBridge::Instance().Tick(frame_count_, fixed_delta_time_);
 
-        // [D17.3] 物理专用 Lua 脚本更新（宏关时为空操作）
-        PhysicsEngineBridge::Instance().UpdateScript();
-
-        // [D17.3] 引擎 Lua 脚本更新
+        // [D17.3] 引擎 Lua 脚本更新 + 非物理依赖任务
         if (script_vm_) {
             script_vm_->UpdateScript();
         }
 
-        // [D17.4] 获取本帧物理结果（frame_count_ 与 Tick 入参一致）
+        // [D17.4] 获取本帧物理结果
         auto result = PhysicsEngineBridge::Instance().FetchResult(frame_count_, 5);
         if (result) {
             // [D17.5] 更新游戏对象状态（result->transforms）
-            // [D17.6] 碰撞事件已在 UpdateScript() 中通过物理 VM 触发
+            // [D17.6] 物理专用 VM 碰撞回调 — 在 FetchResult 之后调用，
+            //   遍历 result->collision_events 触发 on_physics_collision
+            PhysicsEngineBridge::Instance().UpdateScript();
             // [D17.7] 基于 result->diff_packets 构建网络同步数据
         }
     }
@@ -1120,7 +1125,7 @@ resources/physics/configs/
   ── 资产文件格式 ─────────────────────────────────────────────────
     . 场景资产 JSON 完整 schema（staticBodies / dynamicPrototypes / constraints）
     . 支持的形状类型及参数说明（box, sphere, capsule, cylinder, convex_hull,
-      mesh, height_field, compound）
+      mesh, height_field, compound, plane）
     . 材质定义格式及引用方式
     . 约束类型及参数说明（hinge, spring, slider, fixed, distance, point, cone,
       six_dof）
