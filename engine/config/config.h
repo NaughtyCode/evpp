@@ -21,7 +21,8 @@ struct LogConfig {
 };
 
 struct FrameConfig {
-    int interval_ms = 33;
+    int target_fps = 30;       // 0 = unlimited (use interval_ms instead)
+    int interval_ms = 33;      // fallback when target_fps is 0
     int slow_threshold_multiplier = 2;
 };
 
@@ -55,13 +56,31 @@ public:
     ConfigManager(const ConfigManager&) = delete;
     ConfigManager& operator=(const ConfigManager&) = delete;
 
-    // Load configs from the given directory (e.g. "resources/config").
-    // Returns false if a required file is missing or malformed.
+    // ── From JSON strings (text) ─────────────────────────────────────
+    // Parse config directly from JSON strings. Useful for programmatic
+    // configuration or when config comes from a database/network.
+    // Returns false on parse error (current values are preserved).
+
+    bool LoadEngineFromString(const std::string& json);
+    bool LoadServerFromString(const std::string& json);
+    bool LoadFromString(const std::string& engine_json,
+                        const std::string& server_json);
+
+    // ── From files ───────────────────────────────────────────────────
+    // Load a single config file or both from a directory.
+    // Returns false if the file is missing or malformed.
+
+    bool LoadEngineFromFile(const std::string& path);
+    bool LoadServerFromFile(const std::string& path);
     bool Load(const std::string& config_dir);
+
+    // ── Reload ───────────────────────────────────────────────────────
 
     // Reload configs from disk. Returns false on failure (current values
     // are preserved).
     bool Reload(const std::string& config_dir);
+
+    // ── Accessors ────────────────────────────────────────────────────
 
     const EngineConfig& GetEngineConfig() const { return engine_config_; }
     EngineConfig& GetEngineConfigMutable() { return engine_config_; }

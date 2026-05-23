@@ -14,41 +14,78 @@ ConfigManager& ConfigManager::Instance() {
     return instance;
 }
 
-bool ConfigManager::Load(const std::string& config_dir) {
-    // Logger is not initialized yet — use stderr for error reporting.
-    // Success messages are logged later by Engine::Init after InitLogger.
+//============================================================================
+// From JSON strings (text)
+//============================================================================
 
-    // ── engine.json ──────────────────────────────────────────────────
-    std::string engine_path = config_dir + "/engine.json";
-    {
-        std::string buf;
-        auto ec = glz::read_file_json(engine_config_, engine_path, buf);
-        if (ec) {
-            std::string err = glz::format_error(ec, buf);
-            std::fprintf(stderr, "ConfigManager: failed to load [%s]: %s\n",
-                         engine_path.c_str(), err.c_str());
-            return false;
-        }
+bool ConfigManager::LoadEngineFromString(const std::string& json) {
+    auto ec = glz::read_json(engine_config_, json);
+    if (ec) {
+        std::fprintf(stderr, "ConfigManager: failed to parse engine config: %s\n",
+                     glz::format_error(ec, json).c_str());
+        return false;
     }
-
-    // ── server.json ──────────────────────────────────────────────────
-    std::string server_path = config_dir + "/server.json";
-    {
-        std::string buf;
-        auto ec = glz::read_file_json(server_config_, server_path, buf);
-        if (ec) {
-            std::string err = glz::format_error(ec, buf);
-            std::fprintf(stderr, "ConfigManager: failed to load [%s]: %s\n",
-                         server_path.c_str(), err.c_str());
-            return false;
-        }
-    }
-
     return true;
 }
 
+bool ConfigManager::LoadServerFromString(const std::string& json) {
+    auto ec = glz::read_json(server_config_, json);
+    if (ec) {
+        std::fprintf(stderr, "ConfigManager: failed to parse server config: %s\n",
+                     glz::format_error(ec, json).c_str());
+        return false;
+    }
+    return true;
+}
+
+bool ConfigManager::LoadFromString(const std::string& engine_json,
+                                   const std::string& server_json) {
+    if (!LoadEngineFromString(engine_json)) return false;
+    if (!LoadServerFromString(server_json)) return false;
+    return true;
+}
+
+//============================================================================
+// From files
+//============================================================================
+
+bool ConfigManager::LoadEngineFromFile(const std::string& path) {
+    std::string buf;
+    auto ec = glz::read_file_json(engine_config_, path, buf);
+    if (ec) {
+        std::fprintf(stderr, "ConfigManager: failed to load [%s]: %s\n",
+                     path.c_str(), glz::format_error(ec, buf).c_str());
+        return false;
+    }
+    return true;
+}
+
+bool ConfigManager::LoadServerFromFile(const std::string& path) {
+    std::string buf;
+    auto ec = glz::read_file_json(server_config_, path, buf);
+    if (ec) {
+        std::fprintf(stderr, "ConfigManager: failed to load [%s]: %s\n",
+                     path.c_str(), glz::format_error(ec, buf).c_str());
+        return false;
+    }
+    return true;
+}
+
+bool ConfigManager::Load(const std::string& config_dir) {
+    // Logger is not initialized yet — use stderr for error reporting.
+    // Success messages are logged later by Engine::Init after InitLogger.
+    std::string engine_path = config_dir + "/engine.json";
+    std::string server_path = config_dir + "/server.json";
+    if (!LoadEngineFromFile(engine_path)) return false;
+    if (!LoadServerFromFile(server_path)) return false;
+    return true;
+}
+
+//============================================================================
+// Reload (runtime — logger is available)
+//============================================================================
+
 bool ConfigManager::Reload(const std::string& config_dir) {
-    // Reload happens at runtime — logger is available.
     auto* logger = GetLogger();
 
     EngineConfig new_engine;

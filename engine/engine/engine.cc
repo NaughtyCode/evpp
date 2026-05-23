@@ -1,9 +1,5 @@
-#include "engine/engine/engine.h"
-
-#include <csignal>
-#include <memory>
-#include <thread>
-
+// NOMINMAX must be defined before any windows.h inclusion,
+// which can come via engine.h -> invoke_timer.h -> ...
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -13,6 +9,12 @@
 #endif
 #include <winsock2.h>
 #endif
+
+#include "engine/engine/engine.h"
+
+#include <csignal>
+#include <memory>
+#include <thread>
 
 #include <evpp/event_loop.h>
 #include <evpp/event_watcher.h>
@@ -32,7 +34,9 @@ Engine& Engine::Instance() {
 }
 
 Engine::Engine() = default;
-Engine::~Engine() = default;
+Engine::~Engine() {
+    Cleanup();
+}
 
 ScriptVM& Engine::GetScriptVM() {
     if (!script_vm_) {
@@ -43,21 +47,36 @@ ScriptVM& Engine::GetScriptVM() {
     return *script_vm_;
 }
 
-void Engine::Init(const EngineConfig& config) {
+//============================================================================
+// Init
+//============================================================================
+
+void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
     InitLogger(config.log);
 
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger,
                     "engine initializing, log_dir=[{}], log_level=[{}], "
-                    "scripts_dir=[{}], frame_interval=[{}ms]",
+                    "scripts_dir=[{}], frame_interval=[{}ms], library_mode=[{}]",
                     config.log.dir, config.log.level,
-                    config.scripts_dir, config.frame.interval_ms);
+                    config.scripts_dir, config.frame.interval_ms,
+                    (external_loop != nullptr));
 
     TimerManager::create_instance();
     ENGINE_LOG_INFO(logger, "timer manager initialized");
 
-    loop_ = std::make_unique<evpp::EventLoop>();
-    frame_interval_ = std::chrono::milliseconds(config.frame.interval_ms);
+    if (external_loop) {
+        loop_ = external_loop;
+        running_ = true;  // library mode: engine is immediately "running"
+    } else {
+        owned_loop_ = std::make_unique<evpp::EventLoop>();
+        loop_ = owned_loop_.get();
+    }
+    if (config.frame.target_fps > 0) {
+        frame_interval_ = std::chrono::milliseconds(1000 / config.frame.target_fps);
+    } else {
+        frame_interval_ = std::chrono::milliseconds(config.frame.interval_ms);
+    }
 
     script_vm_ = std::make_unique<ScriptVM>();
     ENGINE_LOG_INFO(logger, "lua vm initialized, version=[{}]", ScriptVM::LuaVersion());
@@ -75,68 +94,128 @@ void Engine::Init(const EngineConfig& config) {
     }
 }
 
-void Engine::Run() {
+//============================================================================
+// Start — standalone mode: arm frame timer and signal watchers
+//============================================================================
+
+void Engine::Start() {
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "engine starting, frame_interval=[{}ms]",
                     frame_interval_.count());
 
-    auto sigint_watcher = std::make_unique<evpp::SignalEventWatcher>(
-        SIGINT, loop_.get(), [this]() {
+    sigint_watcher_ = std::make_unique<evpp::SignalEventWatcher>(
+        SIGINT, loop_, [this]() {
             ENGINE_LOG_INFO(GetLogger(), "SIGINT received, shutting down...");
             Shutdown();
         });
-    if (!sigint_watcher->Init() || !sigint_watcher->AsyncWait()) {
+    if (!sigint_watcher_->Init() || !sigint_watcher_->AsyncWait()) {
         ENGINE_LOG_ERROR(logger, "failed to initialize SIGINT watcher");
     }
 
 #ifndef _WIN32
-    auto sigterm_watcher = std::make_unique<evpp::SignalEventWatcher>(
-        SIGTERM, loop_.get(), [this]() {
+    sigterm_watcher_ = std::make_unique<evpp::SignalEventWatcher>(
+        SIGTERM, loop_, [this]() {
             ENGINE_LOG_INFO(GetLogger(), "SIGTERM received, shutting down...");
             Shutdown();
         });
-    if (!sigterm_watcher->Init() || !sigterm_watcher->AsyncWait()) {
+    if (!sigterm_watcher_->Init() || !sigterm_watcher_->AsyncWait()) {
         ENGINE_LOG_ERROR(logger, "failed to initialize SIGTERM watcher");
     }
 #endif
 
-    auto frame_timer = loop_->RunEvery(
+    frame_timer_ = loop_->RunEvery(
         evpp::Duration(frame_interval_.count() * evpp::Duration::kMillisecond),
-        [this]() { FrameLoop(); });
+        [this]() { Tick(); });
 
     running_ = true;
     last_frame_time_ = std::chrono::steady_clock::now();
+    last_work_time_ = last_frame_time_;
+}
 
+//============================================================================
+// Run — standalone convenience: Start + dispatch + Cleanup
+//============================================================================
+
+void Engine::Run() {
+    Start();
+
+    auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "entering main loop");
     loop_->Run();
     ENGINE_LOG_INFO(logger, "main loop exited, frame_count=[{}]", frame_count_);
 
-    if (script_vm_) {
-        script_vm_->DestroyScript();
-        int mem_kb = lua_gc(script_vm_->GetState(), LUA_GCCOUNT, 0);
-        ENGINE_LOG_INFO(logger, "ScriptVM: final memory [{} KB], exiting", mem_kb);
-    }
-
-    script::ShutdownNetBindings();
-    script::ShutdownTimerBindings(*script_vm_);
-    TimerManager::destroy_instance();
-    ENGINE_LOG_INFO(logger, "timer manager shut down");
-
-    if (frame_timer) {
-        frame_timer->Cancel();
-    }
-    sigint_watcher.reset();
-#ifndef _WIN32
-    sigterm_watcher.reset();
-#endif
+    Cleanup();
 }
+
+//============================================================================
+// Tick — one frame of engine work
+//============================================================================
+
+void Engine::Tick() {
+    if (!running_) return;
+
+    auto now = std::chrono::steady_clock::now();
+    if (now - last_work_time_ < frame_interval_) return;
+
+    FrameLoop();
+    last_work_time_ = std::chrono::steady_clock::now();
+}
+
+//============================================================================
+// Shutdown — request graceful stop
+//============================================================================
 
 void Engine::Shutdown() {
     if (running_) {
         running_ = false;
-        loop_->Stop();
+        // Only stop the engine's own loop. In library mode the host
+        // manages the external EventLoop lifetime.
+        if (owned_loop_) {
+            owned_loop_->Stop();
+        }
     }
 }
+
+//============================================================================
+// Cleanup — release all resources
+//============================================================================
+
+void Engine::Cleanup() {
+    if (cleaned_up_) return;
+    cleaned_up_ = true;
+
+    // Cancel frame timer before destroying Lua state.
+    if (frame_timer_) {
+        frame_timer_->Cancel();
+        frame_timer_.reset();
+    }
+
+    if (script_vm_) {
+        script_vm_->DestroyScript();
+        int mem_kb = lua_gc(script_vm_->GetState(), LUA_GCCOUNT, 0);
+        auto* logger = GetLogger();
+        ENGINE_LOG_INFO(logger, "ScriptVM: final memory [{} KB], exiting", mem_kb);
+    }
+
+    script::ShutdownNetBindings();
+    if (script_vm_) {
+        script::ShutdownTimerBindings(*script_vm_);
+    }
+    TimerManager::destroy_instance();
+
+    auto* logger = GetLogger();
+    ENGINE_LOG_INFO(logger, "timer manager shut down");
+
+    // Release signal watchers.
+    sigint_watcher_.reset();
+#ifndef _WIN32
+    sigterm_watcher_.reset();
+#endif
+}
+
+//============================================================================
+// FrameLoop — per-frame work (timer update + Lua update)
+//============================================================================
 
 void Engine::FrameLoop() {
     if (!running_) return;

@@ -80,6 +80,14 @@ int l_import_clearcache(lua_State* L) {
     return 0;
 }
 
+// Wrapper: when the import table is called as import("mod"), Lua invokes
+// the __call metamethod with (table, "mod").  Remove the table so l_import
+// sees the module name at index 1.
+int l_import_call(lua_State* L) {
+    lua_remove(L, 1);
+    return l_import(L);
+}
+
 } // namespace
 
 //=============================================================================
@@ -95,18 +103,28 @@ void ExportImport(ScriptVM& vm) {
     lua_pushlightuserdata(L, &importer);
     lua_setfield(L, LUA_REGISTRYINDEX, "__ScriptImporter");
 
-    // Build the "import" function with sub-functions as fields.
-    // In Lua you can call: import("mod") and import.setpath("...")
-    lua_pushcfunction(L, l_import);               // import function
-    lua_pushcfunction(L, l_import_setpath);       // import.setpath
-    lua_setfield(L, -2, "setpath");
-    lua_pushcfunction(L, l_import_addpath);       // import.addpath
-    lua_setfield(L, -2, "addpath");
-    lua_pushcfunction(L, l_import_loaded);        // import.loaded
-    lua_setfield(L, -2, "loaded");
-    lua_pushcfunction(L, l_import_clearcache);    // import.clearcache
-    lua_setfield(L, -2, "clearcache");
-    lua_setglobal(L, "import");
+    // Build the "import" callable table.  Lua 5.4 does not allow setting
+    // fields on a C function, so we use a table with a __call metamethod.
+    //   import("mod")      → __call dispatches to l_import
+    //   import.setpath(…)  → table field access
+    lua_newtable(L);                                          // t
+
+    lua_pushcfunction(L, l_import_setpath);                  // t, f
+    lua_setfield(L, -2, "setpath");                          // t
+    lua_pushcfunction(L, l_import_addpath);                  // t, f
+    lua_setfield(L, -2, "addpath");                          // t
+    lua_pushcfunction(L, l_import_loaded);                   // t, f
+    lua_setfield(L, -2, "loaded");                           // t
+    lua_pushcfunction(L, l_import_clearcache);               // t, f
+    lua_setfield(L, -2, "clearcache");                       // t
+
+    // Make the table callable via __call metamethod.
+    lua_newtable(L);                                          // t, mt
+    lua_pushcfunction(L, l_import_call);                      // t, mt, f
+    lua_setfield(L, -2, "__call");                            // t, mt
+    lua_setmetatable(L, -2);                                  // t
+
+    lua_setglobal(L, "import");                               // (empty)
 
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "ScriptBind: import module exported "
