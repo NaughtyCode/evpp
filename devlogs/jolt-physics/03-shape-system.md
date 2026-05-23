@@ -148,6 +148,6 @@ RotatedTranslatedShapeSettings(Vec3 position, Quat rotation, Shape* child);
 ### EmptyShape
 无碰撞形状。用于传感器/触发器。
 
-## 碰撞形状常量: cMeshConvexRadius / cDefaultConvexRadius
+## 碰撞形状常量: cDefaultConvexRadius
 
-默认凸体半径 (0.05m) 用于平滑接触，所有凸体形状包含此"皮肤"厚度。
+默认凸体半径 `cDefaultConvexRadius = 0.05f` 用于平滑接触，所有凸体形状包含此"皮肤"厚度。

@@ -13,8 +13,9 @@ VehicleConstraint (继承 Constraint + PhysicsStepListener)
   │    ├── WheelSettings          // 车轮配置
   │    └── Wheel                  // 运行时状态
   └── VehicleController           // 控制器 (输入/逻辑)
-       ├── VehicleControllerKeyboard
-       └── VehicleControllerTank  // 坦克式
+       ├── WheeledVehicleController    // 轮式车辆
+       ├── MotorcycleController        // 摩托车
+       └── TrackedVehicleController    // 履带式/坦克
 ```
 
 ### 悬挂系统
@@ -98,7 +99,7 @@ protected:
 };
 ```
 
-具体子类 (如 `VehicleControllerKeyboard`) 在 `PreCollide`/`PostCollide` 中实现：
+具体子类 (如 `WheeledVehicleController`) 在 `PreCollide`/`PostCollide` 中实现：
 - 读取用户输入 (键盘/手柄)
 - 计算引擎扭矩和转速
 - 变速箱换挡逻辑
@@ -137,8 +138,6 @@ struct WheelSettingsWV : WheelSettings {
     float mInertia;              // 车轮转动惯量
     float mMaxSteerAngle;        // 最大转向角
 };
-```
-```
 
 ### 防倾杆 (AntiRollBar)
 

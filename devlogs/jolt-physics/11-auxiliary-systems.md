@@ -10,13 +10,18 @@ SoftBodyCreationSettings
   └── SoftBodySharedSettings (共享配置)
 ```
 
-### 支持特性
-- 基于顶点的软体模拟
-- 压力约束 (体积保持)
-- 弹性约束 (边距离保持)
-- 弯曲约束 (角度保持)
-- 摩擦接触 (与刚体碰撞)
-- 自碰撞
+### 算法
+基于 **XPBD** (Extended Position Based Dynamics, Matthias Müller, Ten Minute Physics)。内部通过多次迭代 (`mNumIterations`, 默认 5) 在子步内求解约束。
+
+### 约束类型
+- Dihedral Bend (二面角弯曲约束)
+- Volume (体积保持约束)
+- Skin (蒙皮约束)
+- Edge (边长度保持约束)
+- Rod Stretch/Shear (杆伸缩/剪切约束)
+- Rod Bend/Twist (杆弯曲/扭转约束)
+- 碰撞约束 (与刚体摩擦接触)
+- 传感器碰撞
 
 ### 集成
 在 `PhysicsSystem::Update` 中有专门的软体步骤：

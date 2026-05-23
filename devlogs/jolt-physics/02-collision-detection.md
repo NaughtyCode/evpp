@@ -35,14 +35,20 @@ class BroadPhase : public BroadPhaseQuery {
 ### BroadPhaseQuery (查询接口)
 ```cpp
 class BroadPhaseQuery {
-    // AABB 相交查询
-    void CastAABox(const AABox&, CastShapeCollector&, ...);
+    // AABB 扫掠查询
+    void CastAABox(const AABoxCast&, CastShapeBodyCollector&, ...);
     // 射线查询
-    void CastRay(const RayCast&, CastRayCollector&, ...);
-    // 收集与某刚体碰撞的所有 BodyID
-    void CollideAABox(const AABox&, BodyPairCollector&, ...);
-    void CollideSphere(const Sphere&, ...);
-    void CollidePoint(...);
+    void CastRay(const RayCast&, RayCastBodyCollector&, ...);
+    // AABB 相交查询
+    void CollideAABox(const AABox&, CollideShapeBodyCollector&, ...);
+    // 球体相交查询
+    void CollideSphere(Vec3Arg inCenter, float inRadius, CollideShapeBodyCollector&, ...);
+    // 点相交查询
+    void CollidePoint(Vec3Arg, CollideShapeBodyCollector&, ...);
+    // OBB 相交查询
+    void CollideOrientedBox(const OrientedBox&, CollideShapeBodyCollector&, ...);
+    // 获取整个 broadphase 的包围盒
+    AABox GetBounds() const;
 };
 ```
 

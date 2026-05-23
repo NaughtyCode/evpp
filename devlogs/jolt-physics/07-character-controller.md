@@ -49,17 +49,26 @@ class CharacterVirtual : public CharacterBase {
 
 ### 关键设置
 
+`CharacterVirtual` 的关键成员变量 (直接存储在对象上):
+
 ```cpp
-struct CharacterVirtualSettings {
-    float  mPredictiveContactDistance = 0.1f; // 预判距离
-    uint   mMaxCollisionIterations = 5;       // 碰撞迭代
-    uint   mMaxConstraintIterations = 15;     // 约束迭代
-    float  mMinTimeRemaining = 1e-4f;         // 剩余时间阈值
-    float  mCollisionTolerance = 1e-3f;       // 碰撞容差
-    float  mCharacterPadding = 0.02f;         // 安全边距
-    uint   mMaxNumHits = 256;                 // 最大碰撞数
-    float  mHitReductionCosMaxAngle = 0.999f; // 碰撞归并角度
-    float  mPenetrationRecoverySpeed = 1.0f;  // 穿透恢复速度
+// 碰撞检测参数
+float  mPredictiveContactDistance = 0.1f; // 预判距离
+uint   mMaxCollisionIterations = 5;       // 碰撞迭代
+uint   mMaxConstraintIterations = 15;     // 约束迭代
+float  mCharacterPadding = 0.02f;         // 安全边距
+float  mPenetrationRecoverySpeed = 1.0f;  // 穿透恢复速度
+float  mMaxSlopeAngle = 50.0f * JPH_PI / 180.0f; // 最大可攀爬角度
+float  mMaxStrength = 100.0f;             // 最大推力
+
+// ExtendedUpdate 专用设置
+struct ExtendedUpdateSettings {
+    Vec3  mStickToFloorStepDown { 0, -0.5f, 0 };    // StickToFloor 下探距离
+    Vec3  mWalkStairsStepUp { 0, 0.4f, 0 };         // 台阶上探高度
+    float mWalkStairsMinStepForward { 0.02f };       // 最小前探距离
+    float mWalkStairsStepForwardTest { 0.15f };      // 台阶下探前移距离
+    float mWalkStairsCosAngleForwardContact { ... }; // 前进方向与接触法线最大角度(cos 75°)
+    Vec3  mWalkStairsStepDownExtra { Vec3::sZero() };// 额外下探补偿
 };
 ```
 
@@ -78,29 +87,30 @@ struct CharacterVirtualSettings {
 - 射线检测等可命中角色
 - `LinearCast` 快速物体不能穿透
 
-## 台阶检测 (Step Detection)
+## 台阶检测 (Stair Walking)
 
-```cpp
-// CharacterBase
-virtual void SetMaxSlopeAngle(float);
-virtual void SetCharacterUp(Vec3);
-```
+通过 `ExtendedUpdate` 内部调用 `WalkStairs` 实现三步检测：
 
-- 检测前方障碍高度
-- 自动攀爬低于 `mMaxStepHeight` 的台阶
-- 陡坡检测: 表面法线与向上方向夹角超过 `mMaxSlopeAngle` 则不可行走
+1. **Step Up**: 向上扫掠 `mWalkStairsStepUp` 距离
+2. **Step Forward**: 沿前进方向扫掠 `mWalkStairsMinStepForward`
+3. **Step Down**: 向下扫掠到新地面，额外加上 `mWalkStairsStepDownExtra`
+
+台阶前先通过 `CanWalkStairs` 判断是否需要攀爬。台阶高度由 `mWalkStairsStepUp` 控制（默认 0.4m）。斜坡检测：表面法线与 up 方向夹角超过 `mMaxSlopeAngle` 则不可行走。
+
+`ExtendedUpdate` 按顺序组合 `Update` → `StickToFloor` → `WalkStairs` 完成完整角色移动。
 
 ## 地面检测
 
-- 通过 `GetGroundState()` 获取地面状态
-- `OnGround` / `InAir` / `NotSupported`
+- 通过 `GetGroundState()` 获取地面状态 (EGroundState 枚举)
+- `OnGround` / `OnSteepGround` / `NotSupported` / `InAir`
+- `IsSupported()` 在 OnGround 或 OnSteepGround 时返回 true
 - 地面法线和速度通过 `GetGroundNormal()` / `GetGroundVelocity()` 获取
 
 ## 性能考虑
 
 - CharacterVirtual 不参与 BroadPhase → 不需要每帧更新 AABB 树
 - 碰撞检测是每帧按需执行的局部扫掠
-- 可通过调整 `mCharacterPadding` 和 `mMaxNumHits` 平衡精度与性能
+- 可通过调整 `mCharacterPadding` 和 `mMaxCollisionIterations` 平衡精度与性能
 
 ## 注意事项
 

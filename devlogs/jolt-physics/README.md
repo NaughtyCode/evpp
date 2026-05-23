@@ -9,7 +9,7 @@
 | 00 | [overview](00-overview.md) | 架构总览、模块划分、设计原则 |
 | 01 | [math-layer](01-math-layer.md) | SIMD 向量/矩阵/四元数、双精度架构 |
 | 02 | [collision-detection](02-collision-detection.md) | BroadPhase + NarrowPhase、GJK/EPA、CCD |
-| 03 | [shape-system](03-shape-system.md) | 13 种形状类型、装饰器模式、复合形状 |
+| 03 | [shape-system](03-shape-system.md) | 18 种内置 + 16 种用户自定义形状、装饰器模式、复合形状 |
 | 04 | [body-system](04-body-system.md) | 刚体管理、运动属性、睡眠检测 |
 | 05 | [constraints](05-constraints.md) | 12 种约束、Sequential Impulse 求解、Island Build |
 | 06 | [physics-pipeline](06-physics-pipeline.md) | 完整仿真流程、阶段并行化、物理设置 |

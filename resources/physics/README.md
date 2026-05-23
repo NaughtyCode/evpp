@@ -106,11 +106,16 @@ ShapeRefC shape = new BoxShape(Vec3(1, 1, 1));
 
 ### 3. 材质管理
 ```cpp
+// 简单刚体的摩擦/弹性在 Body 层面设置
+BodyCreationSettings bodySettings;
+bodySettings.mFriction = 0.3f;
+bodySettings.mRestitution = 0.1f;
+
+// 网格/高度场形状支持按子形状指定材质
 PhysicsMaterialSimple *concrete = new PhysicsMaterialSimple("concrete", Color::sGrey);
-// 材质引用计数管理, 用 RefConst 持有
-PhysicsMaterialRefC matRef = concrete;
-// 在创建形状时关联材质
-CastShapeSettings shapeSettings(Vec3(1, 1, 1), 0.0f, matRef);
+PhysicsMaterialRefC matRef = concrete; // RefConst 持有引用计数
+MeshShapeSettings meshSettings;
+meshSettings.mMaterials = { matRef };  // 材质列表
 ```
 
 ### 4. 碰撞层映射
