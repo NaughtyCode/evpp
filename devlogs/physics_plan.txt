@@ -1,0 +1,1184 @@
+================================================================================
+引擎物理系统 — 实施计划
+严格遵循: devlogs/physics_tech/服务器物理引擎模拟系统技术报告.md
+严格遵循: 3rdparty/JoltPhysics 引擎规范与 API
+================================================================================
+
+前提：
+. 物理引擎源码位置： ./3rdparty/JoltPhysics （JoltPhysics v5.5.1, MIT 许可）
+. 物理引擎技术分析报告: ./devlogs/jolt-physics （含 12 份分析文档 + 1 份索引）
+. 物理系统设计技术报告: ./devlogs/physics_tech/服务器物理引擎模拟系统技术报告.md
+  （以下简称"设计文档"，所有设计决策以此为准）
+. 物理系统代码放 ./engine/physics 目录下
+. 物理系统配置文件放 ./resources/physics/configs/ 目录下
+. 物理系统资产数据放 ./resources/physics/data/ 目录下
+. 物理脚本放 ./resources/script 目录下（由物理系统专用 ScriptVM 加载）
+. 物理系统配置单独加载、单独管理（PhysicsConfigManager，不依赖 engine::ConfigManager）
+. 物理系统 API 导出到物理系统专用 ScriptVM，相关代码均在 ./engine/physics 目录下
+. 项目使用 glaze 库做 JSON 序列化（路径: 3rdparty/glaze）
+. 项目日志使用 quill 库（API见 engine/core/log/log.h: CreateLogger/GetLogger/InitLogger）
+. 并发队列使用 3rdparty/concurrentqueue（moodycamel::ConcurrentQueue）
+. ScriptVM 类定义见 engine/vm/vm.h（物理系统创建自己的 ScriptVM 实例，不共用引擎 VM）
+. 编译隔离宏 ENGINE_PHYSICS_ENABLED — 统一控制全部物理代码的编译开关，
+  默认开启（服务器构建），构建客户端库时关闭。所有物理代码（源文件 + 头文件
+  引用点）通过此宏隔离，关闭时物理系统完全从二进制中移除
+. 运行时行为 — 物理系统默认不启动。即使编译开关开启、Initialize() 完成配置
+  加载和 VM 初始化，物理线程也不自动启动，需显式调用 Start() 才运行
+  （此行为与编译宏独立：宏关闭时无物理代码，宏开启时物理代码存在于二进制中
+  但默认不运行）
+
+================================================================================
+核心架构（来自设计文档第 2 节）
+================================================================================
+
+  ┌──────────────────────────────────────┐    命令队列 (SPSC)    ┌──────────────────┐
+  │              主线程                   │ ── Spawn/Tick ──────► │    物理线程      │
+  │  · 游戏逻辑                           │                      │  · 场景管理       │
+  │  · 网络同步                           │ ◄─ FrameResult ───── │  · 物理步进       │
+  │  · 序列化                             │    结果队列 (SPSC)    │  · 变化提取       │
+  │  · 物理专用 ScriptVM（Lua 回调/脚本） │                      │                  │
+  └──────────────────────────────────────┘                      └──────────────────┘
+
+. 物理系统专用 ScriptVM — PhysicsSystem 创建并持有独立 Lua VM，加载
+  ./resources/script 下的脚本，Lua 回调在主线程执行（碰撞事件等）
+. 独立物理线程 — 主线程/物理线程间仅通过 SPSC 无锁队列交换数据
+. 帧号（frameId）严格匹配 — 命令与结果一一对应，防止错帧
+. 命令驱动 — 设计文档第 3.2 节定义的 5 种命令:
+    Spawn / Destroy / ApplyForce / SetVelocity / Tick
+. 增量序列化 — 物理线程生成 DiffPacket（设计文档第 6.1 节），
+  主线程按客户端状态做二次增量（设计文档第 6.2 节）
+. 资产驱动场景 — 静态刚体/动态原型/约束均由 JSON 资产文件定义（设计文档第 4 节）
+. 配置独立管理 — PhysicsConfigManager 单独加载/管理/热更新 4 个 JSON 配置文件，
+  不依赖 engine::ConfigManager
+. 编译隔离 — 全部物理系统代码通过 ENGINE_PHYSICS_ENABLED 宏保护：
+  宏开启时（默认，服务器构建）：engine/physics/ 下全部源文件参与编译，
+  引擎其他模块中引用物理系统的代码通过 #ifdef ENGINE_PHYSICS_ENABLED 保护；
+  宏关闭时（客户端库构建）：engine/physics/ 全部源文件不参与编译，引用点
+  编译为无操作空实现
+. 运行时默认不启动 — Engine::Init() 中调用 PhysicsSystem::Initialize() 完成
+  配置加载和 VM 初始化，但不调用 Start()。物理线程保持未运行状态。
+  上层（服务器主逻辑）在适当时机显式调用 PhysicsSystem::Start() 启动物理模拟。
+  Engine::Cleanup() 中调用 Shutdown() 按需清理
+
+================================================================================
+JoltPhysics 规范约束（必须遵守的引擎要求）
+================================================================================
+
+[J1] PhysicsSystem::Init() 精确签名（Jolt/Physics/PhysicsSystem.h:59）:
+     void Init(uint inMaxBodies, uint inNumBodyMutexes, uint inMaxBodyPairs,
+               uint inMaxContactConstraints,
+               const BroadPhaseLayerInterface &inBroadPhaseLayerInterface,
+               const ObjectVsBroadPhaseLayerFilter &inObjectVsBroadPhaseLayerFilter,
+               const ObjectLayerPairFilter &inObjectLayerPairFilter);
+     参数说明:
+     . inMaxBodies          — 最大刚体数，上限 BodyID::cMaxBodyIndex+1（约 8.3M）
+     . inNumBodyMutexes     — Body 互斥锁数量，必须为 2 的幂，范围 [1, 64]，0=auto
+     . inMaxBodyPairs       — 最大 BodyPair 数，应远大于 maxContactConstraints
+     . inMaxContactConstraints — 最大接触约束数
+     . 三个接口实例必须存活于 PhysicsSystem 的整个生命周期中
+     . ⚠ 注意: 此签名与设计文档中简化描述的参数不同，实现时必须使用精确的 7 参数版本
+
+[J2] 初始化必须严格按顺序:
+     1. JPH::RegisterDefaultAllocator()        — 注册分配器（程序级，仅一次）
+     2. JPH::Factory::sInstance = new Factory() — 创建 RTTI 工厂
+     3. JPH::RegisterTypes()                   — 注册所有内置类型
+     4. 创建 JobSystem （即使只用单线程也必须有）
+     5. 创建 TempAllocator（每帧 Update() 必需）
+     6. 创建三个碰撞层接口实例（必须比 PhysicsSystem 活得久）
+     7. PhysicsSystem 构造 + Init(...)
+     8. SetPhysicsSettings() + SetGravity()
+     9. SetContactListener() + SetBodyActivationListener()
+     10. 加载资产（静态刚体 + 约束 + 构建原型池）
+     参考: Jolt/Physics/PhysicsSystem.h, Jolt/Jolt.h, Jolt/Core/TempAllocator.h
+
+[J3] BroadPhase: JoltPhysics 的生产实现仅有 BroadPhaseQuadTree，不存在 AABB_TREE 或 SAP
+     作为 BroadPhase 替换选项。QuadTree 通过松散四叉树实现增量更新。
+     因此不提供 broadPhaseType 配置字段，始终使用 BroadPhaseQuadTree。
+     参考: jolt-physics/02-collision-detection.md Broad Phase 节
+
+[J4] BodyInterface: 通过 PhysicsSystem::GetBodyInterface() 获取（带锁变体
+     BodyLockInterfaceLocking 或 无锁变体 BodyLockInterfaceNoLock）。
+     物理线程内使用无锁变体（仅该线程访问），通过
+     system.GetBodyInterfaceNoLock() 获取。
+     参考: jolt-physics/04-body-system.md BodyInterface 节
+
+[J5] TempAllocator: 每帧 PhysicsSystem::Update() 需要 TempAllocator 参数。
+     使用 JPH::TempAllocatorImpl（预分配固定内存块，栈式分配释放）
+     或 JPH::TempAllocatorImplWithMallocFallback（大负载时自动降级 malloc）。
+     参考: Jolt/Core/TempAllocator.h
+
+[J6] JobSystem:
+     . 即使物理模拟在单一线程中运行，Jolt 内部某些阶段也依赖 JobSystem。
+     . 选择方案:
+       - JobSystemSingleThreaded: 单线程顺序执行，无额外线程，适合调试/确定性验证
+       - JobSystemThreadPool: 多线程工作窃取，并行化物理步进内各阶段，适合生产
+     . 初始化参数: JobSystemThreadPool(maxJobs, maxBarriers, threadCount)
+       默认 maxJobs=2048, maxBarriers=2048, threadCount=-1(hw_concurrency-1)
+     . 物理线程已独立，JobSystem 线程数应 ≤ 可用核心数 − 1（留核心给主线程）
+     . 参考: jolt-physics/09-job-system.md, Jolt/Physics/PhysicsSystem.h
+
+[J7] 碰撞层体系: 必须实现的三个接口:
+     . BroadPhaseLayerInterface  — GetNumBroadPhaseLayers() + GetBroadPhaseLayer(ObjectLayer)
+     . ObjectLayerPairFilter      — ShouldCollide(ObjectLayer, ObjectLayer)
+     . ObjectVsBroadPhaseLayerFilter — ShouldCollide(ObjectLayer, BroadPhaseLayer)
+     三个接口实例必须在 PhysicsSystem 整个生命周期内保持存活。
+     参考: jolt-physics/02-collision-detection.md 碰撞过滤三层架构
+
+[J8] ContactListener（Jolt/Physics/ContactListener.h）:
+     . OnContactAdded    — 新接触，可修改 ContactSettings（摩擦/弹性）
+     . OnContactPersisted — 持续接触
+     . OnContactRemoved  — 接触分离
+     . OnContactValidate  — 验证（可拒绝特定接触对）
+     回调在 Jolt 作业线程中执行！实现必须将事件追加到线程安全缓冲区，
+     Step() 结束后再打包到 PhysicsFrameResult。
+     参考: jolt-physics/05-constraints.md ContactListener 节
+
+[J9] BodyActivationListener（Jolt/Physics/BodyActivationListener.h）:
+     . OnBodyActivated   — 刚体从睡眠中唤醒
+     . OnBodyDeactivated — 刚体进入睡眠
+     用于追踪活跃刚体集合，辅助 Diff 生成（仅活跃刚体有变化）。
+     参考: Jolt/Physics/PhysicsSystem.h SetBodyActivationListener
+
+[J10] Body 生命周期（Jolt 规范，来自 Docs/Architecture.md）:
+      . CreateBody → AddBody → [模拟] → RemoveBody → DestroyBody
+      . 不可直接 new/delete Body，必须通过 BodyInterface
+      . 批量添加使用 AddBodiesPrepare/AddBodiesFinalize（比逐体添加快数百倍），
+        否则 BroadPhase 效率极低，极端情况 std::abort
+      . 修改刚体后必须调用 ActivateBody() 唤醒（除非是 kinematic）
+     参考: Jolt/Docs/Architecture.md Bodies 节
+
+[J11] 形状创建使用 ShapeSettings → Create() 两阶段模式:
+      . ShapeSettings: 可序列化参数（uncooked form）
+      . ShapeSettings::Create() → Shape: 运行时优化形状（cooked form），不可序列化
+      . 同一 Shape 可被多个 Body 共享（侵入式引用计数 RefConst<Shape>）
+      . 所有凸体默认包含 cDefaultConvexRadius = 0.05f 的"皮肤"厚度
+     参考: jolt-physics/03-shape-system.md ShapeSettings / Create 模式
+
+[J12] 确定性模拟: 设计文档第 3.3 节要求确定性还原。
+      Jolt 支持: 编译选项 JPH_CROSS_PLATFORM_DETERMINISTIC（禁用 FMA）、
+      PhysicsSettings::mDeterministicSimulation = true、固定子步长。
+      使用 SaveState()/RestoreState() 实现状态保存与恢复。
+     参考: jolt-physics/06-physics-pipeline.md PhysicsSettings 完整字段
+
+[J13] Combine 函数:
+      . 摩擦默认: sqrt(f1 * f2)（几何平均）
+      . 弹性默认: max(r1, r2)（取大值）
+      . 可通过 PhysicsSystem::SetCombineFriction/SetCombineRestitution 覆盖
+     参考: Jolt/Docs/Architecture.md Friction and Restitution 节
+
+[J14] 内存分配: Jolt 使用全局函数指针 Allocate/Reallocate/Free/
+      AlignedAllocate/AlignedFree。RegisterDefaultAllocator() 使用 malloc/free。
+      可替换为自定义分配器（设置 JPH::Allocate = my_alloc 等）。
+     参考: jolt-physics/10-memory-serialization.md
+
+================================================================================
+设计文档逐节要求对照（必须全部满足）
+================================================================================
+
+设计文档第 3.1 节 — 物理线程初始化:
+  [D1] 线程启动时依次加载:
+       a. 系统级配置文件（physics.json / threading.json / logging.json / thresholds.json）
+       b. 指定的物理资产文件（静态碰撞体/动态原型/约束）
+  [D2] 加载完毕后进入主循环等待命令
+  → 实施: plan [2.3] PhysicsWorld 初始化 + [3.1] PhysicsThread 事件循环
+
+设计文档第 3.2 节 — 命令处理:
+  [D3] 命令类型（精确 5 种，不得增减）:
+       Spawn(protoId, transform)   — 基于原型动态生成刚体并加入世界
+       Destroy(objectId)           — 移除并销毁指定刚体
+       ApplyForce(objectId, force, point) — 对指定物体施加力（世界坐标）
+       SetVelocity(objectId, velocity)    — 直接设置物体线速度
+       Tick(frameId, fixedDeltaTime)      — 进入物理模拟流程
+  [D4] 非 Tick 命令立即处理，Tick 命令为每帧模拟触发器
+  → 实施: plan [1.4] physics_commands.h/cc
+
+设计文档第 3.3 节 — 物理步进与结果生成:
+  [D5] 步进: system.Update(fixedDeltaTime, collisionSteps, tempAllocator, jobSystem)
+       collisionSteps 由配置 sub_step_count 决定
+  [D6] 步进完成后按顺序:
+       1. 提取变换快照 — 遍历所有活跃动态刚体，记录当前 Transform
+       2. 提取碰撞事件 — 收集本帧 contact-start / contact-persist / contact-end
+       3. 生成变化差异 — 逐字段阈值比较（位置/旋转/线速度/角速度），
+          生成 DiffPacket，用当前状态更新副本作为下一帧基线
+       4. 封装为 PhysicsFrameResult（含 frameId），推入结果队列
+  → 实施: plan [2.3] PhysicsWorld + [2.2] physics_diff
+
+设计文档第 3.4 节 — 日志系统:
+  [D7] 独立日志实例: 物理线程创建并持有自己的 Logger，不共享主线程资源
+  [D8] 独立日志文件: 文件名含日期（如 physics_engine_2026-05-23.log）
+  [D9] 日志级别支持运行时热更新
+  → 实施: plan [1.1] PhysicsLogConfig + [3.1] PhysicsThread 独立日志
+
+设计文档第 4 节 — 资产文件设计:
+  [D10] 资产格式为 JSON，包含:
+        . staticBodies[]      — id, shape(type+params), material(friction,restitution), transform
+        . dynamicPrototypes[] — protoId, shape, mass, material, motionType, 阻尼等
+          原型可包含多个 shape（compound shape）
+        . constraints[]       — type(hinge/spring/slider), bodyA, bodyB, pivot, axis, limits
+          支持铰链（hinge）、弹簧（spring）、滑杆（slider）等类型
+  [D11] 全局物理参数（重力、步长等）不在资产文件中定义，属于系统级配置
+  → 实施: plan [2.1] physics_assets
+
+设计文档第 5 节 — 物理系统级配置:
+  [D12] 配置文件目录: resources/physics/configs/
+  [D13] 4 个配置文件: physics.json / threading.json / logging.json / thresholds.json
+  [D14] 支持热更新的参数: thresholds.json（全部）、logging.json 的 level
+        其余参数需重启物理线程生效
+  → 实施: plan [1.1] physics_config.h + [1.2] 配置文件
+
+设计文档第 6.1 节 — DiffPacket 结构:
+  [D15] DiffPacket { objectId(uint32), changeMask(uint16), values[N](float) }
+        objectId 分配: 静态体→加载时分配, 动态体→Spawn 时分配
+        比较阈值: 位置<1mm, 旋转<0.01°, 线速度<0.01m/s, 角速度<0.001rad/s
+  → 实施: plan [2.2] physics_diff
+
+设计文档第 6.2 节 — 主线程生成网络增量:
+  [D16] 主线程维护每个客户端-物体的复制状态跟踪器
+        物理 Diff 更新权威状态 → 结合客户端确认状态计算网络增量
+  → 实施: 网络同步层由上层实现，物理系统仅产出 DiffPacket
+
+设计文档第 7 节 — 主线程帧循环:
+  [D17] 每帧严格时序（8 步）:
+        1. 生成 frameId，处理网络输入，生成物理命令入队
+        2. 写入 Tick(frameId, fixedDeltaTime) 触发物理模拟
+        3. 执行非物理依赖任务（AI、定时器、聊天等）
+        4. FetchResult(frameId, timeout) 等待本帧结果
+        5. 使用变换快照更新游戏对象状态
+        6. 处理碰撞事件，触发游戏逻辑
+        7. 基于 Diff 为各客户端构建增量同步包
+        8. 进入下一帧
+  → 实施: plan [3.3] Engine 集成
+
+设计文档第 8 节 — 线程安全:
+  [D18] 命令队列: SPSC 无锁队列（moodycamel::ConcurrentQueue，SPSC 模式）
+  [D19] 结果队列: 同 SPSC，PhysicsFrameResult 移动语义入队
+  [D20] 帧号严格匹配: FetchResult 仅接受期望帧号的结果
+  → 实施: plan [3.1] physics_thread
+
+设计文档第 9 节 — 容错与健壮性:
+  [D21] 物理线程异常退出 → 原子标志 + 超时检测 + 安全点重新初始化
+  [D22] 配置加载失败 → 阻止服务进入可服务状态
+  [D23] 帧堆积保护 → 最大待处理帧数限制，超限降级
+  [D24] 变化阈值可配置 → thresholds.json 各维度独立 epsilon
+  → 实施: plan [4.1] 容错与健壮性
+
+================================================================================
+整体文件结构
+================================================================================
+
+engine/physics/                                  ← 全部文件受 ENGINE_PHYSICS_ENABLED 宏控制
+├── physics_config.h/cc   — 配置结构体 + PhysicsConfigManager（独立管理）
+├── physics_commands.h/cc — 命令/结果数据结构
+├── physics_layers.h/cc   — 碰撞层三个接口实现 [J7]
+├── physics_materials.h/cc— 物理材质管理
+├── physics_diff.h/cc     — 增量序列化 [D15]
+├── physics_assets.h/cc   — 资产文件加载 [D10][D11]
+├── physics_world.h/cc    — PhysicsWorld（封装 JPH::PhysicsSystem [J1]-[J14]）
+├── physics_thread.h/cc   — PhysicsThread 物理线程 [D18][D19][D20]
+├── physics_system.h/cc   — PhysicsSystem 门面类（持有专用 ScriptVM）
+├── physics_engine_bridge.h/cc — 引擎桥接层（主线程与物理系统的唯一耦合点）
+├── physics_bindings.h/cc — Lua 绑定（导出到物理专用 ScriptVM）
+└── CMakeLists.txt        — 构建配置（根据 ENGINE_PHYSICS_ENABLED 条件编译）
+
+resources/physics/configs/
+├── physics.json          — 引擎核心参数 [D13]
+├── threading.json        — 线程模型配置 [D13]
+├── logging.json          — 日志配置 [D7][D8][D9]
+└── thresholds.json       — 变化检测阈值 [D14][D24]
+
+================================================================================
+阶段一：配置 + 碰撞层 + 数据结构 + 材质
+================================================================================
+
+[1.1] 创建 physics_config.h/cc — 配置结构体 + PhysicsConfigManager + 编译宏
+
+  设计原则:
+    . 物理系统配置完全独立，不依赖 engine::ConfigManager
+    . PhysicsConfigManager 是物理系统内部的配置管理器，单独负责加载/管理/热更新
+    . 所有配置相关代码均在 engine/physics 目录下
+
+  ── ENGINE_PHYSICS_ENABLED 编译隔离宏 ────────────────────────────────
+
+    定义位置: engine/physics/physics_config.h
+    （物理系统最顶层头文件，所有其他物理头文件均包含它）
+
+    宏语义:
+      #ifdef ENGINE_PHYSICS_ENABLED  → 物理系统代码参与编译
+      #ifndef ENGINE_PHYSICS_ENABLED → 物理系统完全移除
+
+    默认行为:
+      . 服务器构建: CMake 定义 ENGINE_PHYSICS_ENABLED（通过 target_compile_definitions）
+      . 客户端库构建: CMake 不定义此宏，engine/physics/ 源文件不参与编译;
+        引擎其他模块中的引用点通过 #ifdef ENGINE_PHYSICS_ENABLED / #endif 保护
+
+    用法规范:
+      . engine/physics/ 内每个 .h 文件顶部: #ifdef ENGINE_PHYSICS_ENABLED / ... / #endif
+      . engine/physics/ 内每个 .cc 文件顶部: #ifdef ENGINE_PHYSICS_ENABLED / ... / #endif
+        （即使 CMake 不编译未定义宏的 .cc，头文件中的 inline/template 代码仍需防护）
+      . 引擎其他模块引用物理系统处:
+        #ifdef ENGINE_PHYSICS_ENABLED
+        #include "engine/physics/physics_system.h"
+        #endif
+        调用点同样用 #ifdef 包裹，宏关闭时编译为空操作
+
+  ── PhysicsConfig（映射 physics.json + 设计文档 5.1 节）─────────────────
+  设计文档字段（必须）:
+    gravity: float[3]             — 重力向量(m/s²), 默认[0, -9.81, 0]
+    fixed_delta_time: float       — 固定步长(秒), 默认0.01667(60Hz)
+    solver_iterations: int        — 求解器迭代次数, 默认10
+    sub_step_count: int           — 每帧子步数, 默认2
+                                   ⚠ 子步时长 = fixed_delta_time / sub_step_count
+                                   映射至: JPH::PhysicsSystem::Update(dt, collisionSteps, ...)
+                                   的 collisionSteps 参数
+    max_bodies: int               — 最大刚体数, 默认4096
+                                   ⚠ 映射至 PhysicsSystem::Init(inMaxBodies)
+    max_contact_points: int       — 最大接触点数, 默认10240
+                                   ⚠ 映射至 PhysicsSystem::Init(inMaxContactConstraints)
+    max_body_pairs: int           — 最大 BodyPair 数, 默认16384
+                                   ⚠ 映射至 PhysicsSystem::Init(inMaxBodyPairs)
+    num_body_mutexes: int         — Body 互斥锁数(2的幂,[1,64],0=auto), 默认32
+                                   ⚠ 映射至 PhysicsSystem::Init(inNumBodyMutexes)
+                                   ⚠ 此字段在设计文档 5.1 节的示例 JSON 中未出现,
+                                   但 JoltPhysics::Init() 要求此参数 [J1]
+
+  JoltPhysics 补充字段（保证全部可配置化，来自 Jolt PhysicsSettings）:
+    position_iterations: int      — 位置求解器迭代次数(对应 mNumPositionSteps), 默认2
+    speculative_contact_distance: float — 推测接触距离, 默认0.02
+    penetration_slop: float       — 允许穿透容差, 默认0.02
+    baumgarte: float              — Baumgarte 位置修正系数, 默认0.2
+    time_before_sleep: float      — 静止超时(秒)(对应 mTimeBeforeSleep), 默认0.5
+    point_velocity_sleep_threshold: float — 睡眠速度阈值(m/s), 默认0.03
+    deterministic_simulation: bool— 确定性模拟, 默认true
+    constraint_warm_start: bool   — 约束预热启动, 默认true
+    allow_sleeping: bool          — 允许睡眠, 默认true
+    use_large_island_splitter: bool — 大岛分割, 默认true
+    linear_cast_threshold: float  — CCD 触发阈值(×内接半径), 默认0.75
+    linear_cast_max_penetration: float — CCD 允许最大穿透(×内接半径), 默认0.25
+    max_penetration_distance: float — 单次迭代最大位置修正距离, 默认0.2
+    min_velocity_for_restitution: float — 弹性恢复最小速度, 默认1.0
+    use_body_pair_contact_cache: bool — BodyPair 缓存, 默认true
+    use_manifold_reduction: bool  — 流形归约, 默认true
+    check_active_edges: bool      — 内部边去除, 默认true
+
+  ── ThreadingConfig（映射 threading.json + 设计文档 5.2 节）──────────────
+  设计文档字段（必须）:
+    thread_priority: string       — "low"|"normal"|"high", 默认"high"
+    affinity_mask: uint64         — CPU亲和性掩码, 0=OS调度, 默认0
+    command_queue_size: int       — 命令队列容量, 默认256
+    result_queue_size: int        — 结果队列容量, 默认64
+  补充字段:
+    max_pending_frames: int       — 最大待处理帧数([D23]帧堆积保护), 默认3
+    job_system_max_jobs: int      — Jolt JobSystem maxJobs, 默认2048
+    job_system_max_barriers: int  — Jolt JobSystem maxBarriers, 默认2048
+    job_system_thread_count: int  — Jolt JobSystem 线程数, -1=auto, 默认-1
+                                    ⚠ 物理线程已独立，JobSystem 线程数
+                                    应 ≤ CPU核心数 - 1
+
+  ── PhysicsLogConfig（映射 logging.json + 设计文档 5.3 节）───────────────
+  设计文档字段（必须）:
+    log_dir: string               — 日志目录, 默认"./logs/physics"
+    file_name: string             — 日志文件基础名, 默认"physics_engine"
+    date_format: string           — 日期格式, 默认"YYYY-MM-DD"
+    level: string                 — "debug"|"info"|"warn"|"error", 默认"info"
+    max_file_size_mb: int         — 单文件最大大小(MB), 默认50
+    max_backup_files: int         — 滚动备份数, 默认10
+  补充字段（对齐 engine/core/log/log_config.h 的 LogConfig）:
+    rotation_frequency: string    — 时间轮转 ""|"daily"|"hourly"|"minutely", 默认"daily"
+    rotation_time_daily: string   — 日轮转时刻 "HH:MM", 默认"00:00"
+    format_pattern: string        — 日志格式, 默认 quill 标准格式
+
+  ── ThresholdsConfig（映射 thresholds.json + 设计文档 5.4 节）───────────
+    position_epsilon: float       — 位置(m), 默认0.001  (1mm)
+    rotation_epsilon: float       — 旋转(rad), 默认0.00017 (≈0.01°)
+    linear_velocity_epsilon: float— 线速度(m/s), 默认0.01
+    angular_velocity_epsilon: float— 角速度(rad/s), 默认0.001
+
+  ── LayerConfig（碰撞层定义，嵌入 physics.json）──────────────────────────
+    object_layers: {name → uint16}       — ObjectLayer 名称→值映射
+    broad_phase_layers: {name → uint8}   — BroadPhaseLayer 名称→值映射
+    layer_mapping: {objLayerName → bpLayerName} — 映射
+    collision_matrix: [[layerA, layerB, bool]] — 两两碰撞开关
+
+  ⚠ 所有字段在 struct 内用 C++ 成员初始化器设置默认值
+  ⚠ 使用 glaze 宏实现 JSON 自动序列化
+  ⚠ JSON 字段名使用 camelCase（设计文档约定），C++ 字段名使用 snake_case
+  ⚠ 热更新标记: thresholds.json（全部字段）, logging.json.level
+
+  ── PhysicsConfigManager（独立配置管理器）────────────────────────────
+
+    class PhysicsConfigManager {
+    public:
+        // 从 config_dir 加载全部 4 个 JSON 文件
+        // 返回 false 表示任一文件缺失/格式错误 [D22]
+        bool Load(const std::string& config_dir);
+
+        // 运行时热更新（仅热更新标记的字段）
+        bool ReloadThresholds(const std::string& config_dir);
+        bool ReloadLogLevel(const std::string& config_dir);
+
+        // 访问器
+        const PhysicsConfig& GetPhysicsConfig() const;
+        const ThreadingConfig& GetThreadingConfig() const;
+        const PhysicsLogConfig& GetLogConfig() const;
+        const ThresholdsConfig& GetThresholdsConfig() const;
+
+    private:
+        PhysicsConfig physics_config_;
+        ThreadingConfig threading_config_;
+        PhysicsLogConfig log_config_;
+        ThresholdsConfig thresholds_config_;
+
+        // 各文件独立加载函数（内部使用 glaze::read_file_json）
+        bool LoadPhysics(const std::string& path);
+        bool LoadThreading(const std::string& path);
+        bool LoadLogging(const std::string& path);
+        bool LoadThresholds(const std::string& path);
+    };
+
+  ⚠ PhysicsConfigManager 不继承/不依赖 engine::ConfigManager，完全独立
+  ⚠ 物理线程启动前，PhysicsSystem::Initialize() 内部创建 PhysicsConfigManager
+    并调用 Load() 加载配置；加载失败则阻止物理线程启动
+  ⚠ 热更新通过主线程调用 ReloadThresholds()/ReloadLogLevel()，内部使用
+    原子变量或 mutex 保护读写，确保物理线程读取配置时无竞争
+
+[1.2] 创建 4 个配置文件到 resources/physics/configs/
+
+  每个 JSON 文件必须包含:
+    . "_module" 对象: 用途描述 + 与其他配置文件的关系
+    . 每个字段上方的 "_comment.<fieldName>" 注释: 字段含义、数据类型、单位、
+      取值范围、默认值、热更新/重启生效标记
+    . "_hot_reload" 数组: 支持热更新的字段名列表
+    . "_requires_restart" 数组: 需要重启物理线程的字段名列表
+
+  文件内容:
+    physics.json      — 字段 = PhysicsConfig + LayerConfig 的所有字段
+    threading.json    — 字段 = ThreadingConfig 的所有字段
+    logging.json      — 字段 = PhysicsLogConfig 的所有字段
+    thresholds.json   — 字段 = ThresholdsConfig 的所有字段
+
+  ⚠ 配置加载验证: 物理线程启动时检查每个 JSON 文件的必需字段是否存在，
+    值是否在合法范围内，失败时阻止物理线程启动 [D22]
+
+[1.3] 创建 physics_layers.h/cc — 碰撞层接口实现 [J7]
+
+  实现三个 Jolt 接口类:
+    class BPLayerInterfaceImpl : public JPH::BroadPhaseLayerInterface {
+        // 构造函数接收 LayerConfig
+        uint GetNumBroadPhaseLayers() const override;
+        JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer) const override;
+    };
+
+    class ObjectLayerPairFilterImpl : public JPH::ObjectLayerPairFilter {
+        bool ShouldCollide(JPH::ObjectLayer, JPH::ObjectLayer) const override;
+        // 查 collision_matrix 表
+    };
+
+    class ObjectVSBLayerFilterImpl : public JPH::ObjectVsBroadPhaseLayerFilter {
+        bool ShouldCollide(JPH::ObjectLayer, JPH::BroadPhaseLayer) const override;
+        // 查 layer_mapping + collision_matrix
+    };
+
+  ⚠ 三个实例在 PhysicsWorld 中作为成员变量持有，确保在 PhysicsSystem 的
+    整个生命周期内存活 [J1]。
+  ⚠ 参考: jolt-physics/02-collision-detection.md 碰撞过滤三层架构
+
+[1.4] 创建 physics_commands.h/cc — 命令/结果数据结构 [D3][D4][D5][D6]
+
+  ⚠ 命令类型严格对齐设计文档第 3.2 节，共 5 种（不含 Shutdown 哨兵）:
+
+    enum class CommandType {
+        Spawn,        // Spawn(protoId, transform)
+        Destroy,      // Destroy(objectId)
+        ApplyForce,   // ApplyForce(objectId, force, point)
+        SetVelocity,  // SetVelocity(objectId, velocity)
+        Tick,         // Tick(frameId, fixedDeltaTime)
+        Shutdown      // 优雅退出哨兵（不对外暴露）
+    };
+
+    struct SpawnArgs {
+        std::string proto_id;
+        JPH::RVec3 position;
+        JPH::Quat rotation;
+        uint64 user_data;
+    };
+    struct DestroyArgs { uint32 body_id; };
+    struct ApplyForceArgs {
+        uint32 body_id;
+        JPH::Vec3 force;
+        JPH::RVec3 point;  // 世界坐标
+    };
+    struct SetVelocityArgs {
+        uint32 body_id;
+        JPH::Vec3 velocity;  // 线速度
+    };
+    struct TickArgs {
+        uint64 frame_id;
+        float delta_time;
+    };
+
+    struct PhysicsCommand {
+        CommandType type;
+        std::variant<SpawnArgs, DestroyArgs, ApplyForceArgs,
+                     SetVelocityArgs, TickArgs> args;
+    };
+
+  ⚠ 设计文档第 3.3 节要求的结果结构:
+
+    struct DiffPacket {  // [D15]
+        uint32_t object_id;   // bit0:position, bit1:rotation, bit2:linearVel,
+        uint16_t change_mask; // bit3:angularVel, bit4-15:reserved
+        std::vector<float> values;  // 按 mask 比特序排列
+    };
+
+    struct CollisionEvent {
+        uint32 body_a;
+        uint32 body_b;
+        enum Type { Start, Persist, End } type;
+        std::vector<JPH::Vec3> contact_points;  // 世界坐标
+    };
+
+    struct BodyTransform {
+        uint32 body_id;
+        double pos_x, pos_y, pos_z;
+        float rot_x, rot_y, rot_z, rot_w;  // quaternion
+    };
+
+    struct PhysicsFrameResult {
+        uint64 frame_id;
+        std::vector<BodyTransform> transforms;     // [D6.1] 变换快照
+        std::vector<CollisionEvent> collision_events; // [D6.2] 碰撞事件
+        std::vector<DiffPacket> diff_packets;      // [D6.3] 变化数据
+        std::string error;  // 空=正常
+    };
+
+[1.5] 创建 physics_materials.h/cc — 物理材质管理
+
+  . 封装 JPH::PhysicsMaterialSimple(friction, restitution)
+  . 材质表: name → JPH::PhysicsMaterial::RefConst 映射
+  . 支持从 JSON 批量定义: [{"name":"concrete","friction":0.8,"restitution":0.1}, ...]
+  . 网格/高度场形状引用材质列表（按子形状编号索引）
+  ⚠ 注意: 简单刚体的 friction/restitution 直接设置于 BodyCreationSettings，
+    材质表主要服务于 MeshShape/HeightFieldShape 的逐面子形状材质
+
+================================================================================
+阶段二：资产加载 + 差异生成 + 物理世界
+================================================================================
+
+[2.1] 创建 physics_assets.h/cc — 资产文件加载 [D10][D11]
+
+  资产文件格式严格对齐设计文档第 4 节:
+
+  staticBodies[] 加载:
+    对每个条目:
+      1. 根据 shape.type 创建对应的 JPH::ShapeSettings 子类
+         (box→BoxShapeSettings, sphere→SphereShapeSettings,
+          capsule→CapsuleShapeSettings, cylinder→CylinderShapeSettings,
+          convex_hull→ConvexHullShapeSettings, mesh→MeshShapeSettings,
+          height_field→HeightFieldShapeSettings)
+      2. shapeSettings.Create() → cooked JPH::Shape [J11]
+      3. JPH::BodyCreationSettings(shape, pos, rot, JPH::EMotionType::Static, layer)
+      4. 设置 material.friction / material.restitution
+      5. BodyInterface::CreateBody + AddBody（使用批量接口 AddBodiesPrepare/AddBodiesFinalize）[J10]
+      6. 注册 body_id → asset_id 到 ObjectRegistry
+
+  dynamicPrototypes[] 加载:
+    对每个条目:
+      1. 同上创建形状
+      2. 构造 PrototypeEntry { proto_id, shape, mass, material, motion_type,
+         motion_quality, linear_damping, angular_damping, gravity_factor,
+         allowed_dofs, is_sensor, ... }
+      3. 原型不加入世界，仅存入原型池（Spawn 时克隆）
+    支持 compound shape: shape 可以是数组 [{type, params}, ...]
+      → 使用 JPH::StaticCompoundShapeSettings
+
+  constraints[] 加载:
+    对每个条目:
+      根据 type 创建对应的 JPH::ConstraintSettings:
+        "hinge" → JPH::HingeConstraintSettings(bodyA, bodyB, pivot, axis, limits)
+        "spring" → JPH::SpringSettings + DistanceConstraintSettings
+        "slider" → JPH::SliderConstraintSettings
+        "fixed"  → JPH::FixedConstraintSettings
+        其他类型按 Jolt 约束体系扩展（见 jolt-physics/05-constraints.md）
+      bodyA/bodyB 通过 asset_id 从 ObjectRegistry 查找
+
+  加载失败处理 [D22]:
+    . 文件不存在 → 明确错误消息（含文件路径）
+    . JSON 格式错误 → 报告解析位置和错误原因
+    . 未知形状类型 → 列出支持的形状类型
+    . 未知约束类型 → 列出支持的约束类型
+    . 引用的 material 名称不存在 → 列出可用材质名
+    . 引用的 body ID 不存在 → 报告缺失的 ID
+
+[2.2] 创建 physics_diff.h/cc — 增量序列化 [D15]
+
+  BodyStateSnapshot（每物体维护的上一帧状态）:
+    . position: JPH::RVec3
+    . rotation: JPH::Quat
+    . linear_velocity: JPH::Vec3
+    . angular_velocity: JPH::Vec3
+
+  DiffPacket GenerateDiff(uint32 body_id,
+                          const BodyStateSnapshot& current,
+                          const BodyStateSnapshot& previous,
+                          const ThresholdsConfig& thresholds):
+    比较逻辑（逐字段，独立 epsilon [D24]）:
+      change_mask bit0: ||current.pos - previous.pos|| > position_epsilon
+      change_mask bit1: angle(current.rot, previous.rot) > rotation_epsilon
+      change_mask bit2: ||current.linVel - prev.linVel|| > linear_velocity_epsilon
+      change_mask bit3: ||current.angVel - prev.angVel|| > angular_velocity_epsilon
+    如果 change_mask == 0: 返回 nullopt（无变化）
+    否则: 按 mask 比特序填充 values 数组
+
+  ⚠ 仅对活跃动态刚体生成 Diff（睡眠刚体的状态不变）
+  ⚠ 生成 Diff 后立即用 current 覆盖 previous（作为下一帧基线）
+
+  ObjectRegistry:
+    . object_id → asset_name 映射（静态体: 加载时注册, 动态体: Spawn 时注册）
+    . 确保主线程可通过 ID 唯一引用每个物体 [D15]
+
+[2.3] 创建 physics_world.h/cc — PhysicsWorld [J1]-[J14]
+
+  成员变量:
+    . JPH::PhysicsSystem system_            — Jolt 物理系统
+    . std::unique_ptr<JPH::JobSystem> job_system_ — 作业系统（持有所有权）
+    . std::unique_ptr<JPH::TempAllocator> temp_allocator_ — 临时分配器（持有所有权）
+    . BPLayerInterfaceImpl bp_layer_interface_      — [J7] 三个层接口实例
+    . ObjectLayerPairFilterImpl layer_pair_filter_  — （成员变量确保生命周期）
+    . ObjectVSBLayerFilterImpl obj_vs_bp_filter_    —
+    . ContactListenerImpl contact_listener_         — [J8] 接触监听器
+    . BodyActivationListenerImpl activation_listener_ — [J9] 激活监听器
+    . quill::Logger* logger_                        — [D7] 独立日志实例
+    . std::unordered_map<std::string, PrototypeEntry> prototype_pool_ — [D10]
+    . ObjectRegistry object_registry_               — [D15] ID注册表
+    . std::unordered_map<uint32, BodyStateSnapshot> state_snapshots_ — [D15]
+    . PhysicsConfig config_                         — 配置副本
+
+  初始化（严格按 [J2] 的 10 步顺序）:
+    bool Initialize(const PhysicsConfig&, const PhysicsLogConfig&,
+                    const std::string& assets_path):
+      1. JPH::RegisterDefaultAllocator()
+      2. JPH::Factory::sInstance = new JPH::Factory()
+      3. JPH::RegisterTypes()
+      4. 根据 ThreadingConfig 创建 JobSystem [J6]
+      5. 创建 TempAllocatorImpl 或 TempAllocatorImplWithMallocFallback [J5]
+         Size = max_body_pairs * 预估 per-pair 内存（约 256 bytes）
+      6. 从 LayerConfig 构造层接口实例（bp_layer_interface_ / layer_pair_filter_ /
+         obj_vs_bp_filter_）
+      7. 调用 system_.Init(maxBodies, numBodyMutexes, maxBodyPairs,
+         maxContactConstraints, bp_layer_interface_, obj_vs_bp_filter_,
+         layer_pair_filter_) [J1]
+      8. system_.SetPhysicsSettings(settings_from_config) + SetGravity()
+      9. system_.SetContactListener(&contact_listener_)
+         system_.SetBodyActivationListener(&activation_listener_)
+      10. LoadAssets(assets_path) → 静态体+约束+原型池 [2.1]
+      返回 true 表示成功
+
+  运行时接口:
+    . CreateBody(proto_id, position, rotation, user_data) → uint32 body_id
+      从原型克隆创建动态刚体 [D3]
+      ⚠ 必须用 EActivation::Activate 激活（除非 kinematic）
+      ⚠ 分配运行时 body_id 并注册到 ObjectRegistry
+
+    . DestroyBody(body_id) → bool
+      BodyInterface::RemoveBody + DestroyBody [J10]
+      ⚠ 同时清理 ObjectRegistry 和 state_snapshots_
+
+    . ApplyForce(body_id, force, point) → bool [D3]
+      BodyInterface::AddForce + 确保激活
+
+    . SetVelocity(body_id, velocity) → bool [D3]
+      BodyInterface::SetLinearVelocity + 确保激活
+
+    . Step(delta_time, frame_id) → PhysicsFrameResult
+      内部: system_.Update(delta_time, sub_step_count, *temp_allocator_, *job_system_)
+      [D5][D6]
+      然后: CollectTransforms() → CollectCollisionEvents() → GenerateDiffs()
+      封装 PhysicsFrameResult
+
+    . GetTransform(body_id) → (pos, rot) | nullopt
+    . SaveState(state_recorder) / RestoreState(state_recorder) [J12]
+    . GetStats() → { active_bodies, total_bodies, ... }
+
+  ⚠ ContactListener 线程安全 [J8]:
+     contact_listener_ 在 OnContactAdded/Persisted/Removed/Validate 回调中
+     将事件追加到内部线程安全缓冲区（Mutex + vector 或 lock-free queue）
+     Step() 结束后 PhysicsWorld 读取缓冲区，填充 PhysicsFrameResult::collision_events
+
+  ⚠ 碰撞事件类型映射:
+     Jolt OnContactAdded    → CollisionEvent::Type::Start
+     Jolt OnContactPersisted → CollisionEvent::Type::Persist
+     Jolt OnContactRemoved   → CollisionEvent::Type::End
+
+================================================================================
+阶段三：物理线程 + 门面类 + Lua 绑定 + 引擎集成
+================================================================================
+
+[3.1] 创建 physics_thread.h/cc — PhysicsThread [D18][D19][D20]
+
+  线程生命周期:
+    bool Start(const PhysicsConfig&, const ThreadingConfig&,
+               const PhysicsLogConfig&, const std::string& assets_path)
+      — 创建独立日志实例 [D7][D8]: logger_ = engine::CreateLogger(log_config)
+      — 创建 PhysicsWorld 并初始化
+      — 启动 std::thread，进入事件循环
+      — 日志文件名按日期生成（如 physics_engine_2026-05-23.log）
+    void Stop()
+      — 向命令队列发送 Shutdown 哨兵
+      — 等待线程 join
+      — 关闭日志（flush + 释放）
+
+  事件循环:
+    while (running_):
+      1. 从 command_queue_ 出队（可设超时）
+      2. 根据 cmd.type 分发:
+         Spawn      → world_.CreateBody(...) [D3][D4]
+         Destroy    → world_.DestroyBody(...)
+         ApplyForce → world_.ApplyForce(...)
+         SetVelocity→ world_.SetVelocity(...)
+         Tick       → result = world_.Step(delta_time, frame_id) [D5][D6]
+                      result_queue_.enqueue(std::move(result)) [D19]
+         Shutdown   → running_ = false; break
+      3. 非 Tick 命令可批量出队一次性处理（减少唤醒开销）
+
+  队列:
+    . command_queue_: moodycamel::ConcurrentQueue<PhysicsCommand>
+    . result_queue_: moodycamel::ConcurrentQueue<PhysicsFrameResult>
+    . 容量保护: 入队前检查队列 size，超出 ThreadingConfig::max_pending_frames 时
+      丢弃最旧结果并记录 WARN 日志 [D23]
+    . 帧号同步 [D20]: result 中 frame_id 由 Tick 命令携带
+
+  线程安全:
+    . 原子标志 running_ 控制退出
+    . 原子标志 healthy_ 标记健康状态（异常时设为 false）[D21]
+
+  异常处理:
+    . PhysicsWorld 操作异常在事件循环内 catch
+    . 捕获后: 填充 PhysicsFrameResult::error，标记 healthy_ = false
+    . 主线程通过 IsHealthy() 感知
+
+[3.2] 创建 physics_system.h/cc — PhysicsSystem 门面类（持有专用 ScriptVM）
+
+  单例模式（与 Engine::Instance() 保持一致）:
+    static PhysicsSystem& Instance();
+    禁止拷贝/移动
+
+  内部成员:
+    . PhysicsConfigManager config_manager_   — 独立配置管理器
+    . std::unique_ptr<ScriptVM> script_vm_   — 物理系统专用 Lua VM
+    . PhysicsThread physics_thread_          — 物理线程
+
+  主线程接口:
+    bool Initialize(const std::string& config_dir,
+                    const std::string& assets_path,
+                    const std::string& scripts_dir)
+      — 创建 PhysicsConfigManager → Load(config_dir) 加载 4 个配置文件 [D22]
+      — 配置格式验证 + 值合法性检查，失败返回 false
+      — 创建物理系统专用 ScriptVM：
+        script_vm_ = std::make_unique<ScriptVM>();
+        script_vm_->SetImportPath(scripts_dir);
+        PhysicsBindings::Register(*script_vm_);  // [3.4] 导出 API 到专用 VM
+        script_vm_->DoDirectory(scripts_dir);    // 加载 ./resources/script 下脚本
+        script_vm_->InitScript();
+      — ⚠ 不启动物理线程！物理线程保持未运行状态
+      — 返回 false 表示初始化失败
+
+    bool Start()
+      — PhysicsThread::Start(...) 启动物理线程
+      — 仅在 is_initialized_=true 且 !is_running_ 时可调用
+      — 返回 false 表示启动失败（线程已运行、未初始化等）
+      — ⚠ 此方法与 Initialize() 分离：上层需显式调用才启动物理模拟
+
+    bool IsRunning() const — 物理线程是否正在运行
+
+    void Shutdown()
+      — if (is_running_) PhysicsThread::Stop()
+      — 物理专用 ScriptVM: script_vm_->DestroyScript()（物理线程已停止后调用）
+      — 清理 ScriptVM 和 config_manager_
+
+    // ── 命令入队（5 种命令 [D3]）──────────────────────────────────
+    void EnqueueSpawn(proto_id, x, y, z, qx, qy, qz, qw, user_data)
+    void EnqueueDestroy(body_id)
+    void EnqueueApplyForce(body_id, fx, fy, fz, px, py, pz)
+    void EnqueueSetVelocity(body_id, vx, vy, vz)
+    void Tick(uint64_t frame_id, float delta_time)
+
+    // ── 结果获取 ──────────────────────────────────────────────────
+    std::optional<PhysicsFrameResult> FetchResult(uint64_t frame_id,
+                                                   int timeout_ms) [D17.4]
+    bool IsHealthy() const
+
+    // ── 配置热更新 ────────────────────────────────────────────────
+    void ReloadThresholds() — 委托 config_manager_.ReloadThresholds() [D14]
+    void ReloadLogLevel() — 委托 config_manager_.ReloadLogLevel() [D9]
+
+    // ── 物理专用 ScriptVM ──────────────────────────────────────────
+    ScriptVM& GetScriptVM() { return *script_vm_; }
+    // Engine 通过此接口获取物理专用 VM，在主线程主循环中调用其 UpdateScript()
+    // 物理线程崩溃/未初始化时，此 VM 仍可安全存在（仅 API 返回 nil）
+
+    // ── Lua 脚本更新（主线程调用）─────────────────────────────────
+    void UpdateScript()
+      — if (script_vm_) script_vm_->UpdateScript();
+      — 在主线程 FrameLoop 中调用，处理碰撞回调等 Lua 逻辑
+
+[3.2b] 创建 physics_engine_bridge.h/cc — 引擎桥接层
+
+  目标: 将 Engine 与 PhysicsSystem 的交互逻辑封装到此独立模块中，
+  使 Engine 与物理系统的耦合降至最低（仅一个 #include + 若干简洁调用）。
+
+  设计原则:
+    . 桥接层是 Engine 与 PhysicsSystem 之间的唯一连接点
+    . Engine 不直接 include PhysicsSystem，只 include PhysicsEngineBridge
+    . 桥接层内部委托 PhysicsSystem，外部暴露简洁的 Engine 友好接口
+    . 宏关闭时桥接层编译为空实现（所有方法为空操作 inline）
+
+  接口（全部通过 PhysicsEngineBridge::Instance() 单例调用）:
+
+    class PhysicsEngineBridge {
+    public:
+        static PhysicsEngineBridge& Instance();
+
+        // Engine::Init() 中调用 — 加载配置、创建 VM、注册绑定，不启动物理线程
+        bool Initialize(const std::string& config_dir,
+                        const std::string& assets_path,
+                        const std::string& scripts_dir);
+
+        // 显式启动物理线程 — 由上层（服务器主逻辑）在合适时机调用
+        bool Start();
+
+        // Engine::FrameLoop() 中调用 — 触发物理步进 + 更新物理专用 VM
+        void Tick(uint64_t frame_id, float delta_time);
+
+        // Engine::FrameLoop() 中调用 — 更新物理专用 VM 脚本（碰撞回调等）
+        void UpdateScript();
+
+        // 获取本帧物理结果 — 供网络同步模块使用
+        std::optional<PhysicsFrameResult> FetchResult(uint64_t frame_id,
+                                                       int timeout_ms);
+
+        // Engine::Cleanup() 中调用
+        void Shutdown();
+
+        bool IsRunning() const;
+        bool IsHealthy() const;
+        ScriptVM* GetScriptVM();  // 物理专用 VM
+    };
+
+  实现:
+    . 宏开启时: 每个方法内部委托 PhysicsSystem::Instance() 的同名方法
+    . 宏关闭时: 所有方法 inline 空实现
+      Initialize() → return false
+      Start() → return false
+      Tick() / UpdateScript() / Shutdown() → 空
+      FetchResult() → return std::nullopt
+      GetScriptVM() → return nullptr
+    . Engine 调用方通过 #ifdef ENGINE_PHYSICS_ENABLED / #endif 包裹 include
+      和调用点（或桥接层自身提供空实现，Engine 无需宏判断即可调用）
+
+  ⚠ 此模块确保 Engine 对物理系统的耦合仅限:
+    1. engine/engine/engine.cc 顶部一处 #include "engine/physics/physics_engine_bridge.h"
+    2. Engine::Init/FrameLoop/Cleanup 中若干行 Bridge::Instance().Xxx() 调用
+    3. 物理系统完全移除时，仅需删除 include 和调用行（或桥接层空实现自动消除）
+
+[3.3] 在 Engine 中集成 PhysicsEngineBridge（对齐设计文档第 7 节 [D17]）
+
+  Engine::Init() 中的集成点:
+    . 位置: Engine 自身 ScriptVM 创建之后、Engine DoDirectory 之前
+    . 调用桥接层（Engine 不直接接触 PhysicsSystem）:
+      #ifdef ENGINE_PHYSICS_ENABLED
+      bool ok = PhysicsEngineBridge::Instance().Initialize(
+          "resources/physics/configs",
+          "resources/physics/data",
+          "resources/script");
+      if (!ok) {
+          ENGINE_LOG_WARN(logger, "physics system failed to initialize");
+      }
+      // ⚠ Initialize() 仅加载配置 + 创建 VM + 加载脚本，不启动物理线程
+      #endif
+    . 初始化失败时引擎继续运行，物理专用 VM 仍存在（API 返回 nil）
+    . 然后: Engine 自身 DoDirectory + InitScript（引擎脚本与物理脚本隔离）
+    . ⚠ 物理线程在此处不启动，上层在适当时机调用
+      PhysicsEngineBridge::Instance().Start() 才启动物理模拟
+
+  Engine::FrameLoop() 中的编排（对齐 [D17] 8 步流程）:
+    void FrameLoop() {
+        TimerManager::instance().update();
+
+        #ifdef ENGINE_PHYSICS_ENABLED
+        // [D17.1][D17.2] 触发物理模拟（若已 Start）
+        PhysicsEngineBridge::Instance().Tick(frame_id, fixed_delta_time);
+
+        // [D17.3] 物理专用 Lua 脚本更新
+        PhysicsEngineBridge::Instance().UpdateScript();
+        #endif
+
+        // [D17.3] 引擎 Lua 脚本更新
+        if (script_vm_) {
+            script_vm_->UpdateScript();
+        }
+
+        #ifdef ENGINE_PHYSICS_ENABLED
+        // [D17.4] 获取本帧物理结果
+        auto result = PhysicsEngineBridge::Instance().FetchResult(frame_id, 5);
+        if (result) {
+            // [D17.5] 更新游戏对象状态（result->transforms）
+            // [D17.6] 碰撞事件已在 UpdateScript() 中通过物理 VM 触发
+            // [D17.7] 基于 result->diff_packets 构建网络同步数据
+        }
+        #endif
+    }
+
+  ⚠ 两条 ScriptVM 流水线的区别:
+    . 引擎 ScriptVM (Engine::GetScriptVM()):
+      — 游戏逻辑脚本（AI、定时器、聊天等）
+      — 通过 engine/script/script_bind.cc 注册引擎 API
+    . 物理专用 ScriptVM (PhysicsEngineBridge::Instance().GetScriptVM()):
+      — 物理相关脚本（碰撞回调、物理对象管理）
+      — 通过 engine/physics/physics_bindings.cc 注册物理 API
+      — 两个 VM 完全隔离，各自独立的 lua_State
+
+  Engine::Cleanup() 中的集成点:
+    #ifdef ENGINE_PHYSICS_ENABLED
+    PhysicsEngineBridge::Instance().Shutdown() — 停止物理线程 + 销毁物理专用 VM
+    #endif
+    先于 Engine 自身 ScriptVM 销毁
+
+  ⚠ Engine 对物理系统的耦合仅限于:
+    . engine/engine/engine.cc 顶部一处 include: physics_engine_bridge.h
+    . 3 个调用点（Init / FrameLoop / Cleanup）中若干行 Bridge::Instance().Xxx()
+    . Engine 不 include 任何其他 physics 头文件，不接触 PhysicsSystem 等内部类
+    . 宏关闭时，删除 include + 对应的 #ifdef 块即可完全移除
+
+[3.4] 创建 physics_bindings.h/cc — Lua 绑定（导出到物理专用 ScriptVM）
+
+  代码位置: engine/physics/physics_bindings.h/cc
+  ⚠ 以下内容是物理专用 ScriptVM 中运行的 Lua 脚本可调用的 API
+
+  注册方式（由 PhysicsSystem::Initialize() 内部调用）:
+    void Register(ScriptVM& vm) {
+        vm.RegisterModule("physics", physics_api);
+        // vm 是物理系统专用 ScriptVM，非引擎 ScriptVM
+    }
+
+  Lua API（对齐 [D3] 5 种命令 + 查询类）:
+    physics.spawn(proto_id, x, y, z, qx, qy, qz, qw[, user_data]) → body_id | nil
+    physics.destroy(body_id) → bool
+    physics.apply_force(body_id, fx, fy, fz, px, py, pz) → bool
+    physics.set_velocity(body_id, vx, vy, vz) → bool
+
+    -- 查询类（读取上一帧结果缓存）:
+    physics.get_transform(body_id) → (x, y, z, qx, qy, qz, qw) | nil
+    physics.get_velocity(body_id) → (vx, vy, vz) | nil
+    physics.is_active(body_id) → bool
+    physics.ray_cast(ox, oy, oz, dx, dy, dz, max_dist) → {body_id, x, y, z} | nil
+    physics.get_stats() → {bodies=N, active=N, collisions=N}
+
+    -- 碰撞回调（在物理专用 VM 中定义，由 PhysicsSystem::UpdateScript() 触发）:
+    -- 脚本中定义: function on_physics_collision(event)
+    --   event = {body_a, body_b, type="start"|"persist"|"end", points={{x,y,z},...}}
+    -- end
+    -- PhysicsSystem::UpdateScript() 在获取 PhysicsFrameResult 后，
+    -- 遍历 collision_events，调用物理专用 VM 中的 on_physics_collision 全局函数
+
+  ⚠ 所有 API 内部通过 PhysicsSystem::Instance() 访问物理系统
+  ⚠ 当 PhysicsSystem 未初始化时，所有 API 返回 (nil, "physics not initialized")
+  ⚠ 参考: engine/vm/vm.h ScriptVM::RegisterModule
+  ⚠ 物理专用 VM 与引擎 VM 完全隔离:
+    — 物理脚本不能访问引擎 API（timer、网络等）
+    — 引擎脚本不能直接访问物理 API
+    — 如需交互，通过 PhysicsSystem::Instance() 的 C++ 接口在 Engine::FrameLoop 中桥接
+
+================================================================================
+阶段四：容错、配置注释、构建、文档
+================================================================================
+
+[4.1] 容错与健壮性（对齐设计文档第 9 节）
+
+  [D21] 物理线程异常退出:
+    . PhysicsThread 捕获所有异常 → healthy_ = false
+    . PhysicsSystem::FetchResult 超时 → 返回 nullopt
+    . 主线程检测到连续超时 → 标记物理系统不可用
+    . 恢复: 在安全点重新创建 PhysicsThread（重新初始化物理世界）
+    . 配合 Jolt SaveState/RestoreState 实现精确状态恢复 [J12]
+
+  [D22] 配置加载失败:
+    . 任一 JSON 文件缺失/格式错误/字段值非法 → Initialize() 返回 false
+    . 阻止物理线程启动，引擎降级运行
+
+  [D23] 帧堆积保护:
+    . 结果队列大小 ≤ max_pending_frames（ThreadingConfig），超限丢弃最旧帧
+    . 记录 WARN 日志（含丢弃帧号）
+    . 不做自动降低子步数（设计文档将此列为临时缓解措施，不自动触发）
+
+  [D24] 变化阈值可配置: 通过 ReloadThresholds() 运行时热更新
+
+[4.2] 配置文件注释规范
+
+  JSON 注释方案（JSON 无原生注释，使用元数据字段约定）:
+    "_module": {
+        "description": "模块用途的中文描述",
+        "related": ["关联的其他配置文件名"],
+        "jolt_reference": "对应的 JoltPhysics 结构体/API 引用"
+    },
+    "_comment": {
+        "fieldName": "中文注释：含义、单位、类型、取值范围、默认值、性能影响"
+    },
+    "_hot_reload": ["fieldName1", "fieldName2"],
+    "_requires_restart": ["fieldName3"],
+    "_restart_note": "修改 requires_restart 中的字段后需重新启动物理线程方可生效"
+
+  实际配置字段与 _comment / _module 平级放置。
+
+[4.3] CMakeLists.txt 更新
+
+  engine/physics/CMakeLists.txt:
+    . 构建为静态库 target: engine_physics
+    . 源文件: physics_config.cc, physics_commands.cc, physics_layers.cc,
+              physics_materials.cc, physics_diff.cc, physics_assets.cc,
+              physics_world.cc, physics_thread.cc, physics_system.cc,
+              physics_engine_bridge.cc, physics_bindings.cc
+    . 链接依赖: JoltPhysics, concurrentqueue, glaze::glaze, quill::quill, liblua
+    . 条件编译:
+      if(ENGINE_PHYSICS_ENABLED)
+        target_compile_definitions(engine_physics PUBLIC ENGINE_PHYSICS_ENABLED)
+        add_library(engine_physics STATIC ${PHYSICS_SOURCES})
+        target_link_libraries(engine_physics ...)
+      else()
+        # 不编译 physics 源文件，但需确保 engine_physics 目标存在
+        add_library(engine_physics INTERFACE)
+        # 不定义 ENGINE_PHYSICS_ENABLED，所有引用点编译为空操作
+      endif()
+
+  engine/CMakeLists.txt:
+    . add_subdirectory(physics)
+    . engine 目标链接 engine_physics
+
+[4.4] 物理系统使用文档
+
+  开发完成后，生成详细使用文档到 devlogs/ 或 resources/physics/ 目录下。
+  文档内容覆盖以下方面：
+
+  ── 快速入门 ─────────────────────────────────────────────────────
+    . 物理系统概述（架构图、核心概念、模块关系）
+    . 最小可运行示例（初始化 → Start → Tick → FetchResult → Shutdown）
+    . 引擎集成示例（在 Engine::Init / FrameLoop / Cleanup 中的调用点）
+
+  ── 编译与构建 ───────────────────────────────────────────────────
+    . ENGINE_PHYSICS_ENABLED 宏的说明（开启/关闭场景、CMake 配置方式）
+    . 客户端库构建说明（宏关闭时的行为）
+    . 依赖库列表及版本要求
+
+  ── 配置文件详解 ─────────────────────────────────────────────────
+    . 4 个 JSON 配置文件（physics.json / threading.json / logging.json /
+      thresholds.json）每个字段的含义、类型、单位、默认值、取值范围
+    . 热更新 vs 重启生效的参数对照表
+    . 配置加载失败时的错误信息说明
+    . 生产环境推荐配置示例
+
+  ── 资产文件格式 ─────────────────────────────────────────────────
+    . 场景资产 JSON 完整 schema（staticBodies / dynamicPrototypes / constraints）
+    . 支持的形状类型及参数说明（box, sphere, capsule, cylinder, convex_hull,
+      mesh, height_field, compound）
+    . 材质定义格式及引用方式
+    . 约束类型及参数说明（hinge, spring, slider, fixed, distance, point, cone,
+      six_dof）
+    . 完整示例资产文件
+
+  ── Lua API 参考 ─────────────────────────────────────────────────
+    . 物理专用 ScriptVM 说明
+    . 完整 API 列表（每个函数的签名、参数、返回值、错误码、使用示例）:
+      physics.spawn / destroy / apply_force / set_velocity
+      physics.get_transform / get_velocity / is_active / ray_cast / get_stats
+    . 碰撞回调 on_physics_collision 的 event 参数结构详解
+    . Lua 脚本示例（生成物体、施力、碰撞处理）
+
+  ── C++ API 参考 ─────────────────────────────────────────────────
+    . PhysicsEngineBridge 完整接口文档
+    . PhysicsSystem 内部接口（供扩展开发参考，非外部调用）
+    . 帧循环编排说明（Timing 图、命令流、结果流）
+    . 错误处理与容错策略说明
+
+  ── 调试与故障排查 ───────────────────────────────────────────────
+    . 日志文件位置、格式、日志级别说明
+    . 常见错误及解决方法（配置加载失败、物理线程崩溃、帧堆积等）
+    . 性能分析要点（刚体数量、碰撞对数量、子步数调优）
+    . 确定性模拟验证方法
+
+  ── 版本与兼容性 ─────────────────────────────────────────────────
+    . JoltPhysics 版本锁定说明
+    . 跨平台注意事项（SIMD 差异、确定性行为差异）
+    . API 变更历史
+
+  ⚠ 文档格式: Markdown，devlogs/physics_usage.md 或
+    resources/physics/USAGE.md
+  ⚠ 文档应在阶段三完成后编写，确保内容与实现一致
+
+================================================================================
+实施顺序依赖关系
+================================================================================
+
+  [1.1] physics_config.h/cc（无依赖，独立管理，含 ENGINE_PHYSICS_ENABLED 宏）
+    ├─→ [1.2] 4 个 JSON 配置文件（依赖 1.1 字段定义）
+    ├─→ [1.3] physics_layers.h/cc（依赖 1.1 的 LayerConfig）
+    ├─→ [1.5] physics_materials.h/cc（无强依赖）
+    └─→ [1.4] physics_commands.h/cc（无强依赖）
+           └─→ [2.2] physics_diff.h/cc（依赖 1.4 DiffPacket + 1.1 ThresholdsConfig）
+                  └─→ [2.3] physics_world.h/cc（依赖 1.1 + 1.3 + 1.4 + 1.5 + 2.2）
+                         ├─→ [2.1] physics_assets.h/cc（依赖 1.5 + 2.3）
+                         └─→ [3.1] physics_thread.h/cc（依赖 1.1 + 2.3）
+                                └─→ [3.2] physics_system.h/cc
+                                       （依赖 1.1 PhysicsConfigManager + 3.1 + ScriptVM）
+                                       ├─→ [3.4] physics_bindings.h/cc（依赖 3.2 的 ScriptVM）
+                                       ├─→ [3.2b] physics_engine_bridge.h/cc
+                                       │      （依赖 3.2 — Engine 与物理系统的唯一耦合点）
+                                       └─→ [3.3] Engine 集成
+                                              （仅 include physics_engine_bridge.h）
+  [4.1] 容错与健壮性 — 贯穿 [3.1]→[3.3]
+  [4.2] 配置文件注释 — 与 [1.2] 同步完成
+  [4.3] CMakeLists.txt — 与各文件创建同步更新
+
+================================================================================
+参考文档索引
+================================================================================
+
+设计文档（权威来源）:
+  devlogs/physics_tech/服务器物理引擎模拟系统技术报告.md
+    第 2 节 — 系统架构                第 6 节 — 增量序列化
+    第 3 节 — 物理线程设计            第 7 节 — 主线程帧循环
+    第 4 节 — 资产文件设计            第 8 节 — 线程安全与通信
+    第 5 节 — 系统级配置              第 9 节 — 容错与健壮性
+
+JoltPhysics 分析文档 (devlogs/jolt-physics/):
+  00-overview.md             — 架构总览、模块划分、设计原则
+  01-math-layer.md           — SIMD 向量/矩阵/四元数、双精度架构
+  02-collision-detection.md  — BroadPhase(QuadTree)、NarrowPhase(GJK/EPA)、CCD、碰撞过滤
+  03-shape-system.md         — 18 种内置形状、ShapeSettings/Create 模式、装饰器模式
+  04-body-system.md          — Body/BodyManager/BodyInterface API、睡眠系统、BodyCreationSettings
+  05-constraints.md          — 12 种约束类型、ContactListener、Island Builder
+  06-physics-pipeline.md     — 完整仿真流程（19 步）、PhysicsSettings 所有字段、并行化
+  07-character-controller.md — Character/Virtual 角色控制器
+  08-vehicle-system.md       — 车辆物理
+  09-job-system.md           — JobSystem 抽象、ThreadPool/SingleThreaded、作业调度树
+  10-memory-serialization.md — 内存分配（全局函数指针）、TempAllocator、序列化系统
+  11-auxiliary-systems.md    — 软体/Ragdoll/Skeleton/Hair、GPU Compute
+
+JoltPhysics 官方文档 (3rdparty/JoltPhysics/Docs/):
+  Architecture.md            — 官方架构文档、Body 生命周期、摩擦/弹性组合函数
+  APIChanges.md              — API 变更历史
+  ReleaseNotes.md            — 版本更新记录
+
+JoltPhysics 源码关键文件:
+  Jolt/Jolt.h               — 公共头文件
+  Jolt/Core/TempAllocator.h — TempAllocator / TempAllocatorImpl / TempAllocatorImplWithMallocFallback
+  Jolt/Physics/PhysicsSystem.h — PhysicsSystem 完整 API
+  Jolt/Physics/Body/BodyInterface.h — BodyInterface 完整 API
+  Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h — BroadPhaseLayer 接口
+
+现有代码参考:
+  engine/config/config.h       — ConfigManager 模式、glaze 反射示例
+  engine/core/log/log.h        — CreateLogger / GetLogger / InitLogger
+  engine/core/log/log_config.h — LogConfig 字段定义（对齐 PhysicsLogConfig）
+  engine/vm/vm.h               — ScriptVM::RegisterModule / RegisterCallback
+  engine/engine/engine.h/cc    — Engine 生命周期、FrameLoop 编排点
+  engine/script/script_bind.h/cc — Lua 模块注册模式
+  resources/physics/README.md  — 物理资源配置说明
