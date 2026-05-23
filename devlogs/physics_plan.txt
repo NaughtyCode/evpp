@@ -333,7 +333,7 @@ resources/physics/configs/
   设计文档字段（必须）:
     gravity: float[3]             — 重力向量(m/s²), 默认[0, -9.81, 0]
     fixed_delta_time: float       — 固定步长(秒), 默认0.01667(60Hz)
-    solver_iterations: int        — 求解器迭代次数, 默认10
+    solver_iterations: int        — 速度求解器迭代次数(对应 mNumVelocitySteps), 默认10
     sub_step_count: int           — 每帧子步数, 默认2
                                    ⚠ 子步时长 = fixed_delta_time / sub_step_count
                                    映射至: JPH::PhysicsSystem::Update(dt, collisionSteps, ...)
@@ -556,7 +556,9 @@ resources/physics/configs/
         uint32_t body_a;
         uint32_t body_b;
         enum Type { Start, Persist, End } type;
-        std::vector<JPH::Vec3> contact_points;  // 世界坐标
+        std::vector<JPH::RVec3> contact_points;  // 世界坐标
+        // ⚠ ContactManifold::GetWorldSpaceContactPointOn1/2 返回 RVec3（double），
+        //   使用 float 会导致大世界精度损失，直接保持 double
     };
 
     struct BodyTransform {
@@ -617,7 +619,8 @@ resources/physics/configs/
     对每个条目:
       根据 type 创建对应的 JPH::ConstraintSettings:
         "hinge" → JPH::HingeConstraintSettings(bodyA, bodyB, pivot, axis, limits)
-        "spring" → JPH::SpringSettings + DistanceConstraintSettings
+        "spring" → JPH::DistanceConstraintSettings（配置 mLimitsSpringSettings
+                   实现弹簧效果，SpringSettings 是 DistanceConstraintSettings 的成员）
         "slider" → JPH::SliderConstraintSettings
         "fixed"  → JPH::FixedConstraintSettings
         其他类型按 Jolt 约束体系扩展（见 jolt-physics/05-constraints.md）
@@ -903,16 +906,19 @@ resources/physics/configs/
         bool IsRunning() const;
         bool IsHealthy() const;
         ScriptVM* GetScriptVM();  // 物理专用 VM
+        float GetFixedDeltaTime() const;  // 从 PhysicsConfig 读取，宏关时返回 0.01667f
     };
 
   实现:
     . 宏开启时: 每个方法内部委托 PhysicsSystem::Instance() 的同名方法
+      GetFixedDeltaTime() 从 PhysicsConfig::fixed_delta_time 读取
     . 宏关闭时: 所有方法在头文件中 inline 空实现（无需链接 engine_physics 库）
       Initialize() → return false
       Start() → return false
       Tick() / UpdateScript() / Shutdown() → 空
       FetchResult() → return std::nullopt
       GetScriptVM() → return nullptr
+      GetFixedDeltaTime() → return 0.01667f
     . 桥接头文件始终可被 include（无论宏开关），Engine 无需 #ifdef 防护:
       #include "engine/physics/physics_engine_bridge.h"  — 永远有效
       PhysicsEngineBridge::Instance().Tick(...) — 宏关时编译为无操作
@@ -940,8 +946,9 @@ resources/physics/configs/
     . 然后: Engine 自身 DoDirectory + InitScript（引擎脚本与物理脚本隔离）
     . ⚠ 物理线程在此处不启动，上层在适当时机调用
       PhysicsEngineBridge::Instance().Start() 才启动物理模拟
-    . ⚠ Initialize() 成功后缓存 PhysicsConfig::fixed_delta_time 到 Engine 成员
-      fixed_delta_time_（用于 FrameLoop 的 Tick 调用），宏关时使用默认值 0.01667f
+    . ⚠ Initialize() 成功后通过 Bridge::GetFixedDeltaTime() 读取
+      fixed_delta_time 缓存到 Engine 成员 fixed_delta_time_
+      （用于 FrameLoop 的 Tick 调用），宏关时 GetFixedDeltaTime() 返回默认值 0.01667f
 
   Engine::FrameLoop() 中的编排（对齐 [D17] 8 步流程）:
     void FrameLoop() {
