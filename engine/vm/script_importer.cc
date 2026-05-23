@@ -78,28 +78,30 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
     // ── Load the Lua chunk ─────────────────────────────────────────
     int rc = luaL_loadfilex(L, filepath.c_str(), nullptr);
     if (rc != LUA_OK) {
-        const char* msg = lua_tostring(L, -1);
+        std::string err_msg(lua_tostring(L, -1));
         lua_pop(L, 1);   // pop error message
         lua_pop(L, 2);   // pop loaded, package
         return luaL_error(L, "error loading module '%.*s': %s",
-                          static_cast<int>(name.size()), name.data(), msg);
+                          static_cast<int>(name.size()), name.data(),
+                          err_msg.c_str());
     }
 
     // ── Execute the chunk ──────────────────────────────────────────
     rc = lua_pcall(L, 0, 1, 0);
     if (rc != LUA_OK) {
-        const char* msg = lua_tostring(L, -1);
+        std::string err_msg(lua_tostring(L, -1));
         lua_pop(L, 1);   // pop error message
         lua_pop(L, 2);   // pop loaded, package
         return luaL_error(L, "error running module '%.*s': %s",
-                          static_cast<int>(name.size()), name.data(), msg);
+                          static_cast<int>(name.size()), name.data(),
+                          err_msg.c_str());
     }
 
     // ── Cache result in package.loaded ─────────────────────────────
     // Stack: ..., pkg, loaded, result
     lua_pushvalue(L, -1);                              // ..., pkg, loaded, result, copy
-    lua_setfield(L, -4, name_str.c_str());             // package.loaded[name] = result
-    lua_remove(L, -3);  // ..., loaded, result
+    lua_setfield(L, -3, name_str.c_str());             // loaded[name] = copy
+    lua_remove(L, -3);  // ..., pkg, result
     lua_remove(L, -2);  // ..., result
     return 1;
 }
@@ -166,7 +168,7 @@ int ScriptImporter::ImportAll(lua_State* L, std::string_view name) {
         lua_pushvalue(L, table_idx);     // push result table
         lua_getfield(L, -1, stem.c_str()); // get result[stem]
         lua_setfield(L, -3, cache_name.c_str()); // package.loaded[cache_name] = result
-        lua_pop(L, 2); // pop package, loaded
+        lua_pop(L, 3); // pop result_table_copy, loaded, package
 
         ++count;
     }
@@ -203,7 +205,9 @@ void ScriptImporter::AddPath(const std::string& path) {
     if (!p.empty() && p.back() != '/') {
         p += '/';
     }
-    search_paths_.push_back(p);
+    if (!p.empty()) {
+        search_paths_.push_back(p);
+    }
 }
 
 void ScriptImporter::ClearCache(lua_State* L) {
@@ -229,6 +233,7 @@ std::string ScriptImporter::FindModule(std::string_view name) const {
 
     for (const auto& base : search_paths_) {
         std::string path = base + mod_path;
+        ec.clear();
         if (std::filesystem::is_regular_file(path, ec) && !ec) {
             return path;
         }
@@ -242,6 +247,7 @@ std::string ScriptImporter::FindDir(std::string_view dir_name) const {
 
     for (const auto& base : search_paths_) {
         std::string path = base + mod_dir;
+        ec.clear();
         if (std::filesystem::is_directory(path, ec) && !ec) {
             return path;
         }

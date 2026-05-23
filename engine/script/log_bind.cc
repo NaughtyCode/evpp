@@ -9,47 +9,22 @@ namespace script {
 
 namespace {
 
-int l_log_trace(lua_State* L) {
-    const char* msg = luaL_checkstring(L, 1);
-    auto* logger = GetLogger();
-    ENGINE_LOG_TRACE(logger, "[lua] {}", msg);
-    return 0;
-}
+#define LUA_LOG_CALL(name, macro)                               \
+    int l_log_##name(lua_State* L) {                             \
+        const char* msg = luaL_checkstring(L, 1);                \
+        auto* logger = GetLogger();                              \
+        if (logger) { macro(logger, "[lua] {}", msg); }          \
+        return 0;                                                \
+    }
 
-int l_log_debug(lua_State* L) {
-    const char* msg = luaL_checkstring(L, 1);
-    auto* logger = GetLogger();
-    ENGINE_LOG_DEBUG(logger, "[lua] {}", msg);
-    return 0;
-}
+LUA_LOG_CALL(trace, ENGINE_LOG_TRACE)
+LUA_LOG_CALL(debug, ENGINE_LOG_DEBUG)
+LUA_LOG_CALL(info,  ENGINE_LOG_INFO)
+LUA_LOG_CALL(warn,  ENGINE_LOG_WARN)
+LUA_LOG_CALL(error, ENGINE_LOG_ERROR)
+LUA_LOG_CALL(fatal, ENGINE_LOG_FATAL)
 
-int l_log_info(lua_State* L) {
-    const char* msg = luaL_checkstring(L, 1);
-    auto* logger = GetLogger();
-    ENGINE_LOG_INFO(logger, "[lua] {}", msg);
-    return 0;
-}
-
-int l_log_warn(lua_State* L) {
-    const char* msg = luaL_checkstring(L, 1);
-    auto* logger = GetLogger();
-    ENGINE_LOG_WARN(logger, "[lua] {}", msg);
-    return 0;
-}
-
-int l_log_error(lua_State* L) {
-    const char* msg = luaL_checkstring(L, 1);
-    auto* logger = GetLogger();
-    ENGINE_LOG_ERROR(logger, "[lua] {}", msg);
-    return 0;
-}
-
-int l_log_fatal(lua_State* L) {
-    const char* msg = luaL_checkstring(L, 1);
-    auto* logger = GetLogger();
-    ENGINE_LOG_FATAL(logger, "[lua] {}", msg);
-    return 0;
-}
+#undef LUA_LOG_CALL
 
 const luaL_Reg kLogFunctions[] = {
     {"log_trace", l_log_trace},

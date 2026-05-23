@@ -107,3 +107,4 @@ Win32/Debug/ZERO_CHECK
 artifacts/bin/*
 artifacts/lib/*
 logs/
+.claude/worktrees/*

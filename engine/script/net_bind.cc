@@ -35,6 +35,7 @@ namespace {
 // Call a Lua function stored in the registry by reference.
 // Logs and pops errors; does NOT unref.
 void call_lua_callback(lua_State* L, int ref) {
+    if (!L) return;
     if (ref == LUA_NOREF) return;
     lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
     if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
@@ -47,6 +48,7 @@ void call_lua_callback(lua_State* L, int ref) {
 
 // Call a Lua function with one string argument.
 void call_lua_callback_str(lua_State* L, int ref, const std::string& s) {
+    if (!L) return;
     if (ref == LUA_NOREF) return;
     lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
     lua_pushlstring(L, s.data(), s.size());
@@ -60,6 +62,7 @@ void call_lua_callback_str(lua_State* L, int ref, const std::string& s) {
 
 // Call a Lua function with (int, string) args — used by server on_connect/on_message/on_close.
 void call_lua_callback_int_str(lua_State* L, int ref, int64_t n, const std::string& s) {
+    if (!L) return;
     if (ref == LUA_NOREF) return;
     lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
     lua_pushinteger(L, static_cast<lua_Integer>(n));
@@ -74,6 +77,7 @@ void call_lua_callback_int_str(lua_State* L, int ref, int64_t n, const std::stri
 
 // Call a Lua function with (int, string) for HTTP response.
 void call_lua_http_handler(lua_State* L, int ref, int code, const std::string& body) {
+    if (!L) return;
     if (ref == LUA_NOREF) return;
     lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
     lua_pushinteger(L, static_cast<lua_Integer>(code));
@@ -169,7 +173,12 @@ int l_net_client_connect(lua_State* L) {
                 ctx->on_connect_ref = LUA_NOREF;
                 ctx->on_message_ref = LUA_NOREF;
                 ctx->on_close_ref = LUA_NOREF;
-                g_clients.erase(cid);
+                // Defer erasing from g_clients to avoid destroying TCPClient
+                // (owned by ClientCtx) while its callback stack is still active.
+                auto* loop = Engine::Instance().GetEventLoop();
+                if (loop) {
+                    loop->RunInLoop([cid] { g_clients.erase(cid); });
+                }
             }
         });
 
@@ -503,7 +512,9 @@ int l_net_server_close_conn(lua_State* L) {
             auto* logger = GetLogger();
             ENGINE_LOG_INFO(logger, "[net.server] closing conn=[{}]", raw_conn_id);
             ci->second->Close();
-            ctx->conns.erase(ci);
+            // Use key-based erase — Close() may fire the disconnect callback
+            // synchronously, which calls ctx->conns.erase(conn_id), invalidating ci.
+            ctx->conns.erase(conn_id);
 
             // Clean up per-connection callback refs — the close callback
             // won't fire for a manual close, so we must release here.
@@ -721,19 +732,17 @@ int l_net_http_get(lua_State* L) {
         loop, url, evpp::Duration(10.0));  // 10s timeout
 
     req->Execute([L, ref](const std::shared_ptr<evpp::httpc::Response>& resp) {
-        // Always unref on any exit path; g_http_pending_refs is cleaned
-        // during ShutdownNetBindings for callbacks that never fire.
         auto erase_ref = [&]() {
             luaL_unref(L, LUA_REGISTRYINDEX, ref);
             auto it = std::find(g_http_pending_refs.begin(),
                                 g_http_pending_refs.end(), ref);
             if (it != g_http_pending_refs.end()) g_http_pending_refs.erase(it);
         };
-        if (!g_net_alive.load()) {
+        // Bail early if engine is shutting down or ref was already released.
+        if (!g_net_alive.load() || ref == LUA_NOREF) {
             erase_ref();
             return;
         }
-        if (ref == LUA_NOREF) return;
         if (resp) {
             std::string body(resp->body().data(), resp->body().size());
             call_lua_http_handler(L, ref, resp->http_code(), body);
@@ -772,11 +781,10 @@ int l_net_http_post(lua_State* L) {
                                 g_http_pending_refs.end(), ref);
             if (it != g_http_pending_refs.end()) g_http_pending_refs.erase(it);
         };
-        if (!g_net_alive.load()) {
+        if (!g_net_alive.load() || ref == LUA_NOREF) {
             erase_ref();
             return;
         }
-        if (ref == LUA_NOREF) return;
         if (resp) {
             std::string body_str(resp->body().data(), resp->body().size());
             call_lua_http_handler(L, ref, resp->http_code(), body_str);
@@ -848,10 +856,12 @@ void ShutdownNetBindings() {
     }
 
     // Release pending HTTP callback refs before any Lua state is closed.
-    if (L && !g_http_pending_refs.empty()) {
-        for (int ref : g_http_pending_refs) {
-            if (ref != LUA_NOREF) {
-                luaL_unref(L, LUA_REGISTRYINDEX, ref);
+    if (!g_http_pending_refs.empty()) {
+        if (L) {
+            for (int ref : g_http_pending_refs) {
+                if (ref != LUA_NOREF) {
+                    luaL_unref(L, LUA_REGISTRYINDEX, ref);
+                }
             }
         }
         size_t http_count = g_http_pending_refs.size();

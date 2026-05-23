@@ -41,6 +41,7 @@ std::unordered_map<TimerId, std::shared_ptr<TimerCtx>> g_timer_ctxs;
 constexpr int64_t kMaxTimerMs = INT64_MAX / kNsPerMs;
 
 void call_lua_callback(lua_State* L, int ref) {
+    if (!L) return;
     if (ref == LUA_NOREF) return;  // timer was already cancelled
     lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
     if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
@@ -84,6 +85,11 @@ int l_timer_timeout(lua_State* L) {
         }
     );
 
+    if (id == kInvalidTimerId) {
+        luaL_unref(L, LUA_REGISTRYINDEX, ref);
+        return luaL_error(L, "timer: failed to create timer");
+    }
+
     ctx->id = id;
     g_timer_ctxs[id] = ctx;
     TimerManager::instance().start_timer_relative(id, ms_to_time(ms));
@@ -123,6 +129,11 @@ int l_timer_interval(lua_State* L) {
         TimerMode::kAbsolute | TimerMode::kRepeating
     );
 
+    if (id == kInvalidTimerId) {
+        luaL_unref(L, LUA_REGISTRYINDEX, ref);
+        return luaL_error(L, "timer: failed to create timer");
+    }
+
     ctx->id = id;
     g_timer_ctxs[id] = ctx;
     TimerManager::instance().start_timer_relative(id, ms_to_time(ms));
@@ -144,8 +155,12 @@ int l_timer_cancel(lua_State* L) {
 
     luaL_unref(L, LUA_REGISTRYINDEX, it->second->ref);
     it->second->ref = LUA_NOREF;
+    // Set ref to LUA_NOREF before destroy_timer so the callback lambda
+    // (which checks ref == LUA_NOREF) won't try to erase from g_timer_ctxs.
     TimerManager::instance().destroy_timer(id);
-    g_timer_ctxs.erase(it);
+    // Use key-based erase to handle the case where destroy_timer fired the
+    // callback synchronously and the callback already erased this entry.
+    g_timer_ctxs.erase(id);
 
     auto* logger = GetLogger();
     ENGINE_LOG_DEBUG(logger, "[lua timer] cancelled timer [{}]", id);
@@ -183,14 +198,29 @@ void ShutdownTimerBindings() {
         return;
     }
 
+    // Collect IDs first — destroy_timer may fire callbacks synchronously,
+    // which would invalidate iterators if we traversed the map directly.
     size_t count = g_timer_ctxs.size();
+    std::vector<TimerId> ids;
+    ids.reserve(count);
     for (auto& [id, ctx] : g_timer_ctxs) {
-        TimerManager::instance().destroy_timer(id);
+        (void)ctx;
+        ids.push_back(id);
+    }
+
+    for (TimerId id : ids) {
+        auto it = g_timer_ctxs.find(id);
+        if (it == g_timer_ctxs.end()) continue;
+        auto& ctx = it->second;
+        // Set ref to LUA_NOREF first so the callback (which may fire synchronously
+        // during destroy_timer) will bail out instead of accessing a dangling L.
         if (ctx->ref != LUA_NOREF && ctx->L) {
             luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->ref);
+            ctx->ref = LUA_NOREF;
         }
+        TimerManager::instance().destroy_timer(id);
+        g_timer_ctxs.erase(id);
     }
-    g_timer_ctxs.clear();
 
     ENGINE_LOG_INFO(logger, "ScriptBind: shut down [{}] timer binding(s)", count);
 }

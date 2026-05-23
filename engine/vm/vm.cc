@@ -29,20 +29,15 @@ ScriptVM::ScriptVM() {
 
 ScriptVM::~ScriptVM() {
     if (L_) {
-        int mem_kb = lua_gc(L_, LUA_GCCOUNT, 0);
-        auto* logger = GetLogger();
-        ENGINE_LOG_INFO(logger, "ScriptVM: closing lua state, "
-                        "final memory usage [{} KB], registered callbacks [{}]",
-                        mem_kb, callbacks_.size());
         lua_close(L_);
         L_ = nullptr;
-        ENGINE_LOG_INFO(logger, "ScriptVM: lua state closed");
     }
 }
 
 ScriptVM::ScriptVM(ScriptVM&& other) noexcept : L_(other.L_) {
     other.L_ = nullptr;
     callbacks_ = std::move(other.callbacks_);
+    importer_ = std::move(other.importer_);
 }
 
 ScriptVM& ScriptVM::operator=(ScriptVM&& other) noexcept {
@@ -53,6 +48,7 @@ ScriptVM& ScriptVM::operator=(ScriptVM&& other) noexcept {
         L_ = other.L_;
         other.L_ = nullptr;
         callbacks_ = std::move(other.callbacks_);
+        importer_ = std::move(other.importer_);
     }
     return *this;
 }
@@ -114,7 +110,7 @@ bool ScriptVM::DoString(std::string_view script,
     }
 
     int rc = luaL_loadbufferx(L_, script.data(), script.size(),
-                               chunk_name.data(), "t");
+                               std::string(chunk_name).c_str(), "t");
     if (rc != LUA_OK) {
         const char* msg = lua_tostring(L_, -1);
         auto* logger = GetLogger();
@@ -208,6 +204,12 @@ size_t ScriptVM::DoDirectory(const std::string& dir_path) {
         }
     }
 
+    if (ec) {
+        ENGINE_LOG_ERROR(logger, "ScriptVM::DoDirectory iteration error in [{}]: [{}]",
+                         dir_path, ec.message());
+        ++failures;
+    }
+
     ENGINE_LOG_INFO(logger, "ScriptVM::DoDirectory [{}] done: "
                     "[{}] loaded, [{}] failed", dir_path, loaded, failures);
     return failures;
@@ -218,7 +220,7 @@ size_t ScriptVM::DoDirectory(const std::string& dir_path) {
 //=================================================================
 
 void ScriptVM::RegisterFunction(std::string_view name, lua_CFunction func) {
-    if (!L_) return;
+    if (!L_ || !func) return;
     lua_pushcfunction(L_, func);
     lua_setglobal(L_, std::string(name).c_str());
     auto* logger = GetLogger();
@@ -231,6 +233,7 @@ void ScriptVM::RegisterFunctions(const luaL_Reg* functions) {
     size_t count = 0;
     lua_pushglobaltable(L_);
     for (const luaL_Reg* r = functions; r->name != nullptr; ++r) {
+        if (!r->func) continue;
         lua_pushcfunction(L_, r->func);
         lua_setfield(L_, -2, r->name);
         ++count;
@@ -243,7 +246,7 @@ void ScriptVM::RegisterFunctions(const luaL_Reg* functions) {
 }
 
 void ScriptVM::RegisterModule(std::string_view name, const luaL_Reg* functions) {
-    if (!L_) return;
+    if (!L_ || !functions) return;
 
     luaL_newlib(L_, functions);
     lua_setglobal(L_, std::string(name).c_str());
@@ -306,6 +309,8 @@ void ScriptVM::RegisterCallback(std::string_view name, LuaCallback callback) {
     if (!L_) return;
 
     auto cb = std::make_unique<LuaCallback>(std::move(callback));
+    // The raw pointer is stable (heap-allocated object never moves) so long as
+    // callbacks_ is append-only. Do NOT add any erasure from this vector.
     auto* ptr = cb.get();
     callbacks_.push_back(std::move(cb));
 

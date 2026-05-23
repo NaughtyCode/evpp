@@ -153,30 +153,35 @@ private:
 
 template <>
 inline void ScriptVM::SetGlobal(std::string_view name, int value) {
+    if (!L_) return;
     lua_pushinteger(L_, static_cast<lua_Integer>(value));
     lua_setglobal(L_, std::string(name).c_str());
 }
 
 template <>
 inline void ScriptVM::SetGlobal(std::string_view name, double value) {
+    if (!L_) return;
     lua_pushnumber(L_, static_cast<lua_Number>(value));
     lua_setglobal(L_, std::string(name).c_str());
 }
 
 template <>
 inline void ScriptVM::SetGlobal(std::string_view name, const char* value) {
+    if (!L_) return;
     lua_pushstring(L_, value);
     lua_setglobal(L_, std::string(name).c_str());
 }
 
 template <>
 inline void ScriptVM::SetGlobal(std::string_view name, std::string_view value) {
+    if (!L_) return;
     lua_pushlstring(L_, value.data(), value.size());
     lua_setglobal(L_, std::string(name).c_str());
 }
 
 template <>
 inline void ScriptVM::SetGlobal(std::string_view name, bool value) {
+    if (!L_) return;
     lua_pushboolean(L_, value ? 1 : 0);
     lua_setglobal(L_, std::string(name).c_str());
 }

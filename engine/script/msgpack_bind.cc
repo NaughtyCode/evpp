@@ -188,34 +188,35 @@ void EncodeInt(EncodeBuf& buf, int64_t n) {
             buf.Append(b, 9);
         }
     } else {
+        uint64_t un = static_cast<uint64_t>(n);
         if (n >= -32) {
             uint8_t b = static_cast<uint8_t>(n);  // negative fixnum
             buf.Append(&b, 1);
         } else if (n >= -128) {
-            uint8_t b[2] = {0xd0, static_cast<uint8_t>(n & 0xff)};
+            uint8_t b[2] = {0xd0, static_cast<uint8_t>(un & 0xff)};
             buf.Append(b, 2);
         } else if (n >= -32768) {
             uint8_t b[3] = {0xd1,
-                            static_cast<uint8_t>((n >> 8) & 0xff),
-                            static_cast<uint8_t>(n & 0xff)};
+                            static_cast<uint8_t>((un >> 8) & 0xff),
+                            static_cast<uint8_t>(un & 0xff)};
             buf.Append(b, 3);
         } else if (n >= -2147483648LL) {
             uint8_t b[5] = {0xd2,
-                            static_cast<uint8_t>((n >> 24) & 0xff),
-                            static_cast<uint8_t>((n >> 16) & 0xff),
-                            static_cast<uint8_t>((n >> 8) & 0xff),
-                            static_cast<uint8_t>(n & 0xff)};
+                            static_cast<uint8_t>((un >> 24) & 0xff),
+                            static_cast<uint8_t>((un >> 16) & 0xff),
+                            static_cast<uint8_t>((un >> 8) & 0xff),
+                            static_cast<uint8_t>(un & 0xff)};
             buf.Append(b, 5);
         } else {
             uint8_t b[9] = {0xd3,
-                            static_cast<uint8_t>((n >> 56) & 0xff),
-                            static_cast<uint8_t>((n >> 48) & 0xff),
-                            static_cast<uint8_t>((n >> 40) & 0xff),
-                            static_cast<uint8_t>((n >> 32) & 0xff),
-                            static_cast<uint8_t>((n >> 24) & 0xff),
-                            static_cast<uint8_t>((n >> 16) & 0xff),
-                            static_cast<uint8_t>((n >> 8) & 0xff),
-                            static_cast<uint8_t>(n & 0xff)};
+                            static_cast<uint8_t>((un >> 56) & 0xff),
+                            static_cast<uint8_t>((un >> 48) & 0xff),
+                            static_cast<uint8_t>((un >> 40) & 0xff),
+                            static_cast<uint8_t>((un >> 32) & 0xff),
+                            static_cast<uint8_t>((un >> 24) & 0xff),
+                            static_cast<uint8_t>((un >> 16) & 0xff),
+                            static_cast<uint8_t>((un >> 8) & 0xff),
+                            static_cast<uint8_t>(un & 0xff)};
             buf.Append(b, 9);
         }
     }

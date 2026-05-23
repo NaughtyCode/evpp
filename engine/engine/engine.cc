@@ -35,6 +35,11 @@ Engine::Engine() = default;
 Engine::~Engine() = default;
 
 ScriptVM& Engine::GetScriptVM() {
+    if (!script_vm_) {
+        auto* logger = GetLogger();
+        ENGINE_LOG_FATAL(logger, "GetScriptVM() called before Engine::Init()");
+        abort();
+    }
     return *script_vm_;
 }
 
@@ -75,8 +80,9 @@ void Engine::Run() {
             ENGINE_LOG_INFO(GetLogger(), "SIGINT received, shutting down...");
             Shutdown();
         });
-    sigint_watcher->Init();
-    sigint_watcher->AsyncWait();
+    if (!sigint_watcher->Init() || !sigint_watcher->AsyncWait()) {
+        ENGINE_LOG_ERROR(logger, "failed to initialize SIGINT watcher");
+    }
 
 #ifndef _WIN32
     auto sigterm_watcher = std::make_unique<evpp::SignalEventWatcher>(
@@ -84,8 +90,9 @@ void Engine::Run() {
             ENGINE_LOG_INFO(GetLogger(), "SIGTERM received, shutting down...");
             Shutdown();
         });
-    sigterm_watcher->Init();
-    sigterm_watcher->AsyncWait();
+    if (!sigterm_watcher->Init() || !sigterm_watcher->AsyncWait()) {
+        ENGINE_LOG_ERROR(logger, "failed to initialize SIGTERM watcher");
+    }
 #endif
 
     auto frame_timer = loop_->RunEvery(
@@ -101,6 +108,8 @@ void Engine::Run() {
 
     if (script_vm_) {
         script_vm_->DestroyScript();
+        int mem_kb = lua_gc(script_vm_->GetState(), LUA_GCCOUNT, 0);
+        ENGINE_LOG_INFO(logger, "ScriptVM: final memory [{} KB], exiting", mem_kb);
     }
 
     script::ShutdownNetBindings();
@@ -108,7 +117,9 @@ void Engine::Run() {
     TimerManager::destroy_instance();
     ENGINE_LOG_INFO(logger, "timer manager shut down");
 
-    frame_timer->Cancel();
+    if (frame_timer) {
+        frame_timer->Cancel();
+    }
     sigint_watcher.reset();
 #ifndef _WIN32
     sigterm_watcher.reset();

@@ -70,6 +70,10 @@ bool Conn::Init() {
     }
     if (!bufferevent_) {
         LOG_ERROR << "bufferevent creation failed.";
+        if (enable_ssl()) {
+            SSL_free(ssl_);
+            ssl_ = nullptr;
+        }
         return false;
     }
     if (enable_ssl()) {

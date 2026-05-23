@@ -40,7 +40,9 @@ int l_import_setpath(lua_State* L) {
     size_t len = 0;
     const char* paths = luaL_checklstring(L, 1, &len);
     auto* importer = GetImporter(L);
-    if (!importer) return 0;
+    if (!importer) {
+        return luaL_error(L, "import: system not initialized");
+    }
     importer->SetPaths(std::string(paths, len));
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "import: setpath [{}]", std::string(paths, len));
@@ -51,7 +53,9 @@ int l_import_addpath(lua_State* L) {
     size_t len = 0;
     const char* path = luaL_checklstring(L, 1, &len);
     auto* importer = GetImporter(L);
-    if (!importer) return 0;
+    if (!importer) {
+        return luaL_error(L, "import: system not initialized");
+    }
     importer->AddPath(std::string(path, len));
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "import: addpath [{}]", std::string(path, len));
@@ -67,7 +71,9 @@ int l_import_loaded(lua_State* L) {
 
 int l_import_clearcache(lua_State* L) {
     auto* importer = GetImporter(L);
-    if (!importer) return 0;
+    if (!importer) {
+        return luaL_error(L, "import: system not initialized");
+    }
     importer->ClearCache(L);
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "import: cache cleared");

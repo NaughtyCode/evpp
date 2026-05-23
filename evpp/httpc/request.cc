@@ -22,6 +22,7 @@ Request::Request(EventLoop* loop, const std::string& http_url, const std::string
 #if LIBEVENT_VERSION_NUMBER >= 0x02001500
     struct evhttp_uri* evuri = evhttp_uri_parse(http_url.c_str());
     if (!evuri) {
+        port_ = 80;
         return;
     }
     uri_ = evhttp_uri_get_path(evuri);

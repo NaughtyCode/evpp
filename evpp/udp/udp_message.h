@@ -24,7 +24,7 @@ public:
         return sockfd_;
     }
 private:
-    struct sockaddr_in remote_addr_;
+    struct sockaddr_storage remote_addr_;
     int sockfd_;
 };
 typedef std::shared_ptr<Message> MessagePtr;
