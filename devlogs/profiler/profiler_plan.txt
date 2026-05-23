@@ -29,7 +29,7 @@
 . 提供丰富的 C++ 宏封装，对标 perfetto 原生宏并降低使用门槛
 . 提供完整的 profiler 启动、停止机制及配套 API (Stop→Start 即可实现重启)
 . 引擎主要函数和流程节点均打上 profiler 桩
-. 物理系统使用独立的 TracingSession 实例 (物理帧与渲染帧解耦，可独立启停)
+. 物理系统使用独立的 TracingSession 实例 (物理线程独立运行，可单独启停 tracing)
 
 二、编译开关设计
 --------------------------------------------------------------------------------
@@ -59,14 +59,22 @@ engine/profiler/
 扩展名使用 .cc 与引擎现有代码保持一致 (见 engine/CMakeLists.txt)。
 PERFETTO_TRACK_EVENT_STATIC_STORAGE() 必须放在唯一一个 .cc 中，选择 profiler_core.cc。
 
+Include 策略:
+. profiler_macros.h — 轻量头文件，业务代码按需 include (仅在需要打桩的 .cc 中引入)
+. profiler_categories.h — 由 macros.h 自动包含 (用户无需手动 include)
+. profiler_core.h — 仅在 Engine::Init() 等需要控制 session 的地方 include
+. profiler_events.h — 按需 include (仅使用引擎专用宏时)
+
 四、C++ 宏设计
 --------------------------------------------------------------------------------
 
 4.1 基础宏 — 封装 perfetto 原生宏，统一 ENGINE_PROFILE_ 前缀:
 
-    (a) Category 声明宏:
-        ENGINE_PROFILE_CATEGORIES(...)
-          → PERFETTO_DEFINE_CATEGORIES(...)
+    cat 参数说明: 所有 cat 参数均为字符串字面量 (如 "engine")，对应 PERFETTO_DEFINE_CATEGORIES
+                 中声明的 Category 名称。perfetto 在运行时按字符串匹配查找 category。
+
+    (a) Category 声明 (直接放在 profiler_categories.h 中，无需包装宏):
+        直接使用 PERFETTO_DEFINE_CATEGORIES(perfetto::Category("name").SetDescription("desc"), ...)
 
     (b) RAII 区间事件 (推荐优先使用):
         ENGINE_PROFILE_SCOPE(cat, name)
@@ -75,7 +83,7 @@ PERFETTO_TRACK_EVENT_STATIC_STORAGE() 必须放在唯一一个 .cc 中，选择 
 
     (c) 手动区间事件 (begin/end 配对，用于跨作用域场景):
         ENGINE_PROFILE_BEGIN(cat, name, ...)
-          → TRACE_EVENT_BEGIN(cat, name, ##__VA_ARGS__)
+          → TRACE_EVENT_BEGIN(cat, name __VA_OPT__(,) __VA_ARGS__)
         ENGINE_PROFILE_END(cat)
           → TRACE_EVENT_END(cat)
 
@@ -89,18 +97,18 @@ PERFETTO_TRACK_EVENT_STATIC_STORAGE() 必须放在唯一一个 .cc 中，选择 
 
     (f) 便捷函数追踪:
         ENGINE_PROFILE_FUNC()
-          → ENGINE_PROFILE_SCOPE(__FUNCTION__)
+          → ENGINE_PROFILE_SCOPE("engine", __FUNCTION__)
 
 4.2 引擎专用宏 — 组合基础宏，对应引擎实际生命周期:
 
     (a) 帧循环 (对应 engine/engine/engine.cc FrameLoop 实际代码流程):
-        ENGINE_PROFILE_FRAME_BEGIN()     — 帧开始 (含 frame_count_, delta_time 信息)
-        ENGINE_PROFILE_FRAME_END()       — 帧结束 (含帧耗时)
-        ENGINE_PROFILE_TIMER_UPDATE()    — TimerManager::update()
-        ENGINE_PROFILE_PHYSICS_TICK(n)   — PhysicsEngineBridge::Tick() 主线程入队
-        ENGINE_PROFILE_SCRIPT_UPDATE()   — ScriptVM::UpdateScript() 主线程协程
-        ENGINE_PROFILE_PHYSICS_FETCH(n)  — PhysicsEngineBridge::FetchResult() 阻塞点
-        ENGINE_PROFILE_SCRIPT_CALLBACK() — PhysicsEngineBridge::UpdateScript() 碰撞回调
+        ENGINE_PROFILE_FRAME_BEGIN(frame_no, dt_ms)  — 帧开始 (记录帧号和帧间隔)
+        ENGINE_PROFILE_FRAME_END(elapsed_ms)         — 帧结束 (记录帧耗时)
+        ENGINE_PROFILE_TIMER_UPDATE()                — TimerManager::update()
+        ENGINE_PROFILE_PHYSICS_TICK(frame_no)        — PhysicsEngineBridge::Tick() 主线程入队
+        ENGINE_PROFILE_SCRIPT_UPDATE()               — ScriptVM::UpdateScript() 主线程协程
+        ENGINE_PROFILE_PHYSICS_FETCH(frame_no)       — PhysicsEngineBridge::FetchResult() 阻塞点
+        ENGINE_PROFILE_SCRIPT_CALLBACK()             — PhysicsEngineBridge::UpdateScript() 碰撞回调
 
     (b) 物理线程 (对应 engine/physics/physics_thread.cc EventLoop):
         ENGINE_PROFILE_PHYSICS_CMD_DEQUEUE()   — 命令出队
@@ -116,20 +124,31 @@ PERFETTO_TRACK_EVENT_STATIC_STORAGE() 必须放在唯一一个 .cc 中，选择 
 4.3 使用示例 (FrameLoop 打桩后):
 
     void Engine::FrameLoop() {
-        ENGINE_PROFILE_FRAME_BEGIN();
+        auto frame_start = std::chrono::steady_clock::now();
+
+        ENGINE_PROFILE_FRAME_BEGIN(frame_count_,
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                frame_start - last_frame_time_).count());
+
         ENGINE_PROFILE_TIMER_UPDATE();
         TimerManager::instance().update();
+
         ENGINE_PROFILE_PHYSICS_TICK(frame_count_);
         PhysicsEngineBridge::Instance().Tick(frame_count_, fixed_delta_time_);
+
         ENGINE_PROFILE_SCRIPT_UPDATE();
         if (script_vm_) script_vm_->UpdateScript();
+
         ENGINE_PROFILE_PHYSICS_FETCH(frame_count_);
         auto result = PhysicsEngineBridge::Instance().FetchResult(frame_count_, 5);
         if (result) {
             ENGINE_PROFILE_SCRIPT_CALLBACK();
             PhysicsEngineBridge::Instance().UpdateScript();
         }
-        ENGINE_PROFILE_FRAME_END();
+
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - frame_start).count();
+        ENGINE_PROFILE_FRAME_END(elapsed);
     }
 
 五、核心 API 设计
@@ -180,7 +199,9 @@ PERFETTO_TRACK_EVENT_STATIC_STORAGE() 必须放在唯一一个 .cc 中，选择 
     };
 
 5.3 物理线程独立 Session:
-    . PhysicsThread 内部持有独立的 TracingSession (通过 ProfilerManager 工厂方法创建)
+    . PhysicsThread 内部自行创建和管理 TracingSession (直接调用
+      perfetto::Tracing::NewTrace(kInProcessBackend))，不依赖 ProfilerManager
+    . ProfilerManager 仅管理主线程 session；物理线程拥有自己的 session 生命周期
     . 主线程 session 和物理线程 session 可独立启停，互不干扰
     . perfetto 自动按线程 track 区分事件来源，在 perfetto UI 中天然隔离
     . 跨线程因果关系使用 TRACE_EVENT_BEGIN 的 FlowDescriptor 参数标记
@@ -259,7 +280,7 @@ PERFETTO_TRACK_EVENT_STATIC_STORAGE() 必须放在唯一一个 .cc 中，选择 
     - 实现 StopSession():  StopBlocking() → 可选 ReadTrace/SaveTrace
     - 实现 Flush(): session_->FlushBlocking()
     - 实现 SaveTrace(path): ReadTrace() 结果写入文件
-    - 实现物理线程独立 session 辅助 (PhysicsProfiler 小类或直接在 PhysicsThread 管理)
+    - 实现物理线程独立 session (PhysicsThread 自行创建 TracingSession)
     - 验证: 启动/停止一次 session，用 perfetto UI 打开 trace 文件确认数据结构正确
 
 第三阶段: 引擎打桩
