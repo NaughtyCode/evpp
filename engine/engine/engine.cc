@@ -13,6 +13,7 @@
 #include "engine/engine/engine.h"
 
 #include <csignal>
+#include <cstdio>
 #include <memory>
 #include <thread>
 
@@ -40,8 +41,7 @@ Engine::~Engine() {
 
 ScriptVM& Engine::GetScriptVM() {
     if (!script_vm_) {
-        auto* logger = GetLogger();
-        ENGINE_LOG_FATAL(logger, "GetScriptVM() called before Engine::Init()");
+        std::fprintf(stderr, "FATAL: GetScriptVM() called before Engine::Init()\n");
         abort();
     }
     return *script_vm_;
@@ -214,6 +214,8 @@ void Engine::Cleanup() {
 #ifndef _WIN32
     sigterm_watcher_.reset();
 #endif
+
+    ShutdownLogger();
 }
 
 //============================================================================

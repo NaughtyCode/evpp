@@ -35,7 +35,6 @@ set(LOG_SOURCES
     core/log/log.cc
     core/log/log.h
     core/log/log_levels.h
-    core/log/log_config.h
     core/log/log_context.h
     core/log/log_macros.h
 )

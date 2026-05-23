@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <ctime>
+#include <filesystem>
 #include <iomanip>
 #include <sstream>
 
@@ -13,7 +14,6 @@
 #include <quill/sinks/RotatingFileSink.h>
 
 #include "engine/config/config.h"
-#include "engine/core/log/log_config.h"
 
 namespace engine {
 
@@ -85,6 +85,9 @@ void apply_rotation_config(quill::RotatingFileSinkConfig& cfg, const LogConfig& 
 
 std::string make_log_path(const LogConfig& config) {
     std::string log_dir = config.dir.empty() ? "logs" : config.dir;
+
+    std::error_code ec;
+    std::filesystem::create_directories(log_dir, ec);
 
     std::string prefix;
     if (!config.log_filename.empty()) {
