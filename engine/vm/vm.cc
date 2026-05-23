@@ -4,6 +4,7 @@
 #include <filesystem>
 
 #include "engine/core/log/log.h"
+#include "engine/profiler/profiler_events.h"
 
 namespace engine {
 
@@ -103,6 +104,9 @@ void ScriptVM::DestroyScript() {
 bool ScriptVM::DoString(std::string_view script,
                   std::string_view chunk_name,
                   std::string* error_out) {
+    ENGINE_PROFILE_SCOPE("engine.script", "DoString",
+        "chunk", std::string(chunk_name).c_str());
+
     if (!L_) {
         if (error_out) *error_out = "ScriptVM not initialized";
         return false;
@@ -136,6 +140,8 @@ bool ScriptVM::DoString(std::string_view script,
 }
 
 bool ScriptVM::DoFile(const std::string& filename, std::string* error_out) {
+    ENGINE_PROFILE_SCRIPT_DOFILE(filename.c_str());
+
     if (!L_) {
         if (error_out) *error_out = "ScriptVM not initialized";
         return false;

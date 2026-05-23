@@ -41,6 +41,10 @@ if(ENGINE_PHYSICS_ENABLED)
 
     target_compile_definitions(engine_physics PUBLIC ENGINE_PHYSICS_ENABLED)
 
+    if(ENGINE_PROFILER_ENABLED)
+        target_compile_definitions(engine_physics PRIVATE ENGINE_PROFILER_ENABLED)
+    endif()
+
     if(MSVC)
         target_compile_options(engine_physics PRIVATE /FS)
     endif()

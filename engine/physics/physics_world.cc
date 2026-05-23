@@ -24,6 +24,7 @@
 #include <Jolt/Physics/StateRecorderImpl.h>
 
 #include "engine/core/log/log_macros.h"
+#include "engine/profiler/profiler_events.h"
 
 namespace engine {
 
@@ -412,7 +413,9 @@ PhysicsFrameResult PhysicsWorld::Step(float delta_time, uint64_t frame_id) {
         return result;
     }
 
-    // Run Jolt Update
+    // Run Jolt Update + post-processing
+    { ENGINE_PROFILE_PHYSICS_STEP(delta_time);
+
     JPH::EPhysicsUpdateError err = system_.Update(
         delta_time,
         config_.sub_step_count,
@@ -436,9 +439,19 @@ PhysicsFrameResult PhysicsWorld::Step(float delta_time, uint64_t frame_id) {
     }
 
     // Post-step: collect transforms, collision events, and diffs
+    { ENGINE_PROFILE_PHYSICS_TRANSFORM();
     CollectTransforms(result);
+    }  // Transform slice ends
+
+    { ENGINE_PROFILE_PHYSICS_COLLISION();
     CollectCollisionEvents(result);
+    }  // Collision slice ends
+
+    { ENGINE_PROFILE_PHYSICS_DIFF();
     GenerateDiffs(result);
+    }  // Diff slice ends
+
+    }  // PhysicsStep slice ends
 
     // Track per-frame stats for GetStats()
     {

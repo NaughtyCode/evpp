@@ -8,6 +8,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # and will get dllimport on Windows / no-op elsewhere.
 add_definitions(-DENGINE_BUILD)
 
+option(ENGINE_PROFILER_ENABLED "Enable perfetto profiler" OFF)
+
 include_directories(${PROJECT_SOURCE_DIR}/3rdparty/quill/include)
 include_directories(${PROJECT_SOURCE_DIR}/3rdparty/lua)
 include_directories(${PROJECT_SOURCE_DIR}/3rdparty/glaze/include)
@@ -15,6 +17,9 @@ include_directories(${PROJECT_SOURCE_DIR})  # for "engine/xxx.h" includes
 
 if (MSVC)
     add_definitions(-D_WIN32_WINNT=0x0A00)
+    add_definitions(-DNOMINMAX)
+    add_definitions(-DWIN32_LEAN_AND_MEAN)
+    add_compile_options(/bigobj /Zc:preprocessor)
 endif()
 
 if (UNIX)
@@ -29,6 +34,16 @@ set(LUA_SOURCES
 )
 set_source_files_properties(${LUA_SOURCES} PROPERTIES COMPILE_DEFINITIONS "MAKE_LIB")
 source_group("3rdparty\\lua" FILES ${LUA_SOURCES})
+
+# ── Perfetto amalgamated source ──────────────────────────────────────
+if(ENGINE_PROFILER_ENABLED)
+    set(PERFETTO_SOURCES
+        ${PROJECT_SOURCE_DIR}/3rdparty/perfetto/perfetto.cc
+    )
+    source_group("3rdparty\\perfetto" FILES ${PERFETTO_SOURCES})
+else()
+    set(PERFETTO_SOURCES "")
+endif()
 
 # ── Log module ────────────────────────────────────────────────────
 set(LOG_SOURCES
@@ -94,6 +109,16 @@ set(SCRIPT_SOURCES
 )
 source_group("engine\\script" FILES ${SCRIPT_SOURCES})
 
+# ── Profiler module ─────────────────────────────────────────────────
+set(PROFILER_SOURCES
+    profiler/profiler_categories.h
+    profiler/profiler_core.cc
+    profiler/profiler_core.h
+    profiler/profiler_events.h
+    profiler/profiler_macros.h
+)
+source_group("engine\\profiler" FILES ${PROFILER_SOURCES})
+
 # ── Export header ─────────────────────────────────────────────────
 set(EXPORT_HEADER
     engine_export.h
@@ -102,12 +127,14 @@ source_group("engine" FILES ${EXPORT_HEADER})
 
 add_library(engine SHARED
     ${LUA_SOURCES}
+    ${PERFETTO_SOURCES}
     ${LOG_SOURCES}
     ${TIMER_SOURCES}
     ${CONFIG_SOURCES}
     ${ENGINE_SOURCES}
     ${VM_SOURCES}
     ${SCRIPT_SOURCES}
+    ${PROFILER_SOURCES}
     ${EXPORT_HEADER}
 )
 
@@ -116,6 +143,10 @@ target_include_directories(engine PUBLIC
     ${PROJECT_SOURCE_DIR}/3rdparty/quill/include
     ${PROJECT_SOURCE_DIR}/3rdparty/lua
 )
+
+if(ENGINE_PROFILER_ENABLED)
+    target_compile_definitions(engine PUBLIC ENGINE_PROFILER_ENABLED)
+endif()
 
 # ── JoltPhysics library ──────────────────────────────────────────────
 # JoltPhysics v5.5.1 (https://github.com/jrouwe/JoltPhysics, MIT License)

@@ -24,6 +24,8 @@
 #include "engine/core/log/log.h"
 #include "engine/core/timer/timer_manager.h"
 #include "engine/physics/physics_engine_bridge.h"
+#include "engine/profiler/profiler_core.h"
+#include "engine/profiler/profiler_events.h"
 #include "engine/script/script_bind.h"
 #include "engine/vm/vm.h"
 
@@ -55,6 +57,17 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
     InitLogger(config.log);
 
     auto* logger = GetLogger();
+
+    // ── Profiler initialization ────────────────────────────────────────
+    {
+        ProfilerConfig prof_cfg;
+        prof_cfg.buffer_size_kb = 32768;
+        ProfilerManager::Get().Initialize(prof_cfg);
+        ProfilerManager::Get().StartSession();
+        ENGINE_LOG_INFO(logger, "profiler initialized and session started, "
+                        "enabled=[{}]", ProfilerManager::IsEnabled());
+    }
+
     ENGINE_LOG_INFO(logger,
                     "engine initializing, log_dir=[{}], log_level=[{}], "
                     "scripts_dir=[{}], frame_interval=[{}ms], library_mode=[{}]",
@@ -119,6 +132,8 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
 //============================================================================
 
 void Engine::Start() {
+    ENGINE_PROFILE_SCOPE("engine", "Start");
+
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "engine starting, frame_interval=[{}ms]",
                     frame_interval_.count());
@@ -184,8 +199,10 @@ void Engine::Tick() {
     auto now = std::chrono::steady_clock::now();
     if (now - last_work_time_ < frame_interval_) return;
 
+    { ENGINE_PROFILE_TICK();
     FrameLoop();
     last_work_time_ = std::chrono::steady_clock::now();
+    }  // Tick slice ends
 }
 
 //============================================================================
@@ -242,6 +259,16 @@ void Engine::Cleanup() {
     sigterm_watcher_.reset();
 #endif
 
+    // ── Profiler shutdown ──────────────────────────────────────────────
+    // Must happen after all subsystems stop (physics, timers, VM)
+    // and before the logger is destroyed, so profiler can log its status.
+    {
+        ENGINE_LOG_INFO(logger, "profiler: stopping session and saving trace...");
+        ProfilerManager::Get().StopSession();
+        ProfilerManager::Get().SaveTrace();
+        ProfilerManager::Get().Shutdown();
+    }
+
     ShutdownLogger();
 }
 
@@ -252,31 +279,50 @@ void Engine::Cleanup() {
 void Engine::FrameLoop() {
     if (!running_) return;
 
-    auto now = std::chrono::steady_clock::now();
+    auto frame_start = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-        now - last_frame_time_);
-    last_frame_time_ = now;
+        frame_start - last_frame_time_);
+    last_frame_time_ = frame_start;
 
     ++frame_count_;
 
+    ENGINE_PROFILE_FRAME_BEGIN(frame_count_, elapsed.count());
+
+    { ENGINE_PROFILE_TIMER_UPDATE();
     TimerManager::instance().update();
+    }  // TimerUpdate slice ends
 
     // [D17.1][D17.2] Trigger physics simulation (Tick enqueues command; physics thread steps)
+    { ENGINE_PROFILE_PHYSICS_TICK(frame_count_);
     PhysicsEngineBridge::Instance().Tick(frame_count_, fixed_delta_time_);
+    }  // PhysicsTick slice ends
 
     // [D17.3] Engine Lua script update + non-physics tasks
+    { ENGINE_PROFILE_SCRIPT_UPDATE();
     if (script_vm_) {
         script_vm_->UpdateScript();
     }
+    }  // ScriptUpdate slice ends
 
     // [D17.4] Fetch physics result for this frame
+    { ENGINE_PROFILE_PHYSICS_FETCH(frame_count_);
     auto result = PhysicsEngineBridge::Instance().FetchResult(frame_count_, 5);
     if (result) {
         // [D17.5] Game object state update from result->transforms would go here
         // [D17.6] Physics VM collision callbacks — after FetchResult
+        { ENGINE_PROFILE_SCRIPT_CALLBACK();
         PhysicsEngineBridge::Instance().UpdateScript();
+        }  // ScriptCallback slice ends
         // [D17.7] Network sync construction from result->diff_packets would go here
     }
+    }  // PhysicsFetch slice ends
+
+    auto frame_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - frame_start).count();
+    ENGINE_PROFILE_FRAME_END(frame_elapsed);
+
+    // Slow frame detection
+    ENGINE_PROFILE_SLOW_FRAME(frame_elapsed, frame_interval_.count() * 2);
 
     if (elapsed > frame_interval_ * 2) {
         if (frame_count_ - last_slow_frame_log_ > 30) {

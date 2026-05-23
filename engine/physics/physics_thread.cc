@@ -13,6 +13,7 @@
 #include "engine/config/config.h"
 #include "engine/core/log/log.h"
 #include "engine/core/log/log_macros.h"
+#include "engine/profiler/profiler_events.h"
 
 namespace engine {
 
@@ -249,6 +250,7 @@ void PhysicsThread::EventLoop() {
             continue;  // timeout — check running_ flag
         }
 
+        { ENGINE_PROFILE_PHYSICS_CMD_DEQUEUE();
         try {
             switch (cmd.type) {
             case CommandType::Spawn: {
@@ -278,7 +280,9 @@ void PhysicsThread::EventLoop() {
                 if (args.delta_time > 0.0f) {
                     PhysicsFrameResult result = world_.Step(
                         args.delta_time, args.frame_id);
+                    { ENGINE_PROFILE_PHYSICS_RESULT_ENQUEUE();
                     result_queue_.enqueue(std::move(result));
+                    }  // ResultEnqueue slice ends
 
                     // Frame pile-up protection [D23]: drop oldest if over limit
                     while (result_queue_.size_approx() >
@@ -303,6 +307,7 @@ void PhysicsThread::EventLoop() {
             ENGINE_LOG_ERROR(logger_, "PhysicsThread: unknown exception in event loop");
             healthy_.store(false, std::memory_order_release);
         }
+        }  // CmdDequeue slice ends
     }
 
     ENGINE_LOG_INFO(logger_, "PhysicsThread: event loop exited");
