@@ -6,6 +6,7 @@
 #include <limits>
 #include <vector>
 
+#include "engine/config/config.h"
 #include "engine/core/log/log.h"
 #include "engine/core/log/log_macros.h"
 #include "engine/vm/vm.h"
@@ -15,7 +16,9 @@ namespace script {
 
 namespace {
 
-constexpr int kMaxNesting = 16;
+int GetMaxNesting() {
+    return ConfigManager::Instance().GetServerConfig().msgpack.max_nesting_depth;
+}
 
 // ============================================================================
 // Endian helper
@@ -356,7 +359,7 @@ void EncodeLuaTable(lua_State* L, EncodeBuf& buf, int level) {
 
 void EncodeLuaType(lua_State* L, EncodeBuf& buf, int level) {
     int t = lua_type(L, -1);
-    if (t == LUA_TTABLE && level == kMaxNesting) t = LUA_TNIL;
+    if (t == LUA_TTABLE && level == GetMaxNesting()) t = LUA_TNIL;
 
     switch (t) {
     case LUA_TSTRING:  EncodeLuaString(L, buf);   break;
@@ -380,7 +383,7 @@ void EncodeLuaType(lua_State* L, EncodeBuf& buf, int level) {
 void DecodeToLuaType(lua_State* L, DecodeCursor* c, int depth);
 
 void DecodeToLuaArray(lua_State* L, DecodeCursor* c, size_t len, int depth) {
-    if (depth >= kMaxNesting) {
+    if (depth >= GetMaxNesting()) {
         c->err = CurError::BadFmt;
         return;
     }
@@ -395,7 +398,7 @@ void DecodeToLuaArray(lua_State* L, DecodeCursor* c, size_t len, int depth) {
 }
 
 void DecodeToLuaHash(lua_State* L, DecodeCursor* c, size_t len, int depth) {
-    if (depth >= kMaxNesting) {
+    if (depth >= GetMaxNesting()) {
         c->err = CurError::BadFmt;
         return;
     }

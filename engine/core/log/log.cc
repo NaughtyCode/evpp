@@ -11,6 +11,7 @@
 #include <quill/sinks/RotatingFileSink.h>
 #include <quill/LogMacros.h>
 
+#include "engine/config/config.h"
 #include "engine/core/log/log_config.h"
 
 namespace engine {
@@ -37,16 +38,17 @@ quill::Logger* GetLogger(const std::string& name) {
     return quill::Frontend::get_logger(name);
 }
 
-void InitLogger(const std::string& log_dir) {
-    std::string log_path = log_dir.empty() ? "logs" : log_dir;
+void InitLogger(const LogConfig& config) {
+    std::string log_path = config.dir.empty() ? "logs" : config.dir;
 
     // Start backend thread (independent of evpp event loops)
     quill::Backend::start(GetBackendOptions());
 
     // Create sinks — always log to rotating file
     quill::RotatingFileSinkConfig file_cfg;
-    file_cfg.set_rotation_max_file_size(100 * 1024 * 1024);
-    file_cfg.set_max_backup_files(10);
+    file_cfg.set_rotation_max_file_size(
+        static_cast<size_t>(config.rotation_size_mb) * 1024 * 1024);
+    file_cfg.set_max_backup_files(config.max_backup_files);
     std::string full_path = log_path + "/engine_" + now_timestamp() + ".log";
     auto sink = quill::Frontend::create_or_get_sink<quill::RotatingFileSink>(
         full_path, file_cfg);
@@ -54,8 +56,24 @@ void InitLogger(const std::string& log_dir) {
     // Create root logger
     quill::Frontend::create_or_get_logger(
         "root", {sink},
-        quill::PatternFormatterOptions{
-            "%(time) [%(thread_id)] [%(log_level_short_code)] [%(logger)] %(message)"});
+        quill::PatternFormatterOptions{config.format_pattern});
+
+    // Apply log level filter from config
+    {
+        auto* root_logger = quill::Frontend::get_logger("root");
+        if (config.level == "trace")
+            root_logger->set_log_level(quill::LogLevel::TraceL1);
+        else if (config.level == "debug")
+            root_logger->set_log_level(quill::LogLevel::Debug);
+        else if (config.level == "warn" || config.level == "warning")
+            root_logger->set_log_level(quill::LogLevel::Warning);
+        else if (config.level == "error")
+            root_logger->set_log_level(quill::LogLevel::Error);
+        else if (config.level == "fatal" || config.level == "critical")
+            root_logger->set_log_level(quill::LogLevel::Critical);
+        else
+            root_logger->set_log_level(quill::LogLevel::Info);
+    }
 
     LOG_INFO(quill::Frontend::get_logger("root"), "log file: {}", full_path);
 }

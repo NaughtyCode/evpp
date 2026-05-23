@@ -14,9 +14,11 @@
 
 namespace engine {
 
+struct LogConfig;
+
 ENGINE_API quill::Logger* GetLogger(const std::string& name = "root");
 
-ENGINE_API void InitLogger(const std::string& log_dir);
+ENGINE_API void InitLogger(const LogConfig& config);
 
 ENGINE_API void ShutdownLogger();
 

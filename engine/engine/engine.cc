@@ -43,28 +43,33 @@ ScriptVM& Engine::GetScriptVM() {
     return *script_vm_;
 }
 
-void Engine::Init(const std::string& log_dir, const std::string& scripts_dir) {
-    InitLogger(log_dir);
+void Engine::Init(const EngineConfig& config) {
+    InitLogger(config.log);
 
     auto* logger = GetLogger();
-    ENGINE_LOG_INFO(logger, "engine initializing, log_dir=[{}]", log_dir);
+    ENGINE_LOG_INFO(logger,
+                    "engine initializing, log_dir=[{}], log_level=[{}], "
+                    "scripts_dir=[{}], frame_interval=[{}ms]",
+                    config.log.dir, config.log.level,
+                    config.scripts_dir, config.frame.interval_ms);
 
     TimerManager::create_instance();
     ENGINE_LOG_INFO(logger, "timer manager initialized");
 
     loop_ = std::make_unique<evpp::EventLoop>();
+    frame_interval_ = std::chrono::milliseconds(config.frame.interval_ms);
 
     script_vm_ = std::make_unique<ScriptVM>();
     ENGINE_LOG_INFO(logger, "lua vm initialized, version=[{}]", ScriptVM::LuaVersion());
 
-    script_vm_->SetImportPath(scripts_dir);
+    script_vm_->SetImportPath(config.scripts_dir);
     script::ExportAll(*script_vm_);
 
-    if (!scripts_dir.empty()) {
-        size_t failed = script_vm_->DoDirectory(scripts_dir);
+    if (!config.scripts_dir.empty()) {
+        size_t failed = script_vm_->DoDirectory(config.scripts_dir);
         if (failed > 0) {
             ENGINE_LOG_WARN(logger, "scripts dir [{}]: [{}] file(s) failed to load",
-                            scripts_dir, failed);
+                            config.scripts_dir, failed);
         }
         script_vm_->InitScript();
     }

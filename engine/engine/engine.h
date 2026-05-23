@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 
+#include "engine/config/config.h"
 #include "engine/engine_export.h"
 
 namespace evpp {
@@ -25,8 +26,7 @@ public:
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
 
-    void Init(const std::string& log_dir,
-              const std::string& scripts_dir = "resources/script");
+    void Init(const EngineConfig& config);
 
     // Run the main loop. Blocks until Shutdown() is called from a signal
     // handler or another thread.

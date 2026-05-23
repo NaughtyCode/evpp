@@ -11,6 +11,7 @@
 #include <winsock2.h>
 #endif
 
+#include "engine/config/config.h"
 #include "engine/core/log/log.h"
 #include "engine/core/log/log_macros.h"
 #include "engine/engine/engine.h"
@@ -39,19 +40,27 @@ struct WinSockGuard {
 int main(int argc, char* argv[]) {
     WinSockGuard winsock_guard;
 
-    std::string log_dir = "logs";
-    std::string scripts_dir = "resources/script";
+    // Load config from JSON files
+    std::string config_dir = "resources/config";
+    if (!engine::ConfigManager::Instance().Load(config_dir)) {
+        std::cerr << "Failed to load config from " << config_dir << std::endl;
+        return 1;
+    }
+
+    // CLI arguments override config values
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg.rfind("--log_dir=", 0) == 0) {
-            log_dir = arg.substr(10);
+            engine::ConfigManager::Instance()
+                .GetEngineConfigMutable().log.dir = arg.substr(10);
         } else if (arg.rfind("--scripts_dir=", 0) == 0) {
-            scripts_dir = arg.substr(15);
+            engine::ConfigManager::Instance()
+                .GetEngineConfigMutable().scripts_dir = arg.substr(15);
         }
     }
 
     auto& engine = engine::Engine::Instance();
-    engine.Init(log_dir, scripts_dir);
+    engine.Init(engine::ConfigManager::Instance().GetEngineConfig());
     engine.Run();
 
     engine::ShutdownLogger();

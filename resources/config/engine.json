@@ -1,0 +1,14 @@
+{
+  "log": {
+    "dir": "logs",
+    "level": "info",
+    "rotation_size_mb": 100,
+    "max_backup_files": 10,
+    "format_pattern": "%(time) [%(thread_id)] [%(log_level_short_code)] [%(logger)] %(message)"
+  },
+  "frame": {
+    "interval_ms": 33,
+    "slow_threshold_multiplier": 2
+  },
+  "scripts_dir": "resources/script"
+}

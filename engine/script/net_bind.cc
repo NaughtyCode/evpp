@@ -20,6 +20,7 @@
 #include <evpp/httpc/request.h>
 #include <evpp/httpc/response.h>
 
+#include "engine/config/config.h"
 #include "engine/core/log/log.h"
 #include "engine/core/log/log_macros.h"
 #include "engine/engine/engine.h"
@@ -728,8 +729,9 @@ int l_net_http_get(lua_State* L) {
     int ref = luaL_ref(L, LUA_REGISTRYINDEX);
     g_http_pending_refs.push_back(ref);
 
+    double timeout = ConfigManager::Instance().GetServerConfig().http.timeout_sec;
     auto req = std::make_shared<evpp::httpc::GetRequest>(
-        loop, url, evpp::Duration(10.0));  // 10s timeout
+        loop, url, evpp::Duration(timeout));
 
     req->Execute([L, ref](const std::shared_ptr<evpp::httpc::Response>& resp) {
         auto erase_ref = [&]() {
@@ -771,8 +773,9 @@ int l_net_http_post(lua_State* L) {
     int ref = luaL_ref(L, LUA_REGISTRYINDEX);
     g_http_pending_refs.push_back(ref);
 
+    double timeout = ConfigManager::Instance().GetServerConfig().http.timeout_sec;
     auto req = std::make_shared<evpp::httpc::PostRequest>(
-        loop, url, std::string(body, body_len), evpp::Duration(10.0));
+        loop, url, std::string(body, body_len), evpp::Duration(timeout));
 
     req->Execute([L, ref](const std::shared_ptr<evpp::httpc::Response>& resp) {
         auto erase_ref = [&]() {

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ENGINE_BUILD triggers dllexport in engine_export.h.
@@ -10,6 +10,7 @@ add_definitions(-DENGINE_BUILD)
 
 include_directories(${PROJECT_SOURCE_DIR}/3rdparty/quill/include)
 include_directories(${PROJECT_SOURCE_DIR}/3rdparty/lua)
+include_directories(${PROJECT_SOURCE_DIR}/3rdparty/glaze/include)
 include_directories(${PROJECT_SOURCE_DIR})  # for "engine/xxx.h" includes
 
 if (MSVC)
@@ -54,6 +55,13 @@ set(TIMER_SOURCES
 )
 source_group("engine\\core\\timer" FILES ${TIMER_SOURCES})
 
+# ── Config module ──────────────────────────────────────────────────
+set(CONFIG_SOURCES
+    config/config.cc
+    config/config.h
+)
+source_group("engine\\config" FILES ${CONFIG_SOURCES})
+
 # ── Engine module ─────────────────────────────────────────────────
 set(ENGINE_SOURCES
     engine/engine.cc
@@ -97,6 +105,7 @@ add_library(engine SHARED
     ${LUA_SOURCES}
     ${LOG_SOURCES}
     ${TIMER_SOURCES}
+    ${CONFIG_SOURCES}
     ${ENGINE_SOURCES}
     ${VM_SOURCES}
     ${SCRIPT_SOURCES}
