@@ -62,6 +62,7 @@ engine/profiler/
 └── profiler_events.h        # 引擎级便捷宏 (帧、物理、脚本等, 组合基础宏, include profiler_macros.h)
 
 扩展名使用 .cc 与引擎现有代码保持一致 (见 engine/CMakeLists.txt)。
+所有新头文件使用 #pragma once，与引擎现有代码保持一致 (见 engine/engine/engine.h:1)。
 PERFETTO_TRACK_EVENT_STATIC_STORAGE() 必须放在唯一一个 .cc 中，选择 profiler_core.cc。
 该宏必须与 PERFETTO_DEFINE_CATEGORIES 在同一命名空间作用域 — 若 categories 声明在全局
 作用域 (不在 namespace engine 内)，则 STATIC_STORAGE 也必须在全局作用域调用 (放在
@@ -85,8 +86,9 @@ Include 策略:
         直接使用 PERFETTO_DEFINE_CATEGORIES(perfetto::Category("name").SetDescription("desc"), ...)
 
     (b) RAII 区间事件 (推荐优先使用):
-        ENGINE_PROFILE_SCOPE(cat, name)
-          → TRACE_EVENT(cat, name)
+        ENGINE_PROFILE_SCOPE(cat, name, ...)
+          → TRACE_EVENT(cat, name __VA_OPT__(,) __VA_ARGS__)
+          变参用于传入 debug annotation (如 "frame_no", frame_count_) 或 Flow Event 标注
           注意: perfetto 原生的 TRACE_EVENT 本身就是 RAII scoped，不是瞬时事件
 
     (c) 手动区间事件 (begin/end 配对，用于跨作用域场景):
@@ -102,10 +104,17 @@ Include 策略:
     (e) 计数器 (数值 track，用于帧率、内存用量等):
         ENGINE_PROFILE_COUNTER(cat, name, value)
           → TRACE_COUNTER(cat, perfetto::CounterTrack(name), value)
+        注意: 每次调用 ENGINE_PROFILE_COUNTER 会构造新的 CounterTrack (新 UUID),
+        导致同一名称的计数器在 UI 中显示为多条独立 track 而非单一时间序列。
+        对于高频计数器 (帧号、帧耗时等), 推荐在 .cc 中创建 static track 复用:
+          static perfetto::CounterTrack s_frame_track("frame_number");
+          ENGINE_PROFILE_COUNTER_TRACK(cat, track, value)
+            → TRACE_COUNTER(cat, track, value)  // 复用预创建 track, 形成连续时间序列
 
     (f) 便捷函数追踪:
         ENGINE_PROFILE_FUNC()
-          → ENGINE_PROFILE_SCOPE("engine", __FUNCTION__)
+          → ENGINE_PROFILE_SCOPE("engine", __func__)
+          (__func__ 是 C++11 标准标识符, 跨平台兼容; MSVC 的 __FUNCTION__ 效果相同)
 
 4.2 引擎专用宏 — 组合基础宏，对应引擎实际生命周期:
 
@@ -114,6 +123,8 @@ Include 策略:
                                                        (多语句宏: 先发 COUNTER 再发 BEGIN, 用 do{}while(0) 包裹)
         ENGINE_PROFILE_FRAME_END(elapsed_ms)         — 帧结束 [END], 记录帧耗时
                                                        (多语句宏: 先发 COUNTER 再发 END, 用 do{}while(0) 包裹)
+        ENGINE_PROFILE_SLOW_FRAME(elapsed_ms, threshold_ms) — 慢帧标记 [INSTANT],
+                                                       elapsed > threshold 时触发，用于定位性能尖峰
         ENGINE_PROFILE_TIMER_UPDATE()                — TimerManager::update() [SCOPE]
         ENGINE_PROFILE_PHYSICS_TICK(frame_no)        — PhysicsEngineBridge::Tick() [SCOPE]
         ENGINE_PROFILE_SCRIPT_UPDATE()               — ScriptVM::UpdateScript() [SCOPE]
@@ -122,14 +133,23 @@ Include 策略:
         注: [BEGIN]/[END] 为手动配对, [SCOPE] 为 RAII 自动结束 (需用 { } 控制作用域)
 
     (b) 物理线程 (对应 engine/physics/physics_thread.cc EventLoop):
+
+        注: CollectTransforms, CollectCollisionEvents, GenerateDiffs 实际上在
+        PhysicsWorld::Step() 内部被调用 (physics_world.cc:439-441)，而非 EventLoop
+        的直接阶段。各宏应在 Step() 内部打桩，trace 层级为:
+          PhysicsStep (system_.Update + 后处理)
+          ├── Collision  (CollectCollisionEvents)
+          ├── Transform  (CollectTransforms)
+          └── Diff       (GenerateDiffs)
+
         ENGINE_PROFILE_PHYSICS_CMD_DEQUEUE()   — 命令出队 [SCOPE]
                                                 (内部将 cmd.frame_id 存入 thread_local 供后续宏使用)
         ENGINE_PROFILE_PHYSICS_STEP(dt)        — PhysicsWorld::Step() [SCOPE]
                                                 (dt 作为 debug annotation 记录: "delta_time", dt;
                                                  通过 thread_local 读取 frame_id 用于 TerminatingFlow)
-        ENGINE_PROFILE_PHYSICS_COLLISION()     — 碰撞检测 [SCOPE]
-        ENGINE_PROFILE_PHYSICS_TRANSFORM()     — 变换收集 [SCOPE]
-        ENGINE_PROFILE_PHYSICS_DIFF()          — 状态差异生成 [SCOPE]
+        ENGINE_PROFILE_PHYSICS_COLLISION()     — 碰撞检测 [SCOPE] (Step 内部嵌套)
+        ENGINE_PROFILE_PHYSICS_TRANSFORM()     — 变换收集 [SCOPE] (Step 内部嵌套)
+        ENGINE_PROFILE_PHYSICS_DIFF()          — 状态差异生成 [SCOPE] (Step 内部嵌套)
         ENGINE_PROFILE_PHYSICS_RESULT_ENQUEUE() — 结果入队 [SCOPE]
 
     (c) 脚本系统:
@@ -139,16 +159,23 @@ Include 策略:
     (d) 跨线程流事件 (Flow Event, 标记因果关系):
         ENGINE_PROFILE_FLOW_BEGIN(cat, name, flow_id)
           → TRACE_EVENT_BEGIN(cat, name, perfetto::Flow::ProcessScoped(flow_id))
-            (在发射端创建切片并标记流起点，flow_id 通常用 frame_count_)
-        ENGINE_PROFILE_FLOW_END(cat, name, flow_id)
-          → TRACE_EVENT_END(cat, perfetto::TerminatingFlow::ProcessScoped(flow_id))
-            (在接收端结束切片并标记流终点)
-        FLOW_BEGIN/END 为手动配对宏，需在同一线程配对使用以关闭切片；
-        跨线程的 flow 关联通过相同的 flow_id 自动建立。
-        注意: Flow Event 是 TRACE_EVENT 切片上的附加标注 (annotation)，
+            (在发射端创建切片并标记流起点, flow_id 通常用 frame_count_)
+        ENGINE_PROFILE_FLOW_END(cat)
+          → TRACE_EVENT_END(cat)
+            (仅关闭切片; TRACE_EVENT_END 不接受 category 之外的参数)
+        ENGINE_PROFILE_FLOW_TERMINATE(cat, name, flow_id)
+          → TRACE_EVENT_BEGIN(cat, name, perfetto::TerminatingFlow::ProcessScoped(flow_id))
+            (在接收端创建切片并标记流终点; 需与 ENGINE_PROFILE_FLOW_END(cat) 配对关闭)
+
+        跨线程使用模式:
+          发射线程:  FLOW_BEGIN(cat, name, id);  ...work...  FLOW_END(cat);
+          接收线程:  FLOW_TERMINATE(cat, name, id);  ...work...  FLOW_END(cat);
+        Flow 标注分别在两端的 BEGIN 上, END 仅为普通关闭; 通过相同 flow_id 关联。
+
+        注意: Flow Event 是 TRACE_EVENT_BEGIN 切片上的附加标注 (annotation),
         不是独立事件。实际使用时推荐将 flow 标注直接整合进引擎宏内部
-        (主线程 PHYSICS_TICK 内部用 Flow::ProcessScoped，
-         物理线程 PHYSICS_STEP 内部用 TerminatingFlow::ProcessScoped)，
+        (主线程 PHYSICS_TICK 内部用 Flow::ProcessScoped,
+         物理线程 PHYSICS_STEP 内部用 TerminatingFlow::ProcessScoped),
         减少显式调用。此处提供独立宏作为备选手动方案。
         用于连接主线程 Tick → 物理线程 Step → FetchResult 返回的因果关系链。
 
@@ -214,7 +241,7 @@ Include 策略:
 5.1 ProfilerConfig 结构体:
 
     struct ENGINE_API ProfilerConfig {
-        const char* output_path      = "trace.perfetto-trace";
+        std::string  output_path     = "trace.perfetto-trace";  // std::string 管理生命周期, 避免 const char* 悬空
         uint32_t    buffer_size_kb   = 32768;   // 每个 buffer 32MB
         uint32_t    duration_ms      = 0;       // 0 = 手动停止
         uint32_t    flush_interval_ms = 5000;
@@ -276,7 +303,8 @@ Include 策略:
     };
 
     生命周期规则:
-    . Initialize() 可重复调用 — 第二次及之后返回 false, 不改变状态
+    . Initialize() 可重复调用 — 第二次及之后返回 false, 不改变状态。
+      如需更换配置重新初始化, 须先 Shutdown() 再 Initialize(new_cfg)。
     . StartSession() 幂等 — 若已有活跃 session 则隐式 StopSession() 再创建新的
     . StopSession() 幂等 — 无活跃 session 时是空操作
     . Shutdown() 幂等 — 可安全多次调用, 自动清理所有资源
