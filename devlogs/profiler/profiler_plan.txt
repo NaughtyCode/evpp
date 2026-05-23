@@ -242,6 +242,12 @@ Include 策略:
 
 5.2 ProfilerManager 单例:
 
+    // profiler_core.h 需要的前向声明和头文件:
+    #include <cstdint>          // uint32_t
+    #include <memory>           // std::unique_ptr
+    #include "engine_export.h"  // ENGINE_API
+    namespace perfetto { class TracingSession; }  // 前向声明, 避免在 .h 中包含 perfetto.h
+
     class ENGINE_API ProfilerManager {
     public:
         static ProfilerManager& Get();
@@ -283,6 +289,8 @@ Include 策略:
       perfetto::Tracing::NewTrace(kInProcessBackend))，不依赖 ProfilerManager
     . ProfilerManager 仅管理主线程 session；物理线程拥有自己的 session 生命周期
     . 主线程 session 和物理线程 session 可独立启停，互不干扰
+    . 物理线程停止时: 在 EventLoop 退出前调用 StopBlocking() + ReadTraceBlocking()，
+      将 trace 数据通过文件或队列传回主线程合并保存
     . perfetto 自动按线程 track 区分事件来源，在 perfetto UI 中天然隔离
     . 跨线程因果关系: 使用 ENGINE_PROFILE_FLOW_BEGIN/END 或将 Flow::ProcessScoped
       标注整合进物理相关的引擎宏 (PHYSICS_TICK 和 PHYSICS_STEP) 内部
