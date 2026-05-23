@@ -284,6 +284,21 @@ const char* ScriptVM::LuaVersion() {
 }
 
 //=================================================================
+// Module import system
+//=================================================================
+
+ScriptImporter& ScriptVM::GetImporter() {
+    if (!importer_) {
+        importer_ = std::make_unique<ScriptImporter>();
+    }
+    return *importer_;
+}
+
+void ScriptVM::SetImportPath(const std::string& scripts_dir) {
+    GetImporter().Init(scripts_dir);
+}
+
+//=================================================================
 // RegisterCallback
 //=================================================================
 

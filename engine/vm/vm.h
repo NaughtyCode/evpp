@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "engine/engine_export.h"
+#include "engine/vm/script_importer.h"
 
 extern "C" {
 #include "3rdparty/lua/lua.h"
@@ -122,6 +123,13 @@ public:
     // Return the Lua version string.
     static const char* LuaVersion();
 
+    //=================================================================
+    // Module import system
+    //=================================================================
+
+    ScriptImporter& GetImporter();
+    void SetImportPath(const std::string& scripts_dir);
+
 private:
     // Shared trampoline storage for RegisterCallback.
     static int CallbackTrampoline(lua_State* L);
@@ -135,6 +143,8 @@ private:
     // Keep callback objects alive at stable addresses (lightuserdata
     // pointers captured by Lua closures must not dangle across reallocations).
     std::vector<std::unique_ptr<LuaCallback>> callbacks_;
+
+    std::unique_ptr<ScriptImporter> importer_;
 };
 
 //=============================================================================

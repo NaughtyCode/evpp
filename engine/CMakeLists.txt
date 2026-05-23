@@ -65,6 +65,8 @@ source_group("engine\\engine" FILES ${ENGINE_SOURCES})
 set(VM_SOURCES
     vm/vm.cc
     vm/vm.h
+    vm/script_importer.cc
+    vm/script_importer.h
 )
 source_group("engine\\vm" FILES ${VM_SOURCES})
 
@@ -80,6 +82,8 @@ set(SCRIPT_SOURCES
     script/net_bind.h
     script/msgpack_bind.cc
     script/msgpack_bind.h
+    script/import_bind.cc
+    script/import_bind.h
 )
 source_group("engine\\script" FILES ${SCRIPT_SOURCES})
 

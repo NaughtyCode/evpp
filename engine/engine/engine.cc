@@ -52,6 +52,7 @@ void Engine::Init(const std::string& log_dir, const std::string& scripts_dir) {
     script_vm_ = std::make_unique<ScriptVM>();
     ENGINE_LOG_INFO(logger, "lua vm initialized, version=[{}]", ScriptVM::LuaVersion());
 
+    script_vm_->SetImportPath(scripts_dir);
     script::ExportAll(*script_vm_);
 
     if (!scripts_dir.empty()) {

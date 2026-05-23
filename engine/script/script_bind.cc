@@ -6,6 +6,7 @@
 #include "engine/script/timer_bind.h"
 #include "engine/script/msgpack_bind.h"
 #include "engine/script/net_bind.h"
+#include "engine/script/import_bind.h"
 #include "engine/vm/vm.h"
 
 namespace engine {
@@ -19,6 +20,7 @@ void ExportAll(ScriptVM& vm) {
     ExportTimer(vm);
     ExportNet(vm);
     ExportMsgPack(vm);
+    engine::ExportImport(vm);
 
     ENGINE_LOG_INFO(logger, "ScriptBind: all APIs exported");
 }
