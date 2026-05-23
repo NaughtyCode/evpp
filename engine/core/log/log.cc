@@ -32,6 +32,70 @@ std::string now_timestamp() {
     return oss.str();
 }
 
+void apply_rotation_config(quill::RotatingFileSinkConfig& cfg, const LogConfig& config) {
+    if (config.rotation_size_mb > 0) {
+        cfg.set_rotation_max_file_size(
+            static_cast<size_t>(config.rotation_size_mb) * 1024 * 1024);
+    }
+
+    if (config.rotation_frequency == "minutely") {
+        cfg.set_rotation_frequency_and_interval(
+            'M', static_cast<uint32_t>(config.rotation_interval));
+    } else if (config.rotation_frequency == "hourly") {
+        cfg.set_rotation_frequency_and_interval(
+            'H', static_cast<uint32_t>(config.rotation_interval));
+    } else if (config.rotation_frequency == "daily") {
+        cfg.set_rotation_time_daily(config.rotation_time_daily);
+    }
+
+    if (config.rotation_naming_scheme == "date") {
+        cfg.set_rotation_naming_scheme(
+            quill::RotatingFileSinkConfig::RotationNamingScheme::Date);
+    } else if (config.rotation_naming_scheme == "date_and_time") {
+        cfg.set_rotation_naming_scheme(
+            quill::RotatingFileSinkConfig::RotationNamingScheme::DateAndTime);
+    }
+
+    cfg.set_max_backup_files(static_cast<uint32_t>(config.max_backup_files));
+
+    if (!config.rotation_frequency.empty()) {
+        cfg.set_rotation_on_creation(true);
+    }
+}
+
+std::string make_log_path(const LogConfig& config) {
+    std::string log_dir = config.dir.empty() ? "logs" : config.dir;
+
+    std::string prefix;
+    if (!config.log_filename.empty()) {
+        prefix = config.log_filename;
+    } else if (!config.logger_name.empty() && config.logger_name != "root") {
+        prefix = config.logger_name;
+    } else {
+        prefix = "engine";
+    }
+
+    if (config.rotation_frequency.empty()) {
+        return log_dir + "/" + prefix + "_" + now_timestamp() + ".log";
+    }
+    return log_dir + "/" + prefix + ".log";
+}
+
+void apply_log_level(quill::Logger* logger, const std::string& level) {
+    if (level == "trace")
+        logger->set_log_level(quill::LogLevel::TraceL1);
+    else if (level == "debug")
+        logger->set_log_level(quill::LogLevel::Debug);
+    else if (level == "warn" || level == "warning")
+        logger->set_log_level(quill::LogLevel::Warning);
+    else if (level == "error")
+        logger->set_log_level(quill::LogLevel::Error);
+    else if (level == "fatal" || level == "critical")
+        logger->set_log_level(quill::LogLevel::Critical);
+    else
+        logger->set_log_level(quill::LogLevel::Info);
+}
+
 } // namespace
 
 quill::Logger* GetLogger(const std::string& name) {
@@ -39,48 +103,49 @@ quill::Logger* GetLogger(const std::string& name) {
 }
 
 void InitLogger(const LogConfig& config) {
-    std::string log_path = config.dir.empty() ? "logs" : config.dir;
-
-    // Start backend thread (independent of evpp event loops)
     quill::Backend::start(GetBackendOptions());
 
-    // Create sinks — always log to console + rotating file
     auto console_sink = quill::Frontend::create_or_get_sink<quill::ConsoleSink>("console");
+
     quill::RotatingFileSinkConfig file_cfg;
-    file_cfg.set_rotation_max_file_size(
-        static_cast<size_t>(config.rotation_size_mb) * 1024 * 1024);
-    file_cfg.set_max_backup_files(config.max_backup_files);
-    std::string full_path = log_path + "/engine_" + now_timestamp() + ".log";
+    apply_rotation_config(file_cfg, config);
+
+    std::string full_path = make_log_path(config);
     auto file_sink = quill::Frontend::create_or_get_sink<quill::RotatingFileSink>(
         full_path, file_cfg);
 
-    // Create root logger with both sinks
-    quill::Frontend::create_or_get_logger(
+    auto* logger = quill::Frontend::create_or_get_logger(
         "root", {console_sink, file_sink},
         quill::PatternFormatterOptions{config.format_pattern});
 
-    // Apply log level filter from config
-    {
-        auto* root_logger = quill::Frontend::get_logger("root");
-        if (config.level == "trace")
-            root_logger->set_log_level(quill::LogLevel::TraceL1);
-        else if (config.level == "debug")
-            root_logger->set_log_level(quill::LogLevel::Debug);
-        else if (config.level == "warn" || config.level == "warning")
-            root_logger->set_log_level(quill::LogLevel::Warning);
-        else if (config.level == "error")
-            root_logger->set_log_level(quill::LogLevel::Error);
-        else if (config.level == "fatal" || config.level == "critical")
-            root_logger->set_log_level(quill::LogLevel::Critical);
-        else
-            root_logger->set_log_level(quill::LogLevel::Info);
-    }
+    apply_log_level(logger, config.level);
 
-    LOG_INFO(quill::Frontend::get_logger("root"), "log file: {}", full_path);
+    LOG_INFO(logger, "log file: {}", full_path);
+}
+
+quill::Logger* CreateLogger(const LogConfig& config) {
+    quill::Backend::start(GetBackendOptions());
+
+    auto console_sink = quill::Frontend::create_or_get_sink<quill::ConsoleSink>("console");
+
+    quill::RotatingFileSinkConfig file_cfg;
+    apply_rotation_config(file_cfg, config);
+
+    std::string full_path = make_log_path(config);
+    auto file_sink = quill::Frontend::create_or_get_sink<quill::RotatingFileSink>(
+        full_path, file_cfg);
+
+    auto* logger = quill::Frontend::create_or_get_logger(
+        config.logger_name, {console_sink, file_sink},
+        quill::PatternFormatterOptions{config.format_pattern});
+
+    apply_log_level(logger, config.level);
+
+    LOG_INFO(logger, "log file: {}", full_path);
+    return logger;
 }
 
 void ShutdownLogger() {
-    // Block until all SPSC queues are drained and written
     quill::Backend::stop();
 }
 

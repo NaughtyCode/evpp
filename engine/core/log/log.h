@@ -20,6 +20,8 @@ ENGINE_API quill::Logger* GetLogger(const std::string& name = "root");
 
 ENGINE_API void InitLogger(const LogConfig& config);
 
+ENGINE_API quill::Logger* CreateLogger(const LogConfig& config);
+
 ENGINE_API void ShutdownLogger();
 
 } // namespace engine

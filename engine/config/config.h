@@ -18,6 +18,16 @@ struct LogConfig {
     int max_backup_files = 10;
     std::string format_pattern =
         "%(time) [%(thread_id)] [%(log_level_short_code)] [%(logger)] %(message)";
+
+    // Time-based rotation (empty = disabled, size-based only)
+    std::string rotation_frequency = "";        // "daily", "hourly", "minutely"
+    int rotation_interval = 1;                  // interval for hourly/minutely
+    std::string rotation_time_daily = "00:00";  // "HH:MM" for daily rotation
+    std::string rotation_naming_scheme = "date_and_time";  // "index", "date", "date_and_time"
+
+    // Multi-instance
+    std::string logger_name = "root";   // logger instance name (used as log file prefix when log_filename is empty)
+    std::string log_filename = "";      // override log file prefix (empty = use logger_name)
 };
 
 struct FrameConfig {
