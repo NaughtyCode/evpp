@@ -51,6 +51,8 @@ else (UNIX)
     find_library(EVENT_LIBRARY event REQUIRED)
     find_library(GLOG_LIBRARY glog REQUIRED)
     SET(DEPENDENT_LIBRARIES ${EVENT_LIBRARY} ${GLOG_LIBRARY})
+    # Suppress evpp's per-frame DLOG_TRACE noise (OnTimerTriggered etc.) in Release
+    SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DGOOGLE_STRIP_LOG=1")
 endif (UNIX)
 
 # Set to true if https support is needed.

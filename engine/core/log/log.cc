@@ -44,18 +44,19 @@ void InitLogger(const LogConfig& config) {
     // Start backend thread (independent of evpp event loops)
     quill::Backend::start(GetBackendOptions());
 
-    // Create sinks — always log to rotating file
+    // Create sinks — always log to console + rotating file
+    auto console_sink = quill::Frontend::create_or_get_sink<quill::ConsoleSink>("console");
     quill::RotatingFileSinkConfig file_cfg;
     file_cfg.set_rotation_max_file_size(
         static_cast<size_t>(config.rotation_size_mb) * 1024 * 1024);
     file_cfg.set_max_backup_files(config.max_backup_files);
     std::string full_path = log_path + "/engine_" + now_timestamp() + ".log";
-    auto sink = quill::Frontend::create_or_get_sink<quill::RotatingFileSink>(
+    auto file_sink = quill::Frontend::create_or_get_sink<quill::RotatingFileSink>(
         full_path, file_cfg);
 
-    // Create root logger
+    // Create root logger with both sinks
     quill::Frontend::create_or_get_logger(
-        "root", {sink},
+        "root", {console_sink, file_sink},
         quill::PatternFormatterOptions{config.format_pattern});
 
     // Apply log level filter from config
