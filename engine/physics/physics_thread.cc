@@ -53,6 +53,7 @@ quill::Logger* PhysicsThread::CreatePhysicsLogger(
 
 bool PhysicsThread::Start(const PhysicsConfig& config,
                            const ThreadingConfig& threading,
+                           const ThresholdsConfig& thresholds,
                            const PhysicsLogConfig& log_config,
                            const std::string& assets_path) {
     if (running_.load(std::memory_order_acquire)) {
@@ -61,6 +62,7 @@ bool PhysicsThread::Start(const PhysicsConfig& config,
 
     physics_config_ = config;
     threading_config_ = threading;
+    thresholds_config_ = thresholds;
     log_config_ = log_config;
     assets_path_ = assets_path;
 
@@ -152,7 +154,8 @@ bool PhysicsThread::Recover(const std::string& saved_state) {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // Restart with the same config
-    bool ok = Start(physics_config_, threading_config_, log_config_, assets_path_);
+    bool ok = Start(physics_config_, threading_config_, thresholds_config_,
+                     log_config_, assets_path_);
     if (!ok) {
         ENGINE_LOG_ERROR(logger, "PhysicsThread: recovery failed — Start() returned false");
         return false;
@@ -227,7 +230,7 @@ void PhysicsThread::EventLoop() {
 
     // Initialize PhysicsWorld with configs captured at Start()
     bool ok = world_.Initialize(physics_config_, threading_config_,
-                                 logger_, assets_path_);
+                                 thresholds_config_, logger_, assets_path_);
     if (!ok) {
         ENGINE_LOG_ERROR(logger_, "PhysicsThread: world initialization failed");
         healthy_.store(false, std::memory_order_release);

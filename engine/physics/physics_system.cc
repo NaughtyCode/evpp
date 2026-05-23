@@ -91,6 +91,7 @@ bool PhysicsSystem::Start() {
     bool ok = physics_thread_.Start(
         config_manager_->GetPhysicsConfig(),
         config_manager_->GetThreadingConfig(),
+        config_manager_->GetThresholdsConfig(),
         config_manager_->GetLogConfig(),
         assets_path_);
 
@@ -232,7 +233,12 @@ bool PhysicsSystem::IsHealthy() const {
 
 bool PhysicsSystem::ReloadThresholds() {
     if (!config_manager_) return false;
-    return config_manager_->ReloadThresholds(config_dir_);
+    if (!config_manager_->ReloadThresholds(config_dir_)) return false;
+    // Propagate to running physics thread
+    if (physics_thread_.IsRunning()) {
+        physics_thread_.SetThresholds(config_manager_->GetThresholdsConfig());
+    }
+    return true;
 }
 
 bool PhysicsSystem::ReloadLogLevel() {

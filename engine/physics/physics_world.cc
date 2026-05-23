@@ -148,11 +148,12 @@ PhysicsWorld::~PhysicsWorld() {
 
 bool PhysicsWorld::Initialize(const PhysicsConfig& config,
                                const ThreadingConfig& threading,
+                               const ThresholdsConfig& thresholds,
                                quill::Logger* logger,
                                const std::string& assets_path) {
     logger_ = logger;
     config_ = config;
-    thresholds_ = nullptr;  // loaded separately by PhysicsConfigManager
+    thresholds_ = thresholds;
 
     // ── Step 1-3: One-time Jolt registration (program-global) ──────────
     if (!s_jolt_registered_.exchange(true)) {
@@ -242,6 +243,11 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 
         system_.SetPhysicsSettings(settings);
         system_.SetGravity(JPH::Vec3(config.gravity_x, config.gravity_y, config.gravity_z));
+
+        // [J13] Combine functions: Jolt defaults are geometric mean for
+        // friction (sqrt(f1*f2)) and max for restitution (max(r1,r2)),
+        // which match the design doc requirements. No explicit override
+        // needed unless custom combine logic is desired.
     }
 
     // ── Step 9: Set listeners ───────────────────────────────────────
@@ -434,6 +440,16 @@ PhysicsFrameResult PhysicsWorld::Step(float delta_time, uint64_t frame_id) {
     CollectCollisionEvents(result);
     GenerateDiffs(result);
 
+    // Track per-frame stats for GetStats()
+    {
+        last_body_pairs_ = static_cast<int>(result.collision_events.size());
+        int total_contacts = 0;
+        for (const auto& evt : result.collision_events) {
+            total_contacts += static_cast<int>(evt.contact_points.size());
+        }
+        last_contact_constraints_ = total_contacts;
+    }
+
     return result;
 }
 
@@ -505,7 +521,7 @@ void PhysicsWorld::CollectCollisionEvents(PhysicsFrameResult& result) {
 
 void PhysicsWorld::GenerateDiffs(PhysicsFrameResult& result) {
     JPH::BodyInterface& bi = system_.GetBodyInterfaceNoLock();
-    const ThresholdsConfig& thresholds = *thresholds_;
+    const ThresholdsConfig& thresholds = thresholds_;
 
     for (auto& [body_id, previous] : state_snapshots_) {
         JPH::BodyID jid(body_id);
@@ -568,7 +584,13 @@ PhysicsWorld::Stats PhysicsWorld::GetStats() const {
             ++s.active_bodies;
         }
     }
+    s.body_pairs = last_body_pairs_;
+    s.contact_constraints = last_contact_constraints_;
     return s;
+}
+
+void PhysicsWorld::SetThresholds(const ThresholdsConfig& thresholds) {
+    thresholds_ = thresholds;
 }
 
 std::optional<PhysicsWorld::RayCastHit> PhysicsWorld::RayCast(

@@ -109,11 +109,15 @@ public:
     PhysicsWorld& operator=(const PhysicsWorld&) = delete;
 
     // ── Initialization (strict 10-step order per [J2]) ──────────────────
-    // Returns false on failure. Caller provides config + logger + asset path.
+    // Returns false on failure. Caller provides config + thresholds + logger + asset path.
     bool Initialize(const PhysicsConfig& config,
                     const ThreadingConfig& threading,
+                    const ThresholdsConfig& thresholds,
                     quill::Logger* logger,
                     const std::string& assets_path);
+
+    // Hot-reload thresholds after initialization [D14]
+    void SetThresholds(const ThresholdsConfig& thresholds);
 
     // ── Runtime body interface ──────────────────────────────────────────
     uint32_t CreateBody(const std::string& proto_id,
@@ -200,8 +204,12 @@ private:
     // Config copy (for runtime access)
     PhysicsConfig config_;
 
-    // Thresholds reference (may be hot-reloaded externally)
-    const ThresholdsConfig* thresholds_ = nullptr;
+    // Thresholds (set at init, hot-reloaded via SetThresholds)
+    ThresholdsConfig thresholds_;
+
+    // Per-frame stats tracking (updated in Step, returned by GetStats)
+    int last_body_pairs_ = 0;
+    int last_contact_constraints_ = 0;
 
     // Static guard for one-time Jolt init steps 1-3
     static std::atomic<bool> s_jolt_registered_;

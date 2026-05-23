@@ -38,6 +38,7 @@ public:
     // Returns false if the world fails to initialize.
     bool Start(const PhysicsConfig& config,
                const ThreadingConfig& threading,
+               const ThresholdsConfig& thresholds,
                const PhysicsLogConfig& log_config,
                const std::string& assets_path);
 
@@ -68,6 +69,12 @@ public:
     std::string SaveState() const { return world_.SaveState(); }
     bool RestoreState(const std::string& data) { return world_.RestoreState(data); }
 
+    // Set thresholds (hot-reload)
+    void SetThresholds(const ThresholdsConfig& thresholds) {
+        world_.SetThresholds(thresholds);
+        thresholds_config_ = thresholds;
+    }
+
     // Recover after a crash. Stops the old thread (if still partially running),
     // restarts with the same config, and optionally restores state.
     // Returns false if recovery fails (config lost, world init failure).
@@ -95,6 +102,7 @@ private:
     // Config copies (stored at Start(), consumed by EventLoop / Recover)
     PhysicsConfig physics_config_;
     ThreadingConfig threading_config_;
+    ThresholdsConfig thresholds_config_;
     PhysicsLogConfig log_config_;
     std::string assets_path_;
 
