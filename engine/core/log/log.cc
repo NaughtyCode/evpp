@@ -9,6 +9,7 @@
 #include <quill/Frontend.h>
 #include <quill/sinks/ConsoleSink.h>
 #include <quill/sinks/RotatingFileSink.h>
+#include <quill/LogMacros.h>
 
 #include "engine/core/log/log_config.h"
 
@@ -42,22 +43,21 @@ void InitLogger(const std::string& log_dir) {
     // Start backend thread (independent of evpp event loops)
     quill::Backend::start(GetBackendOptions());
 
-    // Create sinks
-#ifdef NDEBUG
+    // Create sinks — always log to rotating file
     quill::RotatingFileSinkConfig file_cfg;
     file_cfg.set_rotation_max_file_size(100 * 1024 * 1024);
     file_cfg.set_max_backup_files(10);
+    std::string full_path = log_path + "/engine_" + now_timestamp() + ".log";
     auto sink = quill::Frontend::create_or_get_sink<quill::RotatingFileSink>(
-        log_path + "/engine_" + now_timestamp() + ".log", file_cfg);
-#else
-    auto sink = quill::Frontend::create_or_get_sink<quill::ConsoleSink>("console");
-#endif
+        full_path, file_cfg);
 
     // Create root logger
     quill::Frontend::create_or_get_logger(
         "root", {sink},
         quill::PatternFormatterOptions{
-            "%(time) [%(log_level_short_code)] [%(logger)] %(message)"});
+            "%(time) [%(thread_id)] [%(log_level_short_code)] [%(logger)] %(message)"});
+
+    LOG_INFO(quill::Frontend::get_logger("root"), "log file: {}", full_path);
 }
 
 void ShutdownLogger() {
