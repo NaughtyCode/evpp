@@ -11,6 +11,8 @@
 #include <iostream>
 #include <unordered_map>
 
+#include "engine/profiler/profiler_events.h"
+
 namespace engine {
 
 //=============================================================================
@@ -83,6 +85,8 @@ TimerManager::UpdateResult TimerManager::update() {
 }
 
 TimerManager::UpdateResult TimerManager::update(TimePoint current_time) {
+    ENGINE_PROFILE_SCOPE("engine.timer", "Update");
+
     UpdateResult result;
     result.current_time = current_time;
     result.elapsed = current_time - last_update_time_;
@@ -118,6 +122,10 @@ TimerManager::UpdateResult TimerManager::update(TimePoint current_time) {
     result.total_fired = result.hrtimers_fired +
                          result.wheel_timers_fired +
                          result.alarms_fired;
+
+    if (result.total_fired > 0) {
+        ENGINE_PROFILE_INSTANT("engine.timer", "TimerFired");
+    }
 
     // Update statistics
     stats_.total_updates++;
@@ -270,6 +278,7 @@ TimerId TimerManager::create_simple_timer(std::function<void()> callback,
 void TimerManager::start_timer(TimerId id, TimePoint expiry, TimerMode mode) {
     auto* entry = get_entry(id);
     if (!entry || entry->kind != TimerEntry::Kind::kHrTimer) return;
+    ENGINE_PROFILE_INSTANT("engine.timer", "StartTimer");
     hrtimer_mgr_->start(entry->hrtimer, expiry, mode);
 }
 
@@ -297,15 +306,20 @@ bool TimerManager::cancel_timer(TimerId id) {
     auto* entry = get_entry(id);
     if (!entry) return false;
 
+    bool result = false;
     switch (entry->kind) {
         case TimerEntry::Kind::kHrTimer:
-            return hrtimer_mgr_->cancel(entry->hrtimer);
+            result = hrtimer_mgr_->cancel(entry->hrtimer);
+            break;
         case TimerEntry::Kind::kWheelTimer:
-            return wheel_->del_timer(entry->wheel_timer);
+            result = wheel_->del_timer(entry->wheel_timer);
+            break;
         case TimerEntry::Kind::kAlarm:
-            return alarm_mgr_->cancel(entry->alarm);
+            result = alarm_mgr_->cancel(entry->alarm);
+            break;
     }
-    return false;
+    if (result) ENGINE_PROFILE_INSTANT("engine.timer", "CancelTimer");
+    return result;
 }
 
 void TimerManager::restart_timer(TimerId id) {
@@ -415,6 +429,7 @@ TimerId TimerManager::create_wheel_timer(TimerWheelNode::Callback callback,
 void TimerManager::start_wheel_timer(TimerId id, int64_t expires_ms) {
     auto* entry = get_entry(id);
     if (!entry || entry->kind != TimerEntry::Kind::kWheelTimer) return;
+    ENGINE_PROFILE_INSTANT("engine.timer", "StartWheelTimer");
     wheel_->add_timer(entry->wheel_timer, expires_ms);
 }
 
@@ -457,6 +472,7 @@ TimerId TimerManager::create_alarm(AlarmType type, Alarm::Callback callback) {
 void TimerManager::start_alarm(TimerId id, TimePoint start_time) {
     auto* entry = get_entry(id);
     if (!entry || entry->kind != TimerEntry::Kind::kAlarm) return;
+    ENGINE_PROFILE_INSTANT("engine.timer", "StartAlarm");
     alarm_mgr_->start(entry->alarm, start_time);
 }
 

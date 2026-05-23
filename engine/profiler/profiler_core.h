@@ -46,6 +46,8 @@ private:
     ProfilerManager(const ProfilerManager&) = delete;
     ProfilerManager& operator=(const ProfilerManager&) = delete;
 
+    void WriteTraceToFile(const std::string& path, const std::vector<char>& data);
+
     ProfilerConfig config_;
     std::unique_ptr<perfetto::TracingSession> session_;
     bool initialized_ = false;

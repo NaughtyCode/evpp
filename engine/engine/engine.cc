@@ -68,6 +68,8 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
                         "enabled=[{}]", ProfilerManager::IsEnabled());
     }
 
+    ENGINE_PROFILE_SCOPE("engine", "Init");
+
     ENGINE_LOG_INFO(logger,
                     "engine initializing, log_dir=[{}], log_level=[{}], "
                     "scripts_dir=[{}], frame_interval=[{}ms], library_mode=[{}]",
@@ -210,6 +212,8 @@ void Engine::Tick() {
 //============================================================================
 
 void Engine::Shutdown() {
+    ENGINE_PROFILE_SCOPE("engine", "Shutdown");
+
     if (running_) {
         running_ = false;
         // Only stop the engine's own loop. In library mode the host
@@ -225,6 +229,8 @@ void Engine::Shutdown() {
 //============================================================================
 
 void Engine::Cleanup() {
+    ENGINE_PROFILE_SCOPE("engine", "Cleanup");
+
     if (cleaned_up_) return;
     cleaned_up_ = true;
 
@@ -263,7 +269,8 @@ void Engine::Cleanup() {
     // Must happen after all subsystems stop (physics, timers, VM)
     // and before the logger is destroyed, so profiler can log its status.
     {
-        ENGINE_LOG_INFO(logger, "profiler: stopping session and saving trace...");
+        ENGINE_LOG_INFO(logger, "profiler: flushing, stopping, saving trace...");
+        ProfilerManager::Get().Flush();
         ProfilerManager::Get().StopSession();
         ProfilerManager::Get().SaveTrace();
         ProfilerManager::Get().Shutdown();

@@ -60,6 +60,7 @@ bool ProfilerManager::Initialize(const ProfilerConfig& cfg) {
 void ProfilerManager::Shutdown() {
     if (!initialized_) return;
 
+    Flush();
     StopSession();
     initialized_ = false;
 
@@ -71,7 +72,9 @@ void ProfilerManager::Shutdown() {
 
 static perfetto::TraceConfig MakeTraceConfig(const ProfilerConfig& cfg) {
     perfetto::TraceConfig tc;
-    tc.add_buffers()->set_size_kb(cfg.buffer_size_kb);
+    auto* buf = tc.add_buffers();
+    buf->set_size_kb(cfg.buffer_size_kb);
+    buf->set_fill_policy(perfetto::TraceConfig::BufferConfig::RING_BUFFER);
     auto* ds = tc.add_data_sources();
     ds->mutable_config()->set_name("track_event");
     if (cfg.duration_ms > 0) {
@@ -90,6 +93,11 @@ bool ProfilerManager::StartSession() {
 
     auto cfg = MakeTraceConfig(config_);
     session_ = perfetto::Tracing::NewTrace(perfetto::kInProcessBackend);
+    if (!session_) {
+        auto* logger = GetLogger();
+        ENGINE_LOG_ERROR(logger, "ProfilerManager: NewTrace returned nullptr");
+        return false;
+    }
     session_->Setup(cfg);
     session_->StartBlocking();
 
@@ -168,7 +176,7 @@ void ProfilerManager::SaveTrace() {
         stamped = path + "_" + oss.str();
     }
 
-    SaveTraceExact(stamped);
+    WriteTraceToFile(stamped, data);
 }
 
 void ProfilerManager::SaveTraceExact(const std::string& path) {
@@ -181,6 +189,11 @@ void ProfilerManager::SaveTraceExact(const std::string& path) {
         return;
     }
 
+    WriteTraceToFile(path, data);
+}
+
+void ProfilerManager::WriteTraceToFile(const std::string& path,
+                                        const std::vector<char>& data) {
     std::ofstream ofs(path, std::ios::binary);
     if (!ofs) {
         auto* logger = GetLogger();

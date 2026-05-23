@@ -9,6 +9,8 @@
 namespace engine {
 
 ScriptVM::ScriptVM() {
+    ENGINE_PROFILE_SCOPE("engine.vm", "ScriptVM::ctor");
+
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "ScriptVM: creating lua state...");
 
@@ -28,6 +30,8 @@ ScriptVM::ScriptVM() {
 }
 
 ScriptVM::~ScriptVM() {
+    ENGINE_PROFILE_SCOPE("engine.vm", "ScriptVM::dtor");
+
     if (L_) {
         lua_close(L_);
         L_ = nullptr;
@@ -82,6 +86,8 @@ void ScriptVM::CallGlobalFunction(std::string_view name) {
 }
 
 void ScriptVM::InitScript() {
+    ENGINE_PROFILE_SCOPE("engine.vm", "InitScript");
+
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "ScriptVM: === InitScript phase ===");
     CallGlobalFunction("InitScript");
@@ -92,6 +98,8 @@ void ScriptVM::UpdateScript() {
 }
 
 void ScriptVM::DestroyScript() {
+    ENGINE_PROFILE_SCOPE("engine.vm", "DestroyScript");
+
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "ScriptVM: === DestroyScript phase ===");
     CallGlobalFunction("DestroyScript");
@@ -176,6 +184,8 @@ bool ScriptVM::DoFile(const std::string& filename, std::string* error_out) {
 
 size_t ScriptVM::DoDirectory(const std::string& dir_path) {
     if (!L_) return 0;
+
+    ENGINE_PROFILE_SCOPE("engine.script", "DoDirectory", "dir", dir_path.c_str());
 
     size_t failures = 0;
     size_t loaded = 0;
