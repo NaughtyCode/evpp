@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 #include "engine/core/log/log.h"
 #include "engine/core/log/log_macros.h"
@@ -19,22 +20,38 @@ namespace {
 // Per-timer Lua callback context
 //-----------------------------------------------------------------
 
+struct TimerBindState;  // forward decl for TimerCtx::owner
+
 struct TimerCtx {
     TimerId  id = kInvalidTimerId;
     lua_State* L = nullptr;
     int      ref = LUA_NOREF;
     bool     repeating = false;
     Duration interval{0};
+    TimerBindState* owner = nullptr;  // back-pointer to the per-VM state map
 };
 
-// Map of all Lua-created timers. Safe to access without a mutex because
-// TimerManager callbacks fire on the same thread (the evpp event loop)
-// and Lua is also single-threaded.
-std::unordered_map<TimerId, std::shared_ptr<TimerCtx>> g_timer_ctxs;
+//-----------------------------------------------------------------
+// Per-VM timer state
+//-----------------------------------------------------------------
+
+struct TimerBindState {
+    std::unordered_map<TimerId, std::shared_ptr<TimerCtx>> ctxs;
+};
+
+// Each ScriptVM gets its own TimerBindState. The pointer is stored in the
+// Lua registry under "__TimerBindState", mirroring the __ScriptImporter
+// pattern.  The state is created in ExportTimer and destroyed in
+// ShutdownTimerBindings.
+TimerBindState* GetTimerState(lua_State* L) {
+    lua_getfield(L, LUA_REGISTRYINDEX, "__TimerBindState");
+    auto* state = static_cast<TimerBindState*>(lua_touserdata(L, -1));
+    lua_pop(L, 1);
+    return state;
+}
 
 //-----------------------------------------------------------------
-// Helper: call a Lua function stored in the registry, then optionally
-// release the reference.
+// Helper: call a Lua function stored in the registry.
 //-----------------------------------------------------------------
 
 // Max safe ms before ns conversion overflows int64.
@@ -65,6 +82,11 @@ int l_timer_timeout(lua_State* L) {
         return luaL_error(L, "timer delay out of range [1, %lld]", (long long)kMaxTimerMs);
     }
 
+    auto* state = GetTimerState(L);
+    if (!state) {
+        return luaL_error(L, "timer: system not initialized");
+    }
+
     lua_pushvalue(L, 2);
     int ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
@@ -72,6 +94,7 @@ int l_timer_timeout(lua_State* L) {
     ctx->L = L;
     ctx->ref = ref;
     ctx->repeating = false;
+    ctx->owner = state;
 
     TimerId id = TimerManager::instance().create_timer(
         [ctx](HrTimerNode* /*timer*/) -> TimerResult {
@@ -80,7 +103,9 @@ int l_timer_timeout(lua_State* L) {
                 luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->ref);
                 ctx->ref = LUA_NOREF;
             }
-            g_timer_ctxs.erase(ctx->id);
+            if (ctx->owner) {
+                ctx->owner->ctxs.erase(ctx->id);
+            }
             return TimerResult::kNoRestart;
         }
     );
@@ -91,7 +116,7 @@ int l_timer_timeout(lua_State* L) {
     }
 
     ctx->id = id;
-    g_timer_ctxs[id] = ctx;
+    state->ctxs[id] = ctx;
     TimerManager::instance().start_timer_relative(id, ms_to_time(ms));
 
     lua_pushinteger(L, static_cast<lua_Integer>(id));
@@ -107,6 +132,11 @@ int l_timer_interval(lua_State* L) {
         return luaL_error(L, "timer delay out of range [1, %lld]", (long long)kMaxTimerMs);
     }
 
+    auto* state = GetTimerState(L);
+    if (!state) {
+        return luaL_error(L, "timer: system not initialized");
+    }
+
     lua_pushvalue(L, 2);
     int ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
@@ -115,6 +145,7 @@ int l_timer_interval(lua_State* L) {
     ctx->ref = ref;
     ctx->repeating = true;
     ctx->interval = ms_to_time(ms);
+    ctx->owner = state;
 
     TimerId id = TimerManager::instance().create_timer(
         [ctx](HrTimerNode* timer) -> TimerResult {
@@ -135,7 +166,7 @@ int l_timer_interval(lua_State* L) {
     }
 
     ctx->id = id;
-    g_timer_ctxs[id] = ctx;
+    state->ctxs[id] = ctx;
     TimerManager::instance().start_timer_relative(id, ms_to_time(ms));
 
     lua_pushinteger(L, static_cast<lua_Integer>(id));
@@ -146,8 +177,15 @@ int l_timer_interval(lua_State* L) {
 int l_timer_cancel(lua_State* L) {
     TimerId id = static_cast<TimerId>(luaL_checkinteger(L, 1));
 
-    auto it = g_timer_ctxs.find(id);
-    if (it == g_timer_ctxs.end()) {
+    auto* state = GetTimerState(L);
+    if (!state) {
+        lua_pushnil(L);
+        lua_pushstring(L, "timer system not initialized");
+        return 2;
+    }
+
+    auto it = state->ctxs.find(id);
+    if (it == state->ctxs.end()) {
         lua_pushnil(L);
         lua_pushstring(L, "timer not found");
         return 2;
@@ -156,11 +194,11 @@ int l_timer_cancel(lua_State* L) {
     luaL_unref(L, LUA_REGISTRYINDEX, it->second->ref);
     it->second->ref = LUA_NOREF;
     // Set ref to LUA_NOREF before destroy_timer so the callback lambda
-    // (which checks ref == LUA_NOREF) won't try to erase from g_timer_ctxs.
+    // (which checks ref == LUA_NOREF) won't try to erase from state->ctxs.
     TimerManager::instance().destroy_timer(id);
     // Use key-based erase to handle the case where destroy_timer fired the
     // callback synchronously and the callback already erased this entry.
-    g_timer_ctxs.erase(id);
+    state->ctxs.erase(id);
 
     auto* logger = GetLogger();
     ENGINE_LOG_DEBUG(logger, "[lua timer] cancelled timer [{}]", id);
@@ -183,6 +221,14 @@ const luaL_Reg kTimerFunctions[] = {
 //=================================================================
 
 void ExportTimer(ScriptVM& vm) {
+    lua_State* L = vm.GetState();
+    if (!L) return;
+
+    // Create per-VM timer state and store in the Lua registry.
+    auto* state = new TimerBindState();
+    lua_pushlightuserdata(L, state);
+    lua_setfield(L, LUA_REGISTRYINDEX, "__TimerBindState");
+
     vm.RegisterModule("timer", kTimerFunctions);
 
     auto* logger = GetLogger();
@@ -190,39 +236,55 @@ void ExportTimer(ScriptVM& vm) {
                     "(timer.timeout/interval/cancel)");
 }
 
-void ShutdownTimerBindings() {
+void ShutdownTimerBindings(ScriptVM& vm) {
+    lua_State* L = vm.GetState();
+    if (!L) return;
+
+    auto* state = GetTimerState(L);
+    if (!state) return;
+
     auto* logger = GetLogger();
 
-    if (g_timer_ctxs.empty()) {
+    if (state->ctxs.empty()) {
         ENGINE_LOG_DEBUG(logger, "ScriptBind: no active timer bindings to shut down");
+        delete state;
+        lua_pushnil(L);
+        lua_setfield(L, LUA_REGISTRYINDEX, "__TimerBindState");
         return;
     }
 
     // Collect IDs first — destroy_timer may fire callbacks synchronously,
     // which would invalidate iterators if we traversed the map directly.
-    size_t count = g_timer_ctxs.size();
+    size_t count = state->ctxs.size();
     std::vector<TimerId> ids;
     ids.reserve(count);
-    for (auto& [id, ctx] : g_timer_ctxs) {
+    for (auto& [id, ctx] : state->ctxs) {
         (void)ctx;
         ids.push_back(id);
     }
 
     for (TimerId id : ids) {
-        auto it = g_timer_ctxs.find(id);
-        if (it == g_timer_ctxs.end()) continue;
+        auto it = state->ctxs.find(id);
+        if (it == state->ctxs.end()) continue;
         auto& ctx = it->second;
-        // Set ref to LUA_NOREF first so the callback (which may fire synchronously
-        // during destroy_timer) will bail out instead of accessing a dangling L.
+        // Set ref to LUA_NOREF first so the callback (which may fire
+        // synchronously during destroy_timer) will bail out instead of
+        // accessing a dangling L or erased state.
         if (ctx->ref != LUA_NOREF && ctx->L) {
             luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->ref);
             ctx->ref = LUA_NOREF;
         }
+        ctx->owner = nullptr;  // prevent callback from touching state->ctxs
         TimerManager::instance().destroy_timer(id);
-        g_timer_ctxs.erase(id);
+        state->ctxs.erase(id);
     }
 
     ENGINE_LOG_INFO(logger, "ScriptBind: shut down [{}] timer binding(s)", count);
+
+    // Release the per-VM state.
+    delete state;
+    lua_pushnil(L);
+    lua_setfield(L, LUA_REGISTRYINDEX, "__TimerBindState");
 }
 
 } // namespace script

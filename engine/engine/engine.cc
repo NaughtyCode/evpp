@@ -113,7 +113,7 @@ void Engine::Run() {
     }
 
     script::ShutdownNetBindings();
-    script::ShutdownTimerBindings();
+    script::ShutdownTimerBindings(*script_vm_);
     TimerManager::destroy_instance();
     ENGINE_LOG_INFO(logger, "timer manager shut down");
 

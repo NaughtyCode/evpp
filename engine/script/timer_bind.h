@@ -15,11 +15,12 @@ namespace script {
 //   timer.cancel(timer_id)             → true/false
 //
 // Callbacks are Lua functions that receive no arguments.
-// Returns 0 on failure (Lua will see nil / false).
+// Timer state is per-VM — each ScriptVM has an independent timer table.
 ENGINE_API void ExportTimer(ScriptVM& vm);
 
-// Cancel all Lua-owned timers and release Lua function references.
-ENGINE_API void ShutdownTimerBindings();
+// Cancel all Lua-owned timers for a specific VM and release its Lua
+// function references.  Must be called before the ScriptVM is destroyed.
+ENGINE_API void ShutdownTimerBindings(ScriptVM& vm);
 
 } // namespace script
 } // namespace engine

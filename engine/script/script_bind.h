@@ -21,7 +21,7 @@ ENGINE_API void ExportMsgPack(ScriptVM& vm);
 
 // Shutdown: cancel all Lua-owned objects, release Lua references.
 // Call before destroying the ScriptVM.
-ENGINE_API void ShutdownTimerBindings();
+ENGINE_API void ShutdownTimerBindings(ScriptVM& vm);
 ENGINE_API void ShutdownNetBindings();
 
 } // namespace script
