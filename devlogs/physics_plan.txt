@@ -299,16 +299,18 @@ resources/physics/configs/
 
   ── ENGINE_PHYSICS_ENABLED 编译隔离宏 ────────────────────────────────
 
-    定义位置: engine/physics/physics_config.h
-    （物理系统最顶层头文件，所有其他物理头文件均包含它）
+    控制方式: CMake 通过 target_compile_definitions 控制（服务器构建时定义，客户端不定义）
+    engine/physics/physics_config.h 是物理系统最顶层头文件（所有其他物理头文件
+    均包含它）——它使用 #ifdef ENGINE_PHYSICS_ENABLED 守卫自身内容并作为
+    宏语义的文档位置。⚠ 宏不由任何头文件 #define，统一由 CMake 构建系统控制。
 
     宏语义:
       #ifdef ENGINE_PHYSICS_ENABLED  → 物理系统代码参与编译
       #ifndef ENGINE_PHYSICS_ENABLED → 物理系统完全移除
 
-    默认行为:
-      . 服务器构建: CMake 定义 ENGINE_PHYSICS_ENABLED（通过 target_compile_definitions）
-      . 客户端库构建: CMake 不定义此宏，engine/physics/ 源文件不参与编译;
+    构建行为:
+      . 服务器构建: CMake 定义 ENGINE_PHYSICS_ENABLED
+        . 客户端库构建: CMake 不定义此宏，engine/physics/ 源文件不参与编译;
         引擎其他模块中的引用点通过 #ifdef ENGINE_PHYSICS_ENABLED / #endif 保护
 
     用法规范:
@@ -499,27 +501,28 @@ resources/physics/configs/
         std::string proto_id;
         JPH::RVec3 position;
         JPH::Quat rotation;
-        uint64 user_data;
+        uint64_t user_data;
     };
-    struct DestroyArgs { uint32 body_id; };
+    struct DestroyArgs { uint32_t body_id; };
     struct ApplyForceArgs {
-        uint32 body_id;
+        uint32_t body_id;
         JPH::Vec3 force;
         JPH::RVec3 point;  // 世界坐标
     };
     struct SetVelocityArgs {
-        uint32 body_id;
+        uint32_t body_id;
         JPH::Vec3 velocity;  // 线速度
     };
     struct TickArgs {
-        uint64 frame_id;
+        uint64_t frame_id;
         float delta_time;
     };
 
     struct PhysicsCommand {
         CommandType type;
-        std::variant<SpawnArgs, DestroyArgs, ApplyForceArgs,
+        std::variant<std::monostate, SpawnArgs, DestroyArgs, ApplyForceArgs,
                      SetVelocityArgs, TickArgs> args;
+        // std::monostate 用于 Shutdown 等无参数命令类型
     };
 
   ⚠ 设计文档第 3.3 节要求的结果结构:
@@ -531,20 +534,20 @@ resources/physics/configs/
     };
 
     struct CollisionEvent {
-        uint32 body_a;
-        uint32 body_b;
+        uint32_t body_a;
+        uint32_t body_b;
         enum Type { Start, Persist, End } type;
         std::vector<JPH::Vec3> contact_points;  // 世界坐标
     };
 
     struct BodyTransform {
-        uint32 body_id;
+        uint32_t body_id;
         double pos_x, pos_y, pos_z;
         float rot_x, rot_y, rot_z, rot_w;  // quaternion
     };
 
     struct PhysicsFrameResult {
-        uint64 frame_id;
+        uint64_t frame_id;
         std::vector<BodyTransform> transforms;     // [D6.1] 变换快照
         std::vector<CollisionEvent> collision_events; // [D6.2] 碰撞事件
         std::vector<DiffPacket> diff_packets;      // [D6.3] 变化数据
@@ -617,7 +620,7 @@ resources/physics/configs/
     . linear_velocity: JPH::Vec3
     . angular_velocity: JPH::Vec3
 
-  DiffPacket GenerateDiff(uint32 body_id,
+  DiffPacket GenerateDiff(uint32_t body_id,
                           const BodyStateSnapshot& current,
                           const BodyStateSnapshot& previous,
                           const ThresholdsConfig& thresholds):
@@ -650,7 +653,7 @@ resources/physics/configs/
     . quill::Logger* logger_                        — [D7] 独立日志实例
     . std::unordered_map<std::string, PrototypeEntry> prototype_pool_ — [D10]
     . ObjectRegistry object_registry_               — [D15] ID注册表
-    . std::unordered_map<uint32, BodyStateSnapshot> state_snapshots_ — [D15]
+    . std::unordered_map<uint32_t, BodyStateSnapshot> state_snapshots_ — [D15]
     . PhysicsConfig config_                         — 配置副本
 
   初始化（严格按 [J2] 的 10 步顺序）:
@@ -659,6 +662,8 @@ resources/physics/configs/
       1. JPH::RegisterDefaultAllocator()
       2. JPH::Factory::sInstance = new JPH::Factory()
       3. JPH::RegisterTypes()
+      ⚠ 步骤 1-3 为程序级操作（仅一次），通过 static bool s_jolt_registered 守卫;
+         PhysicsWorld 销毁重建时（[D21] 恢复流程）跳过 1-3，直接从步骤 4 执行。
       4. 根据 ThreadingConfig 创建 JobSystem [J6]
       5. 创建 TempAllocatorImpl 或 TempAllocatorImplWithMallocFallback [J5]
          Size = max_body_pairs * 预估 per-pair 内存（约 256 bytes）
@@ -668,13 +673,14 @@ resources/physics/configs/
          maxContactConstraints, bp_layer_interface_, obj_vs_bp_filter_,
          layer_pair_filter_) [J1]
       8. system_.SetPhysicsSettings(settings_from_config) + SetGravity()
+         system_.SetCombineFriction(...) / SetCombineRestitution(...) — [J13] 摩擦/弹性组合函数
       9. system_.SetContactListener(&contact_listener_)
          system_.SetBodyActivationListener(&activation_listener_)
       10. LoadAssets(assets_path) → 静态体+约束+原型池 [2.1]
       返回 true 表示成功
 
   运行时接口:
-    . CreateBody(proto_id, position, rotation, user_data) → uint32 body_id
+    . CreateBody(proto_id, position, rotation, user_data) → uint32_t body_id
       从原型克隆创建动态刚体 [D3]
       ⚠ 必须用 EActivation::Activate 激活（除非 kinematic）
       ⚠ 分配运行时 body_id 并注册到 ObjectRegistry
@@ -718,7 +724,12 @@ resources/physics/configs/
   线程生命周期:
     bool Start(const PhysicsConfig&, const ThreadingConfig&,
                const PhysicsLogConfig&, const std::string& assets_path)
-      — 创建独立日志实例 [D7][D8]: logger_ = engine::CreateLogger(log_config)
+      — 创建独立日志实例 [D7][D8]:
+        . 将 PhysicsLogConfig 字段映射到 engine::LogConfig（log_dir→dir,
+          file_name→log_filename, max_file_size_mb→rotation_size_mb 等），
+          调用 engine::CreateLogger(mapped_config) 创建独立 Logger
+        ⚠ engine::CreateLogger 接受 engine::LogConfig，PhysicsLogConfig
+          需做字段映射转换（字段名不同但语义对应）
       — 创建 PhysicsWorld 并初始化
       — 启动 std::thread，进入事件循环
       — 日志文件名按日期生成（如 physics_engine_2026-05-23.log）
@@ -906,7 +917,10 @@ resources/physics/configs/
 
         #ifdef ENGINE_PHYSICS_ENABLED
         // [D17.1][D17.2] 触发物理模拟（若已 Start）
-        PhysicsEngineBridge::Instance().Tick(frame_id, fixed_delta_time);
+        // frame_id = frame_count_（Engine 成员）
+        // fixed_delta_time = PhysicsConfig::fixed_delta_time（物理配置，
+        //   Engine 初始化时缓存，不直接使用 frame_interval_）
+        PhysicsEngineBridge::Instance().Tick(frame_count_, fixed_delta_time);
 
         // [D17.3] 物理专用 Lua 脚本更新
         PhysicsEngineBridge::Instance().UpdateScript();
@@ -936,6 +950,11 @@ resources/physics/configs/
       — 物理相关脚本（碰撞回调、物理对象管理）
       — 通过 engine/physics/physics_bindings.cc 注册物理 API
       — 两个 VM 完全隔离，各自独立的 lua_State
+	  ⚠ 两个 VM 加载同一 scripts_dir（默认 resources/script），
+	    所有 .lua 文件会被两个 VM 各加载一次。物理脚本应通过检测 physics
+	    模块是否可用（if physics then ...）来区分运行上下文，避免在引擎
+	    VM 中执行物理相关代码时报错。同理，引擎脚本在物理 VM 中无法访问
+	    timer/net 等引擎 API（这些模块未在物理 VM 中注册）。
 
   Engine::Cleanup() 中的集成点:
     #ifdef ENGINE_PHYSICS_ENABLED
@@ -1123,8 +1142,9 @@ resources/physics/configs/
     ├─→ [1.5] physics_materials.h/cc（无强依赖）
     └─→ [1.4] physics_commands.h/cc（无强依赖）
            └─→ [2.2] physics_diff.h/cc（依赖 1.4 DiffPacket + 1.1 ThresholdsConfig）
-                  └─→ [2.3] physics_world.h/cc（依赖 1.1 + 1.3 + 1.4 + 1.5 + 2.2）
-                         ├─→ [2.1] physics_assets.h/cc（依赖 1.5 + 2.3）
+                  └─→ [2.3] physics_world.h/cc（依赖 1.1 + 1.3 + 1.4 + 1.5 + 2.1 + 2.2）
+                         ├─→ [2.1] physics_assets.h/cc（依赖 1.5 + JoltPhysics 类型，不依赖 2.3）
+                         │      ⚠ 2.1 通过 BodyInterface& 参数操作物理世界，避免循环依赖
                          └─→ [3.1] physics_thread.h/cc（依赖 1.1 + 2.3）
                                 └─→ [3.2] physics_system.h/cc
                                        （依赖 1.1 PhysicsConfigManager + 3.1 + ScriptVM）
@@ -1177,7 +1197,7 @@ JoltPhysics 源码关键文件:
 现有代码参考:
   engine/config/config.h       — ConfigManager 模式、glaze 反射示例
   engine/core/log/log.h        — CreateLogger / GetLogger / InitLogger
-  engine/core/log/log_config.h — LogConfig 字段定义（对齐 PhysicsLogConfig）
+  engine/config/config.h       — LogConfig 字段定义（对齐 PhysicsLogConfig）
   engine/vm/vm.h               — ScriptVM::RegisterModule / RegisterCallback
   engine/engine/engine.h/cc    — Engine 生命周期、FrameLoop 编排点
   engine/script/script_bind.h/cc — Lua 模块注册模式
