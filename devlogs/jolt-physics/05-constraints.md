@@ -128,11 +128,17 @@ class ContactConstraintManager {
 - BodyPair 缓存: 缓存上一帧的接触对
 - 接触丢失时触发 `ContactListener::OnContactRemoved`
 
-## 约束优先级
+## 约束优先级与覆盖
 
-`Constraint::mConstraintPriority` 控制求解优先级 (数值越大越优先)：
-- 高优先级约束在求解器迭代中先处理
-- 用于确保玩家控制器等关键约束正确满足
+`Constraint::mConstraintPriority` 控制求解优先级 (数值越大越优先处理)：
+- 高优先级约束在求解器迭代中先求解，更可能被正确满足
+- 可用于确保玩家控制器等关键约束优先
+
+每约束/每刚体可覆盖全局迭代次数：
+```cpp
+mNumVelocityStepsOverride / mNumPositionStepsOverride // 0 = 使用全局设置
+```
+岛屿内取所有接触和约束的最大值作为实际迭代次数。
 
 ## Island Builder
 

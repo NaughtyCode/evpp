@@ -79,8 +79,8 @@ class Ragdoll {
 ## AABBTree
 
 `Jolt/AABBTree/`:
-- 自底向上 AABB 树构建
-- 支持 half-float 节点压缩
+- 自顶向下 AABB 树构建 (SAH 分割，从所有三角形递归二分)
+- 支持 half-float 节点压缩 (`NodeCodecQuadTreeHalfFloat`)
 - 多种三角编码格式 (SoA4, 8-bit 索引)
 - 将构建结果写入 buffer
 
