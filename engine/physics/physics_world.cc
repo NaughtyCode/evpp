@@ -57,7 +57,7 @@ void ContactListenerImpl::OnContactPersisted(const JPH::Body& inBody1,
     // Collect all contact points for persisted contacts
     JPH::RVec3 cp1_sum = JPH::RVec3::sZero();
     JPH::RVec3 cp2_sum = JPH::RVec3::sZero();
-    int count = std::min(inManifold.GetContactPointsCount(), 4);
+    int count = std::min(static_cast<int>(inManifold.mRelativeContactPointsOn1.size()), 4);
     for (int i = 0; i < count; ++i) {
         cp1_sum += inManifold.GetWorldSpaceContactPointOn1(i);
         cp2_sum += inManifold.GetWorldSpaceContactPointOn2(i);
@@ -161,13 +161,13 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
     if (threading.job_system_thread_count == 0 || threading.job_system_max_jobs <= 0) {
         // Single-threaded for debugging / deterministic verification
         job_system_ = std::make_unique<JPH::JobSystemSingleThreaded>(
-            threading.job_system_max_jobs > 0 ? threading.job_system_max_jobs : 2048);
+            static_cast<uint>(threading.job_system_max_jobs > 0 ? threading.job_system_max_jobs : 2048));
         ENGINE_LOG_INFO(logger_, "PhysicsWorld: using single-threaded job system");
     } else {
         int thread_count = threading.job_system_thread_count;
         job_system_ = std::make_unique<JPH::JobSystemThreadPool>(
-            threading.job_system_max_jobs,
-            threading.job_system_max_barriers,
+            static_cast<uint>(threading.job_system_max_jobs),
+            static_cast<uint>(threading.job_system_max_barriers),
             thread_count);
         ENGINE_LOG_INFO(logger_, "PhysicsWorld: using thread pool job system, "
                         "max_jobs=[{}], max_barriers=[{}], threads=[{}]",
@@ -191,10 +191,12 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
     }
 
     // ── Step 6: Construct layer interface instances ──────────────────
+    // Use unique_ptr because base classes (BroadPhaseLayerInterface etc.)
+    // inherit from NonCopyable and have no default constructors.
     const auto& lc = config.layer_config;
-    bp_layer_interface_ = BPLayerInterfaceImpl(lc);
-    layer_pair_filter_ = ObjectLayerPairFilterImpl(lc);
-    obj_vs_bp_filter_ = ObjectVSBLayerFilterImpl(lc, bp_layer_interface_);
+    bp_layer_interface_ = std::make_unique<BPLayerInterfaceImpl>(lc);
+    layer_pair_filter_ = std::make_unique<ObjectLayerPairFilterImpl>(lc);
+    obj_vs_bp_filter_ = std::make_unique<ObjectVSBLayerFilterImpl>(lc, *bp_layer_interface_);
 
     // ── Step 7: Init PhysicsSystem ────────────────────────────────────
     system_.Init(
@@ -202,9 +204,9 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
         static_cast<uint>(config.num_body_mutexes),
         static_cast<uint>(config.max_body_pairs),
         static_cast<uint>(config.max_contact_points),
-        bp_layer_interface_,
-        obj_vs_bp_filter_,
-        layer_pair_filter_
+        *bp_layer_interface_,
+        *obj_vs_bp_filter_,
+        *layer_pair_filter_
     );
     ENGINE_LOG_INFO(logger_, "PhysicsWorld: system initialized, "
                     "max_bodies=[{}], max_pairs=[{}], max_contacts=[{}]",
@@ -225,8 +227,8 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
         settings.mConstraintWarmStart = config.constraint_warm_start;
         settings.mAllowSleeping = config.allow_sleeping;
         settings.mUseLargeIslandSplitter = config.use_large_island_splitter;
-        settings.mLinearCastThresholdSq = config.linear_cast_threshold * config.linear_cast_threshold;
-        settings.mLinearCastMaxPenetrationSq = config.linear_cast_max_penetration * config.linear_cast_max_penetration;
+        settings.mLinearCastThreshold = config.linear_cast_threshold;
+        settings.mLinearCastMaxPenetration = config.linear_cast_max_penetration;
         settings.mMaxPenetrationDistance = config.max_penetration_distance;
         settings.mMinVelocityForRestitution = config.min_velocity_for_restitution;
         settings.mUseBodyPairContactCache = config.use_body_pair_contact_cache;
@@ -246,7 +248,7 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
         AssetLoader loader;
         JPH::BodyInterface& bi = system_.GetBodyInterface();
         MaterialTable mt;  // empty; inline materials in asset JSON
-        auto result = loader.LoadScene(assets_path, bi, mt, config.layer_config);
+        auto result = loader.LoadScene(assets_path, bi, system_, mt, config.layer_config);
         if (!result.success) {
             ENGINE_LOG_ERROR(logger_, "PhysicsWorld: failed to load assets [{}]: {}",
                              assets_path, result.error);

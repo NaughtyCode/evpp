@@ -71,12 +71,15 @@ class AssetLoader {
 public:
     // Load a complete scene asset file.
     // body_interface: the Jolt BodyInterface for body creation.
+    // physics_system: the Jolt PhysicsSystem for constraint registration
+    //   (AddConstraint lives on PhysicsSystem, not BodyInterface).
     // material_table: pre-registered material definitions.
     // layer_config: for ObjectLayer name → value resolution.
     // Returns result with error details on failure [D22].
     AssetLoadResult LoadScene(
         const std::string& json_path,
         JPH::BodyInterface& body_interface,
+        JPH::PhysicsSystem& physics_system,
         const MaterialTable& material_table,
         const LayerConfig& layer_config);
 

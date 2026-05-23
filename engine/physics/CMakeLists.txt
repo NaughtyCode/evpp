@@ -51,9 +51,7 @@ if(ENGINE_PHYSICS_ENABLED)
     )
 
     target_link_libraries(engine_physics
-        JoltPhysics
-        quill::quill
-        glaze::glaze
+        Jolt
     )
 else()
     # Physics disabled: INTERFACE library with no sources.

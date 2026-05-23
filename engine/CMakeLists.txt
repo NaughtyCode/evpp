@@ -117,6 +117,16 @@ target_include_directories(engine PUBLIC
     ${PROJECT_SOURCE_DIR}/3rdparty/lua
 )
 
+# ── JoltPhysics library ──────────────────────────────────────────────
+# JoltPhysics v5.5.1 (https://github.com/jrouwe/JoltPhysics, MIT License)
+# Must be available before engine_physics links against it.
+# Note: Jolt.cmake sets CMAKE_CXX_STANDARD to 17 globally — we restore
+# C++23 for downstream targets.
+add_subdirectory(${PROJECT_SOURCE_DIR}/3rdparty/JoltPhysics/Build
+                 ${CMAKE_BINARY_DIR}/jolt)
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # ── Physics module ──────────────────────────────────────────────────
 add_subdirectory(physics)
 

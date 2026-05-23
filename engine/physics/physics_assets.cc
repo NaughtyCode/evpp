@@ -38,8 +38,6 @@ namespace engine {
 // Internal JSON parsing structures (used with glaze for asset deserialization)
 //============================================================================
 
-namespace {
-
 // ── Material JSON shape ──
 struct JsonMaterial {
     float friction = 0.2f;
@@ -118,8 +116,6 @@ struct JsonAssetFile {
     std::optional<std::vector<JsonConstraint>> constraints;
     std::optional<std::vector<MaterialEntry>> materials;  // inline material defs
 };
-
-} // anonymous namespace
 
 //============================================================================
 // glaze reflection for JSON asset structures
@@ -483,6 +479,7 @@ static JPH::EMotionQuality ParseMotionQuality(const std::string& s) {
 AssetLoadResult AssetLoader::LoadScene(
     const std::string& json_path,
     JPH::BodyInterface& body_interface,
+    JPH::PhysicsSystem& physics_system,
     const MaterialTable& material_table,
     const LayerConfig& layer_config) {
 
@@ -516,9 +513,9 @@ AssetLoadResult AssetLoader::LoadScene(
 
     // ── Load static bodies ─────────────────────────────────────────────
     if (asset.static_bodies.has_value()) {
-        // Use batch body addition for performance [J10]
-        JPH::BodyInterface::AddState add_state = body_interface.AddBodiesPrepare(
-            asset.static_bodies->size());
+        // First pass: create bodies and collect BodyIDs for batch addition
+        std::vector<JPH::BodyID> body_ids;
+        body_ids.reserve(asset.static_bodies->size());
 
         for (const auto& sbody : *asset.static_bodies) {
             // Resolve object layer
@@ -547,14 +544,22 @@ AssetLoadResult AssetLoader::LoadScene(
                 return result;
             }
 
-            uint32_t body_id = body->GetID().GetIndexAndSequenceNumber();
-            body_interface.AddBodiesPrepare(add_state, body);
+            JPH::BodyID bid = body->GetID();
+            body_ids.push_back(bid);
 
+            uint32_t body_id = bid.GetIndexAndSequenceNumber();
             static_body_ids_[body_id] = sbody.id;
             ++result.static_bodies_loaded;
         }
 
-        body_interface.AddBodiesFinalize(add_state);
+        // Batch add all static bodies to the broad phase
+        if (!body_ids.empty()) {
+            JPH::BodyInterface::AddState add_state = body_interface.AddBodiesPrepare(
+                body_ids.data(), static_cast<int>(body_ids.size()));
+            body_interface.AddBodiesFinalize(
+                body_ids.data(), static_cast<int>(body_ids.size()),
+                add_state, JPH::EActivation::DontActivate);
+        }
     }
 
     // ── Load dynamic prototypes ────────────────────────────────────────
@@ -632,7 +637,7 @@ AssetLoadResult AssetLoader::LoadScene(
                 settings.mLimitsMax = static_cast<float>(con.limits.max);
                 JPH::TwoBodyConstraint* c = body_interface.CreateConstraint(&settings, ja, jb);
                 if (c) {
-                    body_interface.AddConstraint(c);
+                    physics_system.AddConstraint(c);
                     ++result.constraints_loaded;
                 }
             }
@@ -643,13 +648,14 @@ AssetLoadResult AssetLoader::LoadScene(
                 settings.mLimitsSpringSettings.mDamping = con.spring.damping;
                 JPH::TwoBodyConstraint* c = body_interface.CreateConstraint(&settings, ja, jb);
                 if (c) {
-                    body_interface.AddConstraint(c);
+                    physics_system.AddConstraint(c);
                     ++result.constraints_loaded;
                 }
             }
             else if (con.type == "slider") {
                 JPH::SliderConstraintSettings settings;
                 settings.mPoint1 = pivot;
+                settings.mPoint2 = pivot;
                 settings.mSliderAxis1 = axis;
                 settings.mLimitsMin = static_cast<float>(con.limits.min);
                 settings.mLimitsMax = static_cast<float>(con.limits.max);
@@ -663,7 +669,7 @@ AssetLoadResult AssetLoader::LoadScene(
                 }
                 JPH::TwoBodyConstraint* c = body_interface.CreateConstraint(&settings, ja, jb);
                 if (c) {
-                    body_interface.AddConstraint(c);
+                    physics_system.AddConstraint(c);
                     ++result.constraints_loaded;
                 }
             }
@@ -672,7 +678,7 @@ AssetLoadResult AssetLoader::LoadScene(
                 settings.mPoint1 = settings.mPoint2 = pivot;
                 JPH::TwoBodyConstraint* c = body_interface.CreateConstraint(&settings, ja, jb);
                 if (c) {
-                    body_interface.AddConstraint(c);
+                    physics_system.AddConstraint(c);
                     ++result.constraints_loaded;
                 }
             }

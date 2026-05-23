@@ -164,9 +164,9 @@ private:
     std::unique_ptr<JPH::JobSystem> job_system_;
     std::unique_ptr<JPH::TempAllocator> temp_allocator_;
 
-    BPLayerInterfaceImpl bp_layer_interface_;
-    ObjectLayerPairFilterImpl layer_pair_filter_;
-    ObjectVSBLayerFilterImpl obj_vs_bp_filter_;
+    std::unique_ptr<BPLayerInterfaceImpl> bp_layer_interface_;
+    std::unique_ptr<ObjectLayerPairFilterImpl> layer_pair_filter_;
+    std::unique_ptr<ObjectVSBLayerFilterImpl> obj_vs_bp_filter_;
 
     ContactListenerImpl contact_listener_;
     BodyActivationListenerImpl activation_listener_;
