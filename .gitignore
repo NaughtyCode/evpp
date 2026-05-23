@@ -109,3 +109,6 @@ artifacts/lib/*
 logs/
 .claude/worktrees/*
 stdout_test.txt
+*.obj
+*.pdb
+
