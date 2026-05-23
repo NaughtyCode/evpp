@@ -642,7 +642,7 @@ resources/physics/configs/
     . linear_velocity: JPH::Vec3
     . angular_velocity: JPH::Vec3
 
-  DiffPacket GenerateDiff(uint32_t body_id,
+  std::optional<DiffPacket> GenerateDiff(uint32_t body_id,
                           const BodyStateSnapshot& current,
                           const BodyStateSnapshot& previous,
                           const ThresholdsConfig& thresholds):
@@ -651,8 +651,8 @@ resources/physics/configs/
       change_mask bit1: angle(current.rot, previous.rot) > rotation_epsilon
       change_mask bit2: ||current.linVel - prev.linVel|| > linear_velocity_epsilon
       change_mask bit3: ||current.angVel - prev.angVel|| > angular_velocity_epsilon
-    如果 change_mask == 0: 返回 nullopt（无变化）
-    否则: 按 mask 比特序填充 values 数组
+    如果 change_mask == 0: 返回 std::nullopt（无变化）
+    否则: 按 mask 比特序填充 values 数组，返回 DiffPacket
 
   ⚠ 仅对活跃动态刚体生成 Diff（睡眠刚体的状态不变）
   ⚠ 生成 Diff 后立即用 current 覆盖 previous（作为下一帧基线）
@@ -808,6 +808,7 @@ resources/physics/configs/
     . PhysicsConfigManager config_manager_   — 独立配置管理器
     . std::unique_ptr<ScriptVM> script_vm_   — 物理系统专用 Lua VM
     . PhysicsThread physics_thread_          — 物理线程
+    . std::string assets_path_               — Initialize() 缓存，Start() 传入 PhysicsThread
 
   主线程接口:
     bool Initialize(const std::string& config_dir,
@@ -822,10 +823,11 @@ resources/physics/configs/
         script_vm_->DoDirectory(scripts_dir);    // 加载 ./resources/script 下脚本
         script_vm_->InitScript();
       — ⚠ 不启动物理线程！物理线程保持未运行状态
+      — 缓存 assets_path_ ← assets_path（供 Start() 传入 PhysicsThread）
       — 返回 false 表示初始化失败
 
     bool Start()
-      — PhysicsThread::Start(...) 启动物理线程
+      — PhysicsThread::Start(config, threading, log, assets_path_) 启动物理线程
       — 仅在 is_initialized_=true 且 !is_running_ 时可调用
       — 返回 false 表示启动失败（线程已运行、未初始化等）
       — ⚠ 此方法与 Initialize() 分离：上层需显式调用才启动物理模拟
@@ -890,7 +892,7 @@ resources/physics/configs/
         // 显式启动物理线程 — 由上层（服务器主逻辑）在合适时机调用
         bool Start();
 
-        // Engine::FrameLoop() 中调用 — 触发物理步进 + 更新物理专用 VM
+        // Engine::FrameLoop() 中调用 — 入队 Tick 命令触发物理步进
         void Tick(uint64_t frame_id, float delta_time);
 
         // Engine::FrameLoop() 中调用 — 更新物理专用 VM 脚本（碰撞回调等）
@@ -922,6 +924,11 @@ resources/physics/configs/
     . 桥接头文件始终可被 include（无论宏开关），Engine 无需 #ifdef 防护:
       #include "engine/physics/physics_engine_bridge.h"  — 永远有效
       PhysicsEngineBridge::Instance().Tick(...) — 宏关时编译为无操作
+    . ⚠ 宏关闭时 PhysicsFrameResult 等类型不可用——桥接头文件通过条件编译
+      处理: #ifdef ENGINE_PHYSICS_ENABLED 分支 #include physics_commands.h
+      并定义完整接口；#else 分支仅保留方法声明（返回值使用前向声明 stub
+      struct PhysicsFrameResult {}，确保 std::optional<PhysicsFrameResult>
+      可编译，此时仅返回 std::nullopt）
 
   ⚠ 此模块确保 Engine 对物理系统的耦合仅限:
     1. engine/engine/engine.cc 顶部一处 #include "engine/physics/physics_engine_bridge.h"
