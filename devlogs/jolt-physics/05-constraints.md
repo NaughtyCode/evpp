@@ -77,8 +77,8 @@ for each constraint:
 
 类似速度求解，但直接修正位置：
 - 使用 Baumgarte 稳定化
-- 对 NGS (Nonlinear Gauss-Seidel) 步骤
-- 速度迭代次数控制精度 (`mNumVelocitySteps` / `mNumPositionSteps`)
+- 迭代投影穿透修正 (受 `mMaxPenetrationDistance` 限制)
+- 迭代次数由 `mNumVelocitySteps` / `mNumPositionSteps` 控制
 
 ### 求解优先级
 ```cpp
@@ -118,7 +118,7 @@ class ContactConstraintManager {
     CombineFunction mCombineRestitution;  // 默认: max(r1, r2)
 
     // 接触求解 (最多若干个接触点)
-    static constexpr uint cMaxContactPoints = 4;
+    static const int MaxContactPoints = 4;
 };
 ```
 
@@ -161,16 +161,16 @@ Island 2: {D, E}
 ```cpp
 class ContactListener {
     // 验证 (过滤接触对)
-    ValidateResult OnContactValidate(Body&, Body&, ...);
+    ValidateResult OnContactValidate(const Body&, const Body&, RVec3Arg, const CollideShapeResult&);
 
     // 添加 (新接触)
-    void OnContactAdded(Body&, Body&, ContactManifold&, ...);
+    void OnContactAdded(const Body&, const Body&, const ContactManifold&, ContactSettings&);
 
     // 保持 (持续接触)
-    void OnContactPersisted(Body&, Body&, ContactManifold&, ...);
+    void OnContactPersisted(const Body&, const Body&, const ContactManifold&, ContactSettings&);
 
     // 移除 (接触分离)
-    void OnContactRemoved(SubShapeIDPair&);
+    void OnContactRemoved(const SubShapeIDPair&);
 };
 ```
 

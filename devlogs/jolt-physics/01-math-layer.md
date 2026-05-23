@@ -83,8 +83,9 @@ class Mat44 {
 单位四元数表示旋转，与 `Vec4` 共用底层存储：
 
 ```cpp
-class Quat : public Vec4 {
-    // x, y, z = 虚部, w = 实部
+class alignas(JPH_VECTOR_ALIGNMENT) Quat {
+    Vec4 mValue;
+    // x, y, z = 虚部, w = 实部 (存储在 Vec4 中)
 };
 ```
 

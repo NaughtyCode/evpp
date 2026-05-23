@@ -26,8 +26,8 @@ BodyManager
 | Dynamic | 完全物理模拟 | 是 | 是 |
 
 ### BodyType (刚体种类)
-- **Rigid**: 标准刚体
-- **Soft**: 软体
+- **RigidBody**: 标准刚体
+- **SoftBody**: 软体
 
 ### 关键属性
 ```cpp
@@ -186,7 +186,7 @@ enum class EAllowedDOFs : uint8 {
     RotationX            = 0b001000,
     RotationY            = 0b010000,
     RotationZ            = 0b100000,
-    Plane2D              = 0b001011, // X+Z平移, Y旋转
+    Plane2D              = TranslationX | TranslationY | RotationZ, // X+Y平移, Z旋转 (2D平面)
 };
 ```
 

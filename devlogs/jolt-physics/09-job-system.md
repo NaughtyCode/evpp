@@ -183,7 +183,7 @@ class MutexArray {
 
 ## 性能要点
 
-- 最大并发作业数 ≤ `cMaxConcurrency = 32` (硬限制)
+- `GetMaxConcurrency()` 返回 `线程数 + 1` (含主线程)，无硬编码上限
 - `cMaxPhysicsJobs = 2048` / `cMaxPhysicsBarriers = 8`
 - Barrier 不宜过多 (每次需同步所有线程)
 - `LargeIslandSplitter` 可并行化大岛 (默认开启)
