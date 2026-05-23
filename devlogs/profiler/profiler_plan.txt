@@ -123,9 +123,10 @@ Include 策略:
 
     (b) 物理线程 (对应 engine/physics/physics_thread.cc EventLoop):
         ENGINE_PROFILE_PHYSICS_CMD_DEQUEUE()   — 命令出队 [SCOPE]
+                                                (内部将 cmd.frame_id 存入 thread_local 供后续宏使用)
         ENGINE_PROFILE_PHYSICS_STEP(dt)        — PhysicsWorld::Step() [SCOPE]
-                                                (内部通过 dequeued_cmd.frame_id 获取 frame_no
-                                                 用于 TerminatingFlow, 不需显式传参)
+                                                (dt 作为 debug annotation 记录: "delta_time", dt;
+                                                 通过 thread_local 读取 frame_id 用于 TerminatingFlow)
         ENGINE_PROFILE_PHYSICS_COLLISION()     — 碰撞检测 [SCOPE]
         ENGINE_PROFILE_PHYSICS_TRANSFORM()     — 变换收集 [SCOPE]
         ENGINE_PROFILE_PHYSICS_DIFF()          — 状态差异生成 [SCOPE]
@@ -142,9 +143,12 @@ Include 策略:
         ENGINE_PROFILE_FLOW_END(cat, name, flow_id)
           → TRACE_EVENT_END(cat, perfetto::TerminatingFlow::ProcessScoped(flow_id))
             (在接收端结束切片并标记流终点)
+        FLOW_BEGIN/END 为手动配对宏，需在同一线程配对使用以关闭切片；
+        跨线程的 flow 关联通过相同的 flow_id 自动建立。
         注意: Flow Event 是 TRACE_EVENT 切片上的附加标注 (annotation)，
         不是独立事件。实际使用时推荐将 flow 标注直接整合进引擎宏内部
-        (如 ENGINE_PROFILE_PHYSICS_TICK 内部包含 Flow::ProcessScoped)，
+        (主线程 PHYSICS_TICK 内部用 Flow::ProcessScoped，
+         物理线程 PHYSICS_STEP 内部用 TerminatingFlow::ProcessScoped)，
         减少显式调用。此处提供独立宏作为备选手动方案。
         用于连接主线程 Tick → 物理线程 Step → FetchResult 返回的因果关系链。
 
@@ -159,6 +163,9 @@ Include 策略:
         ├── PhysicsFetch
         └── ScriptCallback
     . 4.2(b) 物理线程宏 — 同上，均为 RAII SCOPE 宏。
+    . 带参数的 SCOPE 宏 (如 PHYSICS_TICK(frame_no), PHYSICS_STEP(dt)):
+      额外参数作为 perfetto debug annotation 记录到切片上
+      (e.g. "frame_no", frame_no 或 "delta_time", dt)，可在 trace 中按值筛选。
     . 使用方式: 每个引擎宏后紧跟被检测的代码，用 { } 创建显式作用域以控制切片边界。
       详见 4.3 示例。
 
