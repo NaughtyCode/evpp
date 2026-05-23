@@ -87,7 +87,7 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
     {
         bool ok = PhysicsEngineBridge::Instance().Initialize(
             "resources/physics/configs",
-            "resources/physics/data",
+            "resources/physics/data/scene.json",
             "resources/script");
         if (!ok) {
             ENGINE_LOG_WARN(logger, "physics system failed to initialize");
@@ -122,6 +122,11 @@ void Engine::Start() {
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "engine starting, frame_interval=[{}ms]",
                     frame_interval_.count());
+
+    // ── Start physics simulation ──────────────────────────────────────
+    // Must be called after Initialize() and before the first Tick().
+    // If Initialize() failed, Start() is a safe no-op.
+    PhysicsEngineBridge::Instance().Start();
 
     sigint_watcher_ = std::make_unique<evpp::SignalEventWatcher>(
         SIGINT, loop_, [this]() {

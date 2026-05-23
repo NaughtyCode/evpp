@@ -44,19 +44,6 @@ struct JsonMaterial {
     float restitution = 0.0f;
 };
 
-// ── Shape definition in JSON ──
-struct JsonShapeDef {
-    std::string type;
-    // Polymorphic params — stored as raw JSON and parsed per-type
-    glz::json_t params;
-
-    // For compound sub-shapes
-    std::optional<std::vector<JsonShapeDef>> shapes;
-    std::optional<std::vector<double>> position;  // [x, y, z] optional offset
-    std::optional<std::vector<float>> rotation;   // [x, y, z, w] optional rotation
-    std::optional<std::string> material;          // per-shape material name
-};
-
 // ── Transform in JSON ──
 struct JsonTransform {
     std::vector<double> position = {0.0, 0.0, 0.0};
@@ -99,11 +86,11 @@ struct JsonConstraint {
     std::vector<double> pivot = {0.0, 0.0, 0.0};
     std::vector<double> axis = {0.0, 1.0, 0.0};
     std::optional<std::vector<double>> axis2;  // for slider
-    struct {
+    struct ConstraintLimits {
         double min = -3.14159;
         double max = 3.14159;
     } limits;
-    struct {
+    struct ConstraintSpring {
         float frequency = 1.0f;
         float damping = 0.5f;
     } spring;  // for "spring" type constraints
@@ -189,23 +176,6 @@ struct glz::meta<engine::JsonConstraint> {
         "spring", &T::spring
     );
 
-    struct LimitsMeta {
-        static constexpr auto value = glz::object(
-            "min", &T::limits.min,
-            "max", &T::limits.max
-        );
-    };
-    static constexpr auto limits_ref = glz::object(
-        "min", &T::limits.min,
-        "max", &T::limits.max
-    );
-
-    struct SpringMeta {
-        static constexpr auto value = glz::object(
-            "frequency", &T::spring.frequency,
-            "damping", &T::spring.damping
-        );
-    };
 };
 
 template <>
@@ -269,7 +239,7 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(
             if (sub_def.rotation) {
                 rotation = ParseQuat(*sub_def.rotation);
             }
-            compound.AddShape(offset, rotation, sub_result.shape);
+            compound.AddShape(JPH::Vec3(offset), rotation, sub_result.shape);
         }
 
         JPH::ShapeSettings::ShapeResult sr = compound.Create();
@@ -283,18 +253,21 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(
 
     // Single shape — dispatch by type
     const auto& type = def.type;
-    const auto& p = def.params;  // glz::json_t (raw JSON object)
+    auto& p = const_cast<glz::generic&>(def.params);  // glz::generic (raw JSON object)
 
     // Helper: extract field from json_t
     auto get_num = [&](const std::string& key, double default_val = 0.0) -> double {
-        if (auto* v = p.find(key); v != p.end()) {
-            return v->template get<double>();
+        if (p.contains(key)) {
+            return p[key].template get<double>();
         }
         return default_val;
     };
-    auto get_arr = [&](const std::string& key) -> const glz::json_t* {
-        auto it = p.find(key);
-        return (it != p.end()) ? &*it : nullptr;
+    auto get_arr = [&](const std::string& key) -> glz::generic& {
+        static glz::generic empty;
+        if (p.contains(key) && p[key].is_array()) {
+            return p[key];
+        }
+        return empty;
     };
 
     if (type == "box") {
@@ -302,10 +275,11 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(
         double hy = get_num("halfY", get_num("halfExtent", 0.5));
         double hz = get_num("halfZ", get_num("halfExtent", 0.5));
         // Support array form: "halfExtent": [x, y, z]
-        if (auto* arr = get_arr("halfExtent"); arr && arr->is_array() && arr->size() >= 3) {
-            hx = (*arr)[0].template get<double>();
-            hy = (*arr)[1].template get<double>();
-            hz = (*arr)[2].template get<double>();
+        auto& he_arr = get_arr("halfExtent");
+        if (he_arr.is_array() && he_arr.size() >= 3) {
+            hx = he_arr[0u].template get<double>();
+            hy = he_arr[1u].template get<double>();
+            hz = he_arr[2u].template get<double>();
         }
         JPH::BoxShapeSettings settings(JPH::Vec3(
             static_cast<float>(hx), static_cast<float>(hy), static_cast<float>(hz)));
@@ -336,13 +310,15 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(
     }
     else if (type == "convex_hull" || type == "convexHull") {
         JPH::Array<JPH::Vec3> points;
-        if (auto* arr = get_arr("points"); arr && arr->is_array()) {
-            for (const auto& pt : *arr) {
+        auto& pts_arr = get_arr("points");
+        if (pts_arr.is_array()) {
+            for (size_t i = 0; i < pts_arr.size(); ++i) {
+                auto& pt = pts_arr[unsigned(i)];
                 if (pt.is_array() && pt.size() >= 3) {
                     points.emplace_back(
-                        static_cast<float>(pt[0].template get<double>()),
-                        static_cast<float>(pt[1].template get<double>()),
-                        static_cast<float>(pt[2].template get<double>()));
+                        static_cast<float>(pt[0u].template get<double>()),
+                        static_cast<float>(pt[1u].template get<double>()),
+                        static_cast<float>(pt[2u].template get<double>()));
                 }
             }
         }
@@ -357,20 +333,24 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(
     else if (type == "mesh" || type == "mesh_shape") {
         JPH::VertexList vertices;
         JPH::IndexedTriangleList triangles;
-        if (auto* arr = get_arr("vertices"); arr && arr->is_array()) {
-            for (const auto& v : *arr) {
-                float x = static_cast<float>(v[0].template get<double>());
-                float y = static_cast<float>(v[1].template get<double>());
-                float z = static_cast<float>(v[2].template get<double>());
+        auto& verts_arr = get_arr("vertices");
+        if (verts_arr.is_array()) {
+            for (size_t i = 0; i < verts_arr.size(); ++i) {
+                auto& v = verts_arr[unsigned(i)];
+                float x = static_cast<float>(v[0u].template get<double>());
+                float y = static_cast<float>(v[1u].template get<double>());
+                float z = static_cast<float>(v[2u].template get<double>());
                 vertices.emplace_back(x, y, z);
             }
         }
-        if (auto* arr = get_arr("triangles"); arr && arr->is_array()) {
-            for (const auto& t : *arr) {
+        auto& tris_arr = get_arr("triangles");
+        if (tris_arr.is_array()) {
+            for (size_t i = 0; i < tris_arr.size(); ++i) {
+                auto& t = tris_arr[unsigned(i)];
                 triangles.emplace_back(
-                    static_cast<uint32>(t[0].template get<int64_t>()),
-                    static_cast<uint32>(t[1].template get<int64_t>()),
-                    static_cast<uint32>(t[2].template get<int64_t>()));
+                    static_cast<uint32_t>(t[0u].template get<double>()),
+                    static_cast<uint32_t>(t[1u].template get<double>()),
+                    static_cast<uint32_t>(t[2u].template get<double>()));
             }
         }
         if (vertices.empty() || triangles.empty()) {
@@ -381,10 +361,11 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(
         JPH::MeshShapeSettings settings(vertices, triangles);
 
         // Optional per-face materials
-        if (auto* mats = get_arr("materials"); mats && mats->is_array()) {
+        auto& mats_arr = get_arr("materials");
+        if (mats_arr.is_array()) {
             std::vector<std::string> mat_names;
-            for (const auto& m : *mats) {
-                mat_names.push_back(m.template get<std::string>());
+            for (size_t i = 0; i < mats_arr.size(); ++i) {
+                mat_names.push_back(mats_arr[unsigned(i)].template get<std::string>());
             }
             settings.mMaterials = material_table.CreateList(mat_names);
         }
@@ -395,17 +376,19 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(
     else if (type == "height_field" || type == "heightField") {
         JPH::HeightFieldShapeSettings settings;
         // Height field data is complex; read from an external binary file via path
-        if (auto* path = get_arr("dataFile"); path) {
+        auto& df_arr = get_arr("dataFile");
+        if (df_arr.is_array()) {
             // Path to binary data file specified in JSON; loading deferred
             result.error = "height_field requires external binary data file; "
                            "loading via dataFile path not yet implemented";
             return result;
         }
         // Fallback: parse inline samples
-        if (auto* arr = get_arr("samples"); arr && arr->is_array()) {
+        auto& samples_arr = get_arr("samples");
+        if (samples_arr.is_array()) {
             JPH::Array<float> samples;
-            for (const auto& s : *arr) {
-                samples.push_back(static_cast<float>(s.template get<double>()));
+            for (size_t i = 0; i < samples_arr.size(); ++i) {
+                samples.push_back(static_cast<float>(samples_arr[unsigned(i)].template get<double>()));
             }
             uint32_t sample_count = static_cast<uint32_t>(get_num("sampleCount", 0));
             if (sample_count == 0) {
@@ -419,29 +402,32 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(
             settings.mSampleCount = sample_count;
         }
         // Offset and scale
-        if (auto* off = get_arr("offset"); off && off->is_array() && off->size() >= 3) {
+        auto& off_arr = get_arr("offset");
+        if (off_arr.is_array() && off_arr.size() >= 3) {
             settings.mOffset = JPH::Vec3(
-                static_cast<float>((*off)[0].template get<double>()),
-                static_cast<float>((*off)[1].template get<double>()),
-                static_cast<float>((*off)[2].template get<double>()));
+                static_cast<float>(off_arr[0u].template get<double>()),
+                static_cast<float>(off_arr[1u].template get<double>()),
+                static_cast<float>(off_arr[2u].template get<double>()));
         }
-        if (auto* s = get_arr("scale"); s && s->is_array() && s->size() >= 3) {
+        auto& scale_arr = get_arr("scale");
+        if (scale_arr.is_array() && scale_arr.size() >= 3) {
             settings.mScale = JPH::Vec3(
-                static_cast<float>((*s)[0].template get<double>()),
-                static_cast<float>((*s)[1].template get<double>()),
-                static_cast<float>((*s)[2].template get<double>()));
+                static_cast<float>(scale_arr[0u].template get<double>()),
+                static_cast<float>(scale_arr[1u].template get<double>()),
+                static_cast<float>(scale_arr[2u].template get<double>()));
         }
         auto sr = settings.Create();
         if (sr.IsValid()) { result.shape = sr.Get(); } else { result.error = sr.GetError(); }
     }
     else if (type == "plane") {
         JPH::Plane plane(JPH::Vec3::sAxisY(), 0.0f);
-        if (auto* n = get_arr("normal"); n && n->is_array() && n->size() >= 3) {
+        auto& n_arr = get_arr("normal");
+        if (n_arr.is_array() && n_arr.size() >= 3) {
             plane = JPH::Plane(
                 JPH::Vec3(
-                    static_cast<float>((*n)[0].template get<double>()),
-                    static_cast<float>((*n)[1].template get<double>()),
-                    static_cast<float>((*n)[2].template get<double>())),
+                    static_cast<float>(n_arr[0u].template get<double>()),
+                    static_cast<float>(n_arr[1u].template get<double>()),
+                    static_cast<float>(n_arr[2u].template get<double>())),
                 static_cast<float>(get_num("constant", 0.0)));
         }
         JPH::PlaneShapeSettings settings(plane);

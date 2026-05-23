@@ -84,8 +84,8 @@ private:
 
 class BodyActivationListenerImpl final : public JPH::BodyActivationListener {
 public:
-    void OnBodyActivated(const JPH::BodyID& inBodyID, uint64 inBodyUserData) override;
-    void OnBodyDeactivated(const JPH::BodyID& inBodyID, uint64 inBodyUserData) override;
+    void OnBodyActivated(const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData) override;
+    void OnBodyDeactivated(const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData) override;
 
     // Active body set (for diff filtering)
     bool IsActive(const JPH::BodyID& id) const;

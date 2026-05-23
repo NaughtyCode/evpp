@@ -7,13 +7,17 @@
 // This header is always includable, regardless of ENGINE_PHYSICS_ENABLED.
 // When the macro is off, all methods are inline empty stubs.
 
+#ifdef ENGINE_PHYSICS_ENABLED
+// Full definitions available
+#include "engine/physics/physics_commands.h"
+#endif
+
 namespace engine {
 
 class ScriptVM;
 
 #ifdef ENGINE_PHYSICS_ENABLED
-// Full definitions available
-#include "engine/physics/physics_commands.h"
+// (included above)
 #else
 // Stub type — ensures std::optional<PhysicsFrameResult> compiles
 struct PhysicsFrameResult {

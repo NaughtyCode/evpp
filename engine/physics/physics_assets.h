@@ -14,6 +14,7 @@
 #include <Jolt/Physics/EActivation.h>
 #include <Jolt/Physics/EPhysicsUpdateError.h>
 
+#include "engine/physics/physics_config.h"
 #include "engine/physics/physics_materials.h"
 
 namespace JPH {
@@ -24,6 +25,16 @@ class Body;
 namespace engine {
 
 struct PhysicsConfig;
+
+// JSON shape definition — public so tests/external callers can construct shapes
+struct JsonShapeDef {
+    std::string type;
+    glz::generic params;
+    std::optional<std::vector<JsonShapeDef>> shapes;
+    std::optional<std::vector<double>> position;  // [x, y, z]
+    std::optional<std::vector<float>> rotation;   // [x, y, z, w]
+    std::optional<std::string> material;
+};
 
 //============================================================================
 // PrototypeEntry — a dynamic body template stored in the prototype pool
@@ -91,19 +102,17 @@ public:
         return static_body_ids_;
     }
 
-private:
-    // Internal: create a JPH::ShapeSettings from JSON shape description.
+    // Create a JPH::Shape from JSON shape description.
     // Supports single shape or array of shapes (compound).
     struct ShapeCreateResult {
         JPH::RefConst<JPH::Shape> shape;
         std::string error;
     };
 
-    // Forward declaration of internal helper struct
-    struct JsonShapeDef;
-
     ShapeCreateResult CreateShape(const JsonShapeDef& def,
                                    const MaterialTable& material_table);
+
+private:
 
     // Parse JPH::RVec3 from JSON array [x, y, z]
     static JPH::RVec3 ParseVec3(const std::vector<double>& v);

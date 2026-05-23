@@ -6,6 +6,10 @@
 #include <cstdio>
 #include <thread>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include "engine/config/config.h"
 #include "engine/core/log/log.h"
 #include "engine/core/log/log_macros.h"
@@ -184,10 +188,10 @@ void PhysicsThread::EventLoop() {
     // ── Main event loop ──────────────────────────────────────────────
     while (running_.load(std::memory_order_acquire)) {
         PhysicsCommand cmd;
-        bool got = command_queue_.wait_dequeue_timed(
-            cmd, std::chrono::microseconds(50000));  // 50ms timeout
+        bool got = command_queue_.try_dequeue(cmd);
 
         if (!got) {
+            std::this_thread::sleep_for(std::chrono::microseconds(50000));  // 50ms
             continue;  // timeout — check running_ flag
         }
 

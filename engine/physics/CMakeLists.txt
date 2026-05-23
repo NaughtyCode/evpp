@@ -41,6 +41,10 @@ if(ENGINE_PHYSICS_ENABLED)
 
     target_compile_definitions(engine_physics PUBLIC ENGINE_PHYSICS_ENABLED)
 
+    if(MSVC)
+        target_compile_options(engine_physics PRIVATE /FS)
+    endif()
+
     target_include_directories(engine_physics PUBLIC
         ${PROJECT_SOURCE_DIR}
         ${PROJECT_SOURCE_DIR}/3rdparty/JoltPhysics

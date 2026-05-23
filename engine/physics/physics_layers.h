@@ -6,6 +6,7 @@
 #include <string>
 #include <unordered_map>
 
+#include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
 #include <Jolt/Physics/Collision/ObjectLayer.h>
 
@@ -21,7 +22,7 @@ class BPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface {
 public:
     explicit BPLayerInterfaceImpl(const LayerConfig& config);
 
-    uint GetNumBroadPhaseLayers() const override;
+    unsigned int GetNumBroadPhaseLayers() const override;
     JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer inLayer) const override;
 
 #if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
@@ -29,7 +30,7 @@ public:
 #endif
 
 private:
-    uint num_layers_ = 0;
+    unsigned int num_layers_ = 0;
     // ObjectLayer → BroadPhaseLayer lookup
     std::unordered_map<JPH::ObjectLayer, JPH::BroadPhaseLayer> obj_to_bp_;
 

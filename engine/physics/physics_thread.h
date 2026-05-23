@@ -9,7 +9,7 @@
 
 #include <quill/Logger.h>
 
-#include <concurrentqueue/concurrentqueue.h>
+#include <concurrentqueue.h>
 
 #include "engine/physics/physics_config.h"
 #include "engine/physics/physics_commands.h"

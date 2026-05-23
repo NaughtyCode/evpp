@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/PhysicsMaterial.h>
 #include <Jolt/Core/Color.h>
 
@@ -21,8 +22,6 @@ namespace engine {
 //============================================================================
 
 class PhysicsMaterialSimple final : public JPH::PhysicsMaterial {
-    JPH_DECLARE_SERIALIZABLE_VIRTUAL(JPH_NO_EXPORT, PhysicsMaterialSimple)
-
 public:
     PhysicsMaterialSimple() = default;
 
@@ -31,16 +30,12 @@ public:
 
     const char* GetDebugName() const override { return name_.c_str(); }
     JPH::Color GetDebugColor() const override {
-        // Color by friction: low friction = blue, high friction = red
         return JPH::Color(
-            static_cast<uint8>(friction_ * 255.0f),
+            static_cast<JPH::uint8>(friction_ * 255.0f),
             0,
-            static_cast<uint8>((1.0f - friction_) * 255.0f)
+            static_cast<JPH::uint8>((1.0f - friction_) * 255.0f)
         );
     }
-
-    void SaveBinaryState(JPH::StreamOut& inStream) const override;
-    void RestoreBinaryState(JPH::StreamIn& inStream) override;
 
     const std::string& GetName() const { return name_; }
     float GetFriction() const { return friction_; }
@@ -75,7 +70,7 @@ public:
     void Register(const std::vector<MaterialEntry>& entries);
 
     // Lookup a material by name. Returns sDefault if not found.
-    JPH::PhysicsMaterial::RefConst Get(const std::string& name) const;
+    JPH::RefConst<JPH::PhysicsMaterial> Get(const std::string& name) const;
 
     // Get all registered material names.
     std::vector<std::string> GetNames() const;
@@ -94,7 +89,7 @@ public:
 private:
     // Hold ownership via Ref so materials don't get freed while in use.
     std::unordered_map<std::string, JPH::Ref<PhysicsMaterialSimple>> owned_;
-    std::unordered_map<std::string, JPH::PhysicsMaterial::RefConst> materials_;
+    std::unordered_map<std::string, JPH::RefConst<PhysicsMaterialSimple>> materials_;
 };
 
 } // namespace engine

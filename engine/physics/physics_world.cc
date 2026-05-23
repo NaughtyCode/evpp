@@ -16,6 +16,7 @@
 #include <Jolt/Physics/Body/BodyLockInterface.h>
 #include <Jolt/Physics/EActivation.h>
 #include <Jolt/Physics/EPhysicsUpdateError.h>
+#include <Jolt/RegisterTypes.h>
 #include <Jolt/Physics/Collision/Shape/Shape.h>
 
 #include "engine/core/log/log_macros.h"
@@ -97,13 +98,13 @@ std::vector<ContactListenerImpl::ContactRecord> ContactListenerImpl::Drain() {
 //============================================================================
 
 void BodyActivationListenerImpl::OnBodyActivated(const JPH::BodyID& inBodyID,
-                                                   uint64 inBodyUserData) {
+                                                   JPH::uint64 inBodyUserData) {
     std::lock_guard<std::mutex> lock(mutex_);
     active_bodies_[inBodyID.GetIndexAndSequenceNumber()] = true;
 }
 
 void BodyActivationListenerImpl::OnBodyDeactivated(const JPH::BodyID& inBodyID,
-                                                     uint64 inBodyUserData) {
+                                                     JPH::uint64 inBodyUserData) {
     std::lock_guard<std::mutex> lock(mutex_);
     active_bodies_[inBodyID.GetIndexAndSequenceNumber()] = false;
 }
@@ -147,7 +148,7 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
                                const std::string& assets_path) {
     logger_ = logger;
     config_ = config;
-    thresholds_ = &config_.GetThresholdsConfig();
+    thresholds_ = nullptr;  // loaded separately by PhysicsConfigManager
 
     // ── Step 1-3: One-time Jolt registration (program-global) ──────────
     if (!s_jolt_registered_.exchange(true)) {
@@ -161,13 +162,13 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
     if (threading.job_system_thread_count == 0 || threading.job_system_max_jobs <= 0) {
         // Single-threaded for debugging / deterministic verification
         job_system_ = std::make_unique<JPH::JobSystemSingleThreaded>(
-            static_cast<uint>(threading.job_system_max_jobs > 0 ? threading.job_system_max_jobs : 2048));
+            static_cast<unsigned int>(threading.job_system_max_jobs > 0 ? threading.job_system_max_jobs : 2048));
         ENGINE_LOG_INFO(logger_, "PhysicsWorld: using single-threaded job system");
     } else {
         int thread_count = threading.job_system_thread_count;
         job_system_ = std::make_unique<JPH::JobSystemThreadPool>(
-            static_cast<uint>(threading.job_system_max_jobs),
-            static_cast<uint>(threading.job_system_max_barriers),
+            static_cast<unsigned int>(threading.job_system_max_jobs),
+            static_cast<unsigned int>(threading.job_system_max_barriers),
             thread_count);
         ENGINE_LOG_INFO(logger_, "PhysicsWorld: using thread pool job system, "
                         "max_jobs=[{}], max_barriers=[{}], threads=[{}]",
@@ -177,10 +178,10 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
     }
 
     // ── Step 5: Create TempAllocator ──────────────────────────────────
-    uint temp_size = config.max_body_pairs * 256;
+    unsigned int temp_size = config.max_body_pairs * 256;
     if (temp_size > 256 * 1024 * 1024) {
         // Use malloc fallback for very large configs
-        uint clamped = (temp_size > 0x7FFFFFFF) ? 0x7FFFFFFF : temp_size;
+        unsigned int clamped = (temp_size > 0x7FFFFFFF) ? 0x7FFFFFFF : temp_size;
         temp_allocator_ = std::make_unique<JPH::TempAllocatorImplWithMallocFallback>(clamped);
         ENGINE_LOG_INFO(logger_, "PhysicsWorld: temp allocator with malloc fallback, "
                         "size=[{} MB]", clamped / (1024 * 1024));
@@ -200,10 +201,10 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 
     // ── Step 7: Init PhysicsSystem ────────────────────────────────────
     system_.Init(
-        static_cast<uint>(config.max_bodies),
-        static_cast<uint>(config.num_body_mutexes),
-        static_cast<uint>(config.max_body_pairs),
-        static_cast<uint>(config.max_contact_points),
+        static_cast<unsigned int>(config.max_bodies),
+        static_cast<unsigned int>(config.num_body_mutexes),
+        static_cast<unsigned int>(config.max_body_pairs),
+        static_cast<unsigned int>(config.max_contact_points),
         *bp_layer_interface_,
         *obj_vs_bp_filter_,
         *layer_pair_filter_
@@ -405,17 +406,17 @@ PhysicsFrameResult PhysicsWorld::Step(float delta_time, uint64_t frame_id) {
     JPH::EPhysicsUpdateError err = system_.Update(
         delta_time,
         config_.sub_step_count,
-        *temp_allocator_,
-        *job_system_);
+        temp_allocator_.get(),
+        job_system_.get());
 
     if (err != JPH::EPhysicsUpdateError::None) {
         // Map error to string
         std::string err_str;
-        if (uint(err) & uint(JPH::EPhysicsUpdateError::ManifoldCacheFull))
+        if (static_cast<unsigned int>(err) & static_cast<unsigned int>(JPH::EPhysicsUpdateError::ManifoldCacheFull))
             err_str = "ManifoldCacheFull";
-        if (uint(err) & uint(JPH::EPhysicsUpdateError::BodyPairCacheFull))
+        if (static_cast<unsigned int>(err) & static_cast<unsigned int>(JPH::EPhysicsUpdateError::BodyPairCacheFull))
             err_str += (err_str.empty() ? "" : ", ") + std::string("BodyPairCacheFull");
-        if (uint(err) & uint(JPH::EPhysicsUpdateError::ContactConstraintsFull))
+        if (static_cast<unsigned int>(err) & static_cast<unsigned int>(JPH::EPhysicsUpdateError::ContactConstraintsFull))
             err_str += (err_str.empty() ? "" : ", ") + std::string("ContactConstraintsFull");
 
         ENGINE_LOG_ERROR(logger_, "PhysicsWorld: Update error — frame=[{}], error=[{}]",
@@ -537,17 +538,17 @@ std::optional<std::pair<JPH::RVec3, JPH::Quat>> PhysicsWorld::GetTransform(
     uint32_t body_id) const {
     JPH::BodyID jid(body_id);
     JPH::BodyLockRead lock(system_.GetBodyLockInterface(), jid);
-    const JPH::Body* body = lock.GetBody();
-    if (!body) return std::nullopt;
-    return std::make_pair(body->GetPosition(), body->GetRotation());
+    if (!lock.Succeeded()) return std::nullopt;
+    const JPH::Body& body = lock.GetBody();
+    return std::make_pair(body.GetPosition(), body.GetRotation());
 }
 
 std::optional<JPH::Vec3> PhysicsWorld::GetVelocity(uint32_t body_id) const {
     JPH::BodyID jid(body_id);
     JPH::BodyLockRead lock(system_.GetBodyLockInterface(), jid);
-    const JPH::Body* body = lock.GetBody();
-    if (!body) return std::nullopt;
-    return body->GetLinearVelocity();
+    if (!lock.Succeeded()) return std::nullopt;
+    const JPH::Body& body = lock.GetBody();
+    return body.GetLinearVelocity();
 }
 
 bool PhysicsWorld::IsActive(uint32_t body_id) const {

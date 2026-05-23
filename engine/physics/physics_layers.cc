@@ -33,10 +33,10 @@ BPLayerInterfaceImpl::BPLayerInterfaceImpl(const LayerConfig& config) {
     for (const auto& [obj, bp] : obj_to_bp_) {
         unique_bp[bp.GetValue()] = true;
     }
-    num_layers_ = static_cast<uint>(unique_bp.size());
+    num_layers_ = static_cast<unsigned int>(unique_bp.size());
 }
 
-uint BPLayerInterfaceImpl::GetNumBroadPhaseLayers() const {
+unsigned int BPLayerInterfaceImpl::GetNumBroadPhaseLayers() const {
     return num_layers_ > 0 ? num_layers_ : 1;  // at least 1
 }
 
@@ -96,6 +96,21 @@ bool ObjectLayerPairFilterImpl::ShouldCollide(
 
 ObjectVSBLayerFilterImpl::ObjectVSBLayerFilterImpl(
     const LayerConfig& config, const BPLayerInterfaceImpl& bp_iface) {
+    // Build a local collision lookup from config.collision_matrix
+    std::unordered_map<uint32_t, bool> collision_rules;
+    for (const auto& rule : config.collision_matrix) {
+        auto it_a = config.object_layers.find(rule.layer_a);
+        auto it_b = config.object_layers.find(rule.layer_b);
+        if (it_a == config.object_layers.end() ||
+            it_b == config.object_layers.end()) {
+            continue;
+        }
+        uint16_t a = it_a->second;
+        uint16_t b = it_b->second;
+        collision_rules[(static_cast<uint32_t>(a) << 16) | b] = rule.collide;
+        collision_rules[(static_cast<uint32_t>(b) << 16) | a] = rule.collide;
+    }
+
     // Build filter: for each ObjectLayer, determine which BroadPhaseLayers it collides with
     for (const auto& [obj_name, obj_val] : config.object_layers) {
         JPH::ObjectLayer obj_layer(obj_val);
@@ -108,9 +123,9 @@ ObjectVSBLayerFilterImpl::ObjectVSBLayerFilterImpl(
 
             // Look up collision rule between these two object layers
             uint32_t key = (static_cast<uint32_t>(obj_val) << 16) | other_val;
-            auto cit = collision_rules_.find(key);
+            auto cit = collision_rules.find(key);
             bool collide = default_collide_;
-            if (cit != collision_rules_.end()) {
+            if (cit != collision_rules.end()) {
                 collide = cit->second;
             }
 

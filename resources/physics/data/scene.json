@@ -1,0 +1,76 @@
+{
+  "staticBodies": [
+    {
+      "id": "ground",
+      "shape": {
+        "type": "box",
+        "params": { "halfExtent": [50, 1, 50] }
+      },
+      "material": { "friction": 0.8, "restitution": 0.1 },
+      "transform": {
+        "position": [0, -1.5, 0],
+        "rotation": [0, 0, 0, 1]
+      },
+      "objectLayer": "static"
+    },
+    {
+      "id": "wall_north",
+      "shape": {
+        "type": "box",
+        "params": { "halfExtent": [50, 5, 1] }
+      },
+      "material": { "friction": 0.6, "restitution": 0.1 },
+      "transform": {
+        "position": [0, 3, -20],
+        "rotation": [0, 0, 0, 1]
+      },
+      "objectLayer": "static"
+    }
+  ],
+  "dynamicPrototypes": [
+    {
+      "protoId": "crate",
+      "shape": {
+        "type": "box",
+        "params": { "halfExtent": [0.5, 0.5, 0.5] }
+      },
+      "mass": 10.0,
+      "material": { "friction": 0.6, "restitution": 0.2 },
+      "motionType": "dynamic",
+      "motionQuality": "discrete",
+      "linearDamping": 0.1,
+      "angularDamping": 0.1,
+      "gravityFactor": 1.0,
+      "objectLayer": "dynamic",
+      "isSensor": false,
+      "allowSleeping": true,
+      "maxLinearVelocity": 500.0,
+      "maxAngularVelocity": 47.1
+    },
+    {
+      "protoId": "ball",
+      "shape": {
+        "type": "sphere",
+        "params": { "radius": 0.5 }
+      },
+      "mass": 5.0,
+      "material": { "friction": 0.3, "restitution": 0.8 },
+      "motionType": "dynamic",
+      "motionQuality": "discrete",
+      "linearDamping": 0.05,
+      "angularDamping": 0.05,
+      "gravityFactor": 1.0,
+      "objectLayer": "dynamic",
+      "isSensor": false,
+      "allowSleeping": true,
+      "maxLinearVelocity": 500.0,
+      "maxAngularVelocity": 47.1
+    }
+  ],
+  "constraints": [
+  ],
+  "materials": [
+    { "name": "concrete", "friction": 0.8, "restitution": 0.1 },
+    { "name": "ice", "friction": 0.05, "restitution": 0.01 }
+  ]
+}

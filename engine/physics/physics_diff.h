@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 
+#include <Jolt/Jolt.h>
 #include <Jolt/Math/Vec3.h>
 #include <Jolt/Math/Quat.h>
 
