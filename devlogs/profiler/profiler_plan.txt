@@ -110,32 +110,61 @@ Include 策略:
 4.2 引擎专用宏 — 组合基础宏，对应引擎实际生命周期:
 
     (a) 帧循环 (对应 engine/engine/engine.cc FrameLoop 实际代码流程):
-        ENGINE_PROFILE_FRAME_BEGIN(frame_no, dt_ms)  — 帧开始 (记录帧号和帧间隔)
-        ENGINE_PROFILE_FRAME_END(elapsed_ms)         — 帧结束 (记录帧耗时)
-        ENGINE_PROFILE_TIMER_UPDATE()                — TimerManager::update()
-        ENGINE_PROFILE_PHYSICS_TICK(frame_no)        — PhysicsEngineBridge::Tick() 主线程入队
-        ENGINE_PROFILE_SCRIPT_UPDATE()               — ScriptVM::UpdateScript() 主线程协程
-        ENGINE_PROFILE_PHYSICS_FETCH(frame_no)       — PhysicsEngineBridge::FetchResult() 阻塞点
-        ENGINE_PROFILE_SCRIPT_CALLBACK()             — PhysicsEngineBridge::UpdateScript() 碰撞回调
+        ENGINE_PROFILE_FRAME_BEGIN(frame_no, dt_ms)  — 帧开始 [BEGIN], 记录帧号和帧间隔
+                                                       (多语句宏: 先发 COUNTER 再发 BEGIN, 用 do{}while(0) 包裹)
+        ENGINE_PROFILE_FRAME_END(elapsed_ms)         — 帧结束 [END], 记录帧耗时
+                                                       (多语句宏: 先发 COUNTER 再发 END, 用 do{}while(0) 包裹)
+        ENGINE_PROFILE_TIMER_UPDATE()                — TimerManager::update() [SCOPE]
+        ENGINE_PROFILE_PHYSICS_TICK(frame_no)        — PhysicsEngineBridge::Tick() [SCOPE]
+        ENGINE_PROFILE_SCRIPT_UPDATE()               — ScriptVM::UpdateScript() [SCOPE]
+        ENGINE_PROFILE_PHYSICS_FETCH(frame_no)       — PhysicsEngineBridge::FetchResult() [SCOPE]
+        ENGINE_PROFILE_SCRIPT_CALLBACK()             — PhysicsEngineBridge::UpdateScript() [SCOPE]
+        注: [BEGIN]/[END] 为手动配对, [SCOPE] 为 RAII 自动结束 (需用 { } 控制作用域)
 
     (b) 物理线程 (对应 engine/physics/physics_thread.cc EventLoop):
-        ENGINE_PROFILE_PHYSICS_CMD_DEQUEUE()   — 命令出队
-        ENGINE_PROFILE_PHYSICS_STEP(dt)        — PhysicsWorld::Step() Jolt 步进
-        ENGINE_PROFILE_PHYSICS_COLLISION()     — 碰撞检测
-        ENGINE_PROFILE_PHYSICS_TRANSFORM()     — 变换收集
-        ENGINE_PROFILE_PHYSICS_DIFF()          — 状态差异生成
-        ENGINE_PROFILE_PHYSICS_RESULT_ENQUEUE() — 结果入队
+        ENGINE_PROFILE_PHYSICS_CMD_DEQUEUE()   — 命令出队 [SCOPE]
+        ENGINE_PROFILE_PHYSICS_STEP(dt)        — PhysicsWorld::Step() [SCOPE]
+        ENGINE_PROFILE_PHYSICS_COLLISION()     — 碰撞检测 [SCOPE]
+        ENGINE_PROFILE_PHYSICS_TRANSFORM()     — 变换收集 [SCOPE]
+        ENGINE_PROFILE_PHYSICS_DIFF()          — 状态差异生成 [SCOPE]
+        ENGINE_PROFILE_PHYSICS_RESULT_ENQUEUE() — 结果入队 [SCOPE]
 
     (c) 脚本系统:
-        ENGINE_PROFILE_SCRIPT_DOFILE(path)   — 加载脚本文件
-        ENGINE_PROFILE_SCRIPT_EXPORT(name)   — script bind 注册 (如 "log", "timer")
+        ENGINE_PROFILE_SCRIPT_DOFILE(path)   — 加载脚本文件 [SCOPE]
+        ENGINE_PROFILE_SCRIPT_EXPORT(name)   — script bind 注册 [SCOPE] (如 "log", "timer")
 
     (d) 跨线程流事件 (Flow Event, 标记因果关系):
-        ENGINE_PROFILE_FLOW_BEGIN(cat, flow_id)  — 流起点 (如主线程 Tick 入队时刻)
-        ENGINE_PROFILE_FLOW_END(cat, flow_id)    — 流终点 (如物理线程收到命令时刻)
-        用于连接主线程 Tick → 物理线程 Step → FetchResult 返回的因果关系链
+        ENGINE_PROFILE_FLOW_BEGIN(cat, name, flow_id)
+          → TRACE_EVENT_BEGIN(cat, name, perfetto::Flow::ProcessScoped(flow_id))
+            (在发射端创建切片并标记流起点，flow_id 通常用 frame_count_)
+        ENGINE_PROFILE_FLOW_END(cat, name, flow_id)
+          → TRACE_EVENT_END(cat, perfetto::TerminatingFlow::ProcessScoped(flow_id))
+            (在接收端结束切片并标记流终点)
+        注意: Flow Event 是 TRACE_EVENT 切片上的附加标注 (annotation)，
+        不是独立事件。实际使用时推荐将 flow 标注直接整合进引擎宏内部
+        (如 ENGINE_PROFILE_PHYSICS_TICK 内部包含 Flow::ProcessScoped)，
+        减少显式调用。此处提供独立宏作为备选手动方案。
+        用于连接主线程 Tick → 物理线程 Step → FetchResult 返回的因果关系链。
+
+    引擎专用宏的展开语义:
+    . 4.2(a) 帧循环宏 — 均为 RAII SCOPE 宏 (内部使用 ENGINE_PROFILE_SCOPE)，
+      在最近的封闭 } 处自动结束。FRAME_BEGIN/FRAME_END 例外，使用手动 BEGIN/END
+      配对以包裹整帧。各阶段宏嵌套在 FRAME_BEGIN/END 内部，形成层级结构:
+        Frame
+        ├── TimerUpdate
+        ├── PhysicsTick
+        ├── ScriptUpdate
+        ├── PhysicsFetch
+        └── ScriptCallback
+    . 4.2(b) 物理线程宏 — 同上，均为 RAII SCOPE 宏。
+    . 使用方式: 每个引擎宏后紧跟被检测的代码，用 { } 创建显式作用域以控制切片边界。
+      详见 4.3 示例。
 
 4.3 使用示例 (FrameLoop 打桩后):
+
+    // trace 层级: Frame → [TimerUpdate, PhysicsTick, ScriptUpdate,
+    //                      PhysicsFetch, ScriptCallback]
+    // 内层宏均为 SCOPE (RAII), FRAME_BEGIN/END 为手动配对
 
     void Engine::FrameLoop() {
         auto frame_start = std::chrono::steady_clock::now();
@@ -144,25 +173,30 @@ Include 策略:
             std::chrono::duration_cast<std::chrono::milliseconds>(
                 frame_start - last_frame_time_).count());
 
-        ENGINE_PROFILE_TIMER_UPDATE();
+        { ENGINE_PROFILE_TIMER_UPDATE();
         TimerManager::instance().update();
+        }  // TimerUpdate slice ends
 
-        ENGINE_PROFILE_PHYSICS_TICK(frame_count_);
+        { ENGINE_PROFILE_PHYSICS_TICK(frame_count_);
         PhysicsEngineBridge::Instance().Tick(frame_count_, fixed_delta_time_);
+        }  // PhysicsTick slice ends
 
-        ENGINE_PROFILE_SCRIPT_UPDATE();
+        { ENGINE_PROFILE_SCRIPT_UPDATE();
         if (script_vm_) script_vm_->UpdateScript();
+        }  // ScriptUpdate slice ends
 
-        ENGINE_PROFILE_PHYSICS_FETCH(frame_count_);
+        { ENGINE_PROFILE_PHYSICS_FETCH(frame_count_);
         auto result = PhysicsEngineBridge::Instance().FetchResult(frame_count_, 5);
         if (result) {
-            ENGINE_PROFILE_SCRIPT_CALLBACK();
+            { ENGINE_PROFILE_SCRIPT_CALLBACK();
             PhysicsEngineBridge::Instance().UpdateScript();
+            }  // ScriptCallback slice ends
         }
+        }  // PhysicsFetch slice ends
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - frame_start).count();
-        ENGINE_PROFILE_FRAME_END(elapsed);
+        ENGINE_PROFILE_FRAME_END(elapsed);  // Frame slice ends
     }
 
 五、核心 API 设计
@@ -233,7 +267,8 @@ Include 策略:
     . ProfilerManager 仅管理主线程 session；物理线程拥有自己的 session 生命周期
     . 主线程 session 和物理线程 session 可独立启停，互不干扰
     . perfetto 自动按线程 track 区分事件来源，在 perfetto UI 中天然隔离
-    . 跨线程因果关系使用 TRACE_EVENT_BEGIN 的 FlowDescriptor 参数标记
+    . 跨线程因果关系: 使用 ENGINE_PROFILE_FLOW_BEGIN/END 或将 Flow::ProcessScoped
+      标注整合进物理相关的引擎宏 (PHYSICS_TICK 和 PHYSICS_STEP) 内部
 
 六、Category 设计
 --------------------------------------------------------------------------------
