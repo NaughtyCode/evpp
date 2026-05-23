@@ -625,6 +625,13 @@ resources/physics/configs/
         "fixed"  → JPH::FixedConstraintSettings
         其他类型按 Jolt 约束体系扩展（见 jolt-physics/05-constraints.md）
       bodyA/bodyB 通过 asset_id 从 ObjectRegistry 查找
+      ⚠ 与形状的 ShapeSettings→Create()→Shape 两阶段模式 [J11] 同理，
+        约束采用 ConstraintSettings → CreateConstraint → AddConstraint 流程:
+        . TwoBodyConstraint* c = body_interface.CreateConstraint(settings,
+            body_a_id, body_b_id);  // 从 Settings 实例化约束
+        . system.AddConstraint(c);  // 加入物理世界
+        . 若约束关联动态体：body_interface.ActivateConstraint(c);
+          （静态体间约束无需激活，静态体本身永不睡眠）
 
   加载失败处理 [D22]:
     . 文件不存在 → 明确错误消息（含文件路径）
