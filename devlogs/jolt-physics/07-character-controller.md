@@ -33,6 +33,36 @@ class CharacterVirtual : public CharacterBase {
 
 适用场景：纯运动学角色，如玩家控制器。由于不加入 BroadPhase，性能更好且更可控。
 
+### CharacterVirtualSettings
+
+配置类 (`CharacterVirtualSettings` 继承自 `CharacterBaseSettings`)，构造时传入所有参数：
+
+```cpp
+// 继承自 CharacterBaseSettings:
+Vec3          mUp = Vec3::sAxisY();          // 上方向
+Plane         mSupportingVolume { ... };      // 支撑体积
+float         mMaxSlopeAngle = DegreesToRadians(50.0f); // 最大可攀爬角度 (存储为 cos)
+bool          mEnhancedInternalEdgeRemoval = false;
+RefConst<Shape> mShape;                      // 角色形状
+
+// CharacterVirtualSettings 自有:
+CharacterID   mID;                           // 确定性 ID
+float         mMass = 70.0f;                 // 角色质量 (kg)
+float         mMaxStrength = 100.0f;         // 最大推力 (N)
+Vec3          mShapeOffset = Vec3::sZero();  // 局部空间形状偏移
+float         mPredictiveContactDistance = 0.1f;
+uint          mMaxCollisionIterations = 5;
+uint          mMaxConstraintIterations = 15;
+uint          mMaxNumHits = 256;             // 单次收集的最大接触点数
+float         mCharacterPadding = 0.02f;
+float         mPenetrationRecoverySpeed = 1.0f;
+RefConst<Shape> mInnerBodyShape;             // 可选的内部刚体形状
+BodyID        mInnerBodyIDOverride;
+ObjectLayer   mInnerBodyLayer = 0;
+```
+
+> `CharacterBase` 将 `mMaxSlopeAngle` 转换为 `mCosMaxSlopeAngle = cos(angle)` 存储，用于地面坡度判定。
+
 ## CharacterVirtual 核心算法
 
 ### 移动流程 ExtendedUpdate
@@ -49,17 +79,24 @@ class CharacterVirtual : public CharacterBase {
 
 ### 关键设置
 
-`CharacterVirtual` 的关键成员变量 (直接存储在对象上):
+`CharacterVirtual` 的关键运行时成员变量 (由 `CharacterVirtualSettings` 构造时初始化):
 
 ```cpp
-// 碰撞检测参数
-float  mPredictiveContactDistance = 0.1f; // 预判距离
-uint   mMaxCollisionIterations = 5;       // 碰撞迭代
-uint   mMaxConstraintIterations = 15;     // 约束迭代
-float  mCharacterPadding = 0.02f;         // 安全边距
-float  mPenetrationRecoverySpeed = 1.0f;  // 穿透恢复速度
-float  mMaxSlopeAngle = 50.0f * JPH_PI / 180.0f; // 最大可攀爬角度
-float  mMaxStrength = 100.0f;             // 最大推力
+// 碰撞检测参数 (由 CharacterVirtualSettings 设置)
+EBackFaceMode  mBackFaceMode;               // 背面碰撞模式
+float  mPredictiveContactDistance;          // 预判距离
+uint   mMaxCollisionIterations;             // 碰撞迭代
+uint   mMaxConstraintIterations;            // 约束迭代
+float  mMinTimeRemaining;                   // 早停阈值
+float  mCollisionTolerance;                 // 碰撞容差
+float  mCharacterPadding;                   // 安全边距
+uint   mMaxNumHits;                         // 单次最大接触点数
+float  mHitReductionCosMaxAngle;            // 接触归并阈值
+float  mPenetrationRecoverySpeed;           // 穿透恢复速度
+bool   mEnhancedInternalEdgeRemoval;        // 内部边去除
+float  mMass;                               // 质量 (kg)
+float  mMaxStrength;                        // 最大推力 (N)
+Vec3   mShapeOffset;                        // 形状偏移
 
 // ExtendedUpdate 专用设置
 struct ExtendedUpdateSettings {

@@ -43,14 +43,14 @@
 
 ### Step 2: ApplyGravity
 
-对每个活跃动态刚体 (batch=64)：
-```
-linear_velocity += gravity * gravityFactor * deltaTime
-```
-被 `AllowedDOFs` 锁定的分量不受影响。
+对每个活跃动态刚体 (batch=64)，通过 `ApplyForceTorqueAndDragInternal` 完成：
 
-在此之前，若 `mApplyGyroscopicForce` 开启，先对刚体施加陀螺力 (Dzhanibekov effect):
-`torque += ω × (I·ω)` — 网球拍定理，默认关闭。
+1. 可选: 若 `mApplyGyroscopicForce` 开启，施加陀螺力 (Dzhanibekov effect): `torque += ω × (I·ω)` (网球拍定理，默认关闭)
+2. 重力 + 累积力/扭矩 → 速度: `v += (gravityFactor * gravity + invMass * force) * dt`, `ω += invInertia * torque * dt`
+3. 应用阻尼 — `velocity *= max(0, 1 - damping * dt)` (精确解 `v(t)=v₀·e^(-c·t)` 的 Taylor 近似)
+4. 速度钳制到 `mMaxLinearVelocity` / `mMaxAngularVelocity`
+
+被 `AllowedDOFs` 锁定的分量不受影响。
 
 ### Step 3: FindCollisions (核心碰撞检测)
 
@@ -98,7 +98,10 @@ linear_velocity += gravity * gravityFactor * deltaTime
 
 ### Step 8: PreIntegrateVelocity
 
-`StepListener::OnStep` 回调 (积分前)。车辆等系统在此应用悬挂力。
+准备 CCD (连续碰撞检测) 资源：
+- 从临时分配器分配 CCD body 缓冲区
+- 初始化 active body → CCD body 映射表
+- 准备 LargeIslandSplitter 的位置求解阶段
 
 ### Step 9: IntegrateVelocity
 
@@ -113,8 +116,9 @@ rotation += 0.5 * quat(0, angular_velocity) * rotation * deltaTime
 
 ### Step 10: PostIntegrateVelocity
 
-- `StepListener::OnStep` 回调 (积分后)
-- 应用阻尼: `velocity *= 1.0 - damping * deltaTime`
+若存在 CCD 刚体 → 创建 CCD 解析作业 (`JobResolveCCDContacts`)。若无 CCD 刚体 → 直接触发 `ContactRemovedCallbacks`。
+
+> **注意**: 阻尼在 Step 2 (ApplyGravity) 中通过 `ApplyForceTorqueAndDragInternal` 施加，不在此阶段。
 
 ### Step 11: ResolveCCDContacts
 
@@ -127,7 +131,7 @@ CCD 阈值由 `mLinearCastThreshold` (默认 0.75 × 内接球半径) 和 `mLine
 
 ### Step 12: SolvePositionConstraints
 
-NGS (Nonlinear Gauss-Seidel) 位置修正：
+位置约束求解 (Position Solver)：
 - 迭代 `mNumPositionSteps` 次
 - 修正穿透 (受 `mMaxPenetrationDistance` 限制，默认 0.2m)
 - Baumgarte 稳定化系数 (默认 0.2)
