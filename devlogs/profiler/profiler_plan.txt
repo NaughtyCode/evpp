@@ -33,7 +33,7 @@
 . 提供丰富的 C++ 宏封装，对标 perfetto 原生宏并降低使用门槛
 . 提供完整的 profiler 启动、停止机制及配套 API (Stop→Start 即可实现重启)
 . 引擎主要函数和流程节点均打上 profiler 桩
-. 物理系统使用独立的 TracingSession 实例 (物理线程独立运行，可单独启停 tracing)
+. 物理系统与主线程共享 TracingSession (推荐) 或使用独立 Session (备选, 需实测验证)
 
 二、编译开关设计
 --------------------------------------------------------------------------------
@@ -60,6 +60,8 @@ engine/profiler/
 ├── profiler_core.h          # ProfilerManager 单例 + ProfilerConfig 结构体 (ENGINE_API)
 ├── profiler_core.cc         # 实现 + PERFETTO_TRACK_EVENT_STATIC_STORAGE() (唯一位置)
 └── profiler_events.h        # 引擎级便捷宏 (帧、物理、脚本等, 组合基础宏, include profiler_macros.h)
+                              #   同时声明帧循环复用的 inline perfetto::CounterTrack:
+                              #     g_frame_no_track, g_frame_dt_track, g_frame_time_track
 
 扩展名使用 .cc 与引擎现有代码保持一致 (见 engine/CMakeLists.txt)。
 所有新头文件使用 #pragma once，与引擎现有代码保持一致 (见 engine/engine/engine.h:1)。
@@ -114,15 +116,23 @@ Include 策略:
     (f) 便捷函数追踪:
         ENGINE_PROFILE_FUNC()
           → ENGINE_PROFILE_SCOPE("engine", __func__)
-          (__func__ 是 C++11 标准标识符, 跨平台兼容; MSVC 的 __FUNCTION__ 效果相同)
+          (__func__ 是 C++11 标准标识符, 跨平台兼容, 展开为裸函数名, 如 "FrameLoop";
+           如需类名限定可用 __FUNCTION__ (MSVC) 或 __PRETTY_FUNCTION__ (GCC/Clang),
+           但会降低跨平台一致性, 推荐坚持 __func__)
 
 4.2 引擎专用宏 — 组合基础宏，对应引擎实际生命周期:
 
-    (a) 帧循环 (对应 engine/engine/engine.cc FrameLoop 实际代码流程):
+    (a) 帧循环 (对应 engine/engine/engine.cc Tick + FrameLoop 实际代码流程):
+        ENGINE_PROFILE_TICK()                       — Engine::Tick() 入口 [SCOPE]
+                                                      (包裹整帧逻辑, 包含帧率控制等待 + FrameLoop)
         ENGINE_PROFILE_FRAME_BEGIN(frame_no, dt_ms)  — 帧开始 [BEGIN], 记录帧号和帧间隔
-                                                       (多语句宏: 先发 COUNTER 再发 BEGIN, 用 do{}while(0) 包裹)
+                                                       (多语句宏: 先 COUNTER_TRACK 再 BEGIN, 用 do{}while(0) 包裹)
+                                                       使用 profiler_events.h 中预声明的 inline CounterTrack
+                                                       (g_frame_no_track, g_frame_dt_track) 确保帧号/帧间隔
+                                                       形成连续时间序列, 而非每帧一个独立 track
         ENGINE_PROFILE_FRAME_END(elapsed_ms)         — 帧结束 [END], 记录帧耗时
-                                                       (多语句宏: 先发 COUNTER 再发 END, 用 do{}while(0) 包裹)
+                                                       (多语句宏: 先 COUNTER_TRACK 再 END, 用 do{}while(0) 包裹)
+                                                       使用 g_frame_time_track 记录帧耗时, 再 END 关闭帧切片
         ENGINE_PROFILE_SLOW_FRAME(elapsed_ms, threshold_ms) — 慢帧标记 [INSTANT],
                                                        elapsed > threshold 时触发，用于定位性能尖峰
         ENGINE_PROFILE_TIMER_UPDATE()                — TimerManager::update() [SCOPE]
@@ -137,15 +147,17 @@ Include 策略:
         注: CollectTransforms, CollectCollisionEvents, GenerateDiffs 实际上在
         PhysicsWorld::Step() 内部被调用 (physics_world.cc:439-441)，而非 EventLoop
         的直接阶段。各宏应在 Step() 内部打桩，trace 层级为:
-          PhysicsStep (system_.Update + 后处理)
-          ├── Collision  (CollectCollisionEvents)
-          ├── Transform  (CollectTransforms)
-          └── Diff       (GenerateDiffs)
+          PhysicsStep (system_.Update + 后处理, 对应 PhysicsWorld::Step(float delta_time, uint64_t frame_id))
+          ├── Transform  (CollectTransforms)      — physics_world.cc:439
+          ├── Collision  (CollectCollisionEvents)  — physics_world.cc:440
+          └── Diff       (GenerateDiffs)           — physics_world.cc:441
 
         ENGINE_PROFILE_PHYSICS_CMD_DEQUEUE()   — 命令出队 [SCOPE]
-                                                (内部将 cmd.frame_id 存入 thread_local 供后续宏使用)
-        ENGINE_PROFILE_PHYSICS_STEP(dt)        — PhysicsWorld::Step() [SCOPE]
-                                                (dt 作为 debug annotation 记录: "delta_time", dt;
+                                                (从 cmd.tick_args().frame_id 提取 frame_id (仅 Tick 命令有效),
+                                                 存入 thread_local 供后续宏使用; 非 Tick 命令设为 -1, 后续宏检查
+                                                 frame_id != UINT64_MAX 后才写 flow annotation)
+        ENGINE_PROFILE_PHYSICS_STEP(delta_time)   — PhysicsWorld::Step() [SCOPE]
+                                                (delta_time 作为 debug annotation 记录: "delta_time", delta_time;
                                                  通过 thread_local 读取 frame_id 用于 TerminatingFlow)
         ENGINE_PROFILE_PHYSICS_COLLISION()     — 碰撞检测 [SCOPE] (Step 内部嵌套)
         ENGINE_PROFILE_PHYSICS_TRANSFORM()     — 变换收集 [SCOPE] (Step 内部嵌套)
@@ -162,7 +174,10 @@ Include 策略:
             (在发射端创建切片并标记流起点, flow_id 通常用 frame_count_)
         ENGINE_PROFILE_FLOW_END(cat)
           → TRACE_EVENT_END(cat)
-            (仅关闭切片; TRACE_EVENT_END 不接受 category 之外的参数)
+            (关闭最近一个该 category 的 BEGIN 切片; flow 标注已在 BEGIN 端,
+             END 端无需额外参数 — TRACE_EVENT_END 虽支持 Track 参数用于
+             异步事件配对, 但 ENGINE_PROFILE 的 flow 体系通过同 category
+             的后进先出栈自然匹配, 无需 Track 去歧义)
         ENGINE_PROFILE_FLOW_TERMINATE(cat, name, flow_id)
           → TRACE_EVENT_BEGIN(cat, name, perfetto::TerminatingFlow::ProcessScoped(flow_id))
             (在接收端创建切片并标记流终点; 需与 ENGINE_PROFILE_FLOW_END(cat) 配对关闭)
@@ -180,27 +195,40 @@ Include 策略:
         用于连接主线程 Tick → 物理线程 Step → FetchResult 返回的因果关系链。
 
     引擎专用宏的展开语义:
-    . 4.2(a) 帧循环宏 — 均为 RAII SCOPE 宏 (内部使用 ENGINE_PROFILE_SCOPE)，
-      在最近的封闭 } 处自动结束。FRAME_BEGIN/FRAME_END 例外，使用手动 BEGIN/END
-      配对以包裹整帧。各阶段宏嵌套在 FRAME_BEGIN/END 内部，形成层级结构:
-        Frame
-        ├── TimerUpdate
-        ├── PhysicsTick
-        ├── ScriptUpdate
-        ├── PhysicsFetch
-        └── ScriptCallback
-    . 4.2(b) 物理线程宏 — 同上，均为 RAII SCOPE 宏。
-    . 带参数的 SCOPE 宏 (如 PHYSICS_TICK(frame_no), PHYSICS_STEP(dt)):
+    . 4.2(a) 帧循环宏 — TICK, FRAME_BEGIN, PHYSICS_xxx, SCRIPT_xxx 等均为 SCOPE
+      宏 (内部使用 ENGINE_PROFILE_SCOPE)，在最近的封闭 } 处自动结束。
+      FRAME_BEGIN/FRAME_END 例外，使用手动 BEGIN/END 配对以包裹整帧。
+      各阶段宏嵌套形成层级结构:
+        Tick                        ← ENGINE_PROFILE_TICK() 最外层
+        └── Frame                   ← FRAME_BEGIN + FRAME_END 配对
+            ├── TimerUpdate
+            ├── PhysicsTick
+            ├── ScriptUpdate
+            ├── PhysicsFetch
+            └── ScriptCallback
+    . 4.2(b) 物理线程宏 — 均为 SCOPE 宏，SEMANTICS 同 4.2(a)。
+    . 带参数的 SCOPE 宏 (如 PHYSICS_TICK(frame_no), PHYSICS_STEP(delta_time)):
       额外参数作为 perfetto debug annotation 记录到切片上
-      (e.g. "frame_no", frame_no 或 "delta_time", dt)，可在 trace 中按值筛选。
+      (e.g. "frame_no", frame_no 或 "delta_time", delta_time)，可在 trace 中按值筛选。
     . 使用方式: 每个引擎宏后紧跟被检测的代码，用 { } 创建显式作用域以控制切片边界。
       详见 4.3 示例。
 
 4.3 使用示例 (FrameLoop 打桩后):
 
-    // trace 层级: Frame → [TimerUpdate, PhysicsTick, ScriptUpdate,
-    //                      PhysicsFetch, ScriptCallback]
-    // 内层宏均为 SCOPE (RAII), FRAME_BEGIN/END 为手动配对
+    // trace 层级: Tick → Frame → [TimerUpdate, PhysicsTick, ScriptUpdate,
+    //                                 PhysicsFetch, ScriptCallback]
+    // TICK 和各阶段宏均为 SCOPE (RAII), FRAME_BEGIN/END 为手动配对
+
+    void Engine::Tick() {
+        if (!running_) return;
+        auto now = std::chrono::steady_clock::now();
+        if (now - last_work_time_ < frame_interval_) return;
+
+        { ENGINE_PROFILE_TICK();
+        FrameLoop();
+        last_work_time_ = std::chrono::steady_clock::now();
+        }  // Tick slice ends
+    }
 
     void Engine::FrameLoop() {
         auto frame_start = std::chrono::steady_clock::now();
@@ -241,12 +269,19 @@ Include 策略:
 5.1 ProfilerConfig 结构体:
 
     struct ENGINE_API ProfilerConfig {
-        std::string  output_path     = "trace.perfetto-trace";  // std::string 管理生命周期, 避免 const char* 悬空
+        std::string  output_path     = "trace.perfetto-trace";  // 相对路径, 基于 CWD;
+                                                               // 生产环境须设为绝对路径,
+                                                               // 多次 session 建议追加时间戳避免覆盖
         uint32_t    buffer_size_kb   = 32768;   // 每个 buffer 32MB
-        uint32_t    duration_ms      = 0;       // 0 = 手动停止
+        uint32_t    duration_ms      = 0;       // 0 = 手动停止; 非 0 时到达时限自动停止
         uint32_t    flush_interval_ms = 5000;
-        bool        write_into_file  = false;   // true = 直接写文件
+        bool        write_into_file  = false;   // true = 直接写文件, 避免内存积累
+                                                // false 时数据存于 ring buffer, 留意 buffer_size_kb 上限
     };
+
+    实现建议: SaveTrace() 内部在 output_path 追加时间戳后缀 (如
+    "trace_20260524_143021.perfetto-trace"), 避免多次 session 的 trace 文件互相覆盖。
+    同时提供 SaveTraceExact() 严格使用 config 中的原始路径, 供已知确切路径时使用。
 
     ProfilerConfig → perfetto::TraceConfig 转换逻辑:
     . 创建 BufferConfig: set_size_kb(buffer_size_kb), set_fill_policy(RING_BUFFER)
@@ -266,6 +301,11 @@ Include 策略:
     3. perfetto::TrackEvent::Register()
     4. 若任一步失败, Initialize() 返回 false, initialized_ 保持 false
     5. 后续所有 ProfilerManager 操作检查 initialized_, 未初始化时是空操作
+    6. 错误处理: Initialize() 内部通过 ENGINE_LOG_ERROR 记录失败原因;
+       StartSession() 的 NewTrace + Setup + StartBlocking 任一步失败时返回 false
+       (已创建的 partial session 立即释放), 并通过日志记录具体失败步骤。
+       业务层调用 StartSession() 应检查返回值, 失败时 tracing 静默不可用,
+       不影响引擎正常逻辑 (fail-open 策略)。
 
 5.2 ProfilerManager 单例:
 
@@ -280,7 +320,9 @@ Include 策略:
         static ProfilerManager& Get();
 
         // 生命周期 — Engine::Init() 中调用 Initialize, Cleanup() 中调用 Shutdown
-        bool   Initialize(const ProfilerConfig& cfg);  // 返回 false 表示 perfetto 初始化失败
+        bool   Initialize(const ProfilerConfig& cfg);  // true=初始化就绪 (首次或已初始化幂等);
+                                                       // false=perfetto 底层调用失败, 此时
+                                                       // initialized_ 保持 false, 需检查日志
         void   Shutdown();       // 安全关闭 (自动停止活跃 session, flush, 释放资源)
 
         // Session 控制
@@ -294,7 +336,8 @@ Include 策略:
         // 数据操作
         void              Flush();             // 活跃 session 时有效, 否则空操作
         std::vector<char> ReadTrace();         // Stop 后读取, 无数据时返回空 vector
-        void              SaveTrace(const char* path);
+        void              SaveTrace();                     // 使用 config_.output_path + 时间戳后缀保存
+        void              SaveTraceExact(const std::string& path);  // 严格按给定路径保存, 不做修改
 
     private:
         ProfilerConfig config_;
@@ -303,8 +346,11 @@ Include 策略:
     };
 
     生命周期规则:
-    . Initialize() 可重复调用 — 第二次及之后返回 false, 不改变状态。
-      如需更换配置重新初始化, 须先 Shutdown() 再 Initialize(new_cfg)。
+    . Initialize() 幂等 — 首次调用执行 perfetto 全局初始化; 重复调用返回 true
+      (无操作), 不改变状态。如需更换配置, 须先 Shutdown() 再 Initialize(new_cfg)。
+    . 不可在 Initialize() 和 Shutdown() 调用期间引入数据竞争 — ProfilerManager 的
+      状态变更 (initialized_, session_) 依赖调用者保证串行化, 不在内部加锁。
+      StartSession/StopSession/Flush 同样假定由同一线程或外部同步机制调用。
     . StartSession() 幂等 — 若已有活跃 session 则隐式 StopSession() 再创建新的
     . StopSession() 幂等 — 无活跃 session 时是空操作
     . Shutdown() 幂等 — 可安全多次调用, 自动清理所有资源
@@ -312,16 +358,31 @@ Include 策略:
     . Shutdown() 调用时机 — 必须在 Engine::Cleanup() 末尾, 所有子系统停止之后调用,
       确保各线程的 trace 数据已全部写入。顺序: 先停止子系统, 再 Shutdown profiler。
 
-5.3 物理线程独立 Session:
+5.3 物理线程 Trace 方案:
+
+    方案选择: 优先尝试 "单一 session + 多线程写入" 方案 (简洁), 备选独立 session。
+
+    方案 A (推荐): 单一 Session, 双线程写入
+    . 主线程创建 TracingSession (通过 ProfilerManager::StartSession)
+    . 物理线程直接使用 perfetto 宏写入同一 session — perfetto 内部线程安全,
+      多线程可同时写入, UI 中按线程 track 天然隔离
+    . 无需在物理线程中管理 session 生命周期, 代码最简单
+    . 实现: 将 ENGINE_PROFILER_ENABLED 编译定义传递给 physics 模块即可,
+      physics .cc 文件 include profiler_macros.h 后所有宏直接生效
+    . 跨线程因果关系: 通过 Flow Event 连接 —
+      PHYSICS_TICK 内部用 Flow::ProcessScoped, PHYSICS_STEP 内部用
+      TerminatingFlow::ProcessScoped, 二者共享 frame_id 作为 flow_id
+
+    方案 B (备选): 独立 TracingSession
     . PhysicsThread 内部自行创建和管理 TracingSession (直接调用
-      perfetto::Tracing::NewTrace(kInProcessBackend))，不依赖 ProfilerManager
-    . ProfilerManager 仅管理主线程 session；物理线程拥有自己的 session 生命周期
-    . 主线程 session 和物理线程 session 可独立启停，互不干扰
+      perfetto::Tracing::NewTrace(kInProcessBackend))
+    . 前提: 验证 kInProcessBackend 支持多个并发 TracingSession
+      (perfetto 文档表明支持, 但需在目标版本上实测确认)
+    . 依赖: 必须先调用 ProfilerManager::Initialize() (全局 perfetto 初始化),
+      再启动物理线程 — 物理线程 session 可用但全局 init 由 ProfilerManager 保证
     . 物理线程停止时: 在 EventLoop 退出前调用 StopBlocking() + ReadTraceBlocking()，
-      将 trace 数据通过文件或队列传回主线程合并保存
-    . perfetto 自动按线程 track 区分事件来源，在 perfetto UI 中天然隔离
-    . 跨线程因果关系: 使用 ENGINE_PROFILE_FLOW_BEGIN/END 或将 Flow::ProcessScoped
-      标注整合进物理相关的引擎宏 (PHYSICS_TICK 和 PHYSICS_STEP) 内部
+      将 trace 数据通过文件传回主线程合并保存
+    . 优点: 可对物理线程单独启停 tracing (如只分析物理性能时无需主线程 trace 数据)
 
 六、Category 设计
 --------------------------------------------------------------------------------
@@ -342,9 +403,9 @@ Include 策略:
 七、引擎打桩点清单 (严格对齐 FrameLoop 实际代码)
 --------------------------------------------------------------------------------
 
-7.1 帧循环 (engine/engine/engine.cc FrameLoop, 第252-290行):
-    - Engine::Tick() — 库模式入口 (外部 EventLoop 驱动时)
-    - 帧开始 (frame_count_, delta_time)
+7.1 帧循环 (engine/engine/engine.cc Tick + FrameLoop, 第181-290行):
+    - Engine::Tick() — 库模式入口 (外部 EventLoop 驱动时), 对应 ENGINE_PROFILE_TICK()
+    - 帧开始 (frame_count_, delta_time) — 对应 FRAME_BEGIN
     - TimerManager::update()
     - PhysicsEngineBridge::Tick(frame_count_, fixed_delta_time_) — 入队命令
     - ScriptVM::UpdateScript() — Lua 主线程协程更新
@@ -354,12 +415,14 @@ Include 策略:
 
 7.2 物理线程 (engine/physics/physics_thread.cc EventLoop):
     - 事件循环迭代开始
-    - PhysicsCommand 出队 (SPSC 队列)
-    - PhysicsWorld::Step() — Jolt system_.Update(delta, substeps, allocator, jobs)
-    - CollectTransforms() — 收集活跃刚体变换
-    - CollectCollisionEvents() — 收集碰撞事件
-    - GenerateDiffs() — 生成状态差异包
-    - PhysicsFrameResult 入队 (SPSC 队列)
+    - PhysicsCommand 出队 (moodycamel::ConcurrentQueue)
+    - PhysicsWorld::Step(delta_time, frame_id) — Jolt system_.Update + 后处理
+    - CollectTransforms() — 收集活跃刚体变换 (physics_world.cc:439)
+    - CollectCollisionEvents() — 收集碰撞事件 (physics_world.cc:440)
+    - GenerateDiffs() — 生成状态差异包 (physics_world.cc:441)
+    - PhysicsFrameResult 入队 (moodycamel::ConcurrentQueue)
+    注: 队列类型 moodycamel::ConcurrentQueue 为 MPMC, 引擎注释称 "SPSC"
+    系指使用模式 (单生产者单消费者), 非数据结构语义。
 
 7.3 脚本系统 (engine/vm/vm.cc, engine/script/):
     - ScriptVM 构造 / 析构
@@ -391,16 +454,22 @@ Include 策略:
     - 实现 profiler_categories.h: PERFETTO_DEFINE_CATEGORIES(...)
     - 实现 profiler_core.cc: PERFETTO_TRACK_EVENT_STATIC_STORAGE()
     - 实现 ProfilerManager::Initialize(): 调用 perfetto::Tracing::Initialize() + TrackEvent::Register()
+    - 编译性能: 将 perfetto.h (7.9MB) 加入 engine 的 PCH 或 cmake precompiled headers,
+      避免 4 个包含该头的 .cc 各独立解析 7.9MB 带来的编译时间膨胀。
+      当前引擎未配置 PCH, 可暂用 /Yu (MSVC) 或在 engine/CMakeLists.txt 中
+      为 profiler 相关 .cc 设置 target_precompile_headers
     - 验证: ENGINE_PROFILER_ENABLED=OFF 时编译通过，DLL 不导出 perfetto 符号
 
 第二阶段: 核心能力
     - 实现 ProfilerConfig → perfetto::TraceConfig 转换 (BufferConfig + DataSource)
     - 实现 StartSession(): NewTrace(kInProcessBackend) → Setup(config) → StartBlocking()
-    - 实现 StopSession():  StopBlocking() → 可选 ReadTrace/SaveTrace
+    - 实现 StopSession():  StopBlocking() → 可选 ReadTrace 或 SaveTrace (带时间戳)
     - 实现 Flush(): session_->FlushBlocking()
-    - 实现 SaveTrace(path): ReadTrace() 结果写入文件
-    - 实现物理线程独立 session (PhysicsThread 自行创建 TracingSession)
-    - 验证: 启动/停止一次 session，用 perfetto UI 打开 trace 文件确认数据结构正确
+    - 实现 SaveTrace(): ReadTrace() 结果写入 output_path + 时间戳后缀
+    - 实现 SaveTraceExact(path): ReadTrace() 结果严格写入指定路径
+    - 实现物理线程 trace (按 5.3 方案 A: #include profiler_macros.h 即可写入主 session)
+    - 验证: 在 profiler_core.cc 中插入少量测试 TRACE_EVENT, 启动→停止 session,
+      用 perfetto trace_processor 或 UI 打开 trace 文件确认数据结构正确
 
 第三阶段: 引擎打桩
     - 按依赖顺序: 7.5 (生命周期) → 7.1 (帧循环) → 7.2 (物理线程) → 7.3 (脚本) → 7.4 (定时器)
@@ -412,5 +481,8 @@ Include 策略:
 第四阶段: 工具链与完善
     - 编写 trace 文件查看说明 (perfetto UI 在线版 https://ui.perfetto.dev)
     - 性能验证: ENGINE_PROFILER_ENABLED=OFF 时确认编译产物中无 perfetto 符号
-    - 压力测试: 持续运行 10 分钟 tracing，验证 trace 文件大小可控
+    - 压力测试: 持续运行 10 分钟 tracing (buffer 32MB, ring_buffer 模式),
+      验证 trace 文件大小可控 (<buffer_size_kb × 2 即 ~64MB 为合理上限);
+      若需更长时间, 增大 buffer_size_kb 或启用 write_into_file 模式。
+      同步测试 ENGINE_PROFILER_ENABLED=OFF 模式的帧耗时无回退
     - 文档: ProfilerManager API 使用示例
