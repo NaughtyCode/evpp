@@ -124,6 +124,8 @@ Include 策略:
     (b) 物理线程 (对应 engine/physics/physics_thread.cc EventLoop):
         ENGINE_PROFILE_PHYSICS_CMD_DEQUEUE()   — 命令出队 [SCOPE]
         ENGINE_PROFILE_PHYSICS_STEP(dt)        — PhysicsWorld::Step() [SCOPE]
+                                                (内部通过 dequeued_cmd.frame_id 获取 frame_no
+                                                 用于 TerminatingFlow, 不需显式传参)
         ENGINE_PROFILE_PHYSICS_COLLISION()     — 碰撞检测 [SCOPE]
         ENGINE_PROFILE_PHYSICS_TRANSFORM()     — 变换收集 [SCOPE]
         ENGINE_PROFILE_PHYSICS_DIFF()          — 状态差异生成 [SCOPE]
@@ -214,16 +216,22 @@ Include 策略:
 
     ProfilerConfig → perfetto::TraceConfig 转换逻辑:
     . 创建 BufferConfig: set_size_kb(buffer_size_kb), set_fill_policy(RING_BUFFER)
-    . 创建 DataSource: 设置 ds_cfg.mutable_config()->set_name("track_event")
+    . 创建 DataSource: ds_cfg.mutable_config()->set_name("track_event")
+      (可选: mutable_track_event_config() 按 category 过滤启用/禁用; 默认全部启用)
     . 创建 TraceConfig: add_buffers(), add_data_sources(), set_duration_ms(),
       set_write_into_file(), set_output_path(), set_flush_period_ms()
     . 使用 perfetto::protos::gen::TraceConfig (生成的 C++ protobuf 类)
 
     初始化流程:
-    1. perfetto::Tracing::Initialize(TracingInitArgs{kInProcessBackend})
-    2. perfetto::TrackEvent::Register()
-    3. 若任一步失败, Initialize() 返回 false, initialized_ 保持 false
-    4. 后续所有 ProfilerManager 操作检查 initialized_, 未初始化时是空操作
+    1. 构造 TracingInitArgs:
+       perfetto::TracingInitArgs{
+           .backends = perfetto::kInProcessBackend,
+           .shmem_size_hint_kb = cfg.buffer_size_kb,  // shmem 不小于 buffer
+       }
+    2. perfetto::Tracing::Initialize(args)
+    3. perfetto::TrackEvent::Register()
+    4. 若任一步失败, Initialize() 返回 false, initialized_ 保持 false
+    5. 后续所有 ProfilerManager 操作检查 initialized_, 未初始化时是空操作
 
 5.2 ProfilerManager 单例:
 
@@ -260,6 +268,8 @@ Include 策略:
     . StopSession() 幂等 — 无活跃 session 时是空操作
     . Shutdown() 幂等 — 可安全多次调用, 自动清理所有资源
     . ReadTrace() 仅在 StopSession() 后有效 — 活跃 session 时返回空 vector
+    . Shutdown() 调用时机 — 必须在 Engine::Cleanup() 末尾, 所有子系统停止之后调用,
+      确保各线程的 trace 数据已全部写入。顺序: 先停止子系统, 再 Shutdown profiler。
 
 5.3 物理线程独立 Session:
     . PhysicsThread 内部自行创建和管理 TracingSession (直接调用
@@ -290,6 +300,7 @@ Include 策略:
 --------------------------------------------------------------------------------
 
 7.1 帧循环 (engine/engine/engine.cc FrameLoop, 第252-290行):
+    - Engine::Tick() — 库模式入口 (外部 EventLoop 驱动时)
     - 帧开始 (frame_count_, delta_time)
     - TimerManager::update()
     - PhysicsEngineBridge::Tick(frame_count_, fixed_delta_time_) — 入队命令
