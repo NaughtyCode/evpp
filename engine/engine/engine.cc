@@ -107,7 +107,8 @@ void Engine::Start() {
 
     sigint_watcher_ = std::make_unique<evpp::SignalEventWatcher>(
         SIGINT, loop_, [this]() {
-            ENGINE_LOG_INFO(GetLogger(), "SIGINT received, shutting down...");
+            auto* logger = GetLogger();
+            ENGINE_LOG_INFO(logger, "SIGINT received, shutting down...");
             Shutdown();
         });
     if (!sigint_watcher_->Init() || !sigint_watcher_->AsyncWait()) {
@@ -117,7 +118,8 @@ void Engine::Start() {
 #ifndef _WIN32
     sigterm_watcher_ = std::make_unique<evpp::SignalEventWatcher>(
         SIGTERM, loop_, [this]() {
-            ENGINE_LOG_INFO(GetLogger(), "SIGTERM received, shutting down...");
+            auto* logger = GetLogger();
+            ENGINE_LOG_INFO(logger, "SIGTERM received, shutting down...");
             Shutdown();
         });
     if (!sigterm_watcher_->Init() || !sigterm_watcher_->AsyncWait()) {
@@ -239,7 +241,8 @@ void Engine::FrameLoop() {
 
     if (elapsed > frame_interval_ * 2) {
         if (frame_count_ - last_slow_frame_log_ > 30) {
-            ENGINE_LOG_DEBUG(GetLogger(),
+            auto* logger = GetLogger();
+            ENGINE_LOG_DEBUG(logger,
                              "frame [{}] took [{}ms] (slow)",
                              frame_count_, elapsed.count());
             last_slow_frame_log_ = frame_count_;

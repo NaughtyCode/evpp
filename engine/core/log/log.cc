@@ -19,10 +19,14 @@ namespace engine {
 namespace {
 
 quill::BackendOptions GetBackendOptions() {
+    constexpr auto kSleepDuration = std::chrono::microseconds{500};
+    constexpr size_t kTransitEventsSoftLimit = 16384;
+    constexpr auto kSinkMinFlushInterval = std::chrono::milliseconds{100};
+
     quill::BackendOptions opts;
-    opts.sleep_duration = std::chrono::microseconds{500};
-    opts.transit_events_soft_limit = 16384;
-    opts.sink_min_flush_interval = std::chrono::milliseconds{100};
+    opts.sleep_duration = kSleepDuration;
+    opts.transit_events_soft_limit = kTransitEventsSoftLimit;
+    opts.sink_min_flush_interval = kSinkMinFlushInterval;
     return opts;
 }
 
@@ -87,6 +91,10 @@ std::string make_log_path(const LogConfig& config) {
 
     std::error_code ec;
     std::filesystem::create_directories(log_dir, ec);
+    if (ec) {
+        std::fprintf(stderr, "log: failed to create directory [%s]: %s\n",
+                     log_dir.c_str(), ec.message().c_str());
+    }
 
     std::string prefix;
     if (!config.log_filename.empty()) {
@@ -124,27 +132,6 @@ quill::Logger* GetLogger(const std::string& name) {
     return quill::Frontend::get_logger(name);
 }
 
-void InitLogger(const LogConfig& config) {
-    quill::Backend::start(GetBackendOptions());
-
-    auto console_sink = quill::Frontend::create_or_get_sink<quill::ConsoleSink>("console");
-
-    quill::RotatingFileSinkConfig file_cfg;
-    apply_rotation_config(file_cfg, config);
-
-    std::string full_path = make_log_path(config);
-    auto file_sink = quill::Frontend::create_or_get_sink<quill::RotatingFileSink>(
-        full_path, file_cfg);
-
-    auto* logger = quill::Frontend::create_or_get_logger(
-        "root", {console_sink, file_sink},
-        quill::PatternFormatterOptions{config.format_pattern});
-
-    apply_log_level(logger, config.level);
-
-    ENGINE_LOG_INFO(logger, "log file: {}", full_path);
-}
-
 quill::Logger* CreateLogger(const LogConfig& config) {
     quill::Backend::start(GetBackendOptions());
 
@@ -165,6 +152,12 @@ quill::Logger* CreateLogger(const LogConfig& config) {
 
     ENGINE_LOG_INFO(logger, "log file: {}", full_path);
     return logger;
+}
+
+void InitLogger(const LogConfig& config) {
+    LogConfig root_cfg = config;
+    root_cfg.logger_name = "root";
+    CreateLogger(root_cfg);
 }
 
 void ShutdownLogger() {

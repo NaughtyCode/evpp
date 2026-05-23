@@ -10,7 +10,7 @@
 #define ENGINE_LOG_INFO(logger, fmt, ...)    LOG_INFO(logger, fmt, ##__VA_ARGS__)
 #define ENGINE_LOG_WARN(logger, fmt, ...)    LOG_WARNING(logger, fmt, ##__VA_ARGS__)
 #define ENGINE_LOG_ERROR(logger, fmt, ...)   LOG_ERROR(logger, fmt, ##__VA_ARGS__)
-#define ENGINE_LOG_FATAL(logger, fmt, ...)   LOG_CRITICAL(logger, fmt, ##__VA_ARGS__)
+#define ENGINE_LOG_CRITICAL(logger, fmt, ...) LOG_CRITICAL(logger, fmt, ##__VA_ARGS__)
 
 // Rate-limited variants
 #define ENGINE_LOG_TRACE_LIMIT(d, logger, fmt, ...) \
@@ -23,7 +23,7 @@
     LOG_WARNING_LIMIT(d, logger, fmt, ##__VA_ARGS__)
 #define ENGINE_LOG_ERROR_LIMIT(d, logger, fmt, ...) \
     LOG_ERROR_LIMIT(d, logger, fmt, ##__VA_ARGS__)
-#define ENGINE_LOG_FATAL_LIMIT(d, logger, fmt, ...) \
+#define ENGINE_LOG_CRITICAL_LIMIT(d, logger, fmt, ...) \
     LOG_CRITICAL_LIMIT(d, logger, fmt, ##__VA_ARGS__)
 
 // Logging with trace context injected into message
@@ -62,7 +62,7 @@
               ::engine::TraceContext::room_id(),                                  \
               ##__VA_ARGS__)
 
-#define ENGINE_LOG_CTX_FATAL(logger, fmt, ...)                                   \
+#define ENGINE_LOG_CTX_CRITICAL(logger, fmt, ...)                                 \
     LOG_CRITICAL(logger, "[{}][{}][{}] " fmt,                                    \
                  ::engine::TraceContext::trace_id(),                              \
                  ::engine::TraceContext::player_id(),                             \

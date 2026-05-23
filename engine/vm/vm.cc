@@ -13,8 +13,8 @@ ScriptVM::ScriptVM() {
 
     L_ = luaL_newstate();
     if (!L_) {
-        ENGINE_LOG_FATAL(logger, "ScriptVM: luaL_newstate() returned nullptr");
-        return;
+        ENGINE_LOG_CRITICAL(logger, "ScriptVM: luaL_newstate() returned nullptr");
+        abort();
     }
 
     luaL_openlibs(L_);
