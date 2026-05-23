@@ -18,6 +18,10 @@
 . Category:  PERFETTO_DEFINE_CATEGORIES(perfetto::Category("name")) 在头文件声明
 . 静态存储: PERFETTO_TRACK_EVENT_STATIC_STORAGE() 必须出现在唯一一个 .cc 文件中
 . 线程安全: perfetto 内部线程安全，可在多线程同时使用
+. 编译影响: perfetto.h 为 7.9MB amalgamated 头文件, 不可在公共头文件中包含。
+  仅在 profiler_core.cc 和 profiler_categories.h 中直接包含 perfetto.h;
+  profiler_macros.h 在 ON 模式包含 profiler_categories.h (间接引入);
+  业务 .cc 只 include profiler_macros.h (轻量)。建议将 perfetto.h 加入 PCH。
 
 一、前提与约束
 --------------------------------------------------------------------------------
@@ -43,21 +47,25 @@
 
 . ENGINE_PROFILER_ENABLED=ON:
     - add_definitions(-DENGINE_PROFILER_ENABLED)
-    - include_directories 添加 3rdparty/perfetto
     - profiler 宏展开为实际 perfetto tracing 调用
+    - 包含路径: ${PROJECT_SOURCE_DIR} 已在 CMake 中 (engine/CMakeLists.txt:14)，
+      可直接 #include "3rdparty/perfetto/perfetto.h"，无需额外配置
     - 可通过运行时 API 控制 session 启停
 
 三、文件结构
 --------------------------------------------------------------------------------
 engine/profiler/
 ├── profiler_macros.h        # 用户侧宏 (可独立 include, 不依赖 profiler_core.h)
-├── profiler_categories.h    # PERFETTO_DEFINE_CATEGORIES(...) 声明
+├── profiler_categories.h    # PERFETTO_DEFINE_CATEGORIES(...) 声明 (也需 ON/OFF 宏守卫)
 ├── profiler_core.h          # ProfilerManager 单例 + ProfilerConfig 结构体 (ENGINE_API)
 ├── profiler_core.cc         # 实现 + PERFETTO_TRACK_EVENT_STATIC_STORAGE() (唯一位置)
-└── profiler_events.h        # 引擎级便捷宏 (帧、物理、脚本等, 组合基础宏)
+└── profiler_events.h        # 引擎级便捷宏 (帧、物理、脚本等, 组合基础宏, include profiler_macros.h)
 
 扩展名使用 .cc 与引擎现有代码保持一致 (见 engine/CMakeLists.txt)。
 PERFETTO_TRACK_EVENT_STATIC_STORAGE() 必须放在唯一一个 .cc 中，选择 profiler_core.cc。
+该宏必须与 PERFETTO_DEFINE_CATEGORIES 在同一命名空间作用域 — 若 categories 声明在全局
+作用域 (不在 namespace engine 内)，则 STATIC_STORAGE 也必须在全局作用域调用 (放在
+profiler_core.cc 文件顶部，namespace engine { 之前)。
 
 Include 策略:
 . profiler_macros.h — 轻量头文件，业务代码按需 include (仅在需要打桩的 .cc 中引入)
@@ -119,7 +127,13 @@ Include 策略:
         ENGINE_PROFILE_PHYSICS_RESULT_ENQUEUE() — 结果入队
 
     (c) 脚本系统:
-        ENGINE_PROFILE_SCRIPT_DOFILE(path)  — 加载脚本文件
+        ENGINE_PROFILE_SCRIPT_DOFILE(path)   — 加载脚本文件
+        ENGINE_PROFILE_SCRIPT_EXPORT(name)   — script bind 注册 (如 "log", "timer")
+
+    (d) 跨线程流事件 (Flow Event, 标记因果关系):
+        ENGINE_PROFILE_FLOW_BEGIN(cat, flow_id)  — 流起点 (如主线程 Tick 入队时刻)
+        ENGINE_PROFILE_FLOW_END(cat, flow_id)    — 流终点 (如物理线程收到命令时刻)
+        用于连接主线程 Tick → 物理线程 Step → FetchResult 返回的因果关系链
 
 4.3 使用示例 (FrameLoop 打桩后):
 
@@ -165,9 +179,17 @@ Include 策略:
     };
 
     ProfilerConfig → perfetto::TraceConfig 转换逻辑:
-    . 创建 BufferConfig (RING_BUFFER policy, buffer_size_kb)
-    . 创建 DataSource (track_event config)
-    . 设置 duration_ms, write_into_file, output_path, flush_interval_ms
+    . 创建 BufferConfig: set_size_kb(buffer_size_kb), set_fill_policy(RING_BUFFER)
+    . 创建 DataSource: 设置 ds_cfg.mutable_config()->set_name("track_event")
+    . 创建 TraceConfig: add_buffers(), add_data_sources(), set_duration_ms(),
+      set_write_into_file(), set_output_path(), set_flush_period_ms()
+    . 使用 perfetto::protos::gen::TraceConfig (生成的 C++ protobuf 类)
+
+    初始化流程:
+    1. perfetto::Tracing::Initialize(TracingInitArgs{kInProcessBackend})
+    2. perfetto::TrackEvent::Register()
+    3. 若任一步失败, Initialize() 返回 false, initialized_ 保持 false
+    4. 后续所有 ProfilerManager 操作检查 initialized_, 未初始化时是空操作
 
 5.2 ProfilerManager 单例:
 
@@ -176,27 +198,34 @@ Include 策略:
         static ProfilerManager& Get();
 
         // 生命周期 — Engine::Init() 中调用 Initialize, Cleanup() 中调用 Shutdown
-        void   Initialize(const ProfilerConfig& cfg);
-        void   Shutdown();
+        bool   Initialize(const ProfilerConfig& cfg);  // 返回 false 表示 perfetto 初始化失败
+        void   Shutdown();       // 安全关闭 (自动停止活跃 session, flush, 释放资源)
 
         // Session 控制
-        void   StartSession();
-        void   StopSession();
+        bool   StartSession();   // 返回 false 表示创建失败; 若已有活跃 session 则先停止旧的
+        void   StopSession();    // 无活跃 session 时是空操作 (幂等)
 
         // 状态查询
-        bool   IsActive() const;
-        static bool IsEnabled();  // 编译期开关, inline 返回 #ifdef ENGINE_PROFILER_ENABLED
+        bool   IsActive() const;               // 是否有活跃 session
+        static bool IsEnabled();               // 编译期开关
 
         // 数据操作
-        void              Flush();
-        std::vector<char> ReadTrace();       // Stop 后读取 trace 数据
-        void              SaveTrace(const char* path);  // 保存 trace 到文件
+        void              Flush();             // 活跃 session 时有效, 否则空操作
+        std::vector<char> ReadTrace();         // Stop 后读取, 无数据时返回空 vector
+        void              SaveTrace(const char* path);
 
     private:
         ProfilerConfig config_;
         std::unique_ptr<perfetto::TracingSession> session_;
         bool initialized_ = false;
     };
+
+    生命周期规则:
+    . Initialize() 可重复调用 — 第二次及之后返回 false, 不改变状态
+    . StartSession() 幂等 — 若已有活跃 session 则隐式 StopSession() 再创建新的
+    . StopSession() 幂等 — 无活跃 session 时是空操作
+    . Shutdown() 幂等 — 可安全多次调用, 自动清理所有资源
+    . ReadTrace() 仅在 StopSession() 后有效 — 活跃 session 时返回空 vector
 
 5.3 物理线程独立 Session:
     . PhysicsThread 内部自行创建和管理 TracingSession (直接调用
@@ -216,10 +245,10 @@ Include 策略:
         perfetto::Category("engine.script").SetDescription("脚本系统"),
         perfetto::Category("engine.timer").SetDescription("定时器"),
         perfetto::Category("engine.vm").SetDescription("VM 操作"),
-        perfetto::Category("engine.io").SetDescription("IO 操作"),
     );
 
-. "engine.network" 和 "engine.memory" 预留给后续模块，待网络/内存子系统实现后添加。
+. 预留 category: "engine.io", "engine.network", "engine.memory"
+  待对应子系统实现后添加。
 . Category 名称采用 "引擎.子系统" 层级命名，perfetto UI 会自动按点号分组展示。
 
 七、引擎打桩点清单 (严格对齐 FrameLoop 实际代码)
@@ -267,7 +296,8 @@ Include 策略:
     - 修改 engine/CMakeLists.txt:
         * 添加 PROFILER_SOURCES 组 (参考 LOG_SOURCES 模式)
         * 添加 option(ENGINE_PROFILER_ENABLED "Enable perfetto profiler" OFF)
-        * 在 ON 时 target_include_directories 添加 perfetto 目录
+        * 在 ON 时: ${PROJECT_SOURCE_DIR} 已在 include path (engine/CMakeLists.txt:14)，
+          可直接 #include "3rdparty/perfetto/perfetto.h"，无需额外 target_include_directories
     - 实现 profiler_macros.h: 全部宏 ON/OFF 双路径, OFF 时展开为空
     - 实现 profiler_categories.h: PERFETTO_DEFINE_CATEGORIES(...)
     - 实现 profiler_core.cc: PERFETTO_TRACK_EVENT_STATIC_STORAGE()
