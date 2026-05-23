@@ -6,7 +6,7 @@ namespace engine {
 
 using LogLevel = quill::LogLevel;
 
-// Quill 9-level → game 7-level mapping:
+// Quill 9-level → game 6-level mapping:
 //   TraceL3/TraceL2 → not exposed externally
 //   TraceL1         → TRACE   verbose tracing
 //   Debug           → DEBUG   development debugging

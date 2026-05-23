@@ -1,6 +1,7 @@
 #include "engine/core/log/log.h"
 
 #include <chrono>
+#include <cstdio>
 #include <ctime>
 #include <filesystem>
 #include <iomanip>
@@ -116,6 +117,8 @@ void apply_log_level(quill::Logger* logger, const std::string& level) {
         logger->set_log_level(quill::LogLevel::TraceL1);
     else if (level == "debug")
         logger->set_log_level(quill::LogLevel::Debug);
+    else if (level == "info")
+        logger->set_log_level(quill::LogLevel::Info);
     else if (level == "warn" || level == "warning")
         logger->set_log_level(quill::LogLevel::Warning);
     else if (level == "error")
