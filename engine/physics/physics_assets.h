@@ -110,7 +110,8 @@ public:
     };
 
     ShapeCreateResult CreateShape(const JsonShapeDef& def,
-                                   const MaterialTable& material_table);
+                                   const MaterialTable& material_table,
+                                   const std::string& assets_dir = {});
 
 private:
 

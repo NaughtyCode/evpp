@@ -64,6 +64,15 @@ public:
     PhysicsWorld& GetWorld() { return world_; }
     const PhysicsWorld& GetWorld() const { return world_; }
 
+    // Save/Restore physics state (delegates to PhysicsWorld)
+    std::string SaveState() const { return world_.SaveState(); }
+    bool RestoreState(const std::string& data) { return world_.RestoreState(data); }
+
+    // Recover after a crash. Stops the old thread (if still partially running),
+    // restarts with the same config, and optionally restores state.
+    // Returns false if recovery fails (config lost, world init failure).
+    bool Recover(const std::string& saved_state = {});
+
 private:
     // Event loop (runs on dedicated thread)
     void EventLoop();
@@ -83,9 +92,10 @@ private:
     std::atomic<bool> running_{false};
     std::atomic<bool> healthy_{false};
 
-    // Config copies (stored at Start(), consumed by EventLoop)
+    // Config copies (stored at Start(), consumed by EventLoop / Recover)
     PhysicsConfig physics_config_;
     ThreadingConfig threading_config_;
+    PhysicsLogConfig log_config_;
     std::string assets_path_;
 
     // Independent logger (owned by physics thread)

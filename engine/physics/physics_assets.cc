@@ -215,7 +215,8 @@ JPH::Quat AssetLoader::ParseQuat(const std::vector<float>& q) {
 //============================================================================
 
 AssetLoader::ShapeCreateResult AssetLoader::CreateShape(
-    const JsonShapeDef& def, const MaterialTable& material_table) {
+    const JsonShapeDef& def, const MaterialTable& material_table,
+    const std::string& assets_dir) {
 
     ShapeCreateResult result;
 
@@ -226,7 +227,7 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(
 
         for (size_t i = 0; i < def.shapes->size(); ++i) {
             const auto& sub_def = (*def.shapes)[i];
-            auto sub_result = CreateShape(sub_def, material_table);
+            auto sub_result = CreateShape(sub_def, material_table, assets_dir);
             if (!sub_result.shape) {
                 return sub_result;  // propagate error
             }
@@ -375,13 +376,47 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(
     }
     else if (type == "height_field" || type == "heightField") {
         JPH::HeightFieldShapeSettings settings;
-        // Height field data is complex; read from an external binary file via path
         auto& df_arr = get_arr("dataFile");
         if (df_arr.is_array()) {
-            // Path to binary data file specified in JSON; loading deferred
-            result.error = "height_field requires external binary data file; "
-                           "loading via dataFile path not yet implemented";
-            return result;
+            // Resolve dataFile path relative to assets_dir, or use absolute
+            std::string data_path = std::string(df_arr[0u].template get<std::string>());
+            if (!assets_dir.empty() && !data_path.empty() && data_path[0] != '/'
+                && !(data_path.size() >= 2 && data_path[1] == ':')) {
+                data_path = assets_dir + "/" + data_path;
+            }
+            // Read binary height samples from file
+            std::ifstream bf(data_path, std::ios::binary);
+            if (!bf) {
+                result.error = "height_field: cannot open data file: " + data_path;
+                return result;
+            }
+            bf.seekg(0, std::ios::end);
+            size_t file_size = static_cast<size_t>(bf.tellg());
+            bf.seekg(0, std::ios::beg);
+            size_t sample_count_file = file_size / sizeof(float);
+            if (sample_count_file == 0 || sample_count_file > 65536) {
+                result.error = "height_field: invalid data file size (0 or >65536 samples)";
+                return result;
+            }
+            uint32_t sample_count = static_cast<uint32_t>(get_num("sampleCount", 0));
+            if (sample_count == 0) {
+                sample_count = static_cast<uint32_t>(std::sqrt(sample_count_file));
+                if (sample_count * sample_count != sample_count_file) {
+                    result.error = "height_field: sampleCount not specified and file size "
+                                   "is not a perfect square";
+                    return result;
+                }
+            }
+            JPH::Array<float> samples;
+            samples.resize(sample_count_file);
+            bf.read(reinterpret_cast<char*>(samples.data()),
+                    static_cast<std::streamsize>(sample_count_file * sizeof(float)));
+            if (bf.fail()) {
+                result.error = "height_field: failed to read data file: " + data_path;
+                return result;
+            }
+            settings.mHeightSamples = std::move(samples);
+            settings.mSampleCount = sample_count;
         }
         // Fallback: parse inline samples
         auto& samples_arr = get_arr("samples");
@@ -491,6 +526,16 @@ AssetLoadResult AssetLoader::LoadScene(
         return result;
     }
 
+    // Extract assets directory from json_path for resolving relative data paths
+    std::string assets_dir;
+    {
+        size_t slash = json_path.rfind('/');
+        if (slash == std::string::npos) slash = json_path.rfind('\\');
+        if (slash != std::string::npos) {
+            assets_dir = json_path.substr(0, slash);
+        }
+    }
+
     // Load inline materials into a combined table
     MaterialTable combined_materials = material_table;
     if (asset.materials.has_value()) {
@@ -510,7 +555,7 @@ AssetLoadResult AssetLoader::LoadScene(
                 ? JPH::ObjectLayer(layer_it->second) : JPH::ObjectLayer(0);
 
             // Create shape
-            auto shape_result = CreateShape(sbody.shape, combined_materials);
+            auto shape_result = CreateShape(sbody.shape, combined_materials, assets_dir);
             if (!shape_result.shape) {
                 result.error = "static body '" + sbody.id + "': " + shape_result.error;
                 return result;
@@ -551,7 +596,7 @@ AssetLoadResult AssetLoader::LoadScene(
     // ── Load dynamic prototypes ────────────────────────────────────────
     if (asset.dynamic_prototypes.has_value()) {
         for (const auto& proto : *asset.dynamic_prototypes) {
-            auto shape_result = CreateShape(proto.shape, combined_materials);
+            auto shape_result = CreateShape(proto.shape, combined_materials, assets_dir);
             if (!shape_result.shape) {
                 result.error = "prototype '" + proto.proto_id + "': " + shape_result.error;
                 return result;

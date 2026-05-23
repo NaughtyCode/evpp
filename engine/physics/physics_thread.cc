@@ -61,6 +61,7 @@ bool PhysicsThread::Start(const PhysicsConfig& config,
 
     physics_config_ = config;
     threading_config_ = threading;
+    log_config_ = log_config;
     assets_path_ = assets_path;
 
     // Create independent logger
@@ -132,6 +133,56 @@ void PhysicsThread::Stop() {
 
     ENGINE_LOG_INFO(logger_, "PhysicsThread: stopped");
     logger_ = nullptr;  // logger is managed by quill, no explicit delete
+}
+
+//============================================================================
+// Recover — restart physics thread after a crash [D21]
+//============================================================================
+
+bool PhysicsThread::Recover(const std::string& saved_state) {
+    auto* logger = GetLogger();
+    ENGINE_LOG_WARN(logger, "PhysicsThread: attempting recovery...");
+    ENGINE_LOG_WARN(logger, "PhysicsThread: was healthy=[{}], running=[{}]",
+                    healthy_.load(), running_.load());
+
+    // Stop the old thread (safe even if thread already exited)
+    Stop();
+
+    // Brief pause to ensure clean shutdown
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    // Restart with the same config
+    bool ok = Start(physics_config_, threading_config_, log_config_, assets_path_);
+    if (!ok) {
+        ENGINE_LOG_ERROR(logger, "PhysicsThread: recovery failed — Start() returned false");
+        return false;
+    }
+
+    // Wait for the event loop to initialize the world
+    int wait_attempts = 0;
+    while (!healthy_.load(std::memory_order_acquire) && wait_attempts < 50) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        ++wait_attempts;
+    }
+    if (!healthy_.load(std::memory_order_acquire)) {
+        ENGINE_LOG_ERROR(logger, "PhysicsThread: recovery failed — "
+                         "world did not become healthy after restart");
+        return false;
+    }
+
+    // Optionally restore state
+    if (!saved_state.empty()) {
+        if (!world_.RestoreState(saved_state)) {
+            ENGINE_LOG_ERROR(logger, "PhysicsThread: recovery — "
+                             "state restoration failed");
+            return false;
+        }
+        ENGINE_LOG_INFO(logger, "PhysicsThread: state restored "
+                        "([{}] bytes)", saved_state.size());
+    }
+
+    ENGINE_LOG_INFO(logger, "PhysicsThread: recovery complete");
+    return true;
 }
 
 //============================================================================

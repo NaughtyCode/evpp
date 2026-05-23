@@ -210,6 +210,59 @@ int LuaRayCast(lua_State* L) {
 }
 
 //============================================================================
+// physics.save_state() → string (binary blob)
+//============================================================================
+
+int LuaSaveState(lua_State* L) {
+    if (!CheckInit(L)) return 2;
+
+    std::string data = PhysicsSystem::Instance().SaveState();
+    lua_pushlstring(L, data.data(), data.size());
+    return 1;
+}
+
+//============================================================================
+// physics.restore_state(data) → bool | nil, err
+//============================================================================
+
+int LuaRestoreState(lua_State* L) {
+    if (!CheckInit(L)) return 2;
+
+    size_t len = 0;
+    const char* data = luaL_checklstring(L, 1, &len);
+    bool ok = PhysicsSystem::Instance().RestoreState(std::string(data, len));
+    if (!ok) {
+        PushNilError(L, "restore_state failed");
+        return 2;
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+//============================================================================
+// physics.recover([saved_state]) → bool | nil, err
+//============================================================================
+
+int LuaRecover(lua_State* L) {
+    if (!CheckInit(L)) return 2;
+
+    std::string saved_state;
+    if (lua_gettop(L) >= 1 && lua_type(L, 1) == LUA_TSTRING) {
+        size_t len = 0;
+        const char* data = lua_tolstring(L, 1, &len);
+        saved_state.assign(data, len);
+    }
+
+    bool ok = PhysicsSystem::Instance().Recover(saved_state);
+    if (!ok) {
+        PushNilError(L, "recovery failed");
+        return 2;
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+//============================================================================
 // physics.get_stats() → {bodies=N, active=N, collisions=N}
 //============================================================================
 
@@ -240,6 +293,9 @@ const luaL_Reg kPhysicsModule[] = {
     {"get_velocity",   LuaGetVelocity},
     {"is_active",      LuaIsActive},
     {"ray_cast",       LuaRayCast},
+    {"save_state",     LuaSaveState},
+    {"restore_state",  LuaRestoreState},
+    {"recover",        LuaRecover},
     {"get_stats",      LuaGetStats},
     {nullptr, nullptr}
 };

@@ -21,6 +21,7 @@
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
+#include <Jolt/Physics/StateRecorderImpl.h>
 
 #include "engine/core/log/log_macros.h"
 
@@ -586,6 +587,22 @@ std::optional<PhysicsWorld::RayCastHit> PhysicsWorld::RayCast(
         static_cast<uint32_t>(hit.mBodyID.GetIndexAndSequenceNumber()),
         point.GetX(), point.GetY(), point.GetZ()
     };
+}
+
+std::string PhysicsWorld::SaveState() const {
+    JPH::StateRecorderImpl recorder;
+    system_.SaveState(recorder);
+    return recorder.GetData();
+}
+
+bool PhysicsWorld::RestoreState(const std::string& data) {
+    // StateRecorderImpl writes to an internal stringstream.
+    // To restore: write saved data into the recorder, rewind to
+    // switch it to read mode, then restore into the physics system.
+    JPH::StateRecorderImpl recorder;
+    recorder.WriteBytes(data.data(), data.size());
+    recorder.Rewind();
+    return system_.RestoreState(recorder);
 }
 
 } // namespace engine

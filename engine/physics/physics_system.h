@@ -70,6 +70,13 @@ public:
                                                    int timeout_ms);
     bool IsHealthy() const;
 
+    // ── Save / Restore / Recovery ──────────────────────────────────────
+    std::string SaveState() const;
+    bool RestoreState(const std::string& data);
+    // Recover after physics thread crash. Optionally restores from
+    // a previously saved state blob. Returns false on failure.
+    bool Recover(const std::string& saved_state = {});
+
     // ── Config hot-reload ──────────────────────────────────────────────
     bool ReloadThresholds();
     bool ReloadLogLevel();

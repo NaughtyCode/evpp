@@ -128,6 +128,12 @@ public:
     // ── Simulation ──────────────────────────────────────────────────────
     PhysicsFrameResult Step(float delta_time, uint64_t frame_id);
 
+    // ── Save / Restore ──────────────────────────────────────────────────
+    // Serialize full physics state to a binary blob. Thread-safe.
+    std::string SaveState() const;
+    // Restore physics state from a binary blob. Returns false on failure.
+    bool RestoreState(const std::string& data);
+
     // ── Query ───────────────────────────────────────────────────────────
     std::optional<std::pair<JPH::RVec3, JPH::Quat>> GetTransform(uint32_t body_id) const;
     std::optional<JPH::Vec3> GetVelocity(uint32_t body_id) const;

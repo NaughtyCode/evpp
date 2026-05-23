@@ -293,6 +293,28 @@ PhysicsSystem::PhysicsStats PhysicsSystem::GetPhysicsStats() const {
 }
 
 //============================================================================
+// SaveState / RestoreState
+//============================================================================
+
+std::string PhysicsSystem::SaveState() const {
+    if (!is_initialized_) return {};
+    return physics_thread_.SaveState();
+}
+
+bool PhysicsSystem::RestoreState(const std::string& data) {
+    if (!is_initialized_) return false;
+    return physics_thread_.RestoreState(data);
+}
+
+bool PhysicsSystem::Recover(const std::string& saved_state) {
+    if (!is_initialized_) {
+        std::fprintf(stderr, "PhysicsSystem: not initialized, cannot recover\n");
+        return false;
+    }
+    return physics_thread_.Recover(saved_state);
+}
+
+//============================================================================
 // UpdateScript — call Lua collision callbacks [D17.6]
 //============================================================================
 
