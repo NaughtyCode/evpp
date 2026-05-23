@@ -1,4 +1,5 @@
 #include "engine/core/log/log.h"
+#include "engine/core/log/log_macros.h"
 
 #include <chrono>
 #include <ctime>
@@ -6,10 +7,10 @@
 #include <sstream>
 
 #include <quill/Backend.h>
+#include <quill/backend/BackendOptions.h>
 #include <quill/Frontend.h>
 #include <quill/sinks/ConsoleSink.h>
 #include <quill/sinks/RotatingFileSink.h>
-#include <quill/LogMacros.h>
 
 #include "engine/config/config.h"
 #include "engine/core/log/log_config.h"
@@ -17,6 +18,14 @@
 namespace engine {
 
 namespace {
+
+quill::BackendOptions GetBackendOptions() {
+    quill::BackendOptions opts;
+    opts.sleep_duration = std::chrono::microseconds{500};
+    opts.transit_events_soft_limit = 16384;
+    opts.sink_min_flush_interval = std::chrono::milliseconds{100};
+    return opts;
+}
 
 std::string now_timestamp() {
     auto now = std::chrono::system_clock::now();
@@ -38,14 +47,23 @@ void apply_rotation_config(quill::RotatingFileSinkConfig& cfg, const LogConfig& 
             static_cast<size_t>(config.rotation_size_mb) * 1024 * 1024);
     }
 
+    bool valid_frequency = false;
+
     if (config.rotation_frequency == "minutely") {
-        cfg.set_rotation_frequency_and_interval(
-            'M', static_cast<uint32_t>(config.rotation_interval));
+        if (config.rotation_interval > 0) {
+            cfg.set_rotation_frequency_and_interval(
+                'M', static_cast<uint32_t>(config.rotation_interval));
+            valid_frequency = true;
+        }
     } else if (config.rotation_frequency == "hourly") {
-        cfg.set_rotation_frequency_and_interval(
-            'H', static_cast<uint32_t>(config.rotation_interval));
+        if (config.rotation_interval > 0) {
+            cfg.set_rotation_frequency_and_interval(
+                'H', static_cast<uint32_t>(config.rotation_interval));
+            valid_frequency = true;
+        }
     } else if (config.rotation_frequency == "daily") {
         cfg.set_rotation_time_daily(config.rotation_time_daily);
+        valid_frequency = true;
     }
 
     if (config.rotation_naming_scheme == "date") {
@@ -56,9 +74,11 @@ void apply_rotation_config(quill::RotatingFileSinkConfig& cfg, const LogConfig& 
             quill::RotatingFileSinkConfig::RotationNamingScheme::DateAndTime);
     }
 
-    cfg.set_max_backup_files(static_cast<uint32_t>(config.max_backup_files));
+    if (config.max_backup_files >= 0) {
+        cfg.set_max_backup_files(static_cast<uint32_t>(config.max_backup_files));
+    }
 
-    if (!config.rotation_frequency.empty()) {
+    if (valid_frequency) {
         cfg.set_rotation_on_creation(true);
     }
 }
@@ -120,7 +140,7 @@ void InitLogger(const LogConfig& config) {
 
     apply_log_level(logger, config.level);
 
-    LOG_INFO(logger, "log file: {}", full_path);
+    ENGINE_LOG_INFO(logger, "log file: {}", full_path);
 }
 
 quill::Logger* CreateLogger(const LogConfig& config) {
@@ -141,7 +161,7 @@ quill::Logger* CreateLogger(const LogConfig& config) {
 
     apply_log_level(logger, config.level);
 
-    LOG_INFO(logger, "log file: {}", full_path);
+    ENGINE_LOG_INFO(logger, "log file: {}", full_path);
     return logger;
 }
 
