@@ -1,0 +1,24 @@
+{
+  "_module": {
+    "description": "变化检测阈值配置 — 物理 Diff 生成时各维度的独立比较阈值。全部字段支持运行时热更新 [D24]。",
+    "related": ["physics.json"],
+    "jolt_reference": "N/A (递增序列化由物理系统自定义实现)"
+  },
+  "_comment": {
+    "positionEpsilon": "位置变化阈值 (米), float, >=0, 默认 0.001 (1mm), 位移小于此值不产生位置变化 [D15]",
+    "rotationEpsilon": "旋转变化阈值 (弧度), float, >=0, 默认 0.00017 (≈0.01°), 角度变化小于此值不产生旋转变化",
+    "linearVelocityEpsilon": "线速度变化阈值 (m/s), float, >=0, 默认 0.01, 线速度变化小于此值不产生速度变化",
+    "angularVelocityEpsilon": "角速度变化阈值 (rad/s), float, >=0, 默认 0.001, 角速度变化小于此值不产生角速度变化"
+  },
+  "_hot_reload": [
+    "positionEpsilon", "rotationEpsilon",
+    "linearVelocityEpsilon", "angularVelocityEpsilon"
+  ],
+  "_requires_restart": [],
+  "_restart_note": "全部字段均支持热更新，无需重启物理线程。",
+
+  "positionEpsilon": 0.001,
+  "rotationEpsilon": 0.00017,
+  "linearVelocityEpsilon": 0.01,
+  "angularVelocityEpsilon": 0.001
+}

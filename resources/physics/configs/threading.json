@@ -1,0 +1,34 @@
+{
+  "_module": {
+    "description": "物理线程模型配置 — 控制物理线程优先级、CPU 亲和性、队列容量和 Jolt JobSystem 参数。修改 requires_restart 中的字段后需重启物理线程方可生效。",
+    "related": ["physics.json", "logging.json"],
+    "jolt_reference": "Jolt/Physics/PhysicsSystem.h, Jolt/Physics/JobSystem/JobSystem.h"
+  },
+  "_comment": {
+    "threadPriority": "物理线程优先级, string, \"low\"|\"normal\"|\"high\", 默认 \"high\", 物理模拟对延迟敏感建议使用 high",
+    "affinityMask": "CPU 亲和性掩码, uint64, 0表示由OS调度, 默认 0, 非0时物理线程绑定到指定核心",
+    "commandQueueSize": "命令队列容量, int, >0, 默认 256, SPSC 无锁队列预分配容量",
+    "resultQueueSize": "结果队列容量, int, >0, 默认 64, SPSC 无锁队列预分配容量",
+    "maxPendingFrames": "最大待处理帧数, int, >0, 默认 3, 超出时丢弃最旧帧防止帧堆积 [D23]",
+    "jobSystemMaxJobs": "Jolt JobSystem maxJobs, int, >0, 默认 2048, 对应 JobSystemThreadPool 构造参数",
+    "jobSystemMaxBarriers": "Jolt JobSystem maxBarriers, int, [1,8], 默认 8, Jolt 内部上限 cMaxPhysicsBarriers=8, 对应 JobSystemThreadPool 构造参数",
+    "jobSystemThreadCount": "Jolt JobSystem 线程数, int, -1=自动(CPU核心数-1), 默认 -1, 物理线程已独立的额外工作线程数"
+  },
+  "_hot_reload": [],
+  "_requires_restart": [
+    "threadPriority", "affinityMask",
+    "commandQueueSize", "resultQueueSize",
+    "maxPendingFrames", "jobSystemMaxJobs",
+    "jobSystemMaxBarriers", "jobSystemThreadCount"
+  ],
+  "_restart_note": "修改 requires_restart 中的字段后需重新启动物理线程方可生效",
+
+  "threadPriority": "high",
+  "affinityMask": 0,
+  "commandQueueSize": 256,
+  "resultQueueSize": 64,
+  "maxPendingFrames": 3,
+  "jobSystemMaxJobs": 2048,
+  "jobSystemMaxBarriers": 8,
+  "jobSystemThreadCount": -1
+}

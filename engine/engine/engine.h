@@ -97,6 +97,8 @@ private:
     uint64_t frame_count_{0};
     uint64_t last_slow_frame_log_{0};
 
+    float fixed_delta_time_{0.01667f};  // physics fixed timestep (from PhysicsConfig or default)
+
     std::unique_ptr<ScriptVM> script_vm_;
 
     // Standalone-mode resources (owned, created in Start, destroyed in Cleanup).

@@ -23,6 +23,7 @@
 
 #include "engine/core/log/log.h"
 #include "engine/core/timer/timer_manager.h"
+#include "engine/physics/physics_engine_bridge.h"
 #include "engine/script/script_bind.h"
 #include "engine/vm/vm.h"
 
@@ -79,6 +80,23 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
 
     script_vm_ = std::make_unique<ScriptVM>();
     ENGINE_LOG_INFO(logger, "lua vm initialized, version=[{}]", ScriptVM::LuaVersion());
+
+    // ── Physics system initialization ──────────────────────────────────
+    // Loads config + creates physics-dedicated ScriptVM + loads scripts.
+    // Does NOT start the physics thread (requires explicit Start() by upper layer).
+    {
+        bool ok = PhysicsEngineBridge::Instance().Initialize(
+            "resources/physics/configs",
+            "resources/physics/data",
+            "resources/script");
+        if (!ok) {
+            ENGINE_LOG_WARN(logger, "physics system failed to initialize");
+        } else {
+            fixed_delta_time_ = PhysicsEngineBridge::Instance().GetFixedDeltaTime();
+            ENGINE_LOG_INFO(logger, "physics system initialized, fixed_delta_time=[{}s]",
+                            fixed_delta_time_);
+        }
+    }
 
     script_vm_->SetImportPath(config.scripts_dir);
     script::ExportAll(*script_vm_);
@@ -188,6 +206,9 @@ void Engine::Cleanup() {
     if (cleaned_up_) return;
     cleaned_up_ = true;
 
+    // Shutdown physics (stops thread + destroys physics VM) — before engine VM
+    PhysicsEngineBridge::Instance().Shutdown();
+
     // Cancel frame timer before destroying Lua state.
     if (frame_timer_) {
         frame_timer_->Cancel();
@@ -235,8 +256,21 @@ void Engine::FrameLoop() {
 
     TimerManager::instance().update();
 
+    // [D17.1][D17.2] Trigger physics simulation (Tick enqueues command; physics thread steps)
+    PhysicsEngineBridge::Instance().Tick(frame_count_, fixed_delta_time_);
+
+    // [D17.3] Engine Lua script update + non-physics tasks
     if (script_vm_) {
         script_vm_->UpdateScript();
+    }
+
+    // [D17.4] Fetch physics result for this frame
+    auto result = PhysicsEngineBridge::Instance().FetchResult(frame_count_, 5);
+    if (result) {
+        // [D17.5] Game object state update from result->transforms would go here
+        // [D17.6] Physics VM collision callbacks — after FetchResult
+        PhysicsEngineBridge::Instance().UpdateScript();
+        // [D17.7] Network sync construction from result->diff_packets would go here
     }
 
     if (elapsed > frame_interval_ * 2) {

@@ -117,7 +117,10 @@ target_include_directories(engine PUBLIC
     ${PROJECT_SOURCE_DIR}/3rdparty/lua
 )
 
-target_link_libraries(engine ${LIBRARIES})
+# ── Physics module ──────────────────────────────────────────────────
+add_subdirectory(physics)
+
+target_link_libraries(engine ${LIBRARIES} engine_physics)
 
 # Copy engine DLL to bin directory so main.exe can find it at runtime
 add_custom_command(TARGET engine POST_BUILD
