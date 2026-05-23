@@ -60,7 +60,8 @@ engine/profiler/
 ├── profiler_core.h          # ProfilerManager 单例 + ProfilerConfig 结构体 (ENGINE_API)
 ├── profiler_core.cc         # 实现 + PERFETTO_TRACK_EVENT_STATIC_STORAGE() (唯一位置)
 └── profiler_events.h        # 引擎级便捷宏 (帧、物理、脚本等, 组合基础宏, include profiler_macros.h)
-                              #   同时声明帧循环复用的 inline perfetto::CounterTrack:
+                              #   在 ENGINE_PROFILER_ENABLED 宏守卫内声明帧循环复用的
+                              #   inline perfetto::CounterTrack (需要 #ifdef 包裹, OFF 时不可引用 perfetto 类型):
                               #     g_frame_no_track, g_frame_dt_track, g_frame_time_track
 
 扩展名使用 .cc 与引擎现有代码保持一致 (见 engine/CMakeLists.txt)。
@@ -124,7 +125,8 @@ Include 策略:
 
     (a) 帧循环 (对应 engine/engine/engine.cc Tick + FrameLoop 实际代码流程):
         ENGINE_PROFILE_TICK()                       — Engine::Tick() 入口 [SCOPE]
-                                                      (包裹整帧逻辑, 包含帧率控制等待 + FrameLoop)
+                                                      (包裹 FrameLoop + last_work_time_ 更新;
+                                                       不含帧率控制等待, 等待在宏之前检查)
         ENGINE_PROFILE_FRAME_BEGIN(frame_no, dt_ms)  — 帧开始 [BEGIN], 记录帧号和帧间隔
                                                        (多语句宏: 先 COUNTER_TRACK 再 BEGIN, 用 do{}while(0) 包裹)
                                                        使用 profiler_events.h 中预声明的 inline CounterTrack
@@ -153,9 +155,10 @@ Include 策略:
           └── Diff       (GenerateDiffs)           — physics_world.cc:441
 
         ENGINE_PROFILE_PHYSICS_CMD_DEQUEUE()   — 命令出队 [SCOPE]
-                                                (从 cmd.tick_args().frame_id 提取 frame_id (仅 Tick 命令有效),
-                                                 存入 thread_local 供后续宏使用; 非 Tick 命令设为 -1, 后续宏检查
-                                                 frame_id != UINT64_MAX 后才写 flow annotation)
+                                                (若 cmd.type == Tick 则用 std::get_if<TickArgs>(&cmd.args)
+                                                 提取 frame_id 存入 thread_local; 非 Tick 命令将 frame_id 置为
+                                                 UINT64_MAX 作为无效标记, 后续宏仅在 frame_id != UINT64_MAX
+                                                 时才写 flow annotation)
         ENGINE_PROFILE_PHYSICS_STEP(delta_time)   — PhysicsWorld::Step() [SCOPE]
                                                 (delta_time 作为 debug annotation 记录: "delta_time", delta_time;
                                                  通过 thread_local 读取 frame_id 用于 TerminatingFlow)
@@ -286,10 +289,17 @@ Include 策略:
     ProfilerConfig → perfetto::TraceConfig 转换逻辑:
     . 创建 BufferConfig: set_size_kb(buffer_size_kb), set_fill_policy(RING_BUFFER)
     . 创建 DataSource: ds_cfg.mutable_config()->set_name("track_event")
-      (可选: mutable_track_event_config() 按 category 过滤启用/禁用; 默认全部启用)
+      可选 category 过滤: 构造 TrackEventConfig → add_enabled_categories() /
+      add_disabled_categories() → SerializeAsString() →
+      ds_cfg.mutable_config()->set_track_event_config_raw(raw);
+      默认不设置 (全部启用)
     . 创建 TraceConfig: add_buffers(), add_data_sources(), set_duration_ms(),
       set_write_into_file(), set_output_path(), set_flush_period_ms()
     . 使用 perfetto::protos::gen::TraceConfig (生成的 C++ protobuf 类)
+    . 注意: set_write_into_file() / set_output_path() 在 kInProcessBackend 下可能
+      不被支持 (这些字段原为系统级 traced 服务设计)。可靠的文件写入路径是:
+      StopBlocking() → ReadTraceBlocking() → ProfilerManager::SaveTrace() 手动写盘。
+      write_into_file 默认为 false, 用户显式启用时需在目标 perfetto 版本上实测验证。
 
     初始化流程:
     1. 构造 TracingInitArgs:
@@ -313,7 +323,11 @@ Include 策略:
     #include <cstdint>          // uint32_t
     #include <memory>           // std::unique_ptr
     #include "engine_export.h"  // ENGINE_API
-    namespace perfetto { class TracingSession; }  // 前向声明, 避免在 .h 中包含 perfetto.h
+    namespace perfetto { class TracingSession; }  // 前向声明, 避免在 .h 中包含 perfetto.h;
+                                                   // 注意: std::unique_ptr<perfetto::TracingSession>
+                                                   // 持有不完整类型是合法的, 但必须将 ~ProfilerManager()
+                                                   // 定义在 profiler_core.cc 中 (而非 = default 在头文件),
+                                                   // 否则编译器会在头文件隐式生成 deleter 时要求完整类型
 
     class ENGINE_API ProfilerManager {
     public:
@@ -398,6 +412,14 @@ Include 策略:
 
 . 预留 category: "engine.io", "engine.network", "engine.memory"
   待对应子系统实现后添加。
+. Category → 宏映射 (各引擎专用宏的实现中硬编码对应 category):
+    "engine"          — TICK, FRAME_BEGIN, FRAME_END, SLOW_FRAME, FUNC (通用)
+    "engine.physics"  — PHYSICS_TICK, PHYSICS_FETCH, PHYSICS_CMD_DEQUEUE,
+                        PHYSICS_STEP, PHYSICS_COLLISION, PHYSICS_TRANSFORM,
+                        PHYSICS_DIFF, PHYSICS_RESULT_ENQUEUE
+    "engine.script"   — SCRIPT_UPDATE, SCRIPT_CALLBACK, SCRIPT_DOFILE, SCRIPT_EXPORT
+    "engine.timer"    — TIMER_UPDATE
+    "engine.vm"       — (预留, 后续 VM 操作桩点使用)
 . Category 名称采用 "引擎.子系统" 层级命名，perfetto UI 会自动按点号分组展示。
 
 七、引擎打桩点清单 (严格对齐 FrameLoop 实际代码)
@@ -436,9 +458,14 @@ Include 策略:
     - 定时器调度 (schedule) / 取消 (cancel)
 
 7.5 引擎生命周期 (engine/engine/engine.cc):
-    - Engine::Init() — 日志初始化, TimerManager 创建, ScriptVM 创建
+    - Engine::Init() — ProfilerManager::Initialize() (最早), 日志初始化,
+      TimerManager 创建, ScriptVM 创建
+      注: Initialize() 之后应尽早调用 StartSession() — 若在 Init() 末尾调用,
+      则 Init 内部的桩点不会进入 trace。推荐在 Init() 中 Initialize() →
+      StartSession() → 其余初始化逻辑, 确保整个生命周期被录制
     - Engine::Start() — 物理线程启动, 帧定时器设置
-    - Engine::Shutdown() / Cleanup() — 物理停止, 帧定时器取消, VM 清理
+    - Engine::Shutdown() / Cleanup() — 物理停止, 帧定时器取消, VM 清理;
+      Cleanup() 末尾调用 ProfilerManager::Shutdown() (停止 session + flush + 保存)
 
 八、实施阶段
 --------------------------------------------------------------------------------
