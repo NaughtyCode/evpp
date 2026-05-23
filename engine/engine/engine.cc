@@ -84,6 +84,9 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
     script_vm_->SetImportPath(config.scripts_dir);
     script::ExportAll(*script_vm_);
 
+    last_frame_time_ = std::chrono::steady_clock::now();
+    last_work_time_ = last_frame_time_;
+
     if (!config.scripts_dir.empty()) {
         size_t failed = script_vm_->DoDirectory(config.scripts_dir);
         if (failed > 0) {

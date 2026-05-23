@@ -740,9 +740,12 @@ int l_net_http_get(lua_State* L) {
                                 g_http_pending_refs.end(), ref);
             if (it != g_http_pending_refs.end()) g_http_pending_refs.erase(it);
         };
-        // Bail early if engine is shutting down or ref was already released.
-        if (!g_net_alive.load() || ref == LUA_NOREF) {
-            erase_ref();
+        // If engine is shutting down, ShutdownNetBindings already released
+        // all pending refs — skip erase_ref to avoid double-unref.
+        if (!g_net_alive.load()) {
+            return;
+        }
+        if (ref == LUA_NOREF) {
             return;
         }
         if (resp) {
@@ -856,6 +859,9 @@ void ShutdownNetBindings() {
         for (auto& [sid, ctx] : g_servers) {
             if (ctx->L) { L = ctx->L; break; }
         }
+    }
+    if (!L) {
+        L = Engine::Instance().GetScriptVM().GetState();
     }
 
     // Release pending HTTP callback refs before any Lua state is closed.

@@ -98,13 +98,23 @@ int l_timer_timeout(lua_State* L) {
 
     TimerId id = TimerManager::instance().create_timer(
         [ctx](HrTimerNode* /*timer*/) -> TimerResult {
-            call_lua_callback(ctx->L, ctx->ref);
-            if (ctx->ref != LUA_NOREF) {
-                luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->ref);
-                ctx->ref = LUA_NOREF;
+            // Keep ctx alive on the stack: call_lua_callback may trigger
+            // timer:cancel() which destroys the HrTimerNode (and this
+            // lambda's capture storage).  The local keep prevents the
+            // shared_ptr<Ctx> refcount from hitting zero until we return.
+            auto keep = ctx;
+            lua_State* L = keep->L;
+            int ref = keep->ref;
+            TimerBindState* owner = keep->owner;
+            TimerId id = keep->id;
+
+            call_lua_callback(L, ref);
+
+            if (ref != LUA_NOREF && L) {
+                luaL_unref(L, LUA_REGISTRYINDEX, ref);
             }
-            if (ctx->owner) {
-                ctx->owner->ctxs.erase(ctx->id);
+            if (owner) {
+                owner->ctxs.erase(id);
             }
             return TimerResult::kNoRestart;
         }
@@ -149,11 +159,20 @@ int l_timer_interval(lua_State* L) {
 
     TimerId id = TimerManager::instance().create_timer(
         [ctx](HrTimerNode* timer) -> TimerResult {
-            call_lua_callback(ctx->L, ctx->ref);
-            if (ctx->ref == LUA_NOREF) {
+            // Stack-local keep prevents Ctx from being freed if the Lua
+            // callback self-cancels (which destroys this lambda's capture
+            // storage).  We read keep->ref after the call to detect
+            // cancellation and avoid kRestart (which would UAF on timer).
+            auto keep = ctx;
+            lua_State* L = keep->L;
+            Duration interval = keep->interval;
+
+            call_lua_callback(L, keep->ref);
+
+            if (keep->ref == LUA_NOREF) {
                 return TimerResult::kNoRestart;
             }
-            timer->add_expires(ctx->interval);
+            timer->add_expires(interval);
             return TimerResult::kRestart;
         },
         ClockId::kMonotonic,
