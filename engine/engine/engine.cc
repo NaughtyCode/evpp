@@ -22,7 +22,6 @@
 #include <evpp/invoke_timer.h>
 
 #include "engine/core/log/log.h"
-#include "engine/core/log/log_macros.h"
 #include "engine/core/timer/timer_manager.h"
 #include "engine/script/script_bind.h"
 #include "engine/vm/vm.h"

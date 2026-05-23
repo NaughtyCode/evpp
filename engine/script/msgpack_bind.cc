@@ -8,7 +8,6 @@
 
 #include "engine/config/config.h"
 #include "engine/core/log/log.h"
-#include "engine/core/log/log_macros.h"
 #include "engine/vm/vm.h"
 
 namespace engine {

@@ -1,5 +1,4 @@
 #include "engine/core/log/log.h"
-#include "engine/core/log/log_macros.h"
 
 #include <chrono>
 #include <ctime>

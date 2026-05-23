@@ -1,7 +1,6 @@
 #include "engine/script/log_bind.h"
 
 #include "engine/core/log/log.h"
-#include "engine/core/log/log_macros.h"
 #include "engine/vm/vm.h"
 
 namespace engine {

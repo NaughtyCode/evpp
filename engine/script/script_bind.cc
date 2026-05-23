@@ -1,7 +1,6 @@
 #include "engine/script/script_bind.h"
 
 #include "engine/core/log/log.h"
-#include "engine/core/log/log_macros.h"
 #include "engine/script/log_bind.h"
 #include "engine/script/timer_bind.h"
 #include "engine/script/msgpack_bind.h"

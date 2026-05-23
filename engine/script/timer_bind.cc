@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "engine/core/log/log.h"
-#include "engine/core/log/log_macros.h"
 #include "engine/core/timer/timer_core.h"
 #include "engine/core/timer/timer_manager.h"
 #include "engine/vm/vm.h"

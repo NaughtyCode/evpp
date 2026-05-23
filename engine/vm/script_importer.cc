@@ -4,7 +4,6 @@
 #include <filesystem>
 
 #include "engine/core/log/log.h"
-#include "engine/core/log/log_macros.h"
 
 extern "C" {
 #include "3rdparty/lua/lua.h"

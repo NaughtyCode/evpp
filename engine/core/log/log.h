@@ -10,6 +10,7 @@
 
 #include <quill/Logger.h>
 
+#include "engine/core/log/log_macros.h"
 #include "engine/engine_export.h"
 
 namespace engine {
