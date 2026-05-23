@@ -143,7 +143,9 @@ JoltPhysics 规范约束（必须遵守的引擎要求）
       . CreateBody → AddBody → [模拟] → RemoveBody → DestroyBody
       . 不可直接 new/delete Body，必须通过 BodyInterface
       . 批量添加使用 AddBodiesPrepare/AddBodiesFinalize（比逐体添加快数百倍），
-        否则 BroadPhase 效率极低，极端情况 std::abort
+        否则 BroadPhase 逐体增量更新效率极低（每体触发一次树重建）。
+        注意: 若 TempAllocator 容量不足，Allocate() 内部会 std::abort，
+        与是否批量添加无关——TempAllocator 大小由 max_body_pairs 决定。
       . 修改刚体后必须调用 ActivateBody() 唤醒（除非是 kinematic）
      参考: Jolt/Docs/Architecture.md Bodies 节
 
@@ -324,6 +326,9 @@ resources/physics/configs/
         调用点同样用 #ifdef 包裹，宏关闭时编译为空操作
 
   ── PhysicsConfig（映射 physics.json + 设计文档 5.1 节）─────────────────
+  ⚠ 设计文档 5.1 节的 broadPhaseType 字段在此有意移除——JoltPhysics 生产实现
+    仅有 BroadPhaseQuadTree（见 [J3]），不提供 BroadPhase 算法选择。
+
   设计文档字段（必须）:
     gravity: float[3]             — 重力向量(m/s²), 默认[0, -9.81, 0]
     fixed_delta_time: float       — 固定步长(秒), 默认0.01667(60Hz)
@@ -338,6 +343,8 @@ resources/physics/configs/
                                    ⚠ 映射至 PhysicsSystem::Init(inMaxContactConstraints)
     max_body_pairs: int           — 最大 BodyPair 数, 默认16384
                                    ⚠ 映射至 PhysicsSystem::Init(inMaxBodyPairs)
+                                   ⚠ Jolt 文档警告: 设为 cMaxBodyPairsLimit 会消耗
+                                   极大内存（32位平台直接OOM），必须用合理值
     num_body_mutexes: int         — Body 互斥锁数(2的幂,[1,64],0=auto), 默认32
                                    ⚠ 映射至 PhysicsSystem::Init(inNumBodyMutexes)
                                    ⚠ 此字段在设计文档 5.1 节的示例 JSON 中未出现,
@@ -362,6 +369,9 @@ resources/physics/configs/
     use_manifold_reduction: bool  — 流形归约, 默认true
     check_active_edges: bool      — 内部边去除, 默认true
 
+    // 碰撞层配置（嵌套对象，来自 physics.json → layerConfig 子对象）
+    LayerConfig layer_config;
+
   ── ThreadingConfig（映射 threading.json + 设计文档 5.2 节）──────────────
   设计文档字段（必须）:
     thread_priority: string       — "low"|"normal"|"high", 默认"high"
@@ -371,7 +381,8 @@ resources/physics/configs/
   补充字段:
     max_pending_frames: int       — 最大待处理帧数([D23]帧堆积保护), 默认3
     job_system_max_jobs: int      — Jolt JobSystem maxJobs, 默认2048
-    job_system_max_barriers: int  — Jolt JobSystem maxBarriers, 默认2048
+    job_system_max_barriers: int  — Jolt JobSystem maxBarriers, [1,8], 默认8
+                                    ⚠ Jolt cMaxPhysicsBarriers = 8，不可超过此值
     job_system_thread_count: int  — Jolt JobSystem 线程数, -1=auto, 默认-1
                                     ⚠ 物理线程已独立，JobSystem 线程数
                                     应 ≤ CPU核心数 - 1
@@ -385,7 +396,9 @@ resources/physics/configs/
     max_file_size_mb: int         — 单文件最大大小(MB), 默认50
     max_backup_files: int         — 滚动备份数, 默认10
   补充字段（对齐 engine/core/log/log_config.h 的 LogConfig）:
-    rotation_frequency: string    — 时间轮转 ""|"daily"|"hourly"|"minutely", 默认"daily"
+    rotation_frequency: string    — 时间轮转 ""|"daily"|"hourly"|"minutely", 默认""
+                                    ⚠ 默认为空=仅大小轮转（与 engine::LogConfig 默认值一致）
+    rotation_interval: int        — 轮转间隔粒度, "hourly"时=n小时,"minutely"时=n分钟, 默认1
     rotation_time_daily: string   — 日轮转时刻 "HH:MM", 默认"00:00"
     format_pattern: string        — 日志格式, 默认 quill 标准格式
 
@@ -399,8 +412,11 @@ resources/physics/configs/
     object_layers: {name → uint16}       — ObjectLayer 名称→值映射
     broad_phase_layers: {name → uint8}   — BroadPhaseLayer 名称→值映射
     layer_mapping: {objLayerName → bpLayerName} — 映射
-    collision_matrix: [[layerA, layerB, bool]] — 两两碰撞开关
+    collision_matrix: {object}           — 数组，每项 {layerA:name, layerB:name, collide:bool}
 
+  ⚠ LayerConfig 作为 PhysicsConfig 的成员变量（layer_config），与物理参数在同一个
+    physics.json 文件中：物理参数为顶层字段，LayerConfig 字段嵌套在 "layerConfig"
+    对象下。glaze 通过嵌套 struct 自动处理此 JSON 层级结构。
   ⚠ 所有字段在 struct 内用 C++ 成员初始化器设置默认值
   ⚠ 使用 glaze 宏实现 JSON 自动序列化
   ⚠ JSON 字段名使用 camelCase（设计文档约定），C++ 字段名使用 snake_case
@@ -494,7 +510,8 @@ resources/physics/configs/
         ApplyForce,   // ApplyForce(objectId, force, point)
         SetVelocity,  // SetVelocity(objectId, velocity)
         Tick,         // Tick(frameId, fixedDeltaTime)
-        Shutdown      // 优雅退出哨兵（不对外暴露）
+        // 注意: Shutdown 哨兵通过原子标志 + 特殊 queue 哨兵实现，
+        // 不占用 CommandType 枚举值，避免外部调用点可构造 Shutdown 命令
     };
 
     struct SpawnArgs {
@@ -522,14 +539,15 @@ resources/physics/configs/
         CommandType type;
         std::variant<std::monostate, SpawnArgs, DestroyArgs, ApplyForceArgs,
                      SetVelocityArgs, TickArgs> args;
-        // std::monostate 用于 Shutdown 等无参数命令类型
+        // std::monostate 占位，当前无命令类型使用（保留以支持未来扩展）
     };
 
   ⚠ 设计文档第 3.3 节要求的结果结构:
 
     struct DiffPacket {  // [D15]
-        uint32_t object_id;   // bit0:position, bit1:rotation, bit2:linearVel,
-        uint16_t change_mask; // bit3:angularVel, bit4-15:reserved
+        uint32_t object_id;
+        uint16_t change_mask;  // bit0:position, bit1:rotation, bit2:linearVel,
+                               // bit3:angularVel, bit4-15:reserved
         std::vector<float> values;  // 按 mask 比特序排列
     };
 
@@ -666,7 +684,10 @@ resources/physics/configs/
          PhysicsWorld 销毁重建时（[D21] 恢复流程）跳过 1-3，直接从步骤 4 执行。
       4. 根据 ThreadingConfig 创建 JobSystem [J6]
       5. 创建 TempAllocatorImpl 或 TempAllocatorImplWithMallocFallback [J5]
-         Size = max_body_pairs * 预估 per-pair 内存（约 256 bytes）
+         Size = max_body_pairs × 256 bytes（per-pair 经验估算）
+         ⚠ TempAllocatorImplWithMallocFallback 构造参数类型为 uint（非 size_t），
+           超大配置下 Size 需 ≤ UINT_MAX（约 4 GB），否则溢出截断导致分配不足。
+           默认 max_body_pairs=16384 → Size≈4 MB，距离上限很远。
       6. 从 LayerConfig 构造层接口实例（bp_layer_interface_ / layer_pair_filter_ /
          obj_vs_bp_filter_）
       7. 调用 system_.Init(maxBodies, numBodyMutexes, maxBodyPairs,
@@ -734,22 +755,24 @@ resources/physics/configs/
       — 启动 std::thread，进入事件循环
       — 日志文件名按日期生成（如 physics_engine_2026-05-23.log）
     void Stop()
-      — 向命令队列发送 Shutdown 哨兵
+      — 设置原子标志 running_ = false
+      — 向命令队列发送一条空 Tick（frame_id=0, delta=0）唤醒阻塞出队
       — 等待线程 join
       — 关闭日志（flush + 释放）
 
   事件循环:
     while (running_):
-      1. 从 command_queue_ 出队（可设超时）
-      2. 根据 cmd.type 分发:
+      1. 从 command_queue_ 出队（超时 50ms，便于检查 running_ 标志）
+      2. 若出队超时 → continue（回到 while 检查 running_）
+      3. 根据 cmd.type 分发:
          Spawn      → world_.CreateBody(...) [D3][D4]
          Destroy    → world_.DestroyBody(...)
          ApplyForce → world_.ApplyForce(...)
          SetVelocity→ world_.SetVelocity(...)
-         Tick       → result = world_.Step(delta_time, frame_id) [D5][D6]
-                      result_queue_.enqueue(std::move(result)) [D19]
-         Shutdown   → running_ = false; break
-      3. 非 Tick 命令可批量出队一次性处理（减少唤醒开销）
+         Tick       → if (delta_time > 0)  // delta=0 表示唤醒哨兵，跳过模拟
+                          result = world_.Step(delta_time, frame_id) [D5][D6]
+                          result_queue_.enqueue(std::move(result)) [D19]
+      4. 非 Tick 命令可批量出队一次性处理（减少唤醒开销）
 
   队列:
     . command_queue_: moodycamel::ConcurrentQueue<PhysicsCommand>
@@ -877,14 +900,15 @@ resources/physics/configs/
 
   实现:
     . 宏开启时: 每个方法内部委托 PhysicsSystem::Instance() 的同名方法
-    . 宏关闭时: 所有方法 inline 空实现
+    . 宏关闭时: 所有方法在头文件中 inline 空实现（无需链接 engine_physics 库）
       Initialize() → return false
       Start() → return false
       Tick() / UpdateScript() / Shutdown() → 空
       FetchResult() → return std::nullopt
       GetScriptVM() → return nullptr
-    . Engine 调用方通过 #ifdef ENGINE_PHYSICS_ENABLED / #endif 包裹 include
-      和调用点（或桥接层自身提供空实现，Engine 无需宏判断即可调用）
+    . 桥接头文件始终可被 include（无论宏开关），Engine 无需 #ifdef 防护:
+      #include "engine/physics/physics_engine_bridge.h"  — 永远有效
+      PhysicsEngineBridge::Instance().Tick(...) — 宏关时编译为无操作
 
   ⚠ 此模块确保 Engine 对物理系统的耦合仅限:
     1. engine/engine/engine.cc 顶部一处 #include "engine/physics/physics_engine_bridge.h"
@@ -896,7 +920,6 @@ resources/physics/configs/
   Engine::Init() 中的集成点:
     . 位置: Engine 自身 ScriptVM 创建之后、Engine DoDirectory 之前
     . 调用桥接层（Engine 不直接接触 PhysicsSystem）:
-      #ifdef ENGINE_PHYSICS_ENABLED
       bool ok = PhysicsEngineBridge::Instance().Initialize(
           "resources/physics/configs",
           "resources/physics/data",
@@ -905,42 +928,41 @@ resources/physics/configs/
           ENGINE_LOG_WARN(logger, "physics system failed to initialize");
       }
       // ⚠ Initialize() 仅加载配置 + 创建 VM + 加载脚本，不启动物理线程
-      #endif
+      // ⚠ 宏关闭时 Initialize() 返回 false，日志一次 WARN 后降级运行
     . 初始化失败时引擎继续运行，物理专用 VM 仍存在（API 返回 nil）
     . 然后: Engine 自身 DoDirectory + InitScript（引擎脚本与物理脚本隔离）
     . ⚠ 物理线程在此处不启动，上层在适当时机调用
       PhysicsEngineBridge::Instance().Start() 才启动物理模拟
+    . ⚠ Initialize() 成功后缓存 PhysicsConfig::fixed_delta_time 到 Engine 成员
+      fixed_delta_time_（用于 FrameLoop 的 Tick 调用），宏关时使用默认值 0.01667f
 
   Engine::FrameLoop() 中的编排（对齐 [D17] 8 步流程）:
     void FrameLoop() {
         TimerManager::instance().update();
 
-        #ifdef ENGINE_PHYSICS_ENABLED
-        // [D17.1][D17.2] 触发物理模拟（若已 Start）
-        // frame_id = frame_count_（Engine 成员）
-        // fixed_delta_time = PhysicsConfig::fixed_delta_time（物理配置，
-        //   Engine 初始化时缓存，不直接使用 frame_interval_）
-        PhysicsEngineBridge::Instance().Tick(frame_count_, fixed_delta_time);
+        // [D17.1][D17.2] 触发物理模拟（若已 Start；宏关时为空操作）
+        // fixed_delta_time = PhysicsConfig::fixed_delta_time（Engine 初始化时缓存）
+        PhysicsEngineBridge::Instance().Tick(frame_count_, fixed_delta_time_);
 
-        // [D17.3] 物理专用 Lua 脚本更新
+        // [D17.3] 物理专用 Lua 脚本更新（宏关时为空操作）
         PhysicsEngineBridge::Instance().UpdateScript();
-        #endif
 
         // [D17.3] 引擎 Lua 脚本更新
         if (script_vm_) {
             script_vm_->UpdateScript();
         }
 
-        #ifdef ENGINE_PHYSICS_ENABLED
-        // [D17.4] 获取本帧物理结果
-        auto result = PhysicsEngineBridge::Instance().FetchResult(frame_id, 5);
+        // [D17.4] 获取本帧物理结果（frame_count_ 与 Tick 入参一致）
+        auto result = PhysicsEngineBridge::Instance().FetchResult(frame_count_, 5);
         if (result) {
             // [D17.5] 更新游戏对象状态（result->transforms）
             // [D17.6] 碰撞事件已在 UpdateScript() 中通过物理 VM 触发
             // [D17.7] 基于 result->diff_packets 构建网络同步数据
         }
-        #endif
     }
+
+  ⚠ 桥接层空实现确保宏关闭时上列调用零开销编译为无操作，Engine 无需任何
+    #ifdef ENGINE_PHYSICS_ENABLED 防护（include 也无需防护——桥接头文件始终存在）。
 
   ⚠ 两条 ScriptVM 流水线的区别:
     . 引擎 ScriptVM (Engine::GetScriptVM()):
@@ -957,16 +979,17 @@ resources/physics/configs/
 	    timer/net 等引擎 API（这些模块未在物理 VM 中注册）。
 
   Engine::Cleanup() 中的集成点:
-    #ifdef ENGINE_PHYSICS_ENABLED
     PhysicsEngineBridge::Instance().Shutdown() — 停止物理线程 + 销毁物理专用 VM
-    #endif
+    （宏关时 Shutdown() 为空操作）
     先于 Engine 自身 ScriptVM 销毁
 
   ⚠ Engine 对物理系统的耦合仅限于:
     . engine/engine/engine.cc 顶部一处 include: physics_engine_bridge.h
     . 3 个调用点（Init / FrameLoop / Cleanup）中若干行 Bridge::Instance().Xxx()
     . Engine 不 include 任何其他 physics 头文件，不接触 PhysicsSystem 等内部类
-    . 宏关闭时，删除 include + 对应的 #ifdef 块即可完全移除
+    . 宏关闭时: include 仍有效，所有调用编译为零开销空操作，无需修改 Engine 代码
+    . 额外: Engine 需缓存 fixed_delta_time_ 成员（从 PhysicsConfig 读取，
+      宏关时使用默认值 0.01667f，不影响其他逻辑）
 
 [3.4] 创建 physics_bindings.h/cc — Lua 绑定（导出到物理专用 ScriptVM）
 
