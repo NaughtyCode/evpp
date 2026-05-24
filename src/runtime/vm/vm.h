@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-#include "runtime/core/engine_export.h"
+#include "runtime/core/engine_api.h"
 #include "runtime/vm/script_importer.h"
 
 extern "C" {

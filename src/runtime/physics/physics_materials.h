@@ -10,7 +10,7 @@
 #include <Jolt/Physics/Collision/PhysicsMaterial.h>
 #include <Jolt/Core/Color.h>
 
-#include "runtime/core/engine_export.h"
+#include "runtime/core/engine_api.h"
 
 namespace engine {
 

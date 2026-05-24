@@ -19,7 +19,7 @@
 #include <quill/Logger.h>
 
 #include "runtime/core/log/log_macros.h"
-#include "runtime/core/engine_export.h"
+#include "runtime/core/engine_api.h"
 
 namespace engine {
 

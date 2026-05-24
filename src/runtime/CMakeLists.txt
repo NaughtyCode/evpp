@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 4.0)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# ENGINE_BUILD triggers dllexport in engine_export.h.
+# ENGINE_BUILD triggers dllexport in engine_api.h.
 # Consumers who link against this library do NOT define this
 # and will get dllimport on Windows / no-op elsewhere.
 add_definitions(-DENGINE_BUILD)
@@ -62,7 +62,7 @@ endif()
 # Engine modules
 # ═══════════════════════════════════════════════════════════════════════
 
-set(EXPORT_HEADER core/engine_export.h)
+set(EXPORT_HEADER core/engine_api.h)
 source_group("core" FILES ${EXPORT_HEADER})
 
 # ── Log ────────────────────────────────────────────────────────────

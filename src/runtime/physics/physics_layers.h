@@ -12,7 +12,7 @@
 
 #include "runtime/physics/physics_config.h"
 
-#include "runtime/core/engine_export.h"
+#include "runtime/core/engine_api.h"
 
 namespace engine {
 
