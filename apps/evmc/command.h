@@ -54,9 +54,9 @@ public:
 private:
     virtual void RequestBuffer(std::string& str) = 0;
     evpp::EventLoop* caller_loop_;
-    uint32_t id_; // ²¢·ÇÈ«¾Öid£¬Ö»ÊÇ¸÷¸ömemc_clientÄÚ²¿µÄĞòºÅ; mgetµÄ¶à¸öÃüÁî¹²ÓÃÒ»¸öid
+    uint32_t id_; // å¹¶éå…¨å±€idï¼Œåªæ˜¯å„ä¸ªmemc_clientå†…éƒ¨çš„åºå·; mgetçš„å¤šä¸ªå‘½ä»¤å…±ç”¨ä¸€ä¸ªid
     uint16_t vbucket_id_;
-    std::vector<uint16_t> server_id_history_; // Ö´ĞĞÊ±´Ó¶à¸ö±¸Ñ¡serverÖĞËùÑ¡¶¨µÄserver
+    std::vector<uint16_t> server_id_history_; // æ‰§è¡Œæ—¶ä»å¤šä¸ªå¤‡é€‰serverä¸­æ‰€é€‰å®šçš„server
 };
 
 typedef std::shared_ptr<Command> CommandPtr;

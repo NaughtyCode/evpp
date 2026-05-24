@@ -112,3 +112,4 @@ stdout_test.txt
 *.obj
 *.pdb
 
+build_vs2026/*

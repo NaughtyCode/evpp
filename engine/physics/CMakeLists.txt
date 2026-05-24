@@ -46,7 +46,7 @@ if(ENGINE_PHYSICS_ENABLED)
     endif()
 
     if(MSVC)
-        target_compile_options(engine_physics PRIVATE /FS)
+        target_compile_options(engine_physics PRIVATE /FS /Z7)
     endif()
 
     target_include_directories(engine_physics PUBLIC

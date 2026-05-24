@@ -82,7 +82,7 @@ void BinaryCodec::OnResponsePacket(const protocol_binary_response_header& resp,
     int opcode = resp.response.opcode;
     CommandPtr cmd = memc_client_->PeekRunningCommand();
     if (!cmd || id != cmd->id()) {
-        // TODO : id 不一致时候，如何处理?
+        // TODO : id 不一致时候，如何处理?.
         buf->Retrieve(kHeaderLen + resp.response.bodylen);
         LOG_WARN << "OnResponsePacket cmd/message mismatch." << id;
         return;

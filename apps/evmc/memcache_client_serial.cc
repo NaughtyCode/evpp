@@ -59,7 +59,7 @@ bool MemcacheClientSerial::Start(evpp::EventLoop* loop) {
 void MemcacheClientSerial::LaunchCommand(CommandPtr& command) {
     auto conn = memclient_->conn();
     assert(memclient_);
-    //不需要重试
+    //不需要重试.
     command->set_server_id(0);
     command->set_server_id(0);
     if (LIKELY(conn && conn->IsConnected())) {

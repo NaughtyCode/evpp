@@ -19,7 +19,7 @@ if (MSVC)
     add_definitions(-D_WIN32_WINNT=0x0A00)
     add_definitions(-DNOMINMAX)
     add_definitions(-DWIN32_LEAN_AND_MEAN)
-    add_compile_options(/bigobj /Zc:preprocessor)
+    add_compile_options(/bigobj /Zc:preprocessor /utf-8)
 endif()
 
 if (UNIX)
