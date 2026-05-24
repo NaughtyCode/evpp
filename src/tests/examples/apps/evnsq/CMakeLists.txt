@@ -1,4 +1,4 @@
-include_directories(${PROJECT_SOURCE_DIR}/tests/apps ${PROJECT_SOURCE_DIR}/3rdparty)
+include_directories(${PROJECT_SOURCE_DIR}/tests/apps ${PROJECT_SOURCE_DIR}/thirdparty)
 
 if (UNIX)
 set(LIBRARIES evpp ${DEPENDENT_LIBRARIES})
@@ -11,8 +11,8 @@ target_link_libraries(example_evnsq_tail evnsq_static ${LIBRARIES})
 
 set (evnsq_producer_SRCS evnsq_producer/main.cc)
 if (WIN32)
-	list (APPEND evnsq_producer_SRCS ${PROJECT_SOURCE_DIR}/3rdparty/win32code/getopt/getopt.c)
-    list (APPEND evnsq_producer_SRCS ${PROJECT_SOURCE_DIR}/3rdparty/win32code/getopt/getopt_long.c)
+	list (APPEND evnsq_producer_SRCS ${PROJECT_SOURCE_DIR}/thirdparty/win32code/getopt/getopt.c)
+    list (APPEND evnsq_producer_SRCS ${PROJECT_SOURCE_DIR}/thirdparty/win32code/getopt/getopt_long.c)
 endif (WIN32)
 
 add_executable(example_evnsq_producer ${evnsq_producer_SRCS})

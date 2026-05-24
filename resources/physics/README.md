@@ -23,7 +23,7 @@ resources/physics/
 - `VehicleConstraintSettings` — 车辆参数 (悬挂、车轮、引擎、防倾杆)
 - `CharacterVirtualSettings` — 角色控制器参数
 
-建议使用 JSON 格式存储，通过 glaze 库反序列化 (项目已在 `3rdparty/glaze` 中集成)。
+建议使用 JSON 格式存储，通过 glaze 库反序列化 (项目已在 `src/thirdparty/glaze` 中集成)。
 
 ### 示例 `simulation.json`
 

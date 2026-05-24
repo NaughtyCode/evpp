@@ -34,13 +34,13 @@ if (UNIX)
          -std=c++11
     )
     include_directories (${PROJECT_SOURCE_DIR}
-                         ${PROJECT_SOURCE_DIR}/3rdparty)
+                         ${PROJECT_SOURCE_DIR}/thirdparty)
 else (UNIX)
 set (CXX_FLAGS -DWIN32 -D_WIN32 -EHsc /utf-8)
     set(VcpkgRoot ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET})
     include_directories(${VcpkgRoot}/include
                         ${PROJECT_SOURCE_DIR}
-                        ${PROJECT_SOURCE_DIR}/3rdparty/wininclude)
+                        ${PROJECT_SOURCE_DIR}/thirdparty/wininclude)
 
     # On windows, vcpkg uses different lib names for debug (eventd.lib) vs release (event.lib)
     link_directories(${VcpkgRoot}/debug/lib ${VcpkgRoot}/debug/lib/manual-link

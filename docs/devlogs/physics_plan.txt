@@ -1,11 +1,11 @@
 ================================================================================
 引擎物理系统 — 实施计划
 严格遵循: devlogs/physics_tech/服务器物理引擎模拟系统技术报告.md
-严格遵循: 3rdparty/JoltPhysics 引擎规范与 API
+严格遵循: src/thirdparty/JoltPhysics 引擎规范与 API
 ================================================================================
 
 前提：
-. 物理引擎源码位置： ./3rdparty/JoltPhysics （JoltPhysics v5.5.1, MIT 许可）
+. 物理引擎源码位置： ./src/thirdparty/JoltPhysics （JoltPhysics v5.5.1, MIT 许可）
 . 物理引擎技术分析报告: ./devlogs/jolt-physics （含 12 份分析文档 + 1 份索引）
 . 物理系统设计技术报告: ./devlogs/physics_tech/服务器物理引擎模拟系统技术报告.md
   （以下简称"设计文档"，所有设计决策以此为准）
@@ -15,9 +15,9 @@
 . 物理脚本放 ./resources/script 目录下（由物理系统专用 ScriptVM 加载）
 . 物理系统配置单独加载、单独管理（PhysicsConfigManager，不依赖 engine::ConfigManager）
 . 物理系统 API 导出到物理系统专用 ScriptVM，相关代码均在 ./engine/physics 目录下
-. 项目使用 glaze 库做 JSON 序列化（路径: 3rdparty/glaze）
+. 项目使用 glaze 库做 JSON 序列化（路径: src/thirdparty/glaze）
 . 项目日志使用 quill 库（API见 engine/core/log/log.h: CreateLogger/GetLogger/InitLogger）
-. 并发队列使用 3rdparty/concurrentqueue（moodycamel::ConcurrentQueue）
+. 并发队列使用 src/thirdparty/concurrentqueue（moodycamel::ConcurrentQueue）
 . ScriptVM 类定义见 engine/vm/vm.h（物理系统创建自己的 ScriptVM 实例，不共用引擎 VM）
 . 编译隔离宏 ENGINE_PHYSICS_ENABLED — 统一控制全部物理代码的编译开关，
   默认开启（服务器构建），构建客户端库时关闭。所有物理代码（源文件 + 头文件
@@ -1231,7 +1231,7 @@ JoltPhysics 分析文档 (devlogs/jolt-physics/):
   10-memory-serialization.md — 内存分配（全局函数指针）、TempAllocator、序列化系统
   11-auxiliary-systems.md    — 软体/Ragdoll/Skeleton/Hair、GPU Compute
 
-JoltPhysics 官方文档 (3rdparty/JoltPhysics/Docs/):
+JoltPhysics 官方文档 (src/thirdparty/JoltPhysics/Docs/):
   Architecture.md            — 官方架构文档、Body 生命周期、摩擦/弹性组合函数
   APIChanges.md              — API 变更历史
   ReleaseNotes.md            — 版本更新记录

@@ -2,7 +2,7 @@
 
 #ifdef ENGINE_PROFILER_ENABLED
 
-#include "3rdparty/perfetto/perfetto.h"
+#include "thirdparty/perfetto/perfetto.h"
 
 PERFETTO_DEFINE_CATEGORIES(
     perfetto::Category("engine").SetDescription(

@@ -2,7 +2,7 @@
 set(CMAKE_C_FLAGS -std=gnu99)
 file(GLOB evmc_SRCS *.cc
                     *.h
-                    ${PROJECT_SOURCE_DIR}/3rdparty/libhashkit/*.c)
+                    ${PROJECT_SOURCE_DIR}/thirdparty/libhashkit/*.c)
 file(GLOB evmc_PUBLIC_HEADERS *.h)
 
 add_library(evmc_static STATIC ${evmc_SRCS})

@@ -51,11 +51,11 @@ if(ENGINE_PHYSICS_ENABLED)
 
     target_include_directories(engine_physics PUBLIC
         ${PROJECT_SOURCE_DIR}
-        ${PROJECT_SOURCE_DIR}/3rdparty/JoltPhysics/JoltPhysics
-        ${PROJECT_SOURCE_DIR}/3rdparty/quill/quill/include
-        ${PROJECT_SOURCE_DIR}/3rdparty/glaze/include
-        ${PROJECT_SOURCE_DIR}/3rdparty/concurrentqueue/concurrentqueue
-        ${PROJECT_SOURCE_DIR}/3rdparty/lua/lua
+        ${PROJECT_SOURCE_DIR}/thirdparty/JoltPhysics/JoltPhysics
+        ${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include
+        ${PROJECT_SOURCE_DIR}/thirdparty/glaze/include
+        ${PROJECT_SOURCE_DIR}/thirdparty/concurrentqueue/concurrentqueue
+        ${PROJECT_SOURCE_DIR}/thirdparty/lua/lua
     )
 
     target_link_libraries(engine_physics

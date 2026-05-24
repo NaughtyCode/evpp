@@ -94,11 +94,11 @@ cmake -DENGINE_PHYSICS_ENABLED=OFF ..
 
 | 库 | 用途 | 路径 |
 |----|------|------|
-| JoltPhysics v5.5.1 | 物理引擎核心 | 3rdparty/JoltPhysics |
-| moodycamel::ConcurrentQueue | SPSC 无锁队列 | 3rdparty/concurrentqueue |
-| glaze | JSON 序列化 | 3rdparty/glaze |
-| quill | 日志系统 | 3rdparty/quill |
-| Lua 5.4 | 脚本引擎 | 3rdparty/lua |
+| JoltPhysics v5.5.1 | 物理引擎核心 | src/thirdparty/JoltPhysics |
+| moodycamel::ConcurrentQueue | SPSC 无锁队列 | src/thirdparty/concurrentqueue |
+| glaze | JSON 序列化 | src/thirdparty/glaze |
+| quill | 日志系统 | src/thirdparty/quill |
+| Lua 5.4 | 脚本引擎 | src/thirdparty/lua |
 
 ---
 
@@ -421,7 +421,7 @@ Frame N:
 ### JoltPhysics 版本
 
 - 锁定版本: JoltPhysics v5.5.1 (MIT License)
-- 路径: `3rdparty/JoltPhysics`
+- 路径: `src/thirdparty/JoltPhysics`
 
 ### 跨平台注意事项
 

@@ -1,8 +1,8 @@
 file(GLOB example_SRCS *.cc)
 
 
-#include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/3rdparty)
-#link_directories(${PROJECT_SOURCE_DIR}/3rdparty/libevent-release-2.1.7-rc/build/lib/Debug/
+#include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/thirdparty)
+#link_directories(${PROJECT_SOURCE_DIR}/thirdparty/libevent-release-2.1.7-rc/build/lib/Debug/
 #				 ${PROJECT_SOURCE_DIR}/msvc/bin/Debug/
 #				${PROJECT_SOURCE_DIR}/build/lib/Debug/)
 #				 

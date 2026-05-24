@@ -1,6 +1,6 @@
 #ifdef ENGINE_PROFILER_ENABLED
 
-#include "3rdparty/perfetto/perfetto.h"
+#include "thirdparty/perfetto/perfetto.h"
 
 // Category declarations must be visible before STATIC_STORAGE since
 // the storage expansion references kCategoryCount, kCategories, etc.
@@ -222,7 +222,7 @@ void ProfilerManager::WriteTraceToFile(const std::string& path,
 
 #include "engine/profiler/profiler_core.h"
 
-#include "3rdparty/perfetto/perfetto.h"
+#include "thirdparty/perfetto/perfetto.h"
 
 #include "engine/core/log/log.h"
 #include "engine/core/log/log_macros.h"

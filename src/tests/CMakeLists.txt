@@ -1,11 +1,11 @@
 file(GLOB evpp_unittest_SRCS *.cc
-							 ${PROJECT_SOURCE_DIR}/3rdparty/gtest/src/gtest-all.cc
-							 ${PROJECT_SOURCE_DIR}/3rdparty/gtest/src/gtest_main.cc)
+							 ${PROJECT_SOURCE_DIR}/thirdparty/gtest/src/gtest-all.cc
+							 ${PROJECT_SOURCE_DIR}/thirdparty/gtest/src/gtest_main.cc)
 list(REMOVE_ITEM evpp_unittest_SRCS ${PROJECT_SOURCE_DIR}/tests/https_client_test.cc ${PROJECT_SOURCE_DIR}/tests/physics_smoke.cc)
 file(GLOB evpp_https_unittest_SRCS https_client_test.cc
-							 ${PROJECT_SOURCE_DIR}/3rdparty/gtest/src/gtest-all.cc
-							 ${PROJECT_SOURCE_DIR}/3rdparty/gtest/src/gtest_main.cc)
-include_directories(${PROJECT_SOURCE_DIR}/3rdparty ${PROJECT_SOURCE_DIR}/3rdparty/gtest)
+							 ${PROJECT_SOURCE_DIR}/thirdparty/gtest/src/gtest-all.cc
+							 ${PROJECT_SOURCE_DIR}/thirdparty/gtest/src/gtest_main.cc)
+include_directories(${PROJECT_SOURCE_DIR}/thirdparty ${PROJECT_SOURCE_DIR}/thirdparty/gtest)
 
 if (MSVC)
 link_directories(${LIBRARY_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}/)
@@ -43,11 +43,11 @@ set_target_properties(physics_smoke PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQU
 target_compile_definitions(physics_smoke PRIVATE ENGINE_PHYSICS_ENABLED)
 target_include_directories(physics_smoke PRIVATE
     ${PROJECT_SOURCE_DIR}
-    ${PROJECT_SOURCE_DIR}/3rdparty/JoltPhysics/JoltPhysics
-    ${PROJECT_SOURCE_DIR}/3rdparty/glaze/include
-    ${PROJECT_SOURCE_DIR}/3rdparty/quill/quill/include
-    ${PROJECT_SOURCE_DIR}/3rdparty/concurrentqueue/concurrentqueue
-    ${PROJECT_SOURCE_DIR}/3rdparty/lua/lua
+    ${PROJECT_SOURCE_DIR}/thirdparty/JoltPhysics/JoltPhysics
+    ${PROJECT_SOURCE_DIR}/thirdparty/glaze/include
+    ${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include
+    ${PROJECT_SOURCE_DIR}/thirdparty/concurrentqueue/concurrentqueue
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/lua
 )
 target_link_libraries(physics_smoke engine_physics Jolt)
 

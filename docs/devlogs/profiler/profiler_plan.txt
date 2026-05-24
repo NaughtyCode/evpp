@@ -1,12 +1,12 @@
 ================================================================================
 引擎 Profiler 系统 — Perfetto 集成实施计划
-基于 ./3rdparty/perfetto/perfetto.h (amalgamated 单头文件, 7.9MB)
+基于 ./src/thirdparty/perfetto/perfetto.h (amalgamated 单头文件, 7.9MB)
 ================================================================================
 
 零、perfetto amalgamated 关键信息
 --------------------------------------------------------------------------------
 . 构建类型: kInProcessBackend (无需外部 traced 守护进程)
-. 引入方式: #include "3rdparty/perfetto/perfetto.h" (纯头文件，无需链接额外库)
+. 引入方式: #include "thirdparty/perfetto/perfetto.h" (纯头文件，无需链接额外库)
 . 核心初始化: perfetto::Tracing::Initialize(args) + perfetto::TrackEvent::Register()
 . Session 创建: perfetto::Tracing::NewTrace(kInProcessBackend)
 . Session API: Setup(config) → Start() / StartBlocking()
@@ -25,7 +25,7 @@
 
 一、前提与约束
 --------------------------------------------------------------------------------
-. perfetto SDK 位置: ./3rdparty/perfetto/perfetto.h (amalgamated, 含全部实现)
+. perfetto SDK 位置: ./src/thirdparty/perfetto/perfetto.h (amalgamated, 含全部实现)
 . profiler 新代码全部放入 ./engine/profiler/ 目录
 . profiler 全部代码用 C++ 宏包裹，通过 CMake option 控制 (默认 OFF，开发/测试时 ON)
 . 宏在 OFF 状态下展开为空操作，确保零运行时开销和零编译产物增长
@@ -49,7 +49,7 @@
     - add_definitions(-DENGINE_PROFILER_ENABLED)
     - profiler 宏展开为实际 perfetto tracing 调用
     - 包含路径: ${PROJECT_SOURCE_DIR} 已在 CMake 中 (engine/CMakeLists.txt:14)，
-      可直接 #include "3rdparty/perfetto/perfetto.h"，无需额外配置
+      可直接 #include "thirdparty/perfetto/perfetto.h"，无需额外配置
     - 可通过运行时 API 控制 session 启停
 
 三、文件结构
@@ -476,7 +476,7 @@ Include 策略:
         * 添加 PROFILER_SOURCES 组 (参考 LOG_SOURCES 模式)
         * 添加 option(ENGINE_PROFILER_ENABLED "Enable perfetto profiler" OFF)
         * 在 ON 时: ${PROJECT_SOURCE_DIR} 已在 include path (engine/CMakeLists.txt:14)，
-          可直接 #include "3rdparty/perfetto/perfetto.h"，无需额外 target_include_directories
+          可直接 #include "thirdparty/perfetto/perfetto.h"，无需额外 target_include_directories
     - 实现 profiler_macros.h: 全部宏 ON/OFF 双路径, OFF 时展开为空
     - 实现 profiler_categories.h: PERFETTO_DEFINE_CATEGORIES(...)
     - 实现 profiler_core.cc: PERFETTO_TRACK_EVENT_STATIC_STORAGE()

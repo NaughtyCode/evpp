@@ -4,7 +4,7 @@
 
 #ifdef ENGINE_PROFILER_ENABLED
 
-#include "3rdparty/perfetto/perfetto.h"
+#include "thirdparty/perfetto/perfetto.h"
 
 // ── Reusable counter tracks for frame-level metrics ─────────────────────
 // Static tracks ensure continuous time series in the trace UI rather than

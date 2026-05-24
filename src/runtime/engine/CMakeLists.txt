@@ -10,11 +10,11 @@ add_definitions(-DENGINE_BUILD)
 
 option(ENGINE_PROFILER_ENABLED "Enable perfetto profiler" OFF)
 
-include_directories(${PROJECT_SOURCE_DIR}/3rdparty/quill/quill/include)
-include_directories(${PROJECT_SOURCE_DIR}/3rdparty/lua/lua)
-include_directories(${PROJECT_SOURCE_DIR}/3rdparty/glaze/include)
+include_directories(${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include)
+include_directories(${PROJECT_SOURCE_DIR}/thirdparty/lua/lua)
+include_directories(${PROJECT_SOURCE_DIR}/thirdparty/glaze/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/..)  # for "engine/xxx.h" includes (engine lives under runtime/)
-include_directories(${PROJECT_SOURCE_DIR})  # for "3rdparty/xxx.h" includes
+include_directories(${PROJECT_SOURCE_DIR})  # for "thirdparty/xxx.h" includes
 
 if (MSVC)
     add_definitions(-D_WIN32_WINNT=0x0A00)
@@ -31,17 +31,17 @@ endif (UNIX)
 
 # ── Lua library (amalgamated build) ──────────────────────────────────
 set(LUA_SOURCES
-    ${PROJECT_SOURCE_DIR}/3rdparty/lua/lua/onelua.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/lua/onelua.c
 )
 set_source_files_properties(${LUA_SOURCES} PROPERTIES COMPILE_DEFINITIONS "MAKE_LIB")
-source_group("3rdparty\\lua" FILES ${LUA_SOURCES})
+source_group("thirdparty\\lua" FILES ${LUA_SOURCES})
 
 # ── Perfetto amalgamated source ──────────────────────────────────────
 if(ENGINE_PROFILER_ENABLED)
     set(PERFETTO_SOURCES
-        ${PROJECT_SOURCE_DIR}/3rdparty/perfetto/perfetto.cc
+        ${PROJECT_SOURCE_DIR}/thirdparty/perfetto/perfetto.cc
     )
-    source_group("3rdparty\\perfetto" FILES ${PERFETTO_SOURCES})
+    source_group("thirdparty\\perfetto" FILES ${PERFETTO_SOURCES})
 else()
     set(PERFETTO_SOURCES "")
 endif()
@@ -142,8 +142,8 @@ add_library(engine SHARED
 target_include_directories(engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${PROJECT_SOURCE_DIR}
-    ${PROJECT_SOURCE_DIR}/3rdparty/quill/quill/include
-    ${PROJECT_SOURCE_DIR}/3rdparty/lua/lua
+    ${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/lua
 )
 
 if(ENGINE_PROFILER_ENABLED)
@@ -155,8 +155,8 @@ endif()
 # Must be available before engine_physics links against it.
 # Note: Jolt.cmake sets CMAKE_CXX_STANDARD to 17 globally — we restore
 # C++23 for downstream targets.
-add_subdirectory(${PROJECT_SOURCE_DIR}/3rdparty/JoltPhysics/JoltPhysics/Build
-                 ${CMAKE_BINARY_DIR}/jolt)
+add_subdirectory(${PROJECT_SOURCE_DIR}/thirdparty/JoltPhysics/JoltPhysics/Build
+                 ${PROJECT_SOURCE_DIR}/../artifacts/build/jolt)
 set_target_properties(Jolt PROPERTIES FOLDER "thirdparty")
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
