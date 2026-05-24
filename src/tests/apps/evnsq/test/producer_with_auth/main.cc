@@ -8,6 +8,7 @@
 #include <getopt.h>
 
 #include "runtime/core/log/log.h"
+#include "runtime/config/config.h"
 
 size_t total_count = 200;
 

@@ -6,11 +6,11 @@
 namespace evpp {
 DNSResolver::DNSResolver(EventLoop* evloop, const std::string& h, Duration timeout, const Functor& f)
     : loop_(evloop), dnsbase_(nullptr), dns_req_(nullptr), host_(h), timeout_(timeout), functor_(f) {
-    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::this_thread::get_id(), (void*)this);
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::hash<std::thread::id>{}(std::this_thread::get_id()), (void*)this);
 }
 
 DNSResolver::~DNSResolver() {
-    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::this_thread::get_id(), (void*)this);
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::hash<std::thread::id>{}(std::this_thread::get_id()), (void*)this);
     assert(dnsbase_ == nullptr);
 
 #if LIBEVENT_VERSION_NUMBER >= 0x02001500
@@ -20,7 +20,7 @@ DNSResolver::~DNSResolver() {
 
 void DNSResolver::Start() {
     auto f = [this]() {
-        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::this_thread::get_id(), (void*)this);
+        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::hash<std::thread::id>{}(std::this_thread::get_id()), (void*)this);
         assert(loop_->IsInLoopThread());
 
 #if LIBEVENT_VERSION_NUMBER >= 0x02001500
@@ -74,7 +74,7 @@ void DNSResolver::Cancel() {
 }
 
 void DNSResolver::AsyncWait() {
-    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::this_thread::get_id(), (void*)this);
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::hash<std::thread::id>{}(std::this_thread::get_id()), (void*)this);
     timer_.reset(new TimerEventWatcher(loop_, std::bind(&DNSResolver::OnTimeout, this), timeout_));
     timer_->SetCancelCallback(std::bind(&DNSResolver::OnCanceled, this));
     timer_->Init();
@@ -82,7 +82,7 @@ void DNSResolver::AsyncWait() {
 }
 
 void DNSResolver::OnTimeout() {
-    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::this_thread::get_id(), (void*)this);
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::hash<std::thread::id>{}(std::this_thread::get_id()), (void*)this);
 #if LIBEVENT_VERSION_NUMBER >= 0x02001500
     evdns_getaddrinfo_cancel(dns_req_);
     dns_req_ = nullptr;
@@ -92,7 +92,7 @@ void DNSResolver::OnTimeout() {
 }
 
 void DNSResolver::OnCanceled() {
-    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::this_thread::get_id(), (void*)this);
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::hash<std::thread::id>{}(std::this_thread::get_id()), (void*)this);
 #if LIBEVENT_VERSION_NUMBER >= 0x02001500
     evdns_getaddrinfo_cancel(dns_req_);
     dns_req_ = nullptr;

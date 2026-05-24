@@ -142,7 +142,7 @@ TEST_UNIT(TestEventLoop5) {
 // Test EventLoop's constructor and destructor
 TEST_UNIT(TestEventLoop6) {
     evpp::EventLoop* loop = new evpp::EventLoop;
-    ENGINE_LOG_INFO(engine::GetLogger(), "loop={}", loop);
+    ENGINE_LOG_INFO(engine::GetLogger(), "loop={}", (void*)loop);
     delete loop;
 }
 

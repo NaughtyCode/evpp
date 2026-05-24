@@ -285,7 +285,7 @@ void Server::Dispatch(EventLoop* listening_loop,
 					  const HTTPRequestCallback& user_callback) {
 	// Make sure it is running in the HTTP listening thread
 	assert(listening_loop->IsInLoopThread());
-	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} dispatch request {} url={} in main thread. status={}", (void*)this, ctx->req(), ctx->original_uri(), StatusToString());
+	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} dispatch request {} url={} in main thread. status={}", (void*)this, (void*)ctx->req(), ctx->original_uri(), StatusToString());
 	if (!IsRunning()) {
 		ENGINE_LOG_WARN(engine::GetLogger(), "The listening thread is not running, may be it is stopping now.");
 		//TODO gracefully shutdown.
@@ -297,7 +297,7 @@ void Server::Dispatch(EventLoop* listening_loop,
 
 	// Forward this HTTP request to a worker thread to process
 	auto f = [loop, ctx, response_callback, user_callback, this]() {
-		ENGINE_LOG_TRACE(engine::GetLogger(), "this={} process request {} url={} in working thread. status={}", (void*)this, ctx->req(), ctx->original_uri(), StatusToString());
+		ENGINE_LOG_TRACE(engine::GetLogger(), "this={} process request {} url={} in working thread. status={}", (void*)this, (void*)ctx->req(), ctx->original_uri(), StatusToString());
 
 		if (!IsRunning()) {
 			ENGINE_LOG_WARN(engine::GetLogger(), "The listening thread is not running, may be it is stopping now.");

@@ -28,7 +28,7 @@
 
 static bool g_stopping = false;
 static void RequestHandler(evpp::EventLoop* loop, const evpp::http::ContextPtr& ctx, const evpp::http::HTTPSendResponseCallback& cb) {
-    ENGINE_LOG_INFO(engine::GetLogger(), "DefaultRequestHandler loop={} ctx.url={} tid={}", static_cast<void*>(loop), ctx->original_uri(), std::this_thread::get_id());
+    ENGINE_LOG_INFO(engine::GetLogger(), "DefaultRequestHandler loop={} ctx.url={} tid={}", static_cast<void*>(loop), ctx->original_uri(), std::hash<std::thread::id>{}(std::this_thread::get_id()));
     std::stringstream oss;
     oss << "func=" << __FUNCTION__ << " OK"
         << " ip=" << ctx->remote_ip() << "\n"
@@ -38,7 +38,7 @@ static void RequestHandler(evpp::EventLoop* loop, const evpp::http::ContextPtr& 
 }
 
 static void DefaultRequestHandler(evpp::EventLoop* loop, const evpp::http::ContextPtr& ctx, const evpp::http::HTTPSendResponseCallback& cb) {
-    ENGINE_LOG_INFO(engine::GetLogger(), "DefaultRequestHandler loop={} ctx.url={} tid={}", static_cast<void*>(loop), ctx->original_uri(), std::this_thread::get_id());
+    ENGINE_LOG_INFO(engine::GetLogger(), "DefaultRequestHandler loop={} ctx.url={} tid={}", static_cast<void*>(loop), ctx->original_uri(), std::hash<std::thread::id>{}(std::this_thread::get_id()));
     std::stringstream oss;
     oss << "func=" << __FUNCTION__ << "\n"
         << " ip=" << ctx->remote_ip() << "\n"
@@ -67,7 +67,7 @@ namespace {
         std::string url = GetHttpServerURL() + uri;
         auto r = new evpp::httpc::Request(loop, url, "", evpp::Duration(10.0));
         auto f = [r, finished](const std::shared_ptr<evpp::httpc::Response>& response) {
-            ENGINE_LOG_INFO(engine::GetLogger(), "request={} response={} tid={}", static_cast<void*>(r), static_cast<void*>(response.get()), std::this_thread::get_id());
+            ENGINE_LOG_INFO(engine::GetLogger(), "request={} response={} tid={}", static_cast<void*>(r), static_cast<void*>(response.get()), std::hash<std::thread::id>{}(std::this_thread::get_id()));
             std::string result = response->body().ToString();
             assert(!result.empty());
             assert(result.find("uri=/status") != std::string::npos);
@@ -86,7 +86,7 @@ namespace {
         std::string url = GetHttpServerURL() + uri;
         auto r = new evpp::httpc::Request(loop, url, body, evpp::Duration(10.0));
         auto f = [body, r, finished](const std::shared_ptr<evpp::httpc::Response>& response) {
-            ENGINE_LOG_INFO(engine::GetLogger(), "request={} response={} tid={}", static_cast<void*>(r), static_cast<void*>(response.get()), std::this_thread::get_id());
+            ENGINE_LOG_INFO(engine::GetLogger(), "request={} response={} tid={}", static_cast<void*>(r), static_cast<void*>(response.get()), std::hash<std::thread::id>{}(std::this_thread::get_id()));
             std::string result = response->body().ToString();
             assert(!result.empty());
             assert(result.find("uri=/status") != std::string::npos);
@@ -104,7 +104,7 @@ namespace {
         std::string url = GetHttpServerURL() + uri;
         auto r = new evpp::httpc::Request(loop, url, "", evpp::Duration(10.0));
         auto f = [r, finished](const std::shared_ptr<evpp::httpc::Response>& response) {
-            ENGINE_LOG_INFO(engine::GetLogger(), "request={} response={} tid={}", static_cast<void*>(r), static_cast<void*>(response.get()), std::this_thread::get_id());
+            ENGINE_LOG_INFO(engine::GetLogger(), "request={} response={} tid={}", static_cast<void*>(r), static_cast<void*>(response.get()), std::hash<std::thread::id>{}(std::this_thread::get_id()));
             std::string result = response->body().ToString();
             assert(!result.empty());
             assert(result.find("uri=/status/method/method2/xx") != std::string::npos);
@@ -121,7 +121,7 @@ namespace {
         std::string url = GetHttpServerURL() + uri;
         auto r = new evpp::httpc::Request(loop, url, "", evpp::Duration(10.0));
         auto f = [r, finished](const std::shared_ptr<evpp::httpc::Response>& response) {
-            ENGINE_LOG_INFO(engine::GetLogger(), "request={} response={} tid={}", static_cast<void*>(r), static_cast<void*>(response.get()), std::this_thread::get_id());
+            ENGINE_LOG_INFO(engine::GetLogger(), "request={} response={} tid={}", static_cast<void*>(r), static_cast<void*>(response.get()), std::hash<std::thread::id>{}(std::this_thread::get_id()));
             std::string result = response->body().ToString();
             assert(!result.empty());
             assert(result.find("uri=/push/boot") != std::string::npos);
@@ -138,7 +138,7 @@ namespace {
         std::string url = GetHttpServerURL() + uri;
         auto r = new evpp::httpc::Request(loop, url, "", evpp::Duration(10.0));
         auto f = [r, finished](const std::shared_ptr<evpp::httpc::Response>& response) {
-            ENGINE_LOG_INFO(engine::GetLogger(), "request={} response={} tid={}", static_cast<void*>(r), static_cast<void*>(response.get()), std::this_thread::get_id());
+            ENGINE_LOG_INFO(engine::GetLogger(), "request={} response={} tid={}", static_cast<void*>(r), static_cast<void*>(response.get()), std::hash<std::thread::id>{}(std::this_thread::get_id()));
             std::string result = response->body().ToString();
             assert(!result.empty());
             assert(result.find("uri=/mod/stop") != std::string::npos);

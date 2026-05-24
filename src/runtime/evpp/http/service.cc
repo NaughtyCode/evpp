@@ -227,7 +227,7 @@ namespace evpp {
 			// In the main HTTP listening thread,
 			// this is the main entrance of the HTTP request processing.
 			assert(listen_loop_->IsInLoopThread());
-			ENGINE_LOG_TRACE(engine::GetLogger(), "this={} handle request {} url={}", (void*)this, req, req->uri);
+			ENGINE_LOG_TRACE(engine::GetLogger(), "this={} handle request {} url={}", (void*)this, (void*)req, req->uri);
 
 			ContextPtr ctx(new Context(req));
 			ctx->Init();
@@ -292,7 +292,7 @@ namespace evpp {
 			auto f = [this, response]() {
 				// In the main HTTP listening thread
 				assert(listen_loop_->IsInLoopThread());
-				ENGINE_LOG_TRACE(engine::GetLogger(), "this={} send reply in listening thread. evhttp_={}", (void*)this, evhttp_);
+				ENGINE_LOG_TRACE(engine::GetLogger(), "this={} send reply in listening thread. evhttp_={}", (void*)this, (void*)evhttp_);
 
 				auto x = response->ctx.get();
 

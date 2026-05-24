@@ -66,7 +66,7 @@ TEST_UNIT(testTCPClientReconnect) {
         }
         tsrv.reset();
     }
-    ENGINE_LOG_INFO(engine::GetLogger(), "XXXXXXXXXX connected_count={} message_recved_count={}", connected_count, message_recved_count);
+    ENGINE_LOG_INFO(engine::GetLogger(), "XXXXXXXXXX connected_count={} message_recved_count={}", connected_count.load(), message_recved_count.load());
     tcp_client_thread->loop()->RunInLoop([client]() {client->Disconnect(); });
     tcp_client_thread->loop()->RunAfter(evpp::Duration(1.0), [client]() {delete client; });
     usleep(evpp::Duration(2.0).Microseconds());

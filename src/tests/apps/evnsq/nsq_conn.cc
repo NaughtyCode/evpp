@@ -144,7 +144,7 @@ void NSQConn::OnRecv(const evpp::TCPConnPtr& conn, evpp::Buffer* buf) {
                 rapidjson::Document doc;
                 doc.Parse(msg.data());
                 if (doc.HasParseError()) {
-                    ENGINE_LOG_ERROR(engine::GetLogger(), "Identify Response JSON parsed ERROR. rapidjson ERROR code={}", doc.GetParseError());
+                    ENGINE_LOG_ERROR(engine::GetLogger(), "Identify Response JSON parsed ERROR. rapidjson ERROR code={}", static_cast<int>(doc.GetParseError()));
                     OnConnectedFailed();
                 }
                 bool auth_required = doc["auth_required"].GetBool();
@@ -175,7 +175,7 @@ void NSQConn::OnRecv(const evpp::TCPConnPtr& conn, evpp::Buffer* buf) {
                 rapidjson::Document doc;
                 doc.Parse(msg.data());
                 if (doc.HasParseError()) {
-                    ENGINE_LOG_ERROR(engine::GetLogger(), "Identify Response JSON parsed ERROR. rapidjson ERROR code={}", doc.GetParseError());
+                    ENGINE_LOG_ERROR(engine::GetLogger(), "Identify Response JSON parsed ERROR. rapidjson ERROR code={}", static_cast<int>(doc.GetParseError()));
                     OnConnectedFailed();
                 } else {
                     /*
@@ -341,7 +341,12 @@ bool NSQConn::WritePublishCommand(const CommandPtr& c) {
     assert(c->IsPublish());
     assert(nsq_client_->IsProducer());
     if (wait_ack_.size() >= static_cast<Producer*>(nsq_client_)->high_water_mark()) {
-        ENGINE_LOG_WARN_LIMIT(std::chrono::seconds(1), engine::GetLogger(), "Too many messages are waiting a response ACK. Please try again later.");
+        static auto last_warn_time = std::chrono::steady_clock::time_point::min();
+        auto now = std::chrono::steady_clock::now();
+        if (now - last_warn_time > std::chrono::seconds(1)) {
+            ENGINE_LOG_WARN(engine::GetLogger(), "Too many messages are waiting a response ACK. Please try again later.");
+            last_warn_time = now;
+        }
         return false;
     }
 

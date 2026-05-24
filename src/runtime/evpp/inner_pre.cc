@@ -46,7 +46,7 @@ int EventAdd(struct event* ev, const struct timeval* timeout) {
             assert(false && "event_add twice");
         }
     }
-    ENGINE_LOG_DEBUG(engine::GetLogger(), "event_add ev={} fd={} user_ptr={} tid={}", (void*)ev, ev->ev_fd, ev->ev_arg, std::this_thread::get_id());
+    ENGINE_LOG_DEBUG(engine::GetLogger(), "event_add ev={} fd={} user_ptr={} tid={}", (void*)ev, ev->ev_fd, ev->ev_arg, std::hash<std::thread::id>{}(std::this_thread::get_id()));
 #endif
     return event_add(ev, timeout);
 }
@@ -68,7 +68,7 @@ int EventDel(struct event* ev) {
             evmap.erase(it);
         }
     }
-    ENGINE_LOG_DEBUG(engine::GetLogger(), "event_del ev={} fd={} user_ptr={} tid={}", (void*)ev, ev->ev_fd, ev->ev_arg, std::this_thread::get_id());
+    ENGINE_LOG_DEBUG(engine::GetLogger(), "event_del ev={} fd={} user_ptr={} tid={}", (void*)ev, ev->ev_fd, ev->ev_arg, std::hash<std::thread::id>{}(std::this_thread::get_id()));
 #endif
     return event_del(ev);
 }

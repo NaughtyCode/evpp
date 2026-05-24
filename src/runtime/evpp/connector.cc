@@ -122,7 +122,7 @@ void Connector::Connect() {
     status_ = kConnecting;
 
     chan_.reset(new FdChannel(loop_, fd_, false, true));
-    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} new FdChannel p={} fd={}", (void*)this, chan_.get(), chan_->fd());
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} new FdChannel p={} fd={}", (void*)this, (void*)chan_.get(), chan_->fd());
     chan_->SetWriteCallback(std::bind(&Connector::HandleWrite, shared_from_this()));
     chan_->AttachToLoop();
 }
@@ -216,7 +216,7 @@ void Connector::HandleError() {
             fd_ = INVALID_SOCKET;
         }
 
-        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} loop={} auto reconnect in {}s thread={}", (void*)this, loop_, owner_tcp_client_->reconnect_interval().Seconds(), std::this_thread::get_id());
+        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} loop={} auto reconnect in {}s thread={}", (void*)this, (void*)loop_, owner_tcp_client_->reconnect_interval().Seconds(), std::hash<std::thread::id>{}(std::this_thread::get_id()));
         loop_->RunAfter(owner_tcp_client_->reconnect_interval(), std::bind(&Connector::Start, shared_from_this()));
     }
 }

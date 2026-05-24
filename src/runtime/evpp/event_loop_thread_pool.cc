@@ -7,7 +7,7 @@ namespace evpp {
 EventLoopThreadPool::EventLoopThreadPool(EventLoop* base_loop, uint32_t thread_number)
     : base_loop_(base_loop),
       thread_num_(thread_number) {
-    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} thread_num={} base loop={}", (void*)this, thread_num(), base_loop_);
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} thread_num={} base loop={}", (void*)this, thread_num(), (void*)base_loop_);
 }
 
 EventLoopThreadPool::~EventLoopThreadPool() {
@@ -18,7 +18,7 @@ EventLoopThreadPool::~EventLoopThreadPool() {
 
 bool EventLoopThreadPool::Start(bool wait_thread_started) {
     status_.store(kStarting);
-    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} thread_num={} base loop={} wait_thread_started={}", (void*)this, thread_num(), base_loop_, wait_thread_started);
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} thread_num={} base loop={} wait_thread_started={}", (void*)this, thread_num(), (void*)base_loop_, wait_thread_started);
 
     if (thread_num_ == 0) {
         status_.store(kRunning);
@@ -29,13 +29,13 @@ bool EventLoopThreadPool::Start(bool wait_thread_started) {
     std::shared_ptr<std::atomic<uint32_t>> exited_count(new std::atomic<uint32_t>(0));
     for (uint32_t i = 0; i < thread_num_; ++i) {
         auto prefn = [this, started_count]() {
-            ENGINE_LOG_TRACE(engine::GetLogger(), "a working thread started tid={}", std::this_thread::get_id());
+            ENGINE_LOG_TRACE(engine::GetLogger(), "a working thread started tid={}", std::hash<std::thread::id>{}(std::this_thread::get_id()));
             this->OnThreadStarted(started_count->fetch_add(1) + 1);
             return EventLoopThread::kOK;
         };
 
         auto postfn = [this, exited_count]() {
-            ENGINE_LOG_TRACE(engine::GetLogger(), "a working thread exiting, tid={}", std::this_thread::get_id());
+            ENGINE_LOG_TRACE(engine::GetLogger(), "a working thread exiting, tid={}", std::hash<std::thread::id>{}(std::this_thread::get_id()));
             this->OnThreadExited(exited_count->fetch_add(1) + 1);
             return EventLoopThread::kOK;
         };
@@ -165,7 +165,7 @@ uint32_t EventLoopThreadPool::thread_num() const {
 }
 
 void EventLoopThreadPool::OnThreadStarted(uint32_t count) {
-    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} count={} started.", (void*)this, std::this_thread::get_id(), count);
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} count={} started.", (void*)this, std::hash<std::thread::id>{}(std::this_thread::get_id()), count);
     if (count == thread_num_) {
         ENGINE_LOG_TRACE(engine::GetLogger(), "this={} thread pool totally started.", (void*)this);
         status_.store(kRunning);
@@ -173,7 +173,7 @@ void EventLoopThreadPool::OnThreadStarted(uint32_t count) {
 }
 
 void EventLoopThreadPool::OnThreadExited(uint32_t count) {
-    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} count={} exited.", (void*)this, std::this_thread::get_id(), count);
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} count={} exited.", (void*)this, std::hash<std::thread::id>{}(std::this_thread::get_id()), count);
     if (count == thread_num_) {
         status_.store(kStopped);
         ENGINE_LOG_TRACE(engine::GetLogger(), "this={} this is the last thread stopped. Thread pool totally exited.", (void*)this);
