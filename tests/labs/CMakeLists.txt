@@ -1,6 +1,6 @@
 
-include_directories(${PROJECT_SOURCE_DIR}/apps
-                    ${PROJECT_SOURCE_DIR}/labs
+include_directories(${PROJECT_SOURCE_DIR}/tests/apps
+                    ${PROJECT_SOURCE_DIR}/tests/labs
                     ${PROJECT_SOURCE_DIR}/3rdparty)
 
 if (UNIX)

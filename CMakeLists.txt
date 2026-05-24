@@ -95,9 +95,8 @@ message (STATUS "THRIFT_INCLUDE_DIR " ${THRIFT_INCLUDE_DIR})
 message (STATUS "THRIFT_LIBRARY " ${THRIFT_LIBRARY})
 
 add_subdirectory (evpp)
-add_subdirectory (apps)
-add_subdirectory (labs)
 add_subdirectory (engine)
+add_subdirectory (tests)
 
 # ── Main entry point ──────────────────────────────────────────────
 add_executable(main main.cc)
@@ -106,10 +105,6 @@ target_link_libraries(main engine)
 if (WIN32)
     target_link_libraries(main ws2_32)
 endif()
-
-if (NOT EVPP_VCPKG_BUILD)
-    add_subdirectory (tests)
-endif ()
 
 # ── Solution folder organization ────────────────────────────────────
 function(_assign_folder target folder)

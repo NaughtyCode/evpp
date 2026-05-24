@@ -121,7 +121,7 @@ int main(int argc, char* argv[]) {
 }
 
 #ifdef WIN32
-#include "../../../../tests/examples/echo/tcpecho/winmain-inl.h"
+#include "../../../../examples/echo/tcpecho/winmain-inl.h"
 #endif
 
 

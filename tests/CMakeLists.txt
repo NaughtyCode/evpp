@@ -51,6 +51,8 @@ target_include_directories(physics_smoke PRIVATE
 )
 target_link_libraries(physics_smoke engine_physics Jolt)
 
+add_subdirectory (apps)
+add_subdirectory (labs)
 add_subdirectory (stability)
 add_subdirectory (more_tests)
 

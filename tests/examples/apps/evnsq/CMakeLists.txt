@@ -1,4 +1,4 @@
-include_directories(${PROJECT_SOURCE_DIR}/apps ${PROJECT_SOURCE_DIR}/3rdparty)
+include_directories(${PROJECT_SOURCE_DIR}/tests/apps ${PROJECT_SOURCE_DIR}/3rdparty)
 
 if (UNIX)
 set(LIBRARIES evpp ${DEPENDENT_LIBRARIES})

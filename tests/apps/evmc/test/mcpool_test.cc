@@ -4,7 +4,7 @@
 
 #include <evpp/gettimeofday.h>
 
-#include "../../../tests/examples/winmain-inl.h"
+#include "../../../examples/winmain-inl.h"
 
 #include <thread>
 
