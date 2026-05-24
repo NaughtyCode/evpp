@@ -1,13 +1,11 @@
 #include <evpp/event_loop.h>
 #include <evpp/event_loop_thread.h>
 
-#include "examples/winmain-inl.h"
+#include "../../examples/winmain-inl.h"
 
 uint64_t clock_us() {
     return std::chrono::steady_clock::now().time_since_epoch().count() / 1000;
 }
-
-typedef std::function<void()> Task;
 
 class PostTask {
 public:
@@ -41,9 +39,8 @@ private:
         {
             std::lock_guard<std::mutex> lock(mutex_);
             need_post = pending_tasks_.empty();
-            pending_tasks_.emplace_back([this]() {
-                count_ += 1;
-            });
+            size_t add = 1;
+            pending_tasks_.push_back(add);
         }
 
         if (need_post) {
@@ -55,31 +52,31 @@ private:
                     temp_tasks_.swap(pending_tasks_);
                 }
 
-                for (auto& task : temp_tasks_) {
-                    task();
+                for (size_t i = 0; i < temp_tasks_.size(); ++i) {
+                    count_ += temp_tasks_[i];
                 }
 
                 if (count_ == post_count_) {
-                    stop_time_ = clock_us();
                     stop();
                 }
             });
         }
     }
+
 private:
     void stop() {
         stop_time_ = clock_us();
         loop_.Stop();
     }
 private:
-    const uint64_t post_count_;
+    uint64_t const post_count_;
     evpp::EventLoopThread loop_;
     uint64_t count_{ 0 };
     uint64_t start_time_;
     uint64_t stop_time_;
     std::mutex mutex_;
-    std::vector<Task> pending_tasks_;
-    std::vector<Task> temp_tasks_;
+    std::vector<uint32_t> pending_tasks_;
+    std::vector<uint32_t> temp_tasks_;
 };
 
 int main(int argc, char* argv[]) {

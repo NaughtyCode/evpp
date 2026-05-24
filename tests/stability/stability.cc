@@ -15,7 +15,7 @@
 #include <evpp/http/context.h>
 #include <evpp/http/http_server.h>
 
-#include "../../examples/winmain-inl.h"
+#include "../examples/winmain-inl.h"
 
 #include "stability.h"
 

@@ -3,7 +3,7 @@
 #include <evpp/sockets.h>
 
 #ifdef WIN32
-#include "examples/winmain-inl.h"
+#include "../winmain-inl.h"
 #endif
 
 int main(int argc, char* argv[]) {

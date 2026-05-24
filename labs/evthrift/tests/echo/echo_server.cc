@@ -52,4 +52,4 @@ int main(int argc, char **argv) {
 }
 
 
-#include "../../../../examples/winmain-inl.h"
+#include "../../../../tests/examples/winmain-inl.h"

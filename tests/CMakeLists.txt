@@ -1,7 +1,7 @@
 file(GLOB evpp_unittest_SRCS *.cc
 							 ${PROJECT_SOURCE_DIR}/3rdparty/gtest/src/gtest-all.cc
 							 ${PROJECT_SOURCE_DIR}/3rdparty/gtest/src/gtest_main.cc)
-list(REMOVE_ITEM evpp_unittest_SRCS ${PROJECT_SOURCE_DIR}/test/https_client_test.cc ${PROJECT_SOURCE_DIR}/test/physics_smoke.cc)
+list(REMOVE_ITEM evpp_unittest_SRCS ${PROJECT_SOURCE_DIR}/tests/https_client_test.cc ${PROJECT_SOURCE_DIR}/tests/physics_smoke.cc)
 file(GLOB evpp_https_unittest_SRCS https_client_test.cc
 							 ${PROJECT_SOURCE_DIR}/3rdparty/gtest/src/gtest-all.cc
 							 ${PROJECT_SOURCE_DIR}/3rdparty/gtest/src/gtest_main.cc)
@@ -53,3 +53,10 @@ target_link_libraries(physics_smoke engine_physics Jolt)
 
 add_subdirectory (stability)
 add_subdirectory (more_tests)
+
+if (BUILD_EXAMPLES)
+    add_subdirectory (examples)
+endif()
+if (BUILD_BENCHMARKS)
+    add_subdirectory (benchmarks)
+endif()

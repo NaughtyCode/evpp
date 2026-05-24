@@ -2,7 +2,7 @@
 #include <evpp/event_watcher.h>
 #include <evpp/event_loop.h>
 
-#include "examples/winmain-inl.h"
+#include "../winmain-inl.h"
 
 
 int main(int argc, char* argv[]) {
