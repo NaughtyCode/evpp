@@ -1,5 +1,5 @@
 
-#include "tests/test_common.h"
+#include "test_common.h"
 #include "runtime/evpp/duration.h"
 #include "runtime/evpp/timestamp.h"
 #include "runtime/evpp/gettimeofday.h"

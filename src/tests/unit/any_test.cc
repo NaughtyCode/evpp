@@ -1,4 +1,4 @@
-#include "tests/test_common.h"
+#include "test_common.h"
 
 #include <evpp/any.h>
 #include <evpp/buffer.h>

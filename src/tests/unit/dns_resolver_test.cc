@@ -1,4 +1,4 @@
-#include "tests/test_common.h"
+#include "test_common.h"
 
 #include <evpp/event_loop.h>
 #include <evpp/event_loop_thread.h>

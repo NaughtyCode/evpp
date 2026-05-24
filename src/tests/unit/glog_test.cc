@@ -1,6 +1,6 @@
 #include <evpp/logging.h>
 
-#include "tests/test_common.h"
+#include "test_common.h"
 
 TEST_UNIT(testglog) {
     google::InitGoogleLogging("xxx");
