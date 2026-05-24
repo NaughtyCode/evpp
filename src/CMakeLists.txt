@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.8)
 
-project (safe-evpp C CXX)
+project (ServerEngine C CXX)
 
 option(ENGINE_PHYSICS_ENABLED "Enable the JoltPhysics engine subsystem" ON)
 option(BUILD_EXAMPLES "Build example programs (requires NOT EVPP_VCPKG_BUILD)" OFF)

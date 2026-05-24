@@ -126,6 +126,7 @@ set(PHYSICS_CC
     physics/physics_system.cc physics/physics_engine_bridge.cc
     physics/physics_bindings.cc
 )
+source_group("engine\\physics" FILES ${PHYSICS_CC})
 
 # ── Evpp network library (inlined) ─────────────────────────────────
 file(GLOB EVPP_SOURCES
@@ -184,8 +185,7 @@ endif()
 if(ENGINE_PHYSICS_ENABLED)
     # JoltPhysics v5.5.1 (https://github.com/jrouwe/JoltPhysics, MIT License)
     # Jolt.cmake sets CMAKE_CXX_STANDARD to 17 globally — restore C++23.
-    add_subdirectory(${PROJECT_SOURCE_DIR}/thirdparty/JoltPhysics/JoltPhysics/Build
-                     ${PROJECT_SOURCE_DIR}/../artifacts/build/jolt)
+    add_subdirectory(${PROJECT_SOURCE_DIR}/thirdparty/JoltPhysics/JoltPhysics/Build jolt)
     set_target_properties(Jolt PROPERTIES FOLDER "thirdparty")
     set(CMAKE_CXX_STANDARD 23)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
