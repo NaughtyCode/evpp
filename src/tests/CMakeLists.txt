@@ -13,12 +13,12 @@ endif (MSVC)
 
 add_executable(evpp_unittest ${evpp_unittest_SRCS})
 set_target_properties(evpp_unittest PROPERTIES FOLDER "tests")
-target_link_libraries(evpp_unittest engine ${DEPENDENT_LIBRARIES})
+target_link_libraries(evpp_unittest ServerEngine ${DEPENDENT_LIBRARIES})
 
 if (HTTPS)
 add_executable(evpp_https_unittest ${evpp_https_unittest_SRCS})
 set_target_properties(evpp_https_unittest PROPERTIES FOLDER "tests")
-target_link_libraries(evpp_https_unittest engine ${DEPENDENT_LIBRARIES})
+target_link_libraries(evpp_https_unittest ServerEngine ${DEPENDENT_LIBRARIES})
 endif (HTTPS)
 
 include (CTest)
@@ -27,16 +27,7 @@ add_test(NAME evpp_unittest COMMAND evpp_unittest)
 # ── Physics smoke test ────────────────────────────────────────────────
 add_executable(physics_smoke physics_smoke.cc)
 set_target_properties(physics_smoke PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON FOLDER "tests")
-target_compile_definitions(physics_smoke PRIVATE ENGINE_PHYSICS_ENABLED)
-target_include_directories(physics_smoke PRIVATE
-    ${PROJECT_SOURCE_DIR}
-    ${PROJECT_SOURCE_DIR}/thirdparty/JoltPhysics/JoltPhysics
-    ${PROJECT_SOURCE_DIR}/thirdparty/glaze/include
-    ${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include
-    ${PROJECT_SOURCE_DIR}/thirdparty/concurrentqueue/concurrentqueue
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/lua
-)
-target_link_libraries(physics_smoke engine_physics Jolt)
+target_link_libraries(physics_smoke ServerEngine)
 
 add_subdirectory (apps)
 add_subdirectory (labs)

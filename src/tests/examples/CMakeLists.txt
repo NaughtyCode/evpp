@@ -1,7 +1,7 @@
 include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/thirdparty)
 
 
-set(LIBRARIES engine ${DEPENDENT_LIBRARIES})
+set(LIBRARIES ServerEngine ${DEPENDENT_LIBRARIES})
 if (UNIX)
 else(UNIX)
 link_directories(${PROJECT_SOURCE_DIR}/vsprojects/bin/${CMAKE_BUILD_TYPE}/

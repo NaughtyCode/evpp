@@ -9,13 +9,13 @@
 file(GLOB SROUCES *.cc *.h)
 add_executable(test_evpp_stability ${SROUCES})
 set_target_properties(test_evpp_stability PROPERTIES FOLDER "tests")
-target_link_libraries(test_evpp_stability engine ${DEPENDENT_LIBRARIES})
+target_link_libraries(test_evpp_stability ServerEngine ${DEPENDENT_LIBRARIES})
 
 if (UNIX)
     add_executable(test_evpp_stability_boost_lockfree ${SROUCES})
-    target_link_libraries(test_evpp_stability_boost_lockfree engine ${DEPENDENT_LIBRARIES})
+    target_link_libraries(test_evpp_stability_boost_lockfree ServerEngine ${DEPENDENT_LIBRARIES})
 
     add_executable(test_evpp_stability_concurrentqueue ${SROUCES})
-    target_link_libraries(test_evpp_stability_concurrentqueue engine ${DEPENDENT_LIBRARIES})
+    target_link_libraries(test_evpp_stability_concurrentqueue ServerEngine ${DEPENDENT_LIBRARIES})
 endif (UNIX)
 

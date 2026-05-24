@@ -4,10 +4,10 @@ include_directories(${PROJECT_SOURCE_DIR}/tests/apps
                     ${PROJECT_SOURCE_DIR}/thirdparty)
 
 if (UNIX)
-set(LIBRARIES engine event glog pthread)
+set(LIBRARIES ServerEngine event glog pthread)
 link_directories("/home/s/safe/lib" ${PROJECT_BUILD_DIR}/lib)
 else(UNIX)
-set(LIBRARIES engine event glog)
+set(LIBRARIES ServerEngine event glog)
 link_directories(${PROJECT_SOURCE_DIR}/vsprojects/bin/${CMAKE_BUILD_TYPE}/
 				 ${LIBRARY_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}/)
 endif(UNIX)

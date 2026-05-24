@@ -1,5 +1,5 @@
 // Minimal smoke test for the physics subsystem.
-// Links against engine_physics.lib and Jolt.lib directly.
+// Links against ServerEngine (which includes physics when enabled).
 // Tests: MaterialTable, LayerConfig, AssetLoader shape creation.
 
 #include <cstdio>

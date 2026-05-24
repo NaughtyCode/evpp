@@ -94,13 +94,13 @@ message (STATUS "THRIFT_COMPILER " ${THRIFT_COMPILER})
 message (STATUS "THRIFT_INCLUDE_DIR " ${THRIFT_INCLUDE_DIR})
 message (STATUS "THRIFT_LIBRARY " ${THRIFT_LIBRARY})
 
-add_subdirectory (runtime engine)
+add_subdirectory (runtime)
 add_subdirectory (tests)
 
 # ── Main entry point ──────────────────────────────────────────────
 add_executable(main server/main.cc)
 set_target_properties(main PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
-target_link_libraries(main engine)
+target_link_libraries(main ServerEngine)
 if (WIN32)
     target_link_libraries(main ws2_32)
 endif()
