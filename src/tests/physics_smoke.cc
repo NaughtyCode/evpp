@@ -10,10 +10,10 @@
 #include <Jolt/Core/Factory.h>
 #include <Jolt/RegisterTypes.h>
 
-#include "engine/physics/physics_config.h"
-#include "engine/physics/physics_materials.h"
-#include "engine/physics/physics_layers.h"
-#include "engine/physics/physics_assets.h"
+#include "physics/physics_config.h"
+#include "physics/physics_materials.h"
+#include "physics/physics_layers.h"
+#include "physics/physics_assets.h"
 
 static int failures = 0;
 

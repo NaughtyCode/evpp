@@ -3,7 +3,7 @@ include_directories(${PROJECT_SOURCE_DIR}/tests/apps ${PROJECT_SOURCE_DIR}/third
 if (UNIX)
 set(LIBRARIES evpp ${DEPENDENT_LIBRARIES})
 else(UNIX)
-set(LIBRARIES evpp_static ${DEPENDENT_LIBRARIES})
+set(LIBRARIES engine ${DEPENDENT_LIBRARIES})
 endif(UNIX)
 
 add_executable(example_evnsq_tail evnsq_tail/main.cc)

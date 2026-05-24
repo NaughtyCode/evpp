@@ -94,8 +94,7 @@ message (STATUS "THRIFT_COMPILER " ${THRIFT_COMPILER})
 message (STATUS "THRIFT_INCLUDE_DIR " ${THRIFT_INCLUDE_DIR})
 message (STATUS "THRIFT_LIBRARY " ${THRIFT_LIBRARY})
 
-add_subdirectory (runtime/evpp evpp)
-add_subdirectory (runtime/engine engine)
+add_subdirectory (runtime engine)
 add_subdirectory (tests)
 
 # ── Main entry point ──────────────────────────────────────────────

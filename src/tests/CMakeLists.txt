@@ -13,29 +13,16 @@ endif (MSVC)
 
 add_executable(evpp_unittest ${evpp_unittest_SRCS})
 set_target_properties(evpp_unittest PROPERTIES FOLDER "tests")
-target_link_libraries(evpp_unittest evpp_static ${DEPENDENT_LIBRARIES})
+target_link_libraries(evpp_unittest engine ${DEPENDENT_LIBRARIES})
 
 if (HTTPS)
 add_executable(evpp_https_unittest ${evpp_https_unittest_SRCS})
 set_target_properties(evpp_https_unittest PROPERTIES FOLDER "tests")
-target_link_libraries(evpp_https_unittest evpp_https_static ${DEPENDENT_LIBRARIES})
+target_link_libraries(evpp_https_unittest engine ${DEPENDENT_LIBRARIES})
 endif (HTTPS)
-
-if (UNIX)
-    add_executable(evpp_unittest_boost_lockfree ${evpp_unittest_SRCS})
-    target_link_libraries(evpp_unittest_boost_lockfree evpp_boost ${DEPENDENT_LIBRARIES})
-
-    add_executable(evpp_unittest_concurrentqueue ${evpp_unittest_SRCS})
-    target_link_libraries(evpp_unittest_concurrentqueue evpp_concurrentqueue ${DEPENDENT_LIBRARIES})
-endif (UNIX)
 
 include (CTest)
 add_test(NAME evpp_unittest COMMAND evpp_unittest)
-
-if (UNIX)
-    add_test(NAME evpp_unittest_concurrentqueue COMMAND evpp_unittest_concurrentqueue)
-    add_test(NAME evpp_unittest_boost_lockfree  COMMAND evpp_unittest_boost_lockfree)
-endif (UNIX)
 
 # ── Physics smoke test ────────────────────────────────────────────────
 add_executable(physics_smoke physics_smoke.cc)

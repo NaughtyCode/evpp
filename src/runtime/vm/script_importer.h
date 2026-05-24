@@ -1,0 +1,51 @@
+#pragma once
+
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include "engine_export.h"
+
+struct lua_State;
+
+namespace engine {
+
+//=============================================================================
+// ScriptImporter — per-VM Lua module import system
+//
+// Module names are dot-separated paths relative to search directories:
+//   import("utils.helpers")  →  <search_dir>/utils/helpers.lua
+//   import("utils.*")        →  loads all .lua files in <search_dir>/utils/
+//=============================================================================
+
+class ENGINE_API ScriptImporter {
+public:
+    ScriptImporter() = default;
+
+    // Set the initial search directories. Call once during engine init.
+    void Init(std::string scripts_dir);
+
+    // Import a module by name.
+    //   "sub.mod"  → load <search_dir>/sub/mod.lua, cache in package.loaded
+    //   "sub.*"    → load all .lua files in <search_dir>/sub/, return table
+    int Import(lua_State* L, std::string_view name);
+
+    // Configure search directories (semicolon-separated).
+    void SetPaths(const std::string& paths);
+    void AddPath(const std::string& path);
+
+    // Clear the module cache in package.loaded (enables hot-reload).
+    void ClearCache(lua_State* L);
+
+private:
+    static std::string ModuleToPath(std::string_view name);
+    std::string FindModule(std::string_view name) const;
+    std::string FindDir(std::string_view dir_name) const;
+
+    int ImportSingle(lua_State* L, std::string_view name);
+    int ImportAll(lua_State* L, std::string_view name);
+
+    std::vector<std::string> search_paths_;
+};
+
+} // namespace engine
