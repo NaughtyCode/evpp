@@ -15,7 +15,7 @@ option(ENGINE_PROFILER_ENABLED "Enable perfetto profiler" OFF)
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include)
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty/lua/lua)
-include_directories(${PROJECT_SOURCE_DIR}/thirdparty/glaze/include)
+include_directories(${PROJECT_SOURCE_DIR}/thirdparty/glaze/glaze/include)
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty/concurrentqueue/concurrentqueue)
 
 # ── Platform settings ────────────────────────────────────────────────
@@ -197,7 +197,7 @@ if(ENGINE_PHYSICS_ENABLED)
 endif()
 
 # ── Link system libraries ─────────────────────────────────────────────
-target_link_libraries(ServerEngine ${LIBRARIES})
+target_link_libraries(ServerEngine PUBLIC ${LIBRARIES})
 
 # ── Post-build: copy DLL to bin/ ──────────────────────────────────────
 add_custom_command(TARGET ServerEngine POST_BUILD

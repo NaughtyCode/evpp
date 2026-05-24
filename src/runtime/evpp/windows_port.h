@@ -65,9 +65,6 @@
 
 // We must link against these libraries on windows platform for Visual Studio IDE
 #ifdef _WIN32
-#ifndef EVPP_EXPORTS
-#pragma comment(lib, "evpp_static.lib")
-#endif
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "glog.lib")
 #pragma comment(lib, "event.lib")
