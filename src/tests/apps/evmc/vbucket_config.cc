@@ -1,4 +1,4 @@
-#include "vbucket_config.h"
+﻿#include "vbucket_config.h"
 
 #include <map>
 #include <cassert>
@@ -35,12 +35,12 @@ enum {
 };
 
 void VbucketConfig::OnVbucketResult(uint16_t vbucket, bool success) {
-    // 捎带更新健康值，不专门更新. 这样该函数就是多余的.
+    // Update health value piggyback, not separately. This makes the function redundant.
 
-    // 健康值/权重更新策略:.
-    // 1. 健康值快速(指数)衰减，慢速(线性)恢复.
-    // 2. N个replica，目前是选不同端口重试两次. 是否需要全部重试一遍？.
-    // 3. 更新健康值时，兼顾线程安全和性能.
+    // Health value/weight update strategy:
+    // 1. Health value decays quickly (exponentially), recovers slowly (linearly).
+    // 2. N replicas, currently retry twice on different ports. Should we retry all?
+    // 3. When updating health values, balance thread safety and performance.
     return;
 }
 
@@ -57,7 +57,7 @@ uint16_t VbucketConfig::SelectServerId(uint16_t vbucket, uint16_t last_id) const
 
     uint16_t server_id = BAD_SERVER_ID;
     {
-        // 按健康权重选定server id.
+        // Select server id based on health weight.
         std::map<int64_t, uint16_t> weighted_items;
         int64_t total_weight = 0;
 
@@ -79,7 +79,7 @@ uint16_t VbucketConfig::SelectServerId(uint16_t vbucket, uint16_t last_id) const
         }
     }
 
-    // 捎带更新健康值，不专门更新.
+    // Update health value piggyback, not separately.
     server_health_[server_id] += 1000;
 
     if (server_health_[server_id] > MAX_WEIGHT) {

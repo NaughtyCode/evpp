@@ -1,4 +1,4 @@
-#include "memcache_client_serial.h"
+﻿#include "memcache_client_serial.h"
 #include "evpp/tcp_conn.h"
 #include "evpp/timestamp.h"
 
@@ -59,7 +59,7 @@ bool MemcacheClientSerial::Start(evpp::EventLoop* loop) {
 void MemcacheClientSerial::LaunchCommand(CommandPtr& command) {
     auto conn = memclient_->conn();
     assert(memclient_);
-    //不需要重试.
+    // no retry needed.
     command->set_server_id(0);
     command->set_server_id(0);
     if (LIKELY(conn && conn->IsConnected())) {

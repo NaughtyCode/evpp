@@ -1,4 +1,4 @@
-#include "binary_codec.h"
+﻿#include "binary_codec.h"
 
 #include "memcache_client.h"
 
@@ -82,7 +82,7 @@ void BinaryCodec::OnResponsePacket(const protocol_binary_response_header& resp,
     int opcode = resp.response.opcode;
     CommandPtr cmd = memc_client_->PeekRunningCommand();
     if (!cmd || id != cmd->id()) {
-        // TODO : id 不一致时候，如何处理?.
+        // TODO: what to do when id doesn't match?
         buf->Retrieve(kHeaderLen + resp.response.bodylen);
         LOG_WARN << "OnResponsePacket cmd/message mismatch." << id;
         return;

@@ -1,4 +1,4 @@
-#include "evpp/inner_pre.h"
+﻿#include "evpp/inner_pre.h"
 
 #include "evpp/libevent.h"
 
@@ -259,7 +259,7 @@ void TCPConn::HandleClose() {
     // But we call HandleClose() from out of TCPConn's method, the status_ is kDisconnecting
     assert(status_ == kDisconnecting);
 
-    // 这个设置是必需的，表示正在连接状态，不能去掉
+    // This setting is required, it indicates connecting state and must not be removed
     status_ = kDisconnecting;
     assert(loop_->IsInLoopThread());
     chan_->DisableAllEvent();

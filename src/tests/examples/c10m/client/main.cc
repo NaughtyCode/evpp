@@ -1,4 +1,4 @@
-#include <evpp/tcp_client.h>
+ï»¿#include <evpp/tcp_client.h>
 #include <evpp/event_loop_thread_pool.h>
 #include <evpp/buffer.h>
 #include <evpp/tcp_conn.h>
@@ -15,8 +15,8 @@ DEFINE_int32(threadCount, 24, "The working thread count");
 DEFINE_int32(pendingMax, 10, "The maximum number of pending requests");
 
 
-// ¸ù¾İindex¼ÆËãµ±Ç°ipµÄÏÂÒ»¸öIP
-// ÀıÈçÊäÈë "192.168.0.150:80", ipIndex=2 ===> "192.168.0.152:80"
+// Calculate the next IP based on index from the current IP
+// e.g. given "192.168.0.150:80", ipIndex=2 ===> "192.168.0.152:80"
 std::string calcIpPort(const std::string& ipPort, int ipIndex) {
     std::vector<std::string> spp, dotip;
     evpp::StringSplit(ipPort, ":", 0, spp);
@@ -98,7 +98,7 @@ public:
 
 private:
     void SendMessage(int total_round, int index) {
-        // Ã¿ÃëÖÓÌôÑ¡Ò»²¿·Ö¿Í»§¶Ë·¢ËÍÏûÏ¢£¬ÕâÑùQPSÄÜ¹»±È½Ï¾ùÔÈ
+        // Select a subset of clients to send messages each second, so that QPS is relatively even
         size_t round_count = clients_.size() / total_round;
         for (size_t i = round_count * index, k = 0; k < round_count; k++, i++) {
             auto c = clients_[i]->conn();

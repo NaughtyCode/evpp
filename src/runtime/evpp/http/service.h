@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "evpp/inner_pre.h"
 #include "context.h"
@@ -61,8 +61,8 @@ public:
 	void set_private_key_file(const std::string& filename) {
 		private_key_file_ = filename;
 	}
-	/* berif 初始化SSL
-	 * param force_enable 强制启用SSL
+	/* brief Initialize SSL
+	 * param force_enable force enable SSL
 	 */
 	bool initSSL(bool force_enable = false);
 #endif					
@@ -79,7 +79,7 @@ private:
     HTTPRequestCallbackMap callbacks_;
     HTTPRequestCallback default_callback_;
 
-	// HTTPS 支持
+	// HTTPS support
 #if defined(EVPP_HTTP_SERVER_SUPPORTS_SSL)
 	bool enable_ssl_;
 	SSL_CTX* ssl_ctx_;

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <string>
 #include <vector>
@@ -37,7 +37,7 @@ private:
     int replicas_;
     std::string algorithm_;
     std::vector<std::string> server_list_;
-    mutable std::vector<int> server_health_; // value 为健康值，越高越好
+    mutable std::vector<int> server_health_; // value is health score, higher is better
     Random* rand_;
 
     std::vector<std::vector<int> > vbucket_map_;

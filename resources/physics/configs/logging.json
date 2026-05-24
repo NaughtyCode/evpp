@@ -1,20 +1,20 @@
-{
+﻿{
   "_module": {
-    "description": "物理系统日志配置 — 物理线程独立日志实例，不共享主线程日志资源。日志文件含日期以区分不同会话。level 字段支持运行时热更新。",
+    "description": "Physics system log configuration -- independent log instance for the physics thread, not sharing main thread log resources. Log files include dates to distinguish sessions. The level field supports runtime hot-reload.",
     "related": ["physics.json", "threading.json"],
-    "jolt_reference": "N/A (项目日志层基于 quill 库)"
+    "jolt_reference": "N/A (project log layer is based on quill library)"
   },
   "_comment": {
-    "logDir": "日志目录路径, string, 默认 \"./logs/physics\", 物理线程独立日志文件存放目录",
-    "fileName": "日志文件基础名, string, 默认 \"physics_engine\", 最终文件名 = fileName_dateFormat.log",
-    "dateFormat": "日期格式, string, 默认 \"YYYY-MM-DD\", 用于日志文件名中的日期部分",
-    "level": "日志级别, string, \"debug\"|\"info\"|\"warn\"|\"error\", 默认 \"info\", 支持运行时热更新 [D9]",
-    "maxFileSizeMb": "单文件最大大小 (MB), int, >0, 默认 50, 超出后触发大小轮转",
-    "maxBackupFiles": "滚动备份数, int, >=0, 默认 10, 超出后删除最旧备份",
-    "rotationFrequency": "时间轮转策略, string, \"\"|\"daily\"|\"hourly\"|\"minutely\", 默认 \"\"(仅大小轮转), 与 engine::LogConfig 默认值一致",
-    "rotationInterval": "轮转间隔粒度, int, >0, 默认 1, hourly为n小时, minutely为n分钟",
-    "rotationTimeDaily": "日轮转时刻, string, \"HH:MM\" 格式, 默认 \"00:00\", rotationFrequency=\"daily\" 时生效",
-    "formatPattern": "日志格式模式, string, 默认 quill 标准格式: \"%(time) [%(thread_id)] [%(log_level_short_code)] [%(logger)] %(message)\""
+    "logDir": "Log directory path, string, default \"./logs/physics\", directory for physics thread log files",
+    "fileName": "Log file base name, string, default \"physics_engine\", final filename = fileName_dateFormat.log",
+    "dateFormat": "Date format, string, default \"YYYY-MM-DD\", used for the date portion in log filenames",
+    "level": "Log level, string, \"debug\"|\"info\"|\"warn\"|\"error\", default \"info\", supports runtime hot-reload [D9]",
+    "maxFileSizeMb": "Max file size (MB), int, >0, default 50, triggers size-based rotation when exceeded",
+    "maxBackupFiles": "Number of backup files, int, >=0, default 10, oldest backup is deleted when exceeded",
+    "rotationFrequency": "Time rotation strategy, string, \"\"|\"daily\"|\"hourly\"|\"minutely\", default \"\"(size-only rotation), consistent with engine::LogConfig defaults",
+    "rotationInterval": "Rotation interval granularity, int, >0, default 1, hourly means every N hours, minutely means every N minutes",
+    "rotationTimeDaily": "Daily rotation time, string, \"HH:MM\" format, default \"00:00\", takes effect when rotationFrequency=\"daily\"",
+    "formatPattern": "Log format pattern, string, default quill standard format: \"%(time) [%(thread_id)] [%(log_level_short_code)] [%(logger)] %(message)\""
   },
   "_hot_reload": ["level"],
   "_requires_restart": [
@@ -23,7 +23,7 @@
     "rotationFrequency", "rotationInterval",
     "rotationTimeDaily", "formatPattern"
   ],
-  "_restart_note": "修改 requires_restart 中的字段后需重新启动物理线程方可生效。level 字段支持运行时通过 ReloadLogLevel() 热更新。",
+  "_restart_note": "Fields listed in requires_restart need a physics thread restart to take effect. The level field supports runtime hot-reload via ReloadLogLevel().",
 
   "logDir": "./logs/physics",
   "fileName": "physics_engine",

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "memcache_client.h"
 #include "vbucket_config.h"
@@ -14,10 +14,10 @@ public:
     friend MemcacheClient;
 
     // @brief
-    // @param[in] vbucket_conf - 有三种格式.
-    //      1. memcached单实例模式，传入的参数应该 "host:port"
-    //      2. memcached集群模式，传输的参数可以是vbucket conf url ： "http://host:port/vbucket_conf"
-    //      3. memcached集群模式，传输的参数可以是vbucket conf 本地文件： "/the/path/to/vbucket_conf"
+    // @param[in] vbucket_conf - three formats:
+    //      1. memcached single instance mode, parameter should be "host:port"
+    //      2. memcached cluster mode, parameter can be vbucket conf url: "http://host:port/vbucket_conf"
+    //      3. memcached cluster mode, parameter can be vbucket conf local file: "/the/path/to/vbucket_conf"
     // @param[in] thread_num -
     // @param[in] timeout_ms -
     // @return  -

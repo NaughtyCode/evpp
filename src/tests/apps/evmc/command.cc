@@ -1,4 +1,4 @@
-#include "command.h"
+﻿#include "command.h"
 #include <memcached/protocol_binary.h>
 #include "memcache_client.h"
 #include "vbucket_config.h"
@@ -121,7 +121,7 @@ void MultiGetCommand::OnMultiGetCommandOneResponse(int resp_code, std::string& k
         auto& get_result = it->second;
         get_result.code = resp_code;
         get_result.value.swap(value);
-    } else { //返回值不带key,将serverid对应的key都设置为resp_code
+    } else { // return value has no key, set all keys for the serverid to resp_code
         auto& keys = get_handler()->FindKeysByid(vbucket_id());
         auto& result_map = get_handler()->get_result();
         auto k = result_map.begin();

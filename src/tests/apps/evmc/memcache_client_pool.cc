@@ -1,4 +1,4 @@
-#include "memcache_client_pool.h"
+﻿#include "memcache_client_pool.h"
 
 #include "vbucket_config.h"
 #include "evpp/event_loop_thread_pool.h"
@@ -52,7 +52,7 @@ namespace evmc {
         }
         auto server_list = vbucket_config()->server_list();
 
-        // 须先构造memc_client_map_数组，再各个元素取地址，否则地址不稳定，可能崩溃.
+        // Must construct the memc_client_map_ array first, then take addresses of elements, otherwise addresses are unstable and may cause crashes.
         for (uint32_t i = 0; i < loop_pool_.thread_num(); ++i) {
             memc_client_map_.emplace_back(MemcClientMap());
             evpp::EventLoop* loop = loop_pool_.GetNextLoopWithHash(i);
@@ -210,7 +210,7 @@ namespace evmc {
         MultiModeVbucketConfig* vbconf = vbucket_config();
 
         uint16_t server_id = command->server_id();
-        if (UNLIKELY(!command->ShouldRetry())) { //重试 需要重新算serverid.
+        if (UNLIKELY(!command->ShouldRetry())) { // retry needs to recalculate serverid.
             uint16_t vbucket = command->vbucket_id();
             server_id = vbconf->SelectServerId(vbucket, command->server_id());
             if (UNLIKELY(server_id == BAD_SERVER_ID)) {

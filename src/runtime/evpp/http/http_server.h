@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <atomic>
 #include <map>
@@ -38,20 +38,20 @@ public:
     ~Server();
 
 #if defined(EVPP_HTTP_SERVER_SUPPORTS_SSL)
-	/* berif 对指定监听端口设置SSL选项
-	 * param listen_port 监听的端口
-	 * param enable_ssl 是否开启SSL支持
-	 * param certificate_chain_file 证书链文件
-	 * param private_key_file 私钥文件
+	/* brief Set SSL options for the specified listening port
+	 * param listen_port listening port
+	 * param enable_ssl whether to enable SSL support
+	 * param certificate_chain_file certificate chain file
+	 * param private_key_file private key file
 	 */
     void setPortSSLOption(int listen_port,
 			bool enable_ssl,
 			const char* certificate_chain_file = "",
 			const char* private_key_file = "");
-	/* berif 设置端口默认SSL配置选项
-	 * param enable_ssl 是否开启SSL支持
-	 * param certificate_chain_file 证书链文件
-	 * param private_key_file 私钥文件
+	/* brief Set default SSL configuration options for ports
+	 * param enable_ssl whether to enable SSL support
+	 * param certificate_chain_file certificate chain file
+	 * param private_key_file private key file
 	 */
     void setPortSSLDefaultOption(
 			bool enable_ssl,

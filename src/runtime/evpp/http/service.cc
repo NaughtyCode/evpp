@@ -1,4 +1,4 @@
-#include "service.h"
+﻿#include "service.h"
 
 #include "evpp/libevent.h"
 #include "evpp/event_watcher.h"
@@ -76,36 +76,36 @@ namespace evpp {
             }
             if(ssl_ctx_){ return true; }; 
             
-            /* 初始化SSL协议环境 */
+            /* Initialize SSL protocol environment */
             // SSL_library_int();
-            /* 创建SSL上下文 */
+            /* Create SSL context */
             SSL_CTX *ctx = SSL_CTX_new (SSLv23_server_method ());
             if(ctx == NULL) {
                 LOG_ERROR << "SSL_CTX_new failed";
                 return false;
             }
-            /* 设置SSL选项 https://linux.die.net/man/3/ssl_ctx_set_options */
+            /* Set SSL options https://linux.die.net/man/3/ssl_ctx_set_options */
             SSL_CTX_set_options (ctx,
                         SSL_OP_SINGLE_DH_USE |
                         SSL_OP_SINGLE_ECDH_USE |
-                        SSL_OP_NO_SSLv2 /*禁用SSLv2*/ |
-                        SSL_OP_NO_TLSv1 /*禁用TLSv1*/);
-            /* 是否校验对方证书(这里是服务端，使用SSL_VERIFY_NONE参数表示不校验) */
+                        SSL_OP_NO_SSLv2 /*disable SSLv2*/ |
+                        SSL_OP_NO_TLSv1 /*disable TLSv1*/);
+            /* Whether to verify peer certificate (server-side, use SSL_VERIFY_NONE to skip verification) */
             SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
-            /* 创建椭圆曲线加密key */
+            /* Create ECDH key */
             EC_KEY *ecdh = EC_KEY_new_by_curve_name (NID_X9_62_prime256v1);
             if (ecdh == NULL) {
                 LOG_ERROR << "EC_KEY_new_by_curve_name failed";
                 ERR_print_errors_fp(stderr);
                 return false;
             }
-            /* 设置ECDH临时公钥 */
+            /* Set ECDH ephemeral public key */
             if (1 != SSL_CTX_set_tmp_ecdh (ctx, ecdh)) {
                 LOG_ERROR << "SSL_CTX_set_tmp_ecdh failed";
                 return false;
             }
-            /* 加载证书链文件(文件编码必须为PEM格式，使用Base64编码) */
-            /* 此处也可使用SSL_CTX_use_certificate_file仅加载公钥证书 */
+            /* Load certificate chain file (must be PEM format, Base64 encoded) */
+            /* SSL_CTX_use_certificate_file can also be used to load only the public key certificate */
             if (1 != SSL_CTX_use_certificate_chain_file (
                             ctx, certificate_chain_file_.c_str())) {
                 LOG_ERROR << "Load certificate chain file(" 
@@ -113,7 +113,7 @@ namespace evpp {
                 ERR_print_errors_fp(stderr);
                 return false;
             }
-            /* 加载私钥文件 */
+            /* Load private key file */
             if (1 != SSL_CTX_use_PrivateKey_file (
                             ctx, private_key_file_.c_str(), SSL_FILETYPE_PEM)) {
                 LOG_ERROR << "Load private key file(" 
@@ -121,7 +121,7 @@ namespace evpp {
                 ERR_print_errors_fp(stderr);
                 return false;
             }
-            /* 校验私钥与证书是否匹配 */
+            /* Verify that private key matches the certificate */
             if (1 != SSL_CTX_check_private_key (ctx)) {
                 LOG_ERROR << "EC_KEY_new_by_curve_name failed";
                 ERR_print_errors_fp(stderr);

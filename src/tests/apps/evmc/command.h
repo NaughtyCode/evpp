@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "evmc/config.h"
 
@@ -54,9 +54,9 @@ public:
 private:
     virtual void RequestBuffer(std::string& str) = 0;
     evpp::EventLoop* caller_loop_;
-    uint32_t id_; // 并非全局id，只是各个memc_client内部的序号; mget的多个命令共用一个id
+    uint32_t id_; // not a global id, just an internal sequence number per memc_client; multiple mget commands share one id
     uint16_t vbucket_id_;
-    std::vector<uint16_t> server_id_history_; // 执行时从多个备选server中所选定的server
+    std::vector<uint16_t> server_id_history_; // the server selected from multiple candidates during execution
 };
 
 typedef std::shared_ptr<Command> CommandPtr;

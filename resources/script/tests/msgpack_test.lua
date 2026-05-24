@@ -1,4 +1,4 @@
--- msgpack_test.lua
+﻿-- msgpack_test.lua
 -- Comprehensive test suite for cmsgpack / cmsgpack_safe bindings.
 --
 -- Run from Lua:  dofile("resources/script/tests/msgpack_test.lua")
@@ -212,7 +212,7 @@ roundtrip(bin)
 
 start("string unicode")
 roundtrip("héllo wörld — utf-8 ✓")
-roundtrip("中文测试")
+roundtrip("Chinese test")
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- 6. Table (array) encoding

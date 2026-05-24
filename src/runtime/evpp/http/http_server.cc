@@ -1,4 +1,4 @@
-#include "http_server.h"
+﻿#include "http_server.h"
 
 
 #include "evpp/libevent.h"
@@ -52,7 +52,7 @@ void Server::setPortSSLDefaultOption(
 			const char* certificate_chain_file,
 			const char* private_key_file)
 {
-	/* 以0代表默认设置 */
+	/* Use 0 to represent default settings */
 	ssl_option_map_[0] = PortSSLOption {
 		enable_ssl, certificate_chain_file, private_key_file };
 }

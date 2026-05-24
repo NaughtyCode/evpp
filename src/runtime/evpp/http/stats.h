@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #ifdef _DEBUG
 #ifndef H_INTERNAL_STATS
@@ -13,19 +13,19 @@ namespace evpp {
 namespace http {
 namespace stats {
 
-// ÕâÈı¸öÊ±¼äÏà¼Ó¾ÍÊÇÒ»¸öÇëÇóÔÚÓ¦ÓÃ²ãÕıÕæºÄ·ÑµÄ´¦ÀíÊ±¼ä
+// The sum of these three durations is the actual processing time of a request at the application layer
 struct Time {
-    Duration dispatched_time; // ´Ó½ÓÊÕµ½Ò»¸öÇëÇó¿ªÊ¼¼ÆÊ±£¬µ½¸ÃÇëÇó±»µ÷¶Èµ½¹¤×÷Ïß³Ì¿ªÊ¼Ö´ĞĞ£¬Ö®¼äµÄÏûºÄµÄÊ±¼ä
-    Duration execute_time; // ¸ÃÇëÇóÔÚ¹¤×÷Ïß³ÌÖĞÖ´ĞĞ¹ı³ÌºÄ·ÑµÄÊ±¼ä
-    Duration response_time; // ¸ÃÇëÇóÔÚ¹¤×÷Ïß³ÌÖ´ĞĞÍê³ÉÊ±¿ªÊ¼¼ÆÊ±£¬µ½¸ÃÇëÇóµ÷¶Èµ½¼àÌıÏß³ÌÍê³É·¢ËÍ¹¤×÷ÎªÖ¹£¬Ö®¼äÏûºÄµÄÊ±¼ä
+    Duration dispatched_time; // Time from receiving a request to when it is dispatched to a worker thread and starts executing
+    Duration execute_time; // Time spent executing the request in the worker thread
+    Duration response_time; // Time from when the request completes in the worker thread to when the response is sent by the listening thread
 };
 
 struct Count {
-    std::atomic<uint64_t> recv; // ½ÓÊÕµ½µÄÇëÇó¸öÊı
-    std::atomic<uint64_t> dispatched; // ·Ö·¢µ½¹¤×÷Ïß³ÌÖĞµÄÇëÇó¸öÊı
-    std::atomic<uint64_t> responsed; // ¸ø¿Í»§¶Ë»ØÓ¦µÄÇëÇó¸öÊı
-    std::atomic<uint64_t> failed; // ´¦ÀíÊ§°ÜµÄÇëÇó¸öÊı
-    std::atomic<uint64_t> slow; // ÂıÇëÇó¸öÊı£¨´¦ÀíÊ±¼ä³¬¹ıÒ»¶¨µÄãĞÖµ£©
+    std::atomic<uint64_t> recv; // Number of requests received
+    std::atomic<uint64_t> dispatched; // Number of requests dispatched to worker threads
+    std::atomic<uint64_t> responsed; // Number of requests responded to clients
+    std::atomic<uint64_t> failed; // Number of failed requests
+    std::atomic<uint64_t> slow; // Number of slow requests (processing time exceeds a threshold)
 };
 }
 }

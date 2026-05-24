@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <stdint.h>
 
@@ -31,7 +31,7 @@ private:
     void OnResponsePacket(const protocol_binary_response_header& resp,
                           evpp::Buffer* buf);
 private:
-    // TODO : 若使用智能指针，要处理循环引用. client的回调中引用了codec
+    // TODO: if using smart pointers, handle circular references. client callback references codec
     MemcacheClient* memc_client_;
 };
 
