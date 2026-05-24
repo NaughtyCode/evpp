@@ -93,6 +93,7 @@ source_group("engine" FILES ${ENGINE_SOURCES})
 set(VM_SOURCES
     vm/vm.cc vm/vm.h
     vm/script_importer.cc vm/script_importer.h
+    vm/custom_ptr_store.cc vm/custom_ptr_store.h
 )
 source_group("vm" FILES ${VM_SOURCES})
 

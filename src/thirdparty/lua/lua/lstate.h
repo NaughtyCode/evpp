@@ -368,6 +368,9 @@ typedef struct global_State {
   TString *strcache[STRCACHE_N][STRCACHE_M];  /* cache for strings in API */
   lua_WarnFunction warnf;  /* warning function */
   void *ud_warn;         /* auxiliary data to 'warnf' */
+  void **customptrs;     /* dynamic array of custom void* pointers */
+  int customptr_cap;     /* allocated capacity */
+  int customptr_len;     /* number of stored pointers */
   LX mainth;  /* main thread of this state */
 } global_State;
 

@@ -269,6 +269,7 @@ static void close_state (lua_State *L) {
     luai_userstateclose(L);
   }
   luaM_freearray(L, G(L)->strt.hash, cast_sizet(G(L)->strt.size));
+  luaM_freearray(L, g->customptrs, cast_sizet(g->customptr_cap));
   freestack(L);
   lua_assert(gettotalbytes(g) == sizeof(global_State));
   (*g->frealloc)(g->ud, g, sizeof(global_State), 0);  /* free main block */
@@ -373,6 +374,9 @@ LUA_API lua_State *lua_newstate (lua_Alloc f, void *ud, unsigned seed) {
   g->gray = g->grayagain = NULL;
   g->weak = g->ephemeron = g->allweak = NULL;
   g->twups = NULL;
+  g->customptrs = NULL;
+  g->customptr_cap = 0;
+  g->customptr_len = 0;
   g->GCtotalbytes = sizeof(global_State);
   g->GCmarked = 0;
   g->GCdebt = 0;
