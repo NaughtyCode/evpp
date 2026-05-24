@@ -1,11 +1,10 @@
 
-
-1. posttask1是多个线程排成一圈，依次给下一个线程post task，task为递增一个成员变量，直到递增到设定次数为止。
-1. posttask2是偶数个线程两两分成多组，组内两个线程来回post task，task为递增一个成员变量（需要用atomic），直到递增到设定次数为止。
-1. postask3是线程1向线程2发送指定数量的task。
-1. postask4是线程1向线程2发送指定数量的task，但是并不真正发送这么多次，而是检查一个带锁的队列，如果队列不为空则直接插入不发送。
-1. postask5是posttask4的改进版。队列直接保存task本身。这更接近真实情况。posttask4过于简化任务了。
-1. postask6是多个线程同时向同一个线程post task，task为递增一个成员变量，直到递增到设定次数为止。在多个生产者，单消费者的情况下，使用boost::lockfree之后的性能大约是std::mutex的两倍。推荐使用boost::lockfree
+1. posttask1: multiple threads arranged in a circle, each posting a task to the next thread. The task increments a member variable until a set count is reached.
+1. posttask2: an even number of threads paired into groups. Within each group, two threads post tasks back and forth, incrementing a member variable (requires atomic) until a set count is reached.
+1. posttask3: thread 1 sends a specified number of tasks to thread 2.
+1. posttask4: thread 1 sends a specified number of tasks to thread 2, but doesn't actually send that many times. Instead, it checks a locked queue — if the queue is not empty, it inserts directly without sending.
+1. posttask5: an improved version of posttask4. The queue stores the tasks themselves. This is closer to real-world scenarios. posttask4 oversimplified the task.
+1. posttask6: multiple threads simultaneously post tasks to the same thread, incrementing a member variable until a set count is reached. In a multi-producer, single-consumer scenario, using boost::lockfree yields about twice the performance of std::mutex. boost::lockfree is recommended.
 
 [huyuguang@dtrans1 ~/code/asio]$ ./asio_test.exe posttask3 10000000 use time(us): 9077386
 
@@ -13,4 +12,4 @@
 
 [huyuguang@dtrans1 ~/code/asio]$ ./asio_test.exe posttask5 10000000 use time(us): 4202412
 
-posttask4是理想情况。posttask5比较接近真实情况。但实际上由于posttask5的实现是高度优化的，包括用了2个实现reserved的vector来回swap，因此我怀疑并不值得采用posttask5这样的上层优化。
+posttask4 represents the ideal case. posttask5 is closer to real-world scenarios. However, since posttask5's implementation is highly optimized, including using two pre-reserved vectors that swap back and forth, I doubt whether such upper-layer optimizations like posttask5 are worth adopting.

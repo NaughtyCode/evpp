@@ -1,27 +1,27 @@
 # engine
 
-游戏服务器引擎。
+Game server engine.
 
-## 开发语言
+## Development Language
 
 - C++17
 
-## 代码风格
+## Code Style
 
-- 使用 `clang-format`（项目根目录 `.clang-format`）
-- 类型名 `PascalCase`，函数名 `PascalCase`，变量名 `snake_case`，常量 `kPascalCase`
-- 成员变量后缀 `_`（如 `player_id_`）
-- 头文件 include 顺序：自身头文件 → 标准库 → 第三方库 → 项目头文件
-- 每个 `.cc` 配对 `.h`，统一使用 `#pragma once`
-- 禁止裸 `new/delete`，用 `std::unique_ptr`/`std::shared_ptr` 管理生命周期
+- Use `clang-format` (project root `.clang-format`)
+- Type names `PascalCase`, function names `PascalCase`, variable names `snake_case`, constants `kPascalCase`
+- Member variable suffix `_` (e.g. `player_id_`)
+- Header include order: own header → standard library → third-party library → project header
+- Each `.cc` paired with `.h`, uniformly use `#pragma once`
+- No raw `new`/`delete`, use `std::unique_ptr`/`std::shared_ptr` to manage lifetime
 
-## 提交规范
+## Commit Conventions
 
-- 分支命名：`feature/<描述>`、`fix/<描述>`、`refactor/<描述>`
-- commit message：英文、首行不超过 72 字符，格式 `<type>: <概述>`
-  - `feat:` 新功能
-  - `fix:` 修复
-  - `refactor:` 重构
-  - `docs:` 文档
-  - `test:` 测试
-- 一个 commit 只做一件事，不混入无关改动
+- Branch naming: `feature/<description>`, `fix/<description>`, `refactor/<description>`
+- Commit message: English, first line no more than 72 characters, format `<type>: <summary>`
+  - `feat:` new feature
+  - `fix:` bug fix
+  - `refactor:` refactoring
+  - `docs:` documentation
+  - `test:` tests
+- One commit does one thing, do not mix unrelated changes

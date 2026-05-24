@@ -1,16 +1,16 @@
-# evpp设计细节系列(1)：利用 enable_shared_from_this 实现一个自管理的定时器
+# evpp Design Details Series (1): Implementing a Self-Managed Timer Using enable_shared_from_this
 
 
 
-# 0. 前言
+# 0. Foreword
 
-[https://github.com/Qihoo360/evpp](https://github.com/Qihoo360/evpp)是一个高性能的Reactor模式的现代化的C++11版本的高性能网络库。该项目中有一个`InvokeTimer`对象，接口头文件详细代码请参见[https://github.com/Qihoo360/evpp/blob/master/evpp/invoke_timer.h](https://github.com/Qihoo360/evpp/blob/master/evpp/invoke_timer.h)。它是一个能自我管理的定时器类，可以将一个仿函数绑定到该定时器上，然后让该定时器自己管理并在预期的一段时间后执行该仿函数。
+[https://github.com/Qihoo360/evpp](https://github.com/Qihoo360/evpp) is a high-performance, modern C++11 network library based on the Reactor pattern. The project includes an `InvokeTimer` object — for the detailed interface header file, see [https://github.com/Qihoo360/evpp/blob/master/evpp/invoke_timer.h](https://github.com/Qihoo360/evpp/blob/master/evpp/invoke_timer.h). It is a self-managing timer class that can bind a functor to the timer and then let the timer manage itself and execute the functor after a specified period.
 
-现在我们复盘一下这个功能的实现细节和演化过程。
+Now let's review the implementation details and evolution of this feature.
 
-# 1. 基础代码
+# 1. Base Code
 
-定时器原型声明可能是下面的样子：
+The timer prototype declaration might look like this:
 
 ```C++
 class InvokeTimer {
@@ -21,13 +21,13 @@ public:
 };
 ```
 
-这个是最基本的接口，可以设置一个仿函数，并设置一个过期时间，然后绑定到一个`event_base`对象上，然后就可以期待过了一个预期的时间后，我们设置的仿函数被调用了。
+This is the most basic interface: you can set a functor with an expiration time, bind it to an `event_base` object, and then expect the functor to be called after the specified time has elapsed.
 
-为了便于说明后续的多个版本的实现，我们先将基础的不变的代码说明一下。
+To facilitate explaining the multiple versions that follow, let's first explain the foundational code that remains unchanged.
 
-基础代码，我们采用[evpp]项目中的`TimerEventWatcher`，详细实现在这里[event_watcher.h]和[event_watcher.cc]。它是一个时间定时器观察者对象，可以观察一个时间事件。
+For the base code, we use the `TimerEventWatcher` from the [evpp] project, with detailed implementation in [event_watcher.h] and [event_watcher.cc]. It is a timer event watcher object that can observe a timer event.
 
-头文件`event_watcher.h`定义如下：
+The header file `event_watcher.h` is defined as follows:
 
 ```C++
 #pragma once
@@ -82,7 +82,7 @@ private:
 
 ```
 
-实现文件`event_watcher.cc`如下：
+The implementation file `event_watcher.cc` is as follows:
 
 ```C++
 #include <string.h>
@@ -207,13 +207,13 @@ bool TimerEventWatcher::AsyncWait() {
 ```
 
 
-# 2. 一个最基本的实现：basic-01
+# 2. A Basic Implementation: basic-01
 
-我们先尝试实现一个能满足最基本需求的定时器。
+Let's first try to implement a timer that meets the most basic requirements.
 
 ```C++
 
-// 头文件
+// Header file
 #include <memory>
 #include <functional>
 
@@ -247,7 +247,7 @@ private:
 
 
 
-// 实现文件
+// Implementation file
 #include "invoke_timer.h"
 #include "event_watcher.h"
 
@@ -284,7 +284,7 @@ void InvokeTimer::OnTimerTriggered() {
 
 ```
 
-测试main.cc
+Test main.cc
 
 ```C++
 #include "invoke_timer.h"
@@ -308,9 +308,9 @@ int main() {
 }
 ```
 
-我们先创建一个`event_base`对象，随后创建一个`InvokeTimer`对象，随后让timer启动起来，即将timer注册到`event_base`对象中，最后运行`event_base_dispatch(base)`。
+We first create an `event_base` object, then create an `InvokeTimer` object, then start the timer — i.e., register the timer with the `event_base` object — and finally run `event_base_dispatch(base)`.
 
-下面编译运行，结果是符合预期的：当timer的时间到期后，能顺利触发回调。
+Compile and run it. The result meets expectations: when the timer expires, the callback is triggered successfully.
 
 ```shell
 $ ls -l
@@ -330,16 +330,16 @@ Print hello world.
 InvokeTimer::~InvokeTimer tid=139965845526336 this=0x7ffd2790f780
 ```
 
-这个实现方式，`InvokeTimer`对象生命周期的管理是一个问题，它需要调用者自己管理。
+In this implementation, managing the lifecycle of the `InvokeTimer` object is a problem — it requires the caller to manage it themselves.
 
 
-# 3. 能够实现最基本自我管理：basic-02
+# 3. Basic Self-Management: basic-02
 
-为了实现`InvokeTimer`对象生命周期的自我管理，其实就是调用者不需要关心`InvokeTimer`对象的生命周期问题。可以设想一下，假如`InvokeTimer`对象创建后，当定时时间一到，我们就调用其绑定的毁掉回函，然后`InvokeTimer`对象自我销毁，是不是就可以实现自我管理了呢？嗯，这个可行。请看下面代码。
+To achieve self-management of the `InvokeTimer` object's lifecycle, the caller should not need to care about the lifecycle of the `InvokeTimer` object. Imagine this: after the `InvokeTimer` object is created, when the timer expires, we call its bound callback function, and then the `InvokeTimer` object self-destructs. Wouldn't that achieve self-management? Yes, this works. See the code below.
 
 ```C++
 
-// 头文件
+// Header file
 
 #include <memory>
 #include <functional>
@@ -377,7 +377,7 @@ private:
 }
 
 
-// 实现文件
+// Implementation file
 
 #include "invoke_timer.h"
 #include "event_watcher.h"
@@ -419,9 +419,9 @@ void InvokeTimer::OnTimerTriggered() {
 
 ```
 
-请注意，上述实现中，为了实现自我销毁，我们必须调用 **delete** ，这就注定了`InvokeTimer`对象必须在堆上创建，因此我们隐藏了它的构造函数，然后用一个静态的 **Create** 成员来创建`InvokeTimer`对象的实例。
+Note that in the above implementation, to achieve self-destruction, we must call **delete**, which means the `InvokeTimer` object must be created on the heap. Therefore, we hide its constructor and use a static **Create** member to create instances of the `InvokeTimer` object.
 
-相应的，`main.cc`也做了一点点修改代码如下：
+Correspondingly, `main.cc` has also been slightly modified as follows:
 
 
 ```C++
@@ -438,16 +438,16 @@ void Print() {
 int main() {
     struct event_base* base = event_base_new();
     auto timer = recipes::InvokeTimer::Create(base, 1000.0, &Print);
-    timer->Start(); // 启动完成后，就不用关注该对象了
+    timer->Start(); // Once started, no need to track this object
     event_base_dispatch(base);
     event_base_free(base);
     return 0;
 }
 ```
 
-这个实现，就不需要上层调用者手工`delete`这个`InvokeTimer`对象的实例，从而达到`InvokeTimer`对象自我管理的目的。
+This implementation does not require the upper-layer caller to manually `delete` the `InvokeTimer` object instance, thus achieving self-management of the `InvokeTimer` object.
 
-下面编译运行，结果是符合预期的：当timer时间到期后，能顺利触发回调，并且`InvokeTimer`对象也自动析构了。
+Compile and run it. The result meets expectations: when the timer expires, the callback is triggered successfully, and the `InvokeTimer` object is automatically destructed.
 
 ```shell
 $ ls -l
@@ -468,19 +468,19 @@ InvokeTimer::~InvokeTimer tid=139965845526336 this=0x7ffd2790f780
 ```
 
 
-# 4. 如果要取消一个定时器怎么办：cancel-03
+# 4. What If You Need to Cancel a Timer: cancel-03
 
-上面第2种实现方式，实现了定时器的自我管理，调用者不需要关心定时器的生命周期的管理问题。接下来，新的需求又来了，上层调用者说，在对外发起一个请求时，可以设置一个定时器来处理超时问题，但如果请求及时的回来了，我们得及时取消该定时器啊，这又如何处理呢？
+The second implementation above achieved self-management of the timer, where the caller doesn't need to worry about the timer's lifecycle. Then a new requirement came along: the upper-layer caller said, when making a request, you can set a timer to handle timeout, but if the request comes back in time, we need to cancel the timer promptly. How do we handle that?
 
-这就相当于要把上层调用者还得一直保留`InvokeTimer`对象的实例，以便在需要的时候，提前取消掉该定时器。上层调用者保留这个指针，就会带来一定的风险，例如误用，当`InvokeTimer`对象已经自动析构了，该该指针还继续存在于上层调用者那里。
+This means the upper-layer caller must keep a reference to the `InvokeTimer` object instance so that it can cancel the timer early when needed. The upper-layer caller retaining this pointer introduces certain risks, such as misuse — when the `InvokeTimer` object has already auto-destructed, the dangling pointer still exists at the upper-layer caller.
 
-于是乎，智能指针`shared_ptr`出场了，我们希望上层调用者看到的对象是以`shared_ptr<InvokeTimer>`形式存在的，无论上层调用者是否保留这个`shared_ptr<InvokeTimer>`对象，`InvokeTimer`对象都能自我管理，也就是说，当上层调用者不保留`shared_ptr<InvokeTimer>`对象时，`InvokeTimer`对象要能自我管理。
+Thus, the smart pointer `shared_ptr` makes its entrance. We want the object that the upper-layer caller sees to exist in the form of `shared_ptr<InvokeTimer>`. Regardless of whether the upper-layer caller retains this `shared_ptr<InvokeTimer>` object, the `InvokeTimer` object should be able to self-manage. In other words, when the upper-layer caller does not retain the `shared_ptr<InvokeTimer>` object, the `InvokeTimer` object must still self-manage.
 
-这里就必须让`InvokeTimer`对象本身也要保存一份`shared_ptr<InvokeTimer>`对象。为了实现这一技术，我们需要引入`enable_shared_from_this`。关于`enable_shared_from_this`的介绍，网络上已经有很多资料了，这里不多累述。我们直接上最终的实现代码：
+Here, the `InvokeTimer` object itself must also hold a copy of the `shared_ptr<InvokeTimer>` object. To implement this technique, we need to introduce `enable_shared_from_this`. There is already plenty of material about `enable_shared_from_this` online, so we won't elaborate further here. Let's go straight to the final implementation code:
 
 ```C++
 
-// 头文件
+// Header file
 
 #include <memory>
 #include <functional>
@@ -528,7 +528,7 @@ private:
 }
 
 
-// 实现文件
+// Implementation file
 
 #include "invoke_timer.h"
 #include "event_watcher.h"
@@ -595,7 +595,7 @@ void InvokeTimer::OnCanceled() {
 
 
 
-相应的，`main.cc`也做了一点点修改代码如下：
+Correspondingly, `main.cc` has also been slightly modified as follows:
 
 
 ```C++
@@ -612,28 +612,28 @@ void Print() {
 int main() {
     struct event_base* base = event_base_new();
     auto timer = recipes::InvokeTimer::Create(base, 1000.0, &Print);
-    timer->Start(); // 启动完成后，就不用关注该对象了
+    timer->Start(); // Once started, no need to track this object
     event_base_dispatch(base);
     event_base_free(base);
     return 0;
 }
 ```
 
-这个实现，就不需要上层调用者手工`delete`这个`InvokeTimer`对象的实例，从而达到`InvokeTimer`对象自我管理的目的。
+This implementation does not require the upper-layer caller to manually `delete` the `InvokeTimer` object instance, thus achieving self-management of the `InvokeTimer` object.
 
-下面编译运行，结果是符合预期的：当timer时间到期后，能顺利触发回调，并且`InvokeTimer`对象也自动析构了。
-
-
+Compile and run it. The result meets expectations: when the timer expires, the callback is triggered successfully, and the `InvokeTimer` object is automatically destructed.
 
 
-# 5. 实现一个周期性的定时器：periodic-04
-
-上述几个实现中，都是一次性的定时器任务。但是如果我们想实现一个周期性的定时器该如何实现呢？例如，我们有一个任务，需要每分钟做一次。
-
-其实，基于上述第三个版本的实现，可以很容易的实现周期性的定时器功能。只需要在回调函数中，继续调用`timer->AsyncWait()`即可。详细的修改情况如下。
 
 
-头文件 invoke_timer.h 改变：
+# 5. Implementing a Periodic Timer: periodic-04
+
+The above implementations are all one-shot timer tasks. But what if we want to implement a periodic timer? For example, we have a task that needs to run once per minute.
+
+In fact, based on the third version above, implementing periodic timer functionality is quite easy. You just need to call `timer->AsyncWait()` again in the callback function. The detailed changes are as follows.
+
+
+Header file invoke_timer.h changes:
 
 ```diff
 
@@ -666,7 +666,7 @@ int main() {
 ```
 
 
-实现文件 invoke_timer.cc 改变：
+Implementation file invoke_timer.cc changes:
 
 ```diff
 
@@ -721,7 +721,7 @@ int main() {
 
 ```
 
-main.cc测试示例代码也有所修改，具体如下：
+The main.cc test example has also been modified as follows:
 
 
 ```C++
@@ -746,20 +746,20 @@ int main() {
 }
 ```
 
-该版本是最终的实现版本。相关代码都在[https://github.com/Qihoo360/evpp/tree/master/examples/recipes/self_control_timer]这里，为了便于演示，其不依赖[evpp]。
+This version is the final implementation. The relevant code is all at [https://github.com/Qihoo360/evpp/tree/master/examples/recipes/self_control_timer]. For ease of demonstration, it has no dependency on [evpp].
 
 
-# 6. 最后
+# 6. Closing
 
-[evpp]项目官网地址为：[https://github.com/Qihoo360/evpp]
-本文中的详细代码实现请参考 [https://github.com/Qihoo360/evpp/tree/master/examples/recipes/self_control_timer]
+[evpp] project homepage: [https://github.com/Qihoo360/evpp]
+For the detailed code implementation in this article, see [https://github.com/Qihoo360/evpp/tree/master/examples/recipes/self_control_timer]
 
-# 7. evpp系列文章列表
+# 7. evpp Series Article List
 
-[evpp性能测试（3）: 对无锁队列boost::lockfree::queue和moodycamel::ConcurrentQueue做一个性能对比测试](http://blog.csdn.net/zieckey/article/details/69803011)
-[evpp性能测试（2）: 与Boost.Asio进行吞吐量对比测试](http://blog.csdn.net/zieckey/article/details/69170619)
-[evpp性能测试（1）: 与muduo进行吞吐量测试](http://blog.csdn.net/zieckey/article/details/63778715)
-[发布一个高性能的Reactor模式的C++网络库：evpp](http://blog.csdn.net/zieckey/article/details/63760757)
+[evpp Performance Test (3): A Performance Comparison of Lock-Free Queues boost::lockfree::queue and moodycamel::ConcurrentQueue](http://blog.csdn.net/zieckey/article/details/69803011)
+[evpp Performance Test (2): Throughput Comparison with Boost.Asio](http://blog.csdn.net/zieckey/article/details/69170619)
+[evpp Performance Test (1): Throughput Comparison with muduo](http://blog.csdn.net/zieckey/article/details/63778715)
+[Releasing a High-Performance Reactor-Pattern C++ Network Library: evpp](http://blog.csdn.net/zieckey/article/details/63760757)
 
 [gtest]:https://github.com/google/googletest
 [glog]:https://github.com/google/glog
