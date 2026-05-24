@@ -287,42 +287,42 @@ void ScriptVM::RegisterModuleOpen(std::string_view name, lua_CFunction openf,
 //=================================================================
 
 bool ScriptVM::ReserveCustomPtrSlots(int total_slots) {
-    VMCustomPtrStore store(GetState());
+    VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
     return store.Reserve(total_slots);
 }
 
 void ScriptVM::SetCustomPtr(int index, void* ptr) {
-    VMCustomPtrStore store(GetState());
+    VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
     store.Set(index, ptr);
 }
 
 void* ScriptVM::GetCustomPtr(int index) const {
-    VMCustomPtrStore store(GetState());
+    VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
     return store.Get(index);
 }
 
 int ScriptVM::PushCustomPtr(void* ptr) {
-    VMCustomPtrStore store(GetState());
+    VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
     return store.Push(ptr);
 }
 
 void ScriptVM::SetNullCustomPtr(int index) {
-    VMCustomPtrStore store(GetState());
+    VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
     store.SetNull(index);
 }
 
 void ScriptVM::ClearCustomPtrs() {
-    VMCustomPtrStore store(GetState());
+    VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
     store.Clear();
 }
 
 int ScriptVM::CustomPtrCount() const {
-    VMCustomPtrStore store(GetState());
+    VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
     return store.Count();
 }
 
 int ScriptVM::CustomPtrCapacity() const {
-    VMCustomPtrStore store(GetState());
+    VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
     return store.Capacity();
 }
 
@@ -331,22 +331,22 @@ bool ScriptVM::HasCustomPtr(int index) const {
 }
 
 int ScriptVM::FindCustomPtr(void* ptr) const {
-    VMCustomPtrStore store(GetState());
+    VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
     return store.Find(ptr);
 }
 
 bool ScriptVM::ContainsCustomPtr(void* ptr) const {
-    VMCustomPtrStore store(GetState());
+    VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
     return store.Contains(ptr);
 }
 
 int ScriptVM::CopyCustomPtrsTo(void** dst, int max_count) const {
-    VMCustomPtrStore store(GetState());
+    VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
     return store.CopyTo(dst, max_count);
 }
 
 void ScriptVM::CopyCustomPtrsFrom(void* const* src, int count) {
-    VMCustomPtrStore store(GetState());
+    VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
     store.CopyFrom(src, count);
 }
 

@@ -309,16 +309,24 @@ PHYSICS_LUA_LOG_CALL(Fatal, PHYSICS_LOG_CRITICAL)
 #undef PHYSICS_LUA_LOG_CALL
 
 //============================================================================
-// Module registration table
+// Log functions — registered as globals (log_info, log_debug, …)
 //============================================================================
 
-const luaL_Reg kPhysicsModule[] = {
+const luaL_Reg kPhysicsLogFunctions[] = {
     {"log_trace",      LuaLogTrace},
     {"log_debug",      LuaLogDebug},
     {"log_info",       LuaLogInfo},
     {"log_warn",       LuaLogWarn},
     {"log_error",      LuaLogError},
     {"log_fatal",      LuaLogFatal},
+    {nullptr, nullptr}
+};
+
+//============================================================================
+// Physics module — registered as the "physics" table
+//============================================================================
+
+const luaL_Reg kPhysicsModule[] = {
     {"spawn",          LuaSpawn},
     {"destroy",        LuaDestroy},
     {"apply_force",    LuaApplyForce},
@@ -341,6 +349,7 @@ const luaL_Reg kPhysicsModule[] = {
 //============================================================================
 
 void Register(ScriptVM& vm) {
+    vm.RegisterFunctions(kPhysicsLogFunctions);  // globals: log_info, log_debug, …
     vm.RegisterModule("physics", kPhysicsModule);
 }
 

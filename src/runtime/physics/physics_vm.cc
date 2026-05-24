@@ -28,7 +28,7 @@ PhysicsScriptVM::~PhysicsScriptVM() {
 void PhysicsScriptVM::RegisterSubsystemObjects(PhysicsSystem* sys,
                                                PhysicsThread* thread,
                                                PhysicsWorld* world) {
-    VMCustomPtrStore store(GetState());
+    VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
 
     // Pre-allocate for the 4 core slots so no realloc occurs.
     store.Reserve(kPhysPtrScriptVM);
@@ -47,17 +47,17 @@ void PhysicsScriptVM::RegisterSubsystemObjects(PhysicsSystem* sys,
 // ── Typed subsystem accessors ────────────────────────────────────────────
 
 PhysicsSystem* PhysicsScriptVM::GetPhysicsSystem() const {
-    VMCustomPtrStore store(GetState());
+    VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
     return store.GetAs<PhysicsSystem>(kPhysPtrSystem);
 }
 
 PhysicsThread* PhysicsScriptVM::GetPhysicsThread() const {
-    VMCustomPtrStore store(GetState());
+    VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
     return store.GetAs<PhysicsThread>(kPhysPtrThread);
 }
 
 PhysicsWorld* PhysicsScriptVM::GetPhysicsWorld() const {
-    VMCustomPtrStore store(GetState());
+    VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
     return store.GetAs<PhysicsWorld>(kPhysPtrWorld);
 }
 
