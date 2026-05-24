@@ -8,6 +8,7 @@
 #include <Jolt/Math/Vec3.h>
 #include <Jolt/Math/Quat.h>
 
+#include "runtime/physics/physics_log.h"
 #include "runtime/physics/physics_system.h"
 #include "runtime/vm/vm.h"
 
@@ -281,10 +282,36 @@ int LuaGetStats(lua_State* L) {
 }
 
 //============================================================================
+// Physics-specific log API — uses GetPhysicsLogger() internally.
+//============================================================================
+
+#define PHYSICS_LUA_LOG_CALL(name, macro)                            \
+    int LuaLog##name(lua_State* L) {                                  \
+        const char* msg = luaL_checkstring(L, 1);                     \
+        macro("[physics_lua] {}", msg);                               \
+        return 0;                                                     \
+    }
+
+PHYSICS_LUA_LOG_CALL(Trace, PHYSICS_LOG_TRACE)
+PHYSICS_LUA_LOG_CALL(Debug, PHYSICS_LOG_DEBUG)
+PHYSICS_LUA_LOG_CALL(Info,  PHYSICS_LOG_INFO)
+PHYSICS_LUA_LOG_CALL(Warn,  PHYSICS_LOG_WARN)
+PHYSICS_LUA_LOG_CALL(Error, PHYSICS_LOG_ERROR)
+PHYSICS_LUA_LOG_CALL(Fatal, PHYSICS_LOG_CRITICAL)
+
+#undef PHYSICS_LUA_LOG_CALL
+
+//============================================================================
 // Module registration table
 //============================================================================
 
 const luaL_Reg kPhysicsModule[] = {
+    {"log_trace",      LuaLogTrace},
+    {"log_debug",      LuaLogDebug},
+    {"log_info",       LuaLogInfo},
+    {"log_warn",       LuaLogWarn},
+    {"log_error",      LuaLogError},
+    {"log_fatal",      LuaLogFatal},
     {"spawn",          LuaSpawn},
     {"destroy",        LuaDestroy},
     {"apply_force",    LuaApplyForce},

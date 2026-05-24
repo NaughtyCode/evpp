@@ -120,6 +120,7 @@ set(PHYSICS_HEADERS
     physics/physics_materials.h physics/physics_diff.h physics/physics_assets.h
     physics/physics_world.h physics/physics_thread.h physics/physics_system.h
     physics/physics_engine_bridge.h physics/physics_bindings.h
+    physics/physics_vm.h physics/physics_log.h
 )
 source_group("physics" FILES ${PHYSICS_HEADERS})
 
@@ -129,7 +130,7 @@ set(PHYSICS_CC
     physics/physics_diff.cc physics/physics_assets.cc
     physics/physics_world.cc physics/physics_thread.cc
     physics/physics_system.cc physics/physics_engine_bridge.cc
-    physics/physics_bindings.cc
+    physics/physics_bindings.cc physics/physics_vm.cc
 )
 source_group("physics" FILES ${PHYSICS_CC})
 

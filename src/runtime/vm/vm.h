@@ -32,7 +32,7 @@ public:
     //=================================================================
 
     ScriptVM();
-    ~ScriptVM();
+    virtual ~ScriptVM();
 
     ScriptVM(const ScriptVM&) = delete;
     ScriptVM& operator=(const ScriptVM&) = delete;

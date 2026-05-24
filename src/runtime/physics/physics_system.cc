@@ -9,8 +9,8 @@
 #include <Jolt/Math/Vec3.h>
 #include <Jolt/Math/Quat.h>
 
-#include "runtime/core/log/log.h"
-#include "runtime/core/log/log_macros.h"
+#include "runtime/physics/physics_log.h"
+#include "runtime/physics/physics_vm.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {
@@ -48,11 +48,10 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
         return false;
     }
 
-    auto* logger = GetLogger();
-    ENGINE_LOG_INFO(logger, "PhysicsSystem: configs loaded from [{}]", config_dir);
+    PHYSICS_LOG_INFO("PhysicsSystem: configs loaded from [{}]", config_dir);
 
-    // ── Create physics-dedicated ScriptVM ─────────────────────────────
-    script_vm_ = std::make_unique<ScriptVM>();
+    // ── Create physics-dedicated ScriptVM with [physics_vm] log prefix ─
+    script_vm_ = std::make_unique<PhysicsScriptVM>();
     script_vm_->SetImportPath(scripts_dir);
 
     // Register physics API bindings
@@ -62,7 +61,7 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
     if (!scripts_dir.empty()) {
         size_t failed = script_vm_->DoDirectory(scripts_dir);
         if (failed > 0) {
-            ENGINE_LOG_WARN(logger,
+            PHYSICS_LOG_WARN(
                 "PhysicsSystem: [{}] script(s) failed to load from [{}]",
                 failed, scripts_dir);
         }
@@ -70,7 +69,7 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
     }
 
     is_initialized_ = true;
-    ENGINE_LOG_INFO(logger, "PhysicsSystem: initialized (physics thread NOT started)");
+    PHYSICS_LOG_INFO("PhysicsSystem: initialized (physics thread NOT started)");
     return true;
 }
 
@@ -96,13 +95,11 @@ bool PhysicsSystem::Start() {
         assets_path_);
 
     if (!ok) {
-        auto* logger = GetLogger();
-        ENGINE_LOG_ERROR(logger, "PhysicsSystem: failed to start physics thread");
+        PHYSICS_LOG_ERROR("PhysicsSystem: failed to start physics thread");
         return false;
     }
 
-    auto* logger = GetLogger();
-    ENGINE_LOG_INFO(logger, "PhysicsSystem: physics thread started");
+    PHYSICS_LOG_INFO("PhysicsSystem: physics thread started");
     return true;
 }
 
@@ -123,8 +120,7 @@ void PhysicsSystem::Shutdown() {
     config_manager_.reset();
     is_initialized_ = false;
 
-    auto* logger = GetLogger();
-    ENGINE_LOG_INFO(logger, "PhysicsSystem: shutdown complete");
+    PHYSICS_LOG_INFO("PhysicsSystem: shutdown complete");
 }
 
 //============================================================================
@@ -381,8 +377,7 @@ void PhysicsSystem::UpdateScript() {
 
         // Call on_physics_collision(event)
         if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
-            auto* logger = GetLogger();
-            ENGINE_LOG_ERROR(logger, "PhysicsSystem: on_physics_collision error: {}",
+            PHYSICS_LOG_ERROR("PhysicsSystem: on_physics_collision error: {}",
                              lua_tostring(L, -1));
             lua_pop(L, 1);
         }

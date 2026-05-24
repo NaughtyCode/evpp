@@ -12,7 +12,7 @@
 
 #include "runtime/config/config.h"
 #include "runtime/core/log/log.h"
-#include "runtime/core/log/log_macros.h"
+#include "runtime/physics/physics_log.h"
 #include "runtime/profiler/profiler_events.h"
 
 namespace engine {
@@ -74,7 +74,7 @@ bool PhysicsThread::Start(const PhysicsConfig& config,
         return false;
     }
 
-    ENGINE_LOG_INFO(logger_, "PhysicsThread: starting, thread_priority=[{}], "
+    PHYSICS_LOG_INFO("PhysicsThread: starting, thread_priority=[{}], "
                     "affinity=[{}], assets=[{}]",
                     threading.thread_priority, threading.affinity_mask, assets_path);
 
@@ -120,7 +120,7 @@ void PhysicsThread::Stop() {
         return;
     }
 
-    ENGINE_LOG_INFO(logger_, "PhysicsThread: stopping...");
+    PHYSICS_LOG_INFO("PhysicsThread: stopping...");
 
     // Signal thread to exit
     running_.store(false, std::memory_order_release);
@@ -134,7 +134,7 @@ void PhysicsThread::Stop() {
     }
     thread_.reset();
 
-    ENGINE_LOG_INFO(logger_, "PhysicsThread: stopped");
+    PHYSICS_LOG_INFO("PhysicsThread: stopped");
     logger_ = nullptr;  // logger is managed by quill, no explicit delete
 }
 
@@ -143,9 +143,8 @@ void PhysicsThread::Stop() {
 //============================================================================
 
 bool PhysicsThread::Recover(const std::string& saved_state) {
-    auto* logger = GetLogger();
-    ENGINE_LOG_WARN(logger, "PhysicsThread: attempting recovery...");
-    ENGINE_LOG_WARN(logger, "PhysicsThread: was healthy=[{}], running=[{}]",
+    PHYSICS_LOG_WARN("PhysicsThread: attempting recovery...");
+    PHYSICS_LOG_WARN("PhysicsThread: was healthy=[{}], running=[{}]",
                     healthy_.load(), running_.load());
 
     // Stop the old thread (safe even if thread already exited)
@@ -158,7 +157,7 @@ bool PhysicsThread::Recover(const std::string& saved_state) {
     bool ok = Start(physics_config_, threading_config_, thresholds_config_,
                      log_config_, assets_path_);
     if (!ok) {
-        ENGINE_LOG_ERROR(logger, "PhysicsThread: recovery failed — Start() returned false");
+        PHYSICS_LOG_ERROR("PhysicsThread: recovery failed — Start() returned false");
         return false;
     }
 
@@ -169,7 +168,7 @@ bool PhysicsThread::Recover(const std::string& saved_state) {
         ++wait_attempts;
     }
     if (!healthy_.load(std::memory_order_acquire)) {
-        ENGINE_LOG_ERROR(logger, "PhysicsThread: recovery failed — "
+        PHYSICS_LOG_ERROR("PhysicsThread: recovery failed — "
                          "world did not become healthy after restart");
         return false;
     }
@@ -177,15 +176,15 @@ bool PhysicsThread::Recover(const std::string& saved_state) {
     // Optionally restore state
     if (!saved_state.empty()) {
         if (!world_.RestoreState(saved_state)) {
-            ENGINE_LOG_ERROR(logger, "PhysicsThread: recovery — "
+            PHYSICS_LOG_ERROR("PhysicsThread: recovery — "
                              "state restoration failed");
             return false;
         }
-        ENGINE_LOG_INFO(logger, "PhysicsThread: state restored "
+        PHYSICS_LOG_INFO("PhysicsThread: state restored "
                         "([{}] bytes)", saved_state.size());
     }
 
-    ENGINE_LOG_INFO(logger, "PhysicsThread: recovery complete");
+    PHYSICS_LOG_INFO("PhysicsThread: recovery complete");
     return true;
 }
 
@@ -201,7 +200,7 @@ bool PhysicsThread::EnqueueCommand(PhysicsCommand cmd) {
     // Frame pile-up protection [D23]: check queue size
     size_t approx_size = command_queue_.size_approx();
     if (static_cast<int>(approx_size) >= threading_config_.max_pending_frames) {
-        ENGINE_LOG_WARN(logger_, "PhysicsThread: command queue full "
+        PHYSICS_LOG_WARN("PhysicsThread: command queue full "
                         "(approx=[{}], max=[{}]), dropping command",
                         approx_size, threading_config_.max_pending_frames);
         return false;
@@ -227,18 +226,18 @@ std::unique_ptr<PhysicsFrameResult> PhysicsThread::TryDequeueResult() {
 //============================================================================
 
 void PhysicsThread::EventLoop() {
-    ENGINE_LOG_INFO(logger_, "PhysicsThread: event loop started");
+    PHYSICS_LOG_INFO("PhysicsThread: event loop started");
 
     // Initialize PhysicsWorld with configs captured at Start()
     bool ok = world_.Initialize(physics_config_, threading_config_,
                                  thresholds_config_, logger_, assets_path_);
     if (!ok) {
-        ENGINE_LOG_ERROR(logger_, "PhysicsThread: world initialization failed");
+        PHYSICS_LOG_ERROR("PhysicsThread: world initialization failed");
         healthy_.store(false, std::memory_order_release);
         return;
     }
     healthy_.store(true, std::memory_order_release);
-    ENGINE_LOG_INFO(logger_, "PhysicsThread: world initialized, entering event loop");
+    PHYSICS_LOG_INFO("PhysicsThread: world initialized, entering event loop");
 
     // ── Main event loop ──────────────────────────────────────────────
     while (running_.load(std::memory_order_acquire)) {
@@ -289,7 +288,7 @@ void PhysicsThread::EventLoop() {
                            static_cast<size_t>(threading_config_.max_pending_frames)) {
                         PhysicsFrameResult dropped;
                         result_queue_.try_dequeue(dropped);
-                        ENGINE_LOG_WARN(logger_,
+                        PHYSICS_LOG_WARN(
                             "PhysicsThread: frame pile-up, dropped frame [{}]",
                             dropped.frame_id);
                     }
@@ -300,17 +299,17 @@ void PhysicsThread::EventLoop() {
                 break;
             }
         } catch (const std::exception& e) {
-            ENGINE_LOG_ERROR(logger_, "PhysicsThread: exception in event loop: {}",
+            PHYSICS_LOG_ERROR("PhysicsThread: exception in event loop: {}",
                              e.what());
             healthy_.store(false, std::memory_order_release);
         } catch (...) {
-            ENGINE_LOG_ERROR(logger_, "PhysicsThread: unknown exception in event loop");
+            PHYSICS_LOG_ERROR("PhysicsThread: unknown exception in event loop");
             healthy_.store(false, std::memory_order_release);
         }
         }  // CmdDequeue slice ends
     }
 
-    ENGINE_LOG_INFO(logger_, "PhysicsThread: event loop exited");
+    PHYSICS_LOG_INFO("PhysicsThread: event loop exited");
 }
 
 } // namespace engine

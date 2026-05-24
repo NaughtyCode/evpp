@@ -10,10 +10,9 @@
 #include "runtime/physics/physics_config.h"
 #include "runtime/physics/physics_commands.h"
 #include "runtime/physics/physics_thread.h"
+#include "runtime/physics/physics_vm.h"
 
 namespace engine {
-
-class ScriptVM;
 
 //============================================================================
 // PhysicsSystem — singleton facade that owns the complete physics subsystem
@@ -107,6 +106,9 @@ public:
     ScriptVM& GetScriptVM() { return *script_vm_; }
     const ScriptVM& GetScriptVM() const { return *script_vm_; }
 
+    PhysicsScriptVM& GetPhysicsScriptVM() { return *script_vm_; }
+    const PhysicsScriptVM& GetPhysicsScriptVM() const { return *script_vm_; }
+
     // ── Lua script update (main thread, after FetchResult) ─────────────
     void UpdateScript();
 
@@ -125,7 +127,7 @@ private:
     std::mutex collision_events_mutex_;
 
     std::unique_ptr<PhysicsConfigManager> config_manager_;
-    std::unique_ptr<ScriptVM> script_vm_;
+    std::unique_ptr<PhysicsScriptVM> script_vm_;
     PhysicsThread physics_thread_;
 
     std::string config_dir_;
