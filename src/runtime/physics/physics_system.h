@@ -112,6 +112,10 @@ public:
     // ── Lua script update (main thread, after FetchResult) ─────────────
     void UpdateScript();
 
+    // ── Logger accessor ─────────────────────────────────────────────────
+    // Returns the physics thread's logger, or nullptr before Start() / after Stop().
+    quill::Logger* GetPhysicsLogger() const { return physics_thread_.GetLogger(); }
+
     // ── Fixed delta time (for Engine FrameLoop Tick) ───────────────────
     float GetFixedDeltaTime() const {
         return config_manager_ ? config_manager_->GetPhysicsConfig().fixed_delta_time

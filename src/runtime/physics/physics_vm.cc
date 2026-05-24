@@ -7,11 +7,11 @@
 namespace engine {
 
 PhysicsScriptVM::PhysicsScriptVM() {
-    PHYSICS_LOG_INFO("[PhysicsVM] created, Lua state ready");
+    ENGINE_LOG_INFO(GetLogger(), "[PhysicsVM] created, Lua state ready");
 }
 
 PhysicsScriptVM::~PhysicsScriptVM() {
-    PHYSICS_LOG_INFO("[PhysicsVM] destroyed");
+    ENGINE_LOG_INFO(GetLogger(), "[PhysicsVM] destroyed");
 }
 
 } // namespace engine

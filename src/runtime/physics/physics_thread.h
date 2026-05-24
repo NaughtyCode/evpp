@@ -60,6 +60,10 @@ public:
     bool IsHealthy() const { return healthy_.load(std::memory_order_acquire); }
     bool IsRunning() const { return running_.load(std::memory_order_acquire); }
 
+    // Logger accessor — returns the logger created in Start(), or nullptr
+    // before Start() / after Stop().
+    quill::Logger* GetLogger() const { return logger_; }
+
     // Thread-safe access to PhysicsWorld for synchronous queries.
     // Query methods use Jolt's BodyLockInterface which handles cross-thread safety.
     PhysicsWorld& GetWorld() { return world_; }

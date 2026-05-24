@@ -2,6 +2,8 @@
 
 #ifdef ENGINE_PHYSICS_ENABLED
 
+#include <quill/Logger.h>
+
 #include "runtime/vm/vm.h"
 
 namespace engine {
@@ -23,6 +25,14 @@ public:
     PhysicsScriptVM& operator=(const PhysicsScriptVM&) = delete;
     PhysicsScriptVM(PhysicsScriptVM&&) noexcept = default;
     PhysicsScriptVM& operator=(PhysicsScriptVM&&) noexcept = default;
+
+    // Logger association — set by PhysicsSystem::Start() after the physics
+    // thread creates its logger.
+    void SetPhysicsLogger(quill::Logger* logger) { logger_ = logger; }
+    quill::Logger* GetPhysicsLogger() const { return logger_; }
+
+private:
+    quill::Logger* logger_ = nullptr;
 };
 
 } // namespace engine

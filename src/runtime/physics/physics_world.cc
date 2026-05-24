@@ -161,7 +161,7 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
         JPH::RegisterDefaultAllocator();                                // Step 1
         JPH::Factory::sInstance = new JPH::Factory();                   // Step 2
         JPH::RegisterTypes();                                           // Step 3
-        PHYSICS_LOG_INFO("JoltPhysics registered (allocator, factory, types)");
+        PHYSICS_LOG_INFO(logger_,"JoltPhysics registered (allocator, factory, types)");
     }
 
     // ── Step 4: Create JobSystem ────────────────────────────────────────
@@ -169,14 +169,14 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
         // Single-threaded for debugging / deterministic verification
         job_system_ = std::make_unique<JPH::JobSystemSingleThreaded>(
             static_cast<unsigned int>(threading.job_system_max_jobs > 0 ? threading.job_system_max_jobs : 2048));
-        PHYSICS_LOG_INFO("PhysicsWorld: using single-threaded job system");
+        PHYSICS_LOG_INFO(logger_,"PhysicsWorld: using single-threaded job system");
     } else {
         int thread_count = threading.job_system_thread_count;
         job_system_ = std::make_unique<JPH::JobSystemThreadPool>(
             static_cast<unsigned int>(threading.job_system_max_jobs),
             static_cast<unsigned int>(threading.job_system_max_barriers),
             thread_count);
-        PHYSICS_LOG_INFO("PhysicsWorld: using thread pool job system, "
+        PHYSICS_LOG_INFO(logger_,"PhysicsWorld: using thread pool job system, "
                         "max_jobs=[{}], max_barriers=[{}], threads=[{}]",
                         threading.job_system_max_jobs,
                         threading.job_system_max_barriers,
@@ -189,11 +189,11 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
         // Use malloc fallback for very large configs
         unsigned int clamped = (temp_size > 0x7FFFFFFF) ? 0x7FFFFFFF : temp_size;
         temp_allocator_ = std::make_unique<JPH::TempAllocatorImplWithMallocFallback>(clamped);
-        PHYSICS_LOG_INFO("PhysicsWorld: temp allocator with malloc fallback, "
+        PHYSICS_LOG_INFO(logger_,"PhysicsWorld: temp allocator with malloc fallback, "
                         "size=[{} MB]", clamped / (1024 * 1024));
     } else {
         temp_allocator_ = std::make_unique<JPH::TempAllocatorImpl>(temp_size);
-        PHYSICS_LOG_INFO("PhysicsWorld: temp allocator, size=[{} KB]",
+        PHYSICS_LOG_INFO(logger_,"PhysicsWorld: temp allocator, size=[{} KB]",
                         temp_size / 1024);
     }
 
@@ -215,7 +215,7 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
         *obj_vs_bp_filter_,
         *layer_pair_filter_
     );
-    PHYSICS_LOG_INFO("PhysicsWorld: system initialized, "
+    PHYSICS_LOG_INFO(logger_,"PhysicsWorld: system initialized, "
                     "max_bodies=[{}], max_pairs=[{}], max_contacts=[{}]",
                     config.max_bodies, config.max_body_pairs,
                     config.max_contact_points);
@@ -262,11 +262,11 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
         MaterialTable mt;  // empty; inline materials in asset JSON
         auto result = loader.LoadScene(assets_path, bi, system_, mt, config.layer_config);
         if (!result.success) {
-            PHYSICS_LOG_ERROR("PhysicsWorld: failed to load assets [{}]: {}",
+            PHYSICS_LOG_ERROR(logger_,"PhysicsWorld: failed to load assets [{}]: {}",
                              assets_path, result.error);
             return false;
         }
-        PHYSICS_LOG_INFO("PhysicsWorld: assets loaded — "
+        PHYSICS_LOG_INFO(logger_,"PhysicsWorld: assets loaded — "
                         "[{}] static bodies, [{}] prototypes, [{}] constraints",
                         result.static_bodies_loaded,
                         result.dynamic_prototypes_loaded,
@@ -281,7 +281,7 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
         }
     }
 
-    PHYSICS_LOG_INFO("PhysicsWorld: initialization complete");
+    PHYSICS_LOG_INFO(logger_,"PhysicsWorld: initialization complete");
     return true;
 }
 
@@ -295,7 +295,7 @@ uint32_t PhysicsWorld::CreateBody(const std::string& proto_id,
                                    uint64_t user_data) {
     auto it = prototype_pool_.find(proto_id);
     if (it == prototype_pool_.end()) {
-        PHYSICS_LOG_ERROR("PhysicsWorld: prototype '{}' not found", proto_id);
+        PHYSICS_LOG_ERROR(logger_,"PhysicsWorld: prototype '{}' not found", proto_id);
         return 0;
     }
 
@@ -323,7 +323,7 @@ uint32_t PhysicsWorld::CreateBody(const std::string& proto_id,
     JPH::BodyInterface& bi = system_.GetBodyInterface();
     JPH::Body* body = bi.CreateBody(settings);
     if (!body) {
-        PHYSICS_LOG_ERROR("PhysicsWorld: failed to create body from '{}'",
+        PHYSICS_LOG_ERROR(logger_,"PhysicsWorld: failed to create body from '{}'",
                          proto_id);
         return 0;
     }
@@ -432,7 +432,7 @@ PhysicsFrameResult PhysicsWorld::Step(float delta_time, uint64_t frame_id) {
         if (static_cast<unsigned int>(err) & static_cast<unsigned int>(JPH::EPhysicsUpdateError::ContactConstraintsFull))
             err_str += (err_str.empty() ? "" : ", ") + std::string("ContactConstraintsFull");
 
-        PHYSICS_LOG_ERROR("PhysicsWorld: Update error — frame=[{}], error=[{}]",
+        PHYSICS_LOG_ERROR(logger_,"PhysicsWorld: Update error — frame=[{}], error=[{}]",
                          frame_id, err_str);
         result.error = err_str;
         return result;

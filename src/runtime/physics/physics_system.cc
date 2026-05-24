@@ -32,7 +32,7 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
                                 const std::string& assets_path,
                                 const std::string& scripts_dir) {
     if (is_initialized_) {
-        std::fprintf(stderr, "PhysicsSystem: already initialized\n");
+        ENGINE_LOG_WARN(GetLogger(), "PhysicsSystem: already initialized");
         return false;
     }
 
@@ -43,12 +43,13 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
     // ── Load configs ──────────────────────────────────────────────────
     config_manager_ = std::make_unique<PhysicsConfigManager>();
     if (!config_manager_->Load(config_dir)) {
-        std::fprintf(stderr, "PhysicsSystem: config loading failed\n");
+        ENGINE_LOG_ERROR(GetLogger(), "PhysicsSystem: config loading failed");
         config_manager_.reset();
         return false;
     }
 
-    PHYSICS_LOG_INFO("PhysicsSystem: configs loaded from [{}]", config_dir);
+    ENGINE_LOG_INFO(GetLogger(), "PhysicsSystem: configs loaded from [{}]",
+                    config_dir);
 
     // ── Create physics-dedicated ScriptVM with [physics_vm] log prefix ─
     script_vm_ = std::make_unique<PhysicsScriptVM>();
@@ -61,15 +62,15 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
     if (!scripts_dir.empty()) {
         size_t failed = script_vm_->DoDirectory(scripts_dir);
         if (failed > 0) {
-            PHYSICS_LOG_WARN(
-                "PhysicsSystem: [{}] script(s) failed to load from [{}]",
-                failed, scripts_dir);
+            ENGINE_LOG_WARN(GetLogger(),
+                            "PhysicsSystem: [{}] script(s) failed to load from [{}]",
+                            failed, scripts_dir);
         }
         script_vm_->InitScript();
     }
 
     is_initialized_ = true;
-    PHYSICS_LOG_INFO("PhysicsSystem: initialized (physics thread NOT started)");
+    ENGINE_LOG_INFO(GetLogger(), "PhysicsSystem: initialized (physics thread NOT started)");
     return true;
 }
 
@@ -79,11 +80,11 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
 
 bool PhysicsSystem::Start() {
     if (!is_initialized_) {
-        std::fprintf(stderr, "PhysicsSystem: not initialized, cannot start\n");
+        ENGINE_LOG_WARN(GetLogger(), "PhysicsSystem: not initialized, cannot start");
         return false;
     }
     if (physics_thread_.IsRunning()) {
-        std::fprintf(stderr, "PhysicsSystem: physics thread already running\n");
+        ENGINE_LOG_WARN(GetLogger(), "PhysicsSystem: physics thread already running");
         return false;
     }
 
@@ -95,11 +96,15 @@ bool PhysicsSystem::Start() {
         assets_path_);
 
     if (!ok) {
-        PHYSICS_LOG_ERROR("PhysicsSystem: failed to start physics thread");
+        ENGINE_LOG_ERROR(GetLogger(), "PhysicsSystem: failed to start physics thread");
         return false;
     }
 
-    PHYSICS_LOG_INFO("PhysicsSystem: physics thread started");
+    PHYSICS_LOG_INFO(physics_thread_.GetLogger(), "PhysicsSystem: physics thread started");
+
+    // Associate the physics logger with the ScriptVM so Lua callbacks use it
+    script_vm_->SetPhysicsLogger(physics_thread_.GetLogger());
+
     return true;
 }
 
@@ -109,6 +114,7 @@ bool PhysicsSystem::Start() {
 
 void PhysicsSystem::Shutdown() {
     if (physics_thread_.IsRunning()) {
+        PHYSICS_LOG_INFO(physics_thread_.GetLogger(), "PhysicsSystem: shutdown commencing...");
         physics_thread_.Stop();
     }
 
@@ -120,7 +126,7 @@ void PhysicsSystem::Shutdown() {
     config_manager_.reset();
     is_initialized_ = false;
 
-    PHYSICS_LOG_INFO("PhysicsSystem: shutdown complete");
+    ENGINE_LOG_INFO(GetLogger(), "PhysicsSystem: shutdown complete");
 }
 
 //============================================================================
@@ -310,7 +316,7 @@ bool PhysicsSystem::RestoreState(const std::string& data) {
 
 bool PhysicsSystem::Recover(const std::string& saved_state) {
     if (!is_initialized_) {
-        std::fprintf(stderr, "PhysicsSystem: not initialized, cannot recover\n");
+        ENGINE_LOG_WARN(GetLogger(), "PhysicsSystem: not initialized, cannot recover");
         return false;
     }
     return physics_thread_.Recover(saved_state);
@@ -377,7 +383,7 @@ void PhysicsSystem::UpdateScript() {
 
         // Call on_physics_collision(event)
         if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
-            PHYSICS_LOG_ERROR("PhysicsSystem: on_physics_collision error: {}",
+            PHYSICS_LOG_ERROR(physics_thread_.GetLogger(), "PhysicsSystem: on_physics_collision error: {}",
                              lua_tostring(L, -1));
             lua_pop(L, 1);
         }
