@@ -1,92 +1,90 @@
-﻿--- Network API
+--- Network API
 --- Global module: net
 ---
 --- Sub-modules:
----   net.client  -- TCP client
----   net.server  -- TCP server
----   net.http    -- HTTP client
+---   net.client  -- TCP client (light userdata + Lua class instance)
+---   net.server  -- TCP server (integer handles: server_id, conn_id)
+---   net.http    -- HTTP client (async callback-based)
 ---
 --- All callbacks are invoked asynchronously on the event loop thread.
---- Callback signature summary (instance methods receive self as first arg):
----   client.on_connect(self)                             -- no additional args
----   client.on_message(self, data: string)               -- raw data
----   client.on_close(self)                               -- no additional args
----   server.on_connect(conn_id: integer, addr: string)   -- new connection
----   server.on_message(conn_id: integer, data: string)   -- server-level default
----   server.on_close(conn_id: integer, addr: string)     -- server-level default
----   connection-level on_message(data: string)           -- overrides server default
----   connection-level on_close(conn_id: integer, addr: string) -- overrides server default
----   http.on_response(http_code: integer, body: string)  -- response/timeout callback
+--- Never block or sleep inside a callback.
 
 -- ============================================================================
--- net.client -- TCP client (light userdata + Lua class)
+-- net.client -- TCP client
 -- ============================================================================
+-- Each client returned by net.client.connect() is a Lua class instance
+-- (table with metatable).  The C++ context is stored as light userdata in
+-- the _ctx field and cleaned up by Lua GC (__gc metamethod) or explicitly
+-- via :disconnect().
+--
+-- Methods:
+--   client:send(data)               send raw data       (raises if closed)
+--   client:disconnect() -> bool     disconnect & release (idempotent)
+--   client:is_connected() -> bool   check liveness
+--   client:set_on_message(fn)       set or clear on_message
+--   client:set_on_close(fn)         set or clear on_close
+--
+-- Callback slots (set directly on the instance table):
+--   client.on_connect = function(self) ... end
+--   client.on_message = function(self, data: string) ... end
+--   client.on_close   = function(self) ... end
 
 --- Create a TCP client and connect to host:port.
---- Returns a class instance with methods and callback slots.
 ---@param addr string   address in "host:port" format
----@return table client_instance  object with methods: send, disconnect, is_connected
+---@return table client  instance with methods and callback slots
 function net.client.connect(addr) end
 
---- Instance: send data to the connection.
---- Call as client:send(data).
----@param data string  raw data to send
+--- Send raw data to the connection.
+--- Must be connected; raises an error if the client is closed or disconnected.
+---@param data string
 function client:send(data) end
 
---- Instance: disconnect and release the client.
---- Call as client:disconnect().
----@return boolean existed  true if still active and disconnected, false if already closed
+--- Disconnect and release the client.  Safe to call multiple times.
+---@return boolean existed  true if still active, false if already closed
 function client:disconnect() end
 
---- Instance: check whether the connection is active.
---- Call as client:is_connected().
+--- Check whether the connection is currently active.
 ---@return boolean connected
 function client:is_connected() end
 
---- Instance: set or clear the message callback.
---- Call as client:set_on_message(callback).
---- Pass nil or call with no argument to clear.
----@param callback function?  data receive callback: fun(self, data: string)
+--- Set or clear the on_message callback.
+--- Pass nil or no argument to clear.
+---@param callback fun(self: table, data: string)?
 function client:set_on_message(callback) end
 
---- Instance: set or clear the close callback.
---- Call as client:set_on_close(callback).
---- Pass nil or call with no argument to clear.
----@param callback function?  connection close callback: fun(self)
+--- Set or clear the on_close callback.
+--- Pass nil or no argument to clear.
+---@param callback fun(self: table)?
 function client:set_on_close(callback) end
-
---- Callback slot: set on the instance to receive connect events.
----   client.on_connect = function(self) ... end
----@param self table  the client instance
-
---- Callback slot: set on the instance to receive messages.
----   client.on_message = function(self, data) ... end
----@param self table  the client instance
----@param data string  received raw data
-
---- Callback slot: set on the instance to receive close events.
----   client.on_close = function(self) ... end
----@param self table  the client instance
 
 -- ============================================================================
 -- net.server -- TCP server
 -- ============================================================================
+-- Servers are identified by an integer server_id returned from listen().
+-- Connections are identified by an integer conn_id passed to callbacks.
+-- Servers must be explicitly stopped via net.server.stop(); connections
+-- are cleaned up automatically when they disconnect.
+--
+-- Callback dispatch order (per-connection overrides server-wide):
+--   on_message → per-connection set_on_message  >  server-wide on_message
+--   on_close   → per-connection set_on_close    >  server-wide on_close
 
---- Create and start a TCP server, listening on host:port.
----@param addr        string   address in "host:port" format
----@param on_connect? function new connection callback: fun(conn_id: integer, remote_addr: string)
----@param on_message? function server-level data callback: fun(conn_id: integer, data: string)
----@param on_close?   function server-level close callback: fun(conn_id: integer, remote_addr: string)
----@return integer server_id  success: server identifier
+--- Create and start a TCP server listening on host:port.
+--- The optional callbacks are server-wide defaults.
+---@param addr        string    address in "host:port" format
+---@param on_connect? fun(conn_id: integer, remote_addr: string)  new connection
+---@param on_message? fun(conn_id: integer, data: string)         server-wide message
+---@param on_close?   fun(conn_id: integer, remote_addr: string)  server-wide close
+---@return integer server_id   success: server identifier
 ---@return nil, string errmsg  failure: error message
 function net.server.listen(addr, on_connect, on_message, on_close) end
 
---- Send data to the specified connection.
----@param conn_id integer  connection id
----@param data    string   raw data to send
+--- Send raw data to a connection.
+---@param conn_id integer
+---@param data    string
 function net.server.send(conn_id, data) end
 
---- Close the specified connection and release its callbacks.
+--- Close a connection and release its per-connection callbacks.
 ---@param conn_id integer
 ---@return boolean closed  true if found and closed, false if not found
 function net.server.close_conn(conn_id) end
@@ -96,40 +94,46 @@ function net.server.close_conn(conn_id) end
 ---@return boolean stopped  true if found and stopped, false if not found
 function net.server.stop(server_id) end
 
---- Set a per-connection message callback, overriding the server default on_message.
---- Pass nil to remove the per-connection callback and revert to the server default.
----@param conn_id  integer   connection id
----@param callback function?  data receive callback: fun(data: string)
+--- Set a per-connection on_message callback, overriding the server default.
+--- Pass nil or no argument to remove and revert to the server default.
+---@param conn_id  integer
+---@param callback fun(data: string)?
 function net.server.set_on_message(conn_id, callback) end
 
---- Set a per-connection close callback, overriding the server default on_close.
---- Pass nil to remove the per-connection callback and revert to the server default.
----@param conn_id  integer   connection id
----@param callback function?  connection close callback: fun(conn_id: integer, remote_addr: string)
+--- Set a per-connection on_close callback, overriding the server default.
+--- Pass nil or no argument to remove and revert to the server default.
+---@param conn_id  integer
+---@param callback fun(conn_id: integer, remote_addr: string)?
 function net.server.set_on_close(conn_id, callback) end
 
---- Replace the server's on_connect callback.
----@param server_id integer   server id
----@param callback  function?  new connection callback: fun(conn_id: integer, remote_addr: string)
+--- Replace the server-wide on_connect callback.
+---@param server_id integer
+---@param callback  fun(conn_id: integer, remote_addr: string)?
 function net.server.set_on_connect(server_id, callback) end
 
---- Replace the server's on_close callback.
----@param server_id integer   server id
----@param callback  function?  connection close callback: fun(conn_id: integer, remote_addr: string)
+--- Replace the server-wide on_close callback (fallback for connections
+--- without a per-connection on_close).
+---@param server_id integer
+---@param callback  fun(conn_id: integer, remote_addr: string)?
 function net.server.set_on_disconnect(server_id, callback) end
 
 -- ============================================================================
 -- net.http -- HTTP client
 -- ============================================================================
+-- Async HTTP requests with callback-based response handling.
+-- Pending callbacks are automatically released on engine shutdown;
+-- callbacks that fire after shutdown receive no invocation.
+--
+-- Error handling: on error or timeout, the callback receives
+-- http_code = 0 and body = "".
 
---- Send an async HTTP GET request (10s timeout).
+--- Send an async HTTP GET request.
 ---@param url         string   request URL
----@param on_response function response callback: fun(http_code: integer, body: string)
----                             on error/timeout, http_code is 0 and body is ""
+---@param on_response fun(http_code: integer, body: string)  response callback
 function net.http.get(url, on_response) end
 
---- Send an async HTTP POST request (10s timeout).
+--- Send an async HTTP POST request.
 ---@param url         string   request URL
 ---@param body        string   request body
----@param on_response function response callback: fun(http_code: integer, body: string)
+---@param on_response fun(http_code: integer, body: string)  response callback
 function net.http.post(url, body, on_response) end
