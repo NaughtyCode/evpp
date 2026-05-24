@@ -11,3 +11,5 @@ target_link_libraries(benchmark_pingpong_header_body_client ${LIBRARIES})
 
 add_executable(benchmark_pingpong_header_body_server server.cc)
 target_link_libraries(benchmark_pingpong_header_body_server ${LIBRARIES})
+
+set_target_properties(benchmark_pingpong_header_body_client benchmark_pingpong_header_body_server PROPERTIES FOLDER "tests/benchmarks")

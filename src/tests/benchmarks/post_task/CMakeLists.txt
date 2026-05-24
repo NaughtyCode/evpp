@@ -64,3 +64,14 @@ if (UNIX)
     add_executable(benchmark_post_task_concurrentqueue6 post_task6.cc)
     target_link_libraries(benchmark_post_task_concurrentqueue6 ${LINKED_CONCURRENTQUEUE_LIBRARIES})
 endif (UNIX)
+
+set_target_properties(
+    benchmark_post_task1 benchmark_post_task2 benchmark_post_task3
+    benchmark_post_task4 benchmark_post_task5 benchmark_post_task6
+    benchmark_post_task_boost_lockfree_queue1 benchmark_post_task_boost_lockfree_queue2
+    benchmark_post_task_boost_lockfree_queue3 benchmark_post_task_boost_lockfree_queue4
+    benchmark_post_task_boost_lockfree_queue5 benchmark_post_task_boost_lockfree_queue6
+    benchmark_post_task_concurrentqueue1 benchmark_post_task_concurrentqueue2
+    benchmark_post_task_concurrentqueue3 benchmark_post_task_concurrentqueue4
+    benchmark_post_task_concurrentqueue5 benchmark_post_task_concurrentqueue6
+    PROPERTIES FOLDER "tests/benchmarks")

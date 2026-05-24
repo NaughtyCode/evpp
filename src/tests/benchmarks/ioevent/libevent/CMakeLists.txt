@@ -1,3 +1,5 @@
 
 add_executable(benchmark_ioevent_libevent libevent_ioevent_bench.c)
 target_link_libraries(benchmark_ioevent_libevent event)
+
+set_target_properties(benchmark_ioevent_libevent PROPERTIES FOLDER "tests/benchmarks")

@@ -14,3 +14,5 @@ target_link_libraries(example_http_client_request04 ${LIBRARIES})
 add_executable(example_http_client_request05 client05.cc)
 target_link_libraries(example_http_client_request05 ${LIBRARIES})
 
+set_target_properties(example_http_client_request01 example_http_client_request02 example_http_client_request03 example_http_client_request04 example_http_client_request05 PROPERTIES FOLDER "tests/examples")
+

@@ -25,4 +25,6 @@ endif (WIN32)
 add_executable(benchmark_ioevent_evpp_pipe_watcher ${evpp_SRCS})
 target_link_libraries(benchmark_ioevent_evpp_pipe_watcher ServerEngine ${DEPENDENT_LIBRARIES})
 
+set_target_properties(benchmark_ioevent_evpp benchmark_ioevent_evpp_pipe_watcher PROPERTIES FOLDER "tests/benchmarks")
+
 

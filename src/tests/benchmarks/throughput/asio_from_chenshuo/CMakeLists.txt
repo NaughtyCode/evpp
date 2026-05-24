@@ -6,3 +6,5 @@ target_link_libraries(benchmark_tcp_asio_client ${Boost_SYSTEM_LIBRARY} ${Boost_
 add_executable(benchmark_tcp_asio_server server.cpp)
 target_link_libraries(benchmark_tcp_asio_server ${Boost_SYSTEM_LIBRARY} ${Boost_THREAD_LIBRARY} pthread)
 
+set_target_properties(benchmark_tcp_asio_client benchmark_tcp_asio_server PROPERTIES FOLDER "tests/benchmarks")
+

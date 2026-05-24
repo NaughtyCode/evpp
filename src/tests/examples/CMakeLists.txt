@@ -67,3 +67,14 @@ target_link_libraries(example_signal01 ${LIBRARIES})
 
 add_executable(example_signal02 signal/signal02.cc)
 target_link_libraries(example_signal02 ${LIBRARIES})
+
+set_target_properties(
+    example_httpecho example_tcpecho example_udpecho
+    example_pingpong_client example_pingpong_server
+    example_tcp_client example_tcp_server
+    example_multi_accept
+    example_twisted_pubsubserver example_twisted_webserver
+    example_timer01 example_timer02 example_timer03 example_timer04 example_timer05
+    example_dns_resolve
+    example_signal01 example_signal02
+    PROPERTIES FOLDER "tests/examples")

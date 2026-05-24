@@ -9,4 +9,6 @@ endif(UNIX)
 add_executable(benchmark_fd_channel_vs_pipe_event_watcher fd_channel_vs_pipe_event_watcher.cc)
 target_link_libraries(benchmark_fd_channel_vs_pipe_event_watcher ServerEngine ${DEPENDENT_LIBRARIES})
 
+set_target_properties(benchmark_fd_channel_vs_pipe_event_watcher PROPERTIES FOLDER "tests/benchmarks")
+
 

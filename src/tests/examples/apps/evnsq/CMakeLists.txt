@@ -17,3 +17,5 @@ endif (WIN32)
 
 add_executable(example_evnsq_producer ${evnsq_producer_SRCS})
 target_link_libraries(example_evnsq_producer evnsq_static ${LIBRARIES})
+
+set_target_properties(example_evnsq_tail example_evnsq_producer PROPERTIES FOLDER "tests/examples")
