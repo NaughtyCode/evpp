@@ -1,0 +1,189 @@
+#include "runtime/script/net_http_bind.h"
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
+
+#include <algorithm>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include <runtime/evpp/event_loop.h>
+#include <runtime/evpp/httpc/request.h>
+#include <runtime/evpp/httpc/response.h>
+
+#include "runtime/config/config.h"
+#include "runtime/core/log/log.h"
+#include "runtime/engine/engine.h"
+
+extern "C" {
+#include "lauxlib.h"
+}
+
+namespace engine {
+namespace script {
+
+namespace {
+
+// ======================================================================
+// HTTP Client bindings
+// ======================================================================
+
+// Call a Lua function with (int, string) for HTTP response.
+// Logs and pops errors; does NOT unref.
+void call_lua_http_handler(lua_State* L, int ref, int code, const std::string& body) {
+    if (!L) return;
+    if (ref == LUA_NOREF) return;
+    lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+    lua_pushinteger(L, static_cast<lua_Integer>(code));
+    lua_pushlstring(L, body.data(), body.size());
+    if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+        auto* logger = GetLogger();
+        ENGINE_LOG_ERROR(logger, "[net.http] callback error: {}",
+                         lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+}
+
+// Guards HTTP callbacks from firing after engine shutdown.
+// Set to false in ShutdownHttpBindings; HTTP callbacks check this before
+// touching the Lua state (which may have been destroyed).
+std::atomic<bool> g_net_alive{true};
+
+// Track HTTP callback refs so they can be released during shutdown even
+// when the request hasn't completed yet. Without this, refs held by
+// in-flight HTTP requests would leak in the Lua registry.
+std::vector<int> g_http_pending_refs;
+
+// ── l_net_http_get(url, on_response) ─────────────────────────────────────
+int l_net_http_get(lua_State* L) {
+    const char* url = luaL_checkstring(L, 1);
+    luaL_checktype(L, 2, LUA_TFUNCTION);
+
+    auto* loop = Engine::Instance().GetEventLoop();
+    if (!loop) {
+        return luaL_error(L, "EventLoop not available");
+    }
+
+    lua_pushvalue(L, 2);
+    int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    g_http_pending_refs.push_back(ref);
+
+    double timeout = ConfigManager::Instance().GetServerConfig().http.timeout_sec;
+    auto req = std::make_shared<evpp::httpc::GetRequest>(
+        loop, url, evpp::Duration(timeout));
+
+    req->Execute([L, ref](const std::shared_ptr<evpp::httpc::Response>& resp) {
+        auto erase_ref = [&]() {
+            luaL_unref(L, LUA_REGISTRYINDEX, ref);
+            auto it = std::find(g_http_pending_refs.begin(),
+                                g_http_pending_refs.end(), ref);
+            if (it != g_http_pending_refs.end()) g_http_pending_refs.erase(it);
+        };
+        // If engine is shutting down, ShutdownHttpBindings already released
+        // all pending refs — skip erase_ref to avoid double-unref.
+        if (!g_net_alive.load()) {
+            return;
+        }
+        if (ref == LUA_NOREF) {
+            return;
+        }
+        if (resp) {
+            std::string body(resp->body().data(), resp->body().size());
+            call_lua_http_handler(L, ref, resp->http_code(), body);
+        } else {
+            call_lua_http_handler(L, ref, 0, "");
+        }
+        erase_ref();
+    });
+
+    return 0;
+}
+
+// ── l_net_http_post(url, body, on_response) ──────────────────────────────
+int l_net_http_post(lua_State* L) {
+    const char* url = luaL_checkstring(L, 1);
+    size_t body_len = 0;
+    const char* body = luaL_checklstring(L, 2, &body_len);
+    luaL_checktype(L, 3, LUA_TFUNCTION);
+
+    auto* loop = Engine::Instance().GetEventLoop();
+    if (!loop) {
+        return luaL_error(L, "EventLoop not available");
+    }
+
+    lua_pushvalue(L, 3);
+    int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    g_http_pending_refs.push_back(ref);
+
+    double timeout = ConfigManager::Instance().GetServerConfig().http.timeout_sec;
+    auto req = std::make_shared<evpp::httpc::PostRequest>(
+        loop, url, std::string(body, body_len), evpp::Duration(timeout));
+
+    req->Execute([L, ref](const std::shared_ptr<evpp::httpc::Response>& resp) {
+        auto erase_ref = [&]() {
+            luaL_unref(L, LUA_REGISTRYINDEX, ref);
+            auto it = std::find(g_http_pending_refs.begin(),
+                                g_http_pending_refs.end(), ref);
+            if (it != g_http_pending_refs.end()) g_http_pending_refs.erase(it);
+        };
+        if (!g_net_alive.load() || ref == LUA_NOREF) {
+            erase_ref();
+            return;
+        }
+        if (resp) {
+            std::string body_str(resp->body().data(), resp->body().size());
+            call_lua_http_handler(L, ref, resp->http_code(), body_str);
+        } else {
+            call_lua_http_handler(L, ref, 0, "");
+        }
+        erase_ref();
+    });
+
+    return 0;
+}
+
+const luaL_Reg kHttpFunctions[] = {
+    {"get",  l_net_http_get},
+    {"post", l_net_http_post},
+    {nullptr, nullptr},
+};
+
+} // namespace
+
+// ======================================================================
+// Public API
+// ======================================================================
+
+void PushHttpLibrary(lua_State* L) {
+    if (!L) return;
+    luaL_newlib(L, kHttpFunctions);
+}
+
+void ShutdownHttpBindings() {
+    auto* logger = GetLogger();
+
+    // Prevent any in-flight HTTP callbacks from touching a freed Lua state.
+    g_net_alive.store(false);
+
+    // Release pending HTTP callback refs before any Lua state is closed.
+    lua_State* L = Engine::Instance().GetScriptVM().GetState();
+    if (!g_http_pending_refs.empty()) {
+        if (L) {
+            for (int ref : g_http_pending_refs) {
+                if (ref != LUA_NOREF) {
+                    luaL_unref(L, LUA_REGISTRYINDEX, ref);
+                }
+            }
+        }
+        size_t http_count = g_http_pending_refs.size();
+        ENGINE_LOG_INFO(logger, "ScriptBind: released [{}] pending HTTP callback(s)", http_count);
+        g_http_pending_refs.clear();
+    }
+}
+
+} // namespace script
+} // namespace engine

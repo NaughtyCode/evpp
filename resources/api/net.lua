@@ -7,53 +7,66 @@
 ---   net.http    -- HTTP client
 ---
 --- All callbacks are invoked asynchronously on the event loop thread.
---- Callback signature summary:
----   client.on_connect()                                -- no arguments
----   client.on_message(data: string)                    -- raw data
----   client.on_close()                                  -- no arguments
----   server.on_connect(conn_id: integer, addr: string)  -- new connection
----   server.on_message(conn_id: integer, data: string)  -- server-level default
----   server.on_close(conn_id: integer, addr: string)    -- server-level default
----   connection-level on_message(data: string)          -- overrides server default
----   connection-level on_close(conn_id: integer, addr: string)  -- overrides server default
----   http.on_response(http_code: integer, body: string) -- response/timeout callback
+--- Callback signature summary (instance methods receive self as first arg):
+---   client.on_connect(self)                             -- no additional args
+---   client.on_message(self, data: string)               -- raw data
+---   client.on_close(self)                               -- no additional args
+---   server.on_connect(conn_id: integer, addr: string)   -- new connection
+---   server.on_message(conn_id: integer, data: string)   -- server-level default
+---   server.on_close(conn_id: integer, addr: string)     -- server-level default
+---   connection-level on_message(data: string)           -- overrides server default
+---   connection-level on_close(conn_id: integer, addr: string) -- overrides server default
+---   http.on_response(http_code: integer, body: string)  -- response/timeout callback
 
 -- ============================================================================
--- net.client -- TCP client
+-- net.client -- TCP client (light userdata + Lua class)
 -- ============================================================================
 
 --- Create a TCP client and connect to host:port.
----@param addr        string   address in "host:port" format
----@param on_connect? function connect success callback: fun()
----@param on_message? function data receive callback: fun(data: string)
----@param on_close?   function connection close callback: fun()
----@return integer client_id  client identifier for subsequent operations
-function net.client.connect(addr, on_connect, on_message, on_close) end
+--- Returns a class instance with methods and callback slots.
+---@param addr string   address in "host:port" format
+---@return table client_instance  object with methods: send, disconnect, is_connected
+function net.client.connect(addr) end
 
---- Send data to the connection.
----@param client_id integer  client id returned by connect
----@param data      string  raw data to send
-function net.client.send(client_id, data) end
+--- Instance: send data to the connection.
+--- Call as client:send(data).
+---@param data string  raw data to send
+function client:send(data) end
 
---- Disconnect and release callbacks.
----@param client_id integer
----@return boolean existed  true if found and disconnected, false if not found
-function net.client.disconnect(client_id) end
+--- Instance: disconnect and release the client.
+--- Call as client:disconnect().
+---@return boolean existed  true if still active and disconnected, false if already closed
+function client:disconnect() end
 
---- Check whether the connection is active.
----@param client_id integer
+--- Instance: check whether the connection is active.
+--- Call as client:is_connected().
 ---@return boolean connected
-function net.client.is_connected(client_id) end
+function client:is_connected() end
 
---- Replace the message callback.
----@param client_id integer
----@param callback  function  data receive callback: fun(data: string)
-function net.client.set_on_message(client_id, callback) end
+--- Instance: set or clear the message callback.
+--- Call as client:set_on_message(callback).
+--- Pass nil or call with no argument to clear.
+---@param callback function?  data receive callback: fun(self, data: string)
+function client:set_on_message(callback) end
 
---- Replace the close callback.
----@param client_id integer
----@param callback  function  connection close callback: fun()
-function net.client.set_on_close(client_id, callback) end
+--- Instance: set or clear the close callback.
+--- Call as client:set_on_close(callback).
+--- Pass nil or call with no argument to clear.
+---@param callback function?  connection close callback: fun(self)
+function client:set_on_close(callback) end
+
+--- Callback slot: set on the instance to receive connect events.
+---   client.on_connect = function(self) ... end
+---@param self table  the client instance
+
+--- Callback slot: set on the instance to receive messages.
+---   client.on_message = function(self, data) ... end
+---@param self table  the client instance
+---@param data string  received raw data
+
+--- Callback slot: set on the instance to receive close events.
+---   client.on_close = function(self) ... end
+---@param self table  the client instance
 
 -- ============================================================================
 -- net.server -- TCP server

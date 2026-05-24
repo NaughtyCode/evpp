@@ -103,6 +103,9 @@ set(SCRIPT_SOURCES
     script/log_bind.cc script/log_bind.h
     script/timer_bind.cc script/timer_bind.h
     script/net_bind.cc script/net_bind.h
+    script/net_client_bind.cc script/net_client_bind.h
+    script/net_server_bind.cc script/net_server_bind.h
+    script/net_http_bind.cc script/net_http_bind.h
     script/msgpack_bind.cc script/msgpack_bind.h
     script/import_bind.cc script/import_bind.h
 )
