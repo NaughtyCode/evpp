@@ -107,6 +107,8 @@ Win32/Debug/ZERO_CHECK
 artifacts/bin/*
 artifacts/lib/*
 artifacts/build/*
+artifacts/tests/*
+
 logs/
 .claude/worktrees/*
 stdout_test.txt
