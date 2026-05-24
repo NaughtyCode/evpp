@@ -7,6 +7,8 @@
 #include <evpp/tcp_conn.h>
 #include <evpp/tcp_client.h>
 
+#include "runtime/core/log/log.h"
+
 #include <thread>
 
 namespace {
@@ -16,10 +18,10 @@ namespace {
     void OnClientConnection(const evpp::TCPConnPtr& conn) {
         if (conn->IsConnected()) {
             conn->Send("hello");
-            LOG_INFO << "Send a message to server when connected.";
+            ENGINE_LOG_INFO(engine::GetLogger(), "Send a message to server when connected.");
             connected = true;
         } else {
-            LOG_INFO << "Disconnected from " << conn->remote_addr();
+            ENGINE_LOG_INFO(engine::GetLogger(), "Disconnected from {}", conn->remote_addr());
         }
     }
 
@@ -99,4 +101,3 @@ void TestTCPServerSilenceShutdown2() {
     tsrv.reset();
     assert(evpp::GetActiveEventCount() == 0);
 }
-

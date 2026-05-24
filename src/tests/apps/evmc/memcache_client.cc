@@ -4,6 +4,8 @@
 #include "tests/apps/evmc/memcache_client_pool.h"
 #include "tests/apps/evmc/likely.h"
 
+#include "runtime/core/log/log.h"
+
 namespace evmc {
 
 MemcacheClient::~MemcacheClient() {
@@ -81,7 +83,7 @@ void MemcacheClient::OnConnectTimeout(uint32_t cmd_id) {
         return;
     }
 
-    LOG_DEBUG << "InvokeTimer triggered for " << cmd_id << " " << conn()->remote_addr();
+    ENGINE_LOG_DEBUG(engine::GetLogger(), "InvokeTimer triggered for {} {}", cmd_id, conn()->remote_addr());
 
     while (!waiting_command_.empty()) {
         CommandPtr cmd(waiting_command_.front());
@@ -111,7 +113,7 @@ void MemcacheClient::OnPacketTimeout(uint32_t cmd_id) {
         return;
     }
 
-    LOG_DEBUG << "InvokeTimer triggered for " << cmd_id << " " << conn()->remote_addr();
+    ENGINE_LOG_DEBUG(engine::GetLogger(), "InvokeTimer triggered for {} {}", cmd_id, conn()->remote_addr());
 
     while (!running_command_.empty()) {
         CommandPtr cmd(running_command_.front());
@@ -129,8 +131,7 @@ void MemcacheClient::OnPacketTimeout(uint32_t cmd_id) {
             break;
         }
     }
-    LOG_ERROR << "OnPacketTimeout post, waiting=" << waiting_command_.size()
-              << " running=" << running_command_.size();
+    ENGINE_LOG_ERROR(engine::GetLogger(), "OnPacketTimeout post, waiting={} running={}", waiting_command_.size(), running_command_.size());
 }
 
 }

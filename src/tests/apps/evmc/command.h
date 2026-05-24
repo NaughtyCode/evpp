@@ -1,7 +1,8 @@
-﻿#pragma once
+#pragma once
 
 #include "tests/apps/evmc/config.h"
 
+#include "runtime/core/log/log.h"
 #include "tests/apps/evmc/mctypes.h"
 #include "tests/apps/evmc/likely.h"
 
@@ -71,7 +72,7 @@ public:
     }
 
     virtual void OnError(int err_code) {
-        LOG_INFO << "SetCommand OnError id=" << id();
+        ENGINE_LOG_INFO(engine::GetLogger(), "SetCommand OnError id={}", id());
         auto loop = caller_loop();
         if (loop && !loop->IsInLoopThread()) {
             loop->RunInLoop(std::bind(set_callback_,
@@ -108,7 +109,7 @@ public:
     }
 
     virtual void OnError(int err_code) {
-        LOG(WARNING) << "GetCommand OnError id=" << id();
+        ENGINE_LOG_WARN(engine::GetLogger(), "GetCommand OnError id={}", id());
         auto loop = caller_loop();
         if (loop && !loop->IsInLoopThread()) {
             caller_loop()->RunInLoop(std::bind(get_callback_, std::move(key_),
@@ -141,7 +142,7 @@ public:
     }
 
     virtual void OnError(int err_code) {
-        LOG(WARNING) << "PrefixGetCommand OnError id=" << id();
+        ENGINE_LOG_WARN(engine::GetLogger(), "PrefixGetCommand OnError id={}", id());
         mget_result_->code = err_code;
         auto loop = caller_loop();
         if (loop && !loop->IsInLoopThread()) {
@@ -257,7 +258,7 @@ public:
     }
 
     virtual void OnError(int err_code) {
-        LOG(WARNING) << "MultiGetCommand OnError id=" << id();
+        ENGINE_LOG_WARN(engine::GetLogger(), "MultiGetCommand OnError id={}", id());
         auto& keys = get_handler()->FindKeysByid(vbucket_id());
         auto& result_map = get_handler()->get_result();
         auto k = result_map.begin();
@@ -285,7 +286,7 @@ public:
     }
 
     virtual void OnError(int err_code) {
-        LOG(WARNING) << "MultiGetCommand OnError id =" << id();
+        ENGINE_LOG_WARN(engine::GetLogger(), "MultiGetCommand OnError id={}", id());
         callback_(multiget_result_);
     }
     virtual void OnMultiGetCommandDone(int resp_code, std::string& key, std::string& value);
@@ -312,7 +313,7 @@ public:
     }
 
     virtual void OnError(int err_code) {
-        LOG(WARNING) << "prefixMultiGetCommand OnError id=" << id();
+        ENGINE_LOG_WARN(engine::GetLogger(), "prefixMultiGetCommand OnError id={}", id());
         auto& keys = get_handler()->FindKeysByid(vbucket_id());
         auto& result_map = get_handler()->get_result();
         auto k = result_map.begin();
@@ -339,7 +340,7 @@ public:
         : Command(evloop, vbucket), key_(key), remove_callback_(callback) {
     }
     virtual void OnError(int err_code) {
-        LOG(WARNING) << "RemoveCommand OnError id=" << id();
+        ENGINE_LOG_WARN(engine::GetLogger(), "RemoveCommand OnError id={}", id());
 
         auto loop = caller_loop();
         if (loop && !loop->IsInLoopThread()) {
@@ -365,4 +366,3 @@ private:
 };
 
 }
-

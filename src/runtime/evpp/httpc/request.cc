@@ -76,7 +76,7 @@ void Request::Execute(const Handler& h) {
 }
 
 void Request::ExecuteInLoop() {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     assert(loop_->IsInLoopThread());
     evhttp_cmd_type req_type = EVHTTP_REQ_GET;
 
@@ -139,7 +139,7 @@ void Request::ExecuteInLoop() {
 failed:
     // Retry
     if (retried_ < retry_number_) {
-        LOG_WARN << "this=" << this << " http request failed : " << errmsg << " retried=" << retried_ << " max retry_time=" << retry_number_ << ". Try again.";
+        ENGINE_LOG_WARN(engine::GetLogger(), "this={} http request failed : {} retried={} max retry_time={}. Try again.", (void*)this, errmsg, retried_, retry_number_);
         Retry();
         return;
     }
@@ -188,7 +188,7 @@ void Request::HandleResponse(struct evhttp_request* r) {
         int response_code = r->response_code;
         bool needs_retry = response_code >= 500 && response_code < 600;
         if (!needs_retry || retried_ >= retry_number_) {
-            LOG_WARN << "this=" << this << " response_code=" << r->response_code << " retried=" << retried_ << " max retry_time=" << retry_number_;
+            ENGINE_LOG_WARN(engine::GetLogger(), "this={} response_code={} retried={} max retry_time={}", (void*)this, r->response_code, retried_, retry_number_);
             std::shared_ptr<Response> response(new Response(this, r));
 
             //Recycling the http Connection object
@@ -204,7 +204,7 @@ void Request::HandleResponse(struct evhttp_request* r) {
 
     // Retry
     if (retried_ < retry_number_) {
-        LOG_WARN << "this=" << this << " response_code=" << (r ? r->response_code : 0) << " retried=" << retried_ << " max retry_time=" << retry_number_ << ". Try again";
+        ENGINE_LOG_WARN(engine::GetLogger(), "this={} response_code={} retried={} max retry_time={}. Try again", (void*)this, (r ? r->response_code : 0), retried_, retry_number_);
         Retry();
         return;
     }
@@ -217,12 +217,11 @@ void Request::HandleResponse(struct evhttp_request* r) {
         char buffer[256];
         while ((oslerr = bufferevent_get_openssl_error(conn_->bufferevent()))) {
             ERR_error_string_n(oslerr, buffer, sizeof(buffer));
-            LOG_ERROR << "Openssl error: " << buffer;
+            ENGINE_LOG_ERROR(engine::GetLogger(), "Openssl error: {}", buffer);
             printed_some_error = true;
         }
         if (!printed_some_error) {
-            LOG_ERROR << "socket error(" << errcode << "): "
-                << evutil_socket_error_to_string(errcode);
+            ENGINE_LOG_ERROR(engine::GetLogger(), "socket error({}): {}", errcode, evutil_socket_error_to_string(errcode));
         }
     }
 #endif
@@ -240,5 +239,3 @@ void Request::HandleResponse(struct evhttp_request* r) {
 
 } // httpc
 } // evpp
-
-

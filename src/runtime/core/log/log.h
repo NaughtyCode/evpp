@@ -8,6 +8,14 @@
 #define QUILL_ASSERT_WITH_FMT(expr, fmt, ...) ((void)0)
 #endif
 
+// ThreadContextManager.h forward-declares get_thread_name/get_thread_id as
+// extern, but the definitions in ThreadUtilities.h are inline. On MSVC the
+// extern declaration suppresses inline emission unless ThreadUtilities.h is
+// included first, so the linker never finds the symbols. Include it early.
+#if defined(_MSC_VER)
+#include <quill/backend/ThreadUtilities.h>
+#endif
+
 #include <quill/Logger.h>
 
 #include "runtime/core/log/log_macros.h"

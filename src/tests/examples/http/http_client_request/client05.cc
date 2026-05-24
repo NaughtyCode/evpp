@@ -7,16 +7,17 @@
 #include <evpp/httpc/conn.h>
 #include <evpp/httpc/response.h>
 
+#include "runtime/core/log/log.h"
+
 #include "tests/examples/winmain-inl.h"
 
 static int responsed = 0;
 static void HandleHTTPResponse(const std::shared_ptr<evpp::httpc::Response>& response, evpp::httpc::PostRequest* request) {
-    LOG_INFO << "http_code=" << response->http_code()
-        << " URL=http://" << request->host() << request->uri()
-        << " [" << response->body().ToString() << "]";
+    ENGINE_LOG_INFO(engine::GetLogger(), "http_code={} URL=http://{}{} [{}]", response->http_code(),
+        request->host(), request->uri(), response->body().ToString());
     const char* header = response->FindHeader("Connection");
     if (header) {
-        LOG_INFO << "HTTP HEADER Connection=" << header;
+        ENGINE_LOG_INFO(engine::GetLogger(), "HTTP HEADER Connection={}", header);
     }
     responsed++;
     assert(request == response->request());
@@ -37,6 +38,6 @@ int main() {
     }
 
     t.Stop(true);
-    LOG_INFO << "EventLoopThread stopped.";
+    ENGINE_LOG_INFO(engine::GetLogger(), "EventLoopThread stopped.");
     return 0;
 }

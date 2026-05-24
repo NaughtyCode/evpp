@@ -6,6 +6,8 @@
 #include "tests/examples/winmain-inl.h"
 #endif
 
+#include "runtime/core/log/log.h"
+
 typedef std::map<uint64_t, evpp::TCPConnPtr> ConnectionsMap;
 typedef std::shared_ptr<ConnectionsMap> ConnectionsMapPtr;
 
@@ -19,13 +21,19 @@ std::atomic<int64_t> g_current_round_recved_message = {0};
 std::atomic<int64_t> g_current_round_recved_bytes = {0};
 
 void Print() {
-    LOG_ERROR << "Running ...\n"
-        << "\t                Total connected " << g_connected << "\n"
-        << "\t        Current round connected " << g_current_round_connected.exchange(0) << "\n"
-        << "\t     Current round disconnected " << g_current_round_disconnected.exchange(0) << "\n"
-        << "\t        Total received messages " << g_recved_message << "\n"
-        << "\tCurrent round received messages " << g_current_round_recved_message.exchange(0) << "\n"
-        << "\t                     Throughput " << g_current_round_recved_bytes.exchange(0) / 1024.0 / 1024.0 << "MB/s\n";
+    ENGINE_LOG_ERROR(engine::GetLogger(), "Running ...\n"
+        "\t                Total connected {}\n"
+        "\t        Current round connected {}\n"
+        "\t     Current round disconnected {}\n"
+        "\t        Total received messages {}\n"
+        "\tCurrent round received messages {}\n"
+        "\t                     Throughput {}MB/s\n",
+        g_connected.load(),
+        g_current_round_connected.exchange(0),
+        g_current_round_disconnected.exchange(0),
+        g_recved_message.load(),
+        g_current_round_recved_message.exchange(0),
+        g_current_round_recved_bytes.exchange(0) / 1024.0 / 1024.0);
 }
 
 void OnMessage(const evpp::TCPConnPtr& conn,
@@ -51,18 +59,18 @@ void OnMessage(const evpp::TCPConnPtr& conn,
             }
         }
         if (!check) {
-            LOG_ERROR << "Received an ERROR message.";
+            ENGINE_LOG_ERROR(engine::GetLogger(), "Received an ERROR message.");
         }
     }
 }
 
 void OnConnection(const evpp::TCPConnPtr& conn) {
     if (conn->IsConnected()) {
-        LOG_INFO << "Accept a new connection " << conn->AddrToString();
+        ENGINE_LOG_INFO(engine::GetLogger(), "Accept a new connection {}", conn->AddrToString());
         g_connected++;
         g_current_round_connected++;
     } else {
-        LOG_INFO << "Disconnected from " << conn->remote_addr();
+        ENGINE_LOG_INFO(engine::GetLogger(), "Disconnected from {}", conn->remote_addr());
         g_connected--;
         g_current_round_disconnected++;
     }

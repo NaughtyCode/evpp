@@ -14,6 +14,10 @@
 #include "tests/apps/evnsq/client.h"
 #include "tests/apps/evnsq/producer.h"
 
+#include <chrono>
+
+#include "runtime/core/log/log.h"
+
 namespace evnsq {
 static const std::string kNSQMagic = "  V2";
 static const std::string kOK = "OK";
@@ -27,15 +31,15 @@ NSQConn::NSQConn(Client* c, const Option& ops)
     , published_count_(0)
     , published_ok_count_(0)
     , published_failed_count_(0) {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
 }
 
 NSQConn::~NSQConn() {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
 }
 
 void NSQConn::Connect(const std::string& addr) {
-    DLOG_TRACE << " remote_addr=" << addr;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} remote_addr={}", (void*)this, addr);
     tcp_client_ = evpp::TCPClientPtr(new evpp::TCPClient(loop_, addr, std::string("NSQClient-") + addr));
     status_ = kConnecting;
     tcp_client_->SetConnectionCallback(std::bind(&NSQConn::OnTCPConnectionEvent, this, std::placeholders::_1));
@@ -45,18 +49,18 @@ void NSQConn::Connect(const std::string& addr) {
 
 
 void NSQConn::Close() {
-    LOG_WARN << "NSQConn::Close() this=" << this << " status=" << StatusToString();
+    ENGINE_LOG_WARN(engine::GetLogger(), "NSQConn::Close() this={} status={}", (void*)this, StatusToString());
     status_ = kDisconnecting;
     assert(loop_->IsInLoopThread());
     tcp_client_->Disconnect();
 }
 
 void NSQConn::Reconnect() {
-    LOG_WARN << "NSQConn::Close() this=" << this << " status=" << StatusToString() << " remote_nsq_addr=" << remote_addr();
+    ENGINE_LOG_WARN(engine::GetLogger(), "NSQConn::Close() this={} status={} remote_nsq_addr={}", (void*)this, StatusToString(), remote_addr());
 
     // Discards all the messages which were cached by the broken tcp connection.
     if (!wait_ack_.empty()) {
-        LOG_WARN << "Discards " << wait_ack_.size() << " NSQ messages. nsq_message_missing";
+        ENGINE_LOG_WARN(engine::GetLogger(), "Discards {} NSQ messages. nsq_message_missing", wait_ack_.size());
         published_failed_count_ += wait_ack_.size();
         wait_ack_.clear();
     }
@@ -70,7 +74,7 @@ const std::string& NSQConn::remote_addr() const {
 }
 
 void NSQConn::OnTCPConnectionEvent(const evpp::TCPConnPtr& conn) {
-    DLOG_TRACE << "status=" << StatusToString() << " TCPConn=" << conn.get() << " remote_addr=" << conn->remote_addr();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} status={} TCPConn={} remote_addr={}", (void*)this, StatusToString(), (void*)conn.get(), conn->remote_addr());
     if (conn->IsConnected()) {
         assert(tcp_client_->conn() == conn);
         if (status_ == kConnecting) {
@@ -105,7 +109,7 @@ void NSQConn::OnRecv(const evpp::TCPConnPtr& conn, evpp::Buffer* buf) {
         }
 
         buf->Skip(4); // 4 bytes of size
-        //LOG_INFO << "Recv a data from NSQD msg body len=" << size - 4 << " body=[" << std::string(buf->data(), size - 4) << "]";
+        //ENGINE_LOG_INFO(engine::GetLogger(), "Recv a data from NSQD msg body len={} body=[{}]", size - 4, std::string(buf->data(), size - 4));
         int32_t frame_type = buf->ReadInt32();
 
         size_t body_len = size - sizeof(frame_type); // The message body length
@@ -140,7 +144,7 @@ void NSQConn::OnRecv(const evpp::TCPConnPtr& conn, evpp::Buffer* buf) {
                 rapidjson::Document doc;
                 doc.Parse(msg.data());
                 if (doc.HasParseError()) {
-                    LOG_ERROR << "Identify Response JSON parsed ERROR. rapidjson ERROR code=" << doc.GetParseError();
+                    ENGINE_LOG_ERROR(engine::GetLogger(), "Identify Response JSON parsed ERROR. rapidjson ERROR code={}", doc.GetParseError());
                     OnConnectedFailed();
                 }
                 bool auth_required = doc["auth_required"].GetBool();
@@ -154,7 +158,7 @@ void NSQConn::OnRecv(const evpp::TCPConnPtr& conn, evpp::Buffer* buf) {
                 if (buf->NextString(body_len) == kOK) {
                     OnConnectedOK();
                 } else {
-                    LOG_ERROR << "Identify ERROR";
+                    ENGINE_LOG_ERROR(engine::GetLogger(), "Identify ERROR");
                     OnConnectedFailed();
                 }
             }
@@ -165,13 +169,13 @@ void NSQConn::OnRecv(const evpp::TCPConnPtr& conn, evpp::Buffer* buf) {
         {
             std::string msg = buf->NextString(body_len);
             if (msg.substr(0, 2) == "E_") {
-                LOG_ERROR << "Authenticate Failed. [" << msg << "]";
+                ENGINE_LOG_ERROR(engine::GetLogger(), "Authenticate Failed. [{}]", msg);
                 OnConnectedFailed();
             } else {
                 rapidjson::Document doc;
                 doc.Parse(msg.data());
                 if (doc.HasParseError()) {
-                    LOG_ERROR << "Identify Response JSON parsed ERROR. rapidjson ERROR code=" << doc.GetParseError();
+                    ENGINE_LOG_ERROR(engine::GetLogger(), "Identify Response JSON parsed ERROR. rapidjson ERROR code={}", doc.GetParseError());
                     OnConnectedFailed();
                 } else {
                     /*
@@ -199,7 +203,7 @@ void NSQConn::OnRecv(const evpp::TCPConnPtr& conn, evpp::Buffer* buf) {
                     auto self = shared_from_this();
                     conn_fn_(self);
                 }
-                LOG_INFO << "Successfully connected to nsqd " << conn->remote_addr();
+                ENGINE_LOG_INFO(engine::GetLogger(), "Successfully connected to nsqd {}", conn->remote_addr());
                 UpdateReady(100); //TODO RDY count
             } else {
                 Reconnect();
@@ -220,7 +224,7 @@ void NSQConn::OnMessage(size_t message_len, int32_t frame_type, evpp::Buffer* bu
     if (frame_type == kFrameTypeResponse) {
         const size_t kHeartbeatLen = sizeof("_heartbeat_") - 1;
         if (message_len == kHeartbeatLen && strncmp(buf->data(), "_heartbeat_", kHeartbeatLen) == 0) {
-            LOG_TRACE << "recv heartbeat from nsqd " << tcp_client_->remote_addr();
+            ENGINE_LOG_TRACE(engine::GetLogger(), "recv heartbeat from nsqd {}", tcp_client_->remote_addr());
             Command c;
             c.Nop();
             WriteCommand(c);
@@ -231,7 +235,7 @@ void NSQConn::OnMessage(size_t message_len, int32_t frame_type, evpp::Buffer* bu
 
     switch (frame_type) {
     case kFrameTypeResponse:
-        LOG_INFO << "frame_type=" << frame_type << " kFrameTypeResponse. [" << std::string(buf->data(), message_len) << "]";
+        ENGINE_LOG_INFO(engine::GetLogger(), "frame_type={} kFrameTypeResponse. [{}]", frame_type, std::string(buf->data(), message_len));
         if (nsq_client_->IsProducer()) {
             OnPublishResponse(buf->data(), message_len);
         }
@@ -256,7 +260,7 @@ void NSQConn::OnMessage(size_t message_len, int32_t frame_type, evpp::Buffer* bu
     {
         // E_UNAUTHORIZED AUTH failed for PUB on "xyyyy1" ""
         std::string msg = std::string(buf->data(), message_len);
-        LOG_ERROR << "frame_type=" << frame_type << " kFrameTypeResponse. [" << msg << "]";
+        ENGINE_LOG_ERROR(engine::GetLogger(), "frame_type={} kFrameTypeResponse. [{}]", frame_type, msg);
         static const std::string unauthorized = "E_UNAUTHORIZED AUTH";
         if (strncmp(msg.data(), unauthorized.data(), unauthorized.size()) == 0) {
             Close();
@@ -337,7 +341,7 @@ bool NSQConn::WritePublishCommand(const CommandPtr& c) {
     assert(c->IsPublish());
     assert(nsq_client_->IsProducer());
     if (wait_ack_.size() >= static_cast<Producer*>(nsq_client_)->high_water_mark()) {
-        LOG_EVERY_N(WARNING, 100000) << "Too many messages are waiting a response ACK. Please try again later.";
+        ENGINE_LOG_WARN_LIMIT(std::chrono::seconds(1), engine::GetLogger(), "Too many messages are waiting a response ACK. Please try again later.");
         return false;
     }
 
@@ -346,7 +350,7 @@ bool NSQConn::WritePublishCommand(const CommandPtr& c) {
     c->WriteTo(&buf);
     WriteBinaryCommand(&buf);
     PushWaitACKCommand(c);
-    LOG_INFO << "Publish a message to " << remote_addr() << " command=" << c.get();
+    ENGINE_LOG_INFO(engine::GetLogger(), "Publish a message to {} command={}", remote_addr(), (void*)c.get());
     return true;
 }
 
@@ -386,12 +390,12 @@ void NSQConn::OnPublishResponse(const char* d, size_t len) {
     CommandPtr cmd = PopWaitACKCommand();
     if (len == 2 && d[0] == 'O' && d[1] == 'K') {
         published_ok_count_++;
-        LOG_INFO << "Get a PublishResponse message 'OK', command=" << cmd.get() << " published_ok_count=" << published_ok_count_;
+        ENGINE_LOG_INFO(engine::GetLogger(), "Get a PublishResponse message 'OK', command={} published_ok_count={}", (void*)cmd.get(), published_ok_count_);
         publish_response_cb_(cmd, true);
         return;
     }
 
-    LOG_ERROR << "Publish message failed : [" << std::string(d, len) << "].";
+    ENGINE_LOG_ERROR(engine::GetLogger(), "Publish message failed : [{}].", std::string(d, len));
     if (!cmd.get()) {
         return;
     }
@@ -403,7 +407,7 @@ void NSQConn::OnPublishResponse(const char* d, size_t len) {
     }
 
     cmd->IncRetriedTime();
-    LOG_ERROR << "Publish command " << cmd.get() << " failed : [" << std::string(d, len) << "]. Try again.";
+    ENGINE_LOG_ERROR(engine::GetLogger(), "Publish command {} failed : [{}]. Try again.", (void*)cmd.get(), std::string(d, len));
     WritePublishCommand(cmd); // TODO This code will serialize Command more than twice. We need to cache the first serialization result to fix this performance problem
 }
 

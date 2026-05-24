@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 4.0)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # and will get dllimport on Windows / no-op elsewhere.
 add_definitions(-DENGINE_BUILD)
 
-option(ENGINE_PROFILER_ENABLED "Enable perfetto profiler" OFF)
+option(ENGINE_PROFILER_ENABLED "Enable perfetto profiler" ON)
 
 # ── Global include directories ───────────────────────────────────────
 # All project includes are src/-relative.
@@ -24,12 +24,17 @@ if(MSVC)
     add_definitions(-DNOMINMAX)
     add_definitions(-DWIN32_LEAN_AND_MEAN)
     add_compile_options(/bigobj /Zc:preprocessor /utf-8)
+    # Moved from windows_port.h — suppress noisy / unactionable MSVC warnings.
+    add_compile_options(
+        /wd4005 /wd4244 /wd4251 /wd4355 /wd4503 /wd4530
+        /wd4577 /wd4715 /wd4800 /wd4819 /wd4996
+    )
 endif()
 
 if(UNIX)
-    set(LIBRARIES event glog pthread)
+    set(LIBRARIES event pthread)
 else()
-    set(LIBRARIES event glog)
+    set(LIBRARIES event_core_static event_extra_static)
 endif()
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -116,7 +121,7 @@ set(PHYSICS_HEADERS
     physics/physics_world.h physics/physics_thread.h physics/physics_system.h
     physics/physics_engine_bridge.h physics/physics_bindings.h
 )
-source_group("engine\\physics" FILES ${PHYSICS_HEADERS})
+source_group("physics" FILES ${PHYSICS_HEADERS})
 
 set(PHYSICS_CC
     physics/physics_config.cc physics/physics_commands.cc
@@ -126,7 +131,7 @@ set(PHYSICS_CC
     physics/physics_system.cc physics/physics_engine_bridge.cc
     physics/physics_bindings.cc
 )
-source_group("engine\\physics" FILES ${PHYSICS_CC})
+source_group("physics" FILES ${PHYSICS_CC})
 
 # ── Evpp network library (inlined) ─────────────────────────────────
 file(GLOB EVPP_SOURCES
@@ -197,6 +202,7 @@ if(ENGINE_PHYSICS_ENABLED)
 endif()
 
 # ── Link system libraries ─────────────────────────────────────────────
+target_link_directories(ServerEngine PUBLIC "${PROJECT_BINARY_DIR}/libevent/lib/$<CONFIG>")
 target_link_libraries(ServerEngine PUBLIC ${LIBRARIES})
 
 # ── Post-build: copy DLL to bin/ ──────────────────────────────────────

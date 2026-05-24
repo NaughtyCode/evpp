@@ -41,19 +41,22 @@ bool ProfilerManager::Initialize(const ProfilerConfig& cfg) {
 
     config_ = cfg;
 
+    auto* logger = GetLogger();
+    ENGINE_LOG_INFO(logger, "ProfilerManager: initializing (before Tracing::Init)");
+
     perfetto::TracingInitArgs args;
     args.backends = perfetto::kInProcessBackend;
     args.shmem_size_hint_kb = cfg.buffer_size_kb;
 
     perfetto::Tracing::Initialize(args);
+
+    ENGINE_LOG_INFO(logger, "ProfilerManager: after Tracing::Init, before Register");
+
     perfetto::TrackEvent::Register();
 
-    initialized_ = true;
+    ENGINE_LOG_INFO(logger, "ProfilerManager: initialized, buffer=[{}KB]", cfg.buffer_size_kb);
 
-    auto* logger = GetLogger();
-    ENGINE_LOG_INFO(logger,
-        "ProfilerManager: initialized, buffer=[{}KB], duration=[{}ms]",
-        cfg.buffer_size_kb, cfg.duration_ms);
+    initialized_ = true;
     return true;
 }
 

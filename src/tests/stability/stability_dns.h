@@ -8,6 +8,7 @@
 #include <evpp/event_loop.h>
 #include <evpp/dns_resolver.h>
 
+#include "runtime/core/log/log.h"
 #include "tests/examples/winmain-inl.h"
 
 void TestDNSResolver() {
@@ -15,7 +16,7 @@ void TestDNSResolver() {
         bool resolved = false;
         bool deleted = false;
         auto fn_resolved = [&resolved](const std::vector <struct in_addr>& addrs) {
-            LOG_INFO << "Entering fn_resolved";
+            ENGINE_LOG_INFO(engine::GetLogger(), "Entering fn_resolved");
             resolved = true;
         };
 
@@ -30,7 +31,7 @@ void TestDNSResolver() {
         }
 
         auto fn_deleter = [&deleted, dns_resolver]() {
-            LOG_INFO << "Entering fn_deleter";
+            ENGINE_LOG_INFO(engine::GetLogger(), "Entering fn_deleter");
             deleted = true;
         };
 

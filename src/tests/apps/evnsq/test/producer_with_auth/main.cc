@@ -7,10 +7,12 @@
 
 #include <getopt.h>
 
+#include "runtime/core/log/log.h"
+
 size_t total_count = 200;
 
 bool Publish(evnsq::Producer* producer) {
-    LOG_INFO << "Publish(evnsq::Producer* producer) published_count=" << producer->published_count();
+    ENGINE_LOG_INFO(engine::GetLogger(), "Publish(evnsq::Producer* producer) published_count={}", producer->published_count());
     if (producer->published_count() == total_count) {
         producer->Close();
         auto loop = producer->loop();
@@ -44,9 +46,7 @@ void Close(evnsq::Producer* p) {
 }
 
 int main(int argc, char* argv[]) {
-    google::InitGoogleLogging(argv[0]);
-
-    FLAGS_stderrthreshold = 0;
+    engine::InitLogger({});
 
     int opt = 0;
     //int digit_optind = 0;
@@ -123,7 +123,3 @@ int main(int argc, char* argv[]) {
 #ifdef WIN32
 #include "tests/examples/winmain-inl.h"
 #endif
-
-
-
-

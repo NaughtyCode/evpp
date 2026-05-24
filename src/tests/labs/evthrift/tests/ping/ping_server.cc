@@ -2,6 +2,8 @@
 
 #include "tests/labs/evthrift/thrift_server.h"
 
+#include "runtime/core/log/log.h"
+
 #include "gen-cpp/Ping.h"
 
 using apache::thrift::protocol::TCompactProtocolFactory;
@@ -13,7 +15,7 @@ public:
     PingHandler() {}
 
     void ping() {
-        LOG_INFO << "ping";
+        ENGINE_LOG_INFO(engine::GetLogger(), "ping");
     }
 
 };

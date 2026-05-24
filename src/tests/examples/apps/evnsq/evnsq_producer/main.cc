@@ -7,8 +7,10 @@
 
 #include <getopt.h>
 
+#include "runtime/core/log/log.h"
+
 int OnMessage(const evnsq::Message* msg) {
-    LOG_INFO << "Received a message, id=" << msg->id << " message=[" << msg->body.ToString() << "]";
+    ENGINE_LOG_INFO(engine::GetLogger(), "Received a message, id={} message=[{}]", msg->id, msg->body.ToString());
     return 0;
 }
 
@@ -23,7 +25,7 @@ bool Publish(evnsq::Producer* producer) {
     if (!producer->Publish(topic1, msg)) {
         return false;
     }
-    //LOG_INFO << "Publish : [" << msg << "]";
+    //ENGINE_LOG_INFO(engine::GetLogger(), "Publish : [{}]", msg);
     std::vector<std::string> messages;
     messages.push_back(msg);
     messages.push_back(msg);
@@ -42,9 +44,7 @@ void Close(evnsq::Producer* p) {
 }
 
 int main(int argc, char* argv[]) {
-    google::InitGoogleLogging(argv[0]);
-
-    FLAGS_stderrthreshold = 0;
+    engine::InitLogger({});
 
     int opt = 0;
     int option_index = 0;
@@ -136,7 +136,6 @@ int main(int argc, char* argv[]) {
 #ifdef WIN32
 #include "tests/examples/winmain-inl.h"
 #endif
-
 
 
 

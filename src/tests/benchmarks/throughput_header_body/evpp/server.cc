@@ -2,6 +2,8 @@
 #include <evpp/buffer.h>
 #include <evpp/tcp_conn.h>
 
+#include "runtime/core/log/log.h"
+
 #include "tests/benchmarks/throughput_header_body/evpp/header.h"
 
 uint32_t g_total_count = 100;
@@ -20,7 +22,7 @@ void OnConnection(const evpp::TCPConnPtr& conn) {
 
 void OnMessage(const evpp::TCPConnPtr& conn,
                evpp::Buffer* buf) {
-    LOG_INFO << " buf->size=" << buf->size();
+    ENGINE_LOG_INFO(engine::GetLogger(), " buf->size={}", buf->size());
     const size_t kHeaderLen = sizeof(Header);
     while (buf->size() > kHeaderLen) {
         Header* header = reinterpret_cast<Header*>(const_cast<char*>(buf->data()));
@@ -30,7 +32,7 @@ void OnMessage(const evpp::TCPConnPtr& conn,
             return;
         }
 
-        LOG_INFO << "full_size=" << full_size << " header.body_size_=" << ntohl(header->body_size_) << " header.packet_count_=" << ntohl(header->packet_count_);
+        ENGINE_LOG_INFO(engine::GetLogger(), "full_size={} header.body_size_={} header.packet_count_={}", full_size, ntohl(header->body_size_), ntohl(header->packet_count_));
 
         if (check_count(header)) {
             conn->Close();
@@ -70,5 +72,4 @@ int main(int argc, char* argv[]) {
 
 
 #include "tests/examples/winmain-inl.h"
-
 

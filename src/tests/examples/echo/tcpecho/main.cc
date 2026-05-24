@@ -6,10 +6,12 @@
 #include "tests/examples/winmain-inl.h"
 #endif
 
+#include "runtime/core/log/log.h"
+
 void OnMessage(const evpp::TCPConnPtr& conn,
                evpp::Buffer* msg) {
     std::string s = msg->NextAllString();
-    LOG_INFO << "Received a message [" << s << "]";
+    ENGINE_LOG_INFO(engine::GetLogger(), "Received a message [{}]", s);
     conn->Send(s);
 
     if (s == "quit" || s == "exit") {
@@ -20,9 +22,9 @@ void OnMessage(const evpp::TCPConnPtr& conn,
 
 void OnConnection(const evpp::TCPConnPtr& conn) {
     if (conn->IsConnected()) {
-        LOG_INFO << "Accept a new connection from " << conn->remote_addr();
+        ENGINE_LOG_INFO(engine::GetLogger(), "Accept a new connection from {}", conn->remote_addr());
     } else {
-        LOG_INFO << "Disconnected from " << conn->remote_addr();
+        ENGINE_LOG_INFO(engine::GetLogger(), "Disconnected from {}", conn->remote_addr());
     }
 }
 

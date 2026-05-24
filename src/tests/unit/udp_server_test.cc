@@ -23,7 +23,7 @@ static void Init() {
 }
 
 TEST_UNIT(testUDPServer) {
-    LOG_TRACE << __func__;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "{}", __func__);
     Init();
     std::vector<int> ports(2, 0);
     ports[0] = 15368;
@@ -32,7 +32,7 @@ TEST_UNIT(testUDPServer) {
     udpsrv->SetMessageHandler(std::bind(&OnMessage, udpsrv, std::placeholders::_1, std::placeholders::_2));
     H_TEST_ASSERT(udpsrv->Init(ports) && udpsrv->Start());
     usleep(100);//wait udpsrv started
-    LOG_TRACE << "udpserver started.";
+    ENGINE_LOG_TRACE(engine::GetLogger(), "udpserver started.");
 
     int loop = 10;
     for (int i = 0; i < loop; ++i) {
@@ -61,7 +61,7 @@ TEST_UNIT(testUDPServer) {
 
 
 TEST_UNIT(testUDPServerGraceStop) {
-    LOG_TRACE << __func__;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "{}", __func__);
     Init();
     int port = 53669;
     evpp::udp::Server* udpsrv = new evpp::udp::Server;

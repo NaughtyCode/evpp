@@ -1,11 +1,12 @@
 #include "runtime/evpp/inner_pre.h"
 
+#include <cstdio>
 #include <string.h>
 
 #include "runtime/evpp/libevent.h"
 #include "runtime/evpp/event_watcher.h"
 #include "runtime/evpp/event_loop.h"
-#include "runtime/evpp/logging.h"
+#include "runtime/core/log/log.h"
 
 namespace evpp {
 
@@ -56,7 +57,7 @@ bool EventWatcher::Watch(Duration timeout) {
         // When InvokerTimer::periodic_ == true, EventWatcher::Watch will be called many times
         // so we need to remove it from event_base before we add it into event_base
         if (EventDel(event_) != 0) {
-            LOG_ERROR << "event_del failed. fd=" << this->event_->ev_fd << " event_=" << event_;
+            ENGINE_LOG_ERROR(engine::GetLogger(), "event_del failed. fd={} event_={}", this->event_->ev_fd, (void*)event_);
             // TODO how to deal with it when failed?
         }
         attached_ = false;
@@ -64,7 +65,7 @@ bool EventWatcher::Watch(Duration timeout) {
 
     assert(!attached_);
     if (EventAdd(event_, timeoutval) != 0) {
-        LOG_ERROR << "event_add failed. fd=" << this->event_->ev_fd << " event_=" << event_;
+        ENGINE_LOG_ERROR(engine::GetLogger(), "event_add failed. fd={} event_={}", this->event_->ev_fd, (void*)event_);
         return false;
     }
     attached_ = true;
@@ -122,14 +123,82 @@ PipeEventWatcher::~PipeEventWatcher() {
 bool PipeEventWatcher::DoInit() {
     assert(pipe_[0] == 0);
 
+#ifdef H_OS_WINDOWS
+    // On Windows, wepoll uses AFD (Ancillary Function Driver) polling which
+    // may not reliably detect events on AF_UNIX sockets. Use AF_INET loopback
+    // instead to ensure the wakeup pipe works correctly with IOCP.
+    {
+        evutil_socket_t listener = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (listener < 0) {
+            std::fprintf(stderr, "[PipeEventWatcher] socket() failed, WSA err=%d\n",
+                         ::WSAGetLastError());
+            goto failed;
+        }
+
+        struct sockaddr_in addr;
+        memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        addr.sin_port = 0;
+
+        if (::bind(listener, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+            std::fprintf(stderr, "[PipeEventWatcher] bind() failed, WSA err=%d\n",
+                         ::WSAGetLastError());
+            EVUTIL_CLOSESOCKET(listener);
+            goto failed;
+        }
+        if (::listen(listener, 1) < 0) {
+            std::fprintf(stderr, "[PipeEventWatcher] listen() failed, WSA err=%d\n",
+                         ::WSAGetLastError());
+            EVUTIL_CLOSESOCKET(listener);
+            goto failed;
+        }
+
+        socklen_t addrlen = sizeof(addr);
+        if (::getsockname(listener, (struct sockaddr*)&addr, &addrlen) < 0) {
+            std::fprintf(stderr, "[PipeEventWatcher] getsockname() failed, WSA err=%d\n",
+                         ::WSAGetLastError());
+            EVUTIL_CLOSESOCKET(listener);
+            goto failed;
+        }
+
+        pipe_[0] = ::socket(AF_INET, SOCK_STREAM, 0); // writer side
+        if (pipe_[0] < 0) {
+            std::fprintf(stderr, "[PipeEventWatcher] socket(writer) failed, WSA err=%d\n",
+                         ::WSAGetLastError());
+            EVUTIL_CLOSESOCKET(listener);
+            goto failed;
+        }
+        if (::connect(pipe_[0], (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+            std::fprintf(stderr, "[PipeEventWatcher] connect() failed, WSA err=%d\n",
+                         ::WSAGetLastError());
+            EVUTIL_CLOSESOCKET(listener);
+            EVUTIL_CLOSESOCKET(pipe_[0]);
+            goto failed;
+        }
+
+        pipe_[1] = ::accept(listener, NULL, NULL); // reader side
+        EVUTIL_CLOSESOCKET(listener);
+        if (pipe_[1] < 0) {
+            std::fprintf(stderr, "[PipeEventWatcher] accept() failed, WSA err=%d\n",
+                         ::WSAGetLastError());
+            EVUTIL_CLOSESOCKET(pipe_[0]);
+            goto failed;
+        }
+    }
+#else
     if (evutil_socketpair(AF_UNIX, SOCK_STREAM, 0, pipe_) < 0) {
-        int err = errno;
-        LOG_ERROR << "create socketpair ERROR errno=" << err << " " << strerror(err);
+        int err = EVPP_ERRNO;
+        std::fprintf(stderr, "[PipeEventWatcher] socketpair() failed, errno=%d %s\n",
+                     err, strerror(err));
+        ENGINE_LOG_ERROR(engine::GetLogger(), "create socketpair ERROR errno={} {}", err, strerror(err));
         goto failed;
     }
+#endif
 
     if (evutil_make_socket_nonblocking(pipe_[0]) < 0 ||
         evutil_make_socket_nonblocking(pipe_[1]) < 0) {
+        std::fprintf(stderr, "[PipeEventWatcher] evutil_make_socket_nonblocking() failed\n");
         goto failed;
     }
 
@@ -150,11 +219,11 @@ void PipeEventWatcher::DoClose() {
 }
 
 void PipeEventWatcher::HandlerFn(evpp_socket_t fd, short /*which*/, void* v) {
-    LOG_INFO << "PipeEventWatcher::HandlerFn fd=" << fd << " v=" << v;
+    ENGINE_LOG_INFO(engine::GetLogger(), "PipeEventWatcher::HandlerFn fd={} v={}", fd, v);
     PipeEventWatcher* e = (PipeEventWatcher*)v;
 #ifdef H_BENCHMARK_TESTING
     // Every time we only read 1 byte for testing the IO event performance.
-    // We use it in the benchmark test program 
+    // We use it in the benchmark test program
     //  1. evpp/benchmark/ioevent/evpp/
     //  1. evpp/benchmark/ioevent/fd_channel_vs_pipe_event_watcher/
     char buf[1];
@@ -176,6 +245,20 @@ void PipeEventWatcher::Notify() {
     char buf[1] = {};
 
     if (::send(pipe_[0], buf, sizeof(buf), 0) < 0) {
+        // If the send buffer is full (EAGAIN/EWOULDBLOCK), the event loop
+        // already has notification data pending and will wake up, so
+        // dropping this notification is safe.
+        int serrno = EVPP_ERRNO;
+        if (serrno != EAGAIN
+#ifdef EWOULDBLOCK
+            && serrno != EWOULDBLOCK
+#endif
+#ifdef WSAEWOULDBLOCK
+            && serrno != WSAEWOULDBLOCK
+#endif
+        ) {
+            ENGINE_LOG_ERROR(engine::GetLogger(), "PipeEventWatcher::Notify send failed errno={} {}", serrno, strerror(serrno));
+        }
         return;
     }
 }
@@ -256,4 +339,3 @@ bool SignalEventWatcher::AsyncWait() {
     return Watch(Duration());
 }
 }
-

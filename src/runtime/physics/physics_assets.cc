@@ -258,7 +258,7 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(
 
     // Helper: extract field from json_t
     auto get_num = [&](const std::string& key, double default_val = 0.0) -> double {
-        if (p.contains(key)) {
+        if (p.contains(key) && p[key].is_number()) {
             return p[key].template get<double>();
         }
         return default_val;

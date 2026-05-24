@@ -22,7 +22,7 @@ static void Handle() {
 }
 
 static void MyEventThread() {
-    LOG_INFO << "EventLoop is running ...";
+    ENGINE_LOG_INFO(engine::GetLogger(), "EventLoop is running ...");
     loop = std::shared_ptr<evpp::EventLoop>(new evpp::EventLoop);
     loop->Run();
 }
@@ -45,4 +45,3 @@ TEST_UNIT(testInvokerTimerCancel) {
     H_TEST_ASSERT(!event_handler_called);
     H_TEST_ASSERT(evpp::GetActiveEventCount() == 0);
 }
-

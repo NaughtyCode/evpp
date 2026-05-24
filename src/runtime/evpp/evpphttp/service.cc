@@ -19,16 +19,16 @@ bool Service::Init(const ConnectionCallback& cb) {
         delete listen_loop_;
         delete tcp_srv_;
         is_stopped_ = true;
-        LOG_WARN << "tcpserver on " << listen_addr_ << " init failed";
+        ENGINE_LOG_WARN(engine::GetLogger(), "tcpserver on {} init failed", listen_addr_);
         return false;
     }
-    LOG_INFO << "http server init success";
+    ENGINE_LOG_INFO(engine::GetLogger(), "http server init success");
     return true;
 }
 
 bool Service::Start() {
     if (is_stopped_) {
-        LOG_WARN << "init failed, so not to start";
+        ENGINE_LOG_WARN(engine::GetLogger(), "init failed, so not to start");
         return false;
     }
     listen_thr_ = new std::thread([listen_loop = listen_loop_]() {
@@ -36,10 +36,10 @@ bool Service::Start() {
     });
     assert(listen_thr_ != nullptr);
     if (!tcp_srv_->Start()) {
-        LOG_WARN << "tcpserver on " << listen_addr_ << " start failed";
+        ENGINE_LOG_WARN(engine::GetLogger(), "tcpserver on {} start failed", listen_addr_);
         return false;
     }
-    LOG_INFO << "http server start on " << listen_addr_ << " suc";
+    ENGINE_LOG_INFO(engine::GetLogger(), "http server start on {} suc", listen_addr_);
     return true;
 }
 
@@ -57,14 +57,14 @@ void Service::AfterFork() {
 }
 
 void Service::Stop() {
-    DLOG_TRACE << "http service is stopping";
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http service is stopping", (void*)this);
     tcp_srv_->Stop();
     listen_loop_->Stop();
     if (listen_thr_ && listen_thr_->joinable()) {
         listen_thr_->join();
     }
     callbacks_.clear();
-    DLOG_TRACE << "http service stopped";
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http service stopped", (void*)this);
     is_stopped_ = true;
 }
 
@@ -106,7 +106,7 @@ int Service::RequestHandler(const evpp::TCPConnPtr& conn, evpp::Buffer* buf, Htt
 
 void Service::OnMessage(const evpp::TCPConnPtr& conn, evpp::Buffer* buf) {
     int ret = 0;
-    //LOG_TRACE << "recv message:" << buf->ToString();
+    //ENGINE_LOG_TRACE(engine::GetLogger(), "recv message:{}", buf->ToString());
     if (!conn->context().IsEmpty()) {
         auto context = conn->context();
         //  release by shared_ptr

@@ -10,7 +10,7 @@
 #include <evpp/event_loop.h>
 #include <evpp/event_loop_thread.h>
 
-// 
+//
 // namespace evtimer {
 // static evpp::Duration g_timeout(1.0); // 1s
 // static bool g_event_handler_called = false;
@@ -18,7 +18,7 @@
 //     g_event_handler_called = true;
 //     event_base_loopexit(base, 0);
 // }
-// 
+//
 // static void MyEventThread(struct event_base* base, evpp::TimerEventWatcher* ev) {
 //     ev->Init();
 //     ev->AsyncWait();
@@ -26,7 +26,7 @@
 //     delete ev; // make sure to initialize and delete in the same thread.
 // }
 // }
-// 
+//
 // TEST_UNIT(testTimerEventWatcher) {
 //     using namespace evtimer;
 //     struct event_base* base = event_base_new();
@@ -87,7 +87,7 @@ namespace evsignal {
 static evpp::SignalEventWatcher* ev = nullptr;
 static bool g_event_handler_called = false;
 static void Handle(evpp::EventLoopThread* thread) {
-    LOG_INFO << "SIGINT caught.";
+    ENGINE_LOG_INFO(engine::GetLogger(), "SIGINT caught.");
     g_event_handler_called = true;
     thread->Stop();
     delete ev; // make sure to initialize and delete in the same thread.
@@ -108,7 +108,7 @@ TEST_UNIT(testSignalEventWatcher) {
     ev = new evpp::SignalEventWatcher(SIGINT, loop, std::bind(&Handle, thread.get()));
     loop->RunInLoop(&WatchSignalInt);
     auto f = []() {
-        LOG_INFO << "Send SIGINT ...";
+        ENGINE_LOG_INFO(engine::GetLogger(), "Send SIGINT ...");
 #ifdef H_OS_WINDOWS
         raise(SIGINT);
 #else

@@ -7,18 +7,18 @@ namespace evpp {
 EventLoopThreadPool::EventLoopThreadPool(EventLoop* base_loop, uint32_t thread_number)
     : base_loop_(base_loop),
       thread_num_(thread_number) {
-    DLOG_TRACE << "thread_num=" << thread_num() << " base loop=" << base_loop_;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} thread_num={} base loop={}", (void*)this, thread_num(), base_loop_);
 }
 
 EventLoopThreadPool::~EventLoopThreadPool() {
-    DLOG_TRACE << "thread_num=" << thread_num();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} thread_num={}", (void*)this, thread_num());
     Join();
     threads_.clear();
 }
 
 bool EventLoopThreadPool::Start(bool wait_thread_started) {
     status_.store(kStarting);
-    DLOG_TRACE << "thread_num=" << thread_num() << " base loop=" << base_loop_ << " wait_thread_started=" << wait_thread_started;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} thread_num={} base loop={} wait_thread_started={}", (void*)this, thread_num(), base_loop_, wait_thread_started);
 
     if (thread_num_ == 0) {
         status_.store(kRunning);
@@ -29,13 +29,13 @@ bool EventLoopThreadPool::Start(bool wait_thread_started) {
     std::shared_ptr<std::atomic<uint32_t>> exited_count(new std::atomic<uint32_t>(0));
     for (uint32_t i = 0; i < thread_num_; ++i) {
         auto prefn = [this, started_count]() {
-            DLOG_TRACE << "a working thread started tid=" << std::this_thread::get_id();
+            ENGINE_LOG_TRACE(engine::GetLogger(), "a working thread started tid={}", std::this_thread::get_id());
             this->OnThreadStarted(started_count->fetch_add(1) + 1);
             return EventLoopThread::kOK;
         };
 
         auto postfn = [this, exited_count]() {
-            DLOG_TRACE << "a working thread exiting, tid=" << std::this_thread::get_id();
+            ENGINE_LOG_TRACE(engine::GetLogger(), "a working thread exiting, tid={}", std::this_thread::get_id());
             this->OnThreadExited(exited_count->fetch_add(1) + 1);
             return EventLoopThread::kOK;
         };
@@ -43,7 +43,7 @@ bool EventLoopThreadPool::Start(bool wait_thread_started) {
         EventLoopThreadPtr t(new EventLoopThread());
         if (!t->Start(wait_thread_started, prefn, postfn)) {
             //FIXME error process
-            LOG_ERROR << "start thread failed!";
+            ENGINE_LOG_ERROR(engine::GetLogger(), "start thread failed!");
             return false;
         }
 
@@ -67,30 +67,30 @@ bool EventLoopThreadPool::Start(bool wait_thread_started) {
 }
 
 void EventLoopThreadPool::Stop(bool wait_thread_exit) {
-    DLOG_TRACE << "wait_thread_exit=" << wait_thread_exit;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} wait_thread_exit={}", (void*)this, wait_thread_exit);
     Stop(wait_thread_exit, DoneCallback());
 }
 
 void EventLoopThreadPool::Stop(DoneCallback fn) {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     Stop(false, fn);
 }
 
 void EventLoopThreadPool::Stop(bool wait_thread_exit, DoneCallback fn) {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     status_.store(kStopping);
-    
+
     if (thread_num_ == 0) {
         status_.store(kStopped);
-        
+
         if (fn) {
-            DLOG_TRACE << "calling stopped callback";
+            ENGINE_LOG_TRACE(engine::GetLogger(), "this={} calling stopped callback", (void*)this);
             fn();
         }
         return;
     }
 
-    DLOG_TRACE << "wait_thread_exit=" << wait_thread_exit;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} wait_thread_exit={}", (void*)this, wait_thread_exit);
     stopped_cb_ = fn;
 
     for (auto &t : threads_) {
@@ -109,19 +109,19 @@ void EventLoopThreadPool::Stop(bool wait_thread_exit, DoneCallback fn) {
         return true;
     };
 
-    DLOG_TRACE << "before promise wait";
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} before promise wait", (void*)this);
     if (thread_num_ > 0 && wait_thread_exit) {
         while (!is_stopped_fn()) {
             usleep(1);
         }
     }
-    DLOG_TRACE << "after promise wait";
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} after promise wait", (void*)this);
 
     status_.store(kStopped);
 }
 
 void EventLoopThreadPool::Join() {
-    DLOG_TRACE << "thread_num=" << thread_num();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} thread_num={}", (void*)this, thread_num());
     for (auto &t : threads_) {
         t->Join();
     }
@@ -129,14 +129,14 @@ void EventLoopThreadPool::Join() {
 }
 
 void EventLoopThreadPool::AfterFork() {
-    DLOG_TRACE << "thread_num=" << thread_num();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} thread_num={}", (void*)this, thread_num());
     for (auto &t : threads_) {
         t->AfterFork();
     }
 }
 
 EventLoop* EventLoopThreadPool::GetNextLoop() {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     EventLoop* loop = base_loop_;
 
     if (IsRunning() && !threads_.empty()) {
@@ -165,18 +165,18 @@ uint32_t EventLoopThreadPool::thread_num() const {
 }
 
 void EventLoopThreadPool::OnThreadStarted(uint32_t count) {
-    DLOG_TRACE << "tid=" << std::this_thread::get_id() << " count=" << count << " started.";
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} count={} started.", (void*)this, std::this_thread::get_id(), count);
     if (count == thread_num_) {
-        DLOG_TRACE << "thread pool totally started.";
+        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} thread pool totally started.", (void*)this);
         status_.store(kRunning);
     }
 }
 
 void EventLoopThreadPool::OnThreadExited(uint32_t count) {
-    DLOG_TRACE << "tid=" << std::this_thread::get_id() << " count=" << count << " exited.";
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} count={} exited.", (void*)this, std::this_thread::get_id(), count);
     if (count == thread_num_) {
         status_.store(kStopped);
-        DLOG_TRACE << "this is the last thread stopped. Thread pool totally exited.";
+        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} this is the last thread stopped. Thread pool totally exited.", (void*)this);
         if (stopped_cb_) {
             stopped_cb_();
             stopped_cb_ = DoneCallback();

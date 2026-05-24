@@ -116,3 +116,7 @@ stdout_test.txt
 *.pdb
 
 build_vs2026/*
+stderr.txt
+stdout.txt
+*.log
+compile_error.txt

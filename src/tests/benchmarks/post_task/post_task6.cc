@@ -1,6 +1,8 @@
 #include <evpp/event_loop.h>
 #include <evpp/event_loop_thread_pool.h>
 
+#include "runtime/core/log/log.h"
+
 #include "tests/examples/winmain-inl.h"
 
 uint64_t clock_us() {
@@ -49,7 +51,7 @@ private:
         for (uint32_t i = 0; i < pool_.thread_num(); i++) {
             pool_.GetNextLoopWithHash(i)->RunInLoop(p);
         }
-        
+
     }
 
     void Stop() {
@@ -82,6 +84,6 @@ int main(int argc, char* argv[]) {
     PostTask p(thread_count, post_count);
     p.Start();
     p.Wait();
-    LOG_WARN << argv[0] << " thread_count=" << thread_count << " post_count=" << post_count << " use time: " << p.use_time() << " seconds\n";
+    ENGINE_LOG_WARN(engine::GetLogger(), "{} thread_count={} post_count={} use time: {} seconds\n", argv[0], thread_count, post_count, p.use_time());
     return 0;
 }

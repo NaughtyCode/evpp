@@ -11,17 +11,19 @@
 #include "tests/apps/evnsq/command.h"
 #include "tests/apps/evnsq/option.h"
 
+#include "runtime/core/log/log.h"
+
 namespace evnsq {
 static const std::string kNSQMagic = "  V2";
 static const std::string kOK = "OK";
 
 Client::Client(evpp::EventLoop* l, Type t, const Option& ops)
     : loop_(l), type_(t), option_(ops), closing_(false) {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
 }
 
 Client::~Client() {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
 }
 
 void Client::ConnectToNSQD(const std::string& addr) {
@@ -46,7 +48,7 @@ void Client::ConnectToNSQDs(const std::vector<std::string>& tcp_addrs/*host:port
 
 void Client::ConnectToLookupd(const std::string& lookupd_url/*http://127.0.0.1:4161/lookup?topic=test*/) {
     auto f = [this, lookupd_url]() {
-        LOG_INFO << "query nsqlookupd " << lookupd_url;
+        ENGINE_LOG_INFO(engine::GetLogger(), "query nsqlookupd {}", lookupd_url);
         std::shared_ptr<evpp::httpc::Request> r(std::make_shared<evpp::httpc::Request>(this->loop_, lookupd_url, "", evpp::Duration(1.0)));
         r->Execute(std::bind(&Client::HandleLoopkupdHTTPResponse, this, std::placeholders::_1, r));
     };
@@ -68,18 +70,18 @@ void Client::ConnectToLookupds(const std::string& lookupd_urls/*http://192.168.0
 }
 
 void Client::Close() {
-    DLOG_TRACE << "conns_.size=" << conns_.size() << " connecting_conns_.size=" << connecting_conns_.size();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} conns_.size={} connecting_conns_.size={}", (void*)this, conns_.size(), connecting_conns_.size());
     closing_ = true;
 
     auto f = [this]() {
         ready_to_publish_fn_ = ReadyToPublishCallback();
         for (auto& it : conns_) {
-            DLOG_TRACE << "Close connected NSQConn " << it.get() << it->remote_addr();
+            ENGINE_LOG_TRACE(engine::GetLogger(), "this={} Close connected NSQConn {} {}", (void*)this, (void*)it.get(), it->remote_addr());
             it->Close();
         }
 
         for (auto& it : connecting_conns_) {
-            DLOG_TRACE << "Close connecting NSQConn " << it.second.get() << it.second->remote_addr();
+            ENGINE_LOG_TRACE(engine::GetLogger(), "this={} Close connecting NSQConn {} {}", (void*)this, (void*)it.second.get(), it.second->remote_addr());
             it.second->Close();
         }
 
@@ -112,26 +114,21 @@ bool Client::IsReady() const {
 void Client::HandleLoopkupdHTTPResponse(
     const std::shared_ptr<evpp::httpc::Response>& response,
     const std::shared_ptr<evpp::httpc::Request>& request) {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
 
     // release r(evpp::httpc::Request) create  at Client::ConnectToLookupd
     evpp::httpc::Handler stackptr;
     request->GetHandler()->swap(stackptr);
 
     if (response.get() == nullptr) {
-        LOG_ERROR << "Request lookupd http://" << request->host() << ":"
-            << request->port() << request->uri()
-            << " failed, response is null";
+        ENGINE_LOG_ERROR(engine::GetLogger(), "Request lookupd http://{}:{}{} failed, response is null", request->host(), request->port(), request->uri());
 
         return;
     }
 
     std::string body = response->body().ToString();
     if (response->http_code() != 200) {
-        LOG_ERROR << "Request lookupd http://" << request->host() << ":"
-                  << request->port() << request->uri()
-                  << " failed, http-code=" << response->http_code()
-                  << " [" << body << "]";
+        ENGINE_LOG_ERROR(engine::GetLogger(), "Request lookupd http://{}:{}{} failed, http-code={} [{}]", request->host(), request->port(), request->uri(), response->http_code(), body);
         return;
     }
 
@@ -159,7 +156,7 @@ void Client::HandleLoopkupdHTTPResponse(
 }
 
 void Client::OnConnection(const NSQConnPtr& conn) {
-    DLOG_TRACE << " NSQConn remote_addr=" << conn->remote_addr() << " status=" << conn->StatusToString();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} NSQConn remote_addr={} status={}", (void*)this, conn->remote_addr(), conn->StatusToString());
     assert(loop_->IsInLoopThread());
 
     switch (conn->status()) {
@@ -207,7 +204,7 @@ void Client::OnConnection(const NSQConnPtr& conn) {
         auto f = [this, conn]() {
             assert(conn->IsDisconnected());
             if (!conn->IsDisconnected()) {
-                LOG_ERROR << "NSQConn status is not kDisconnected : " << int(conn->status());
+                ENGINE_LOG_ERROR(engine::GetLogger(), "NSQConn status is not kDisconnected : {}", int(conn->status()));
             }
         };
         loop_->QueueInLoop(f);

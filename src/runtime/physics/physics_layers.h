@@ -12,13 +12,15 @@
 
 #include "runtime/physics/physics_config.h"
 
+#include "runtime/core/engine_export.h"
+
 namespace engine {
 
 //============================================================================
 // BPLayerInterfaceImpl — maps ObjectLayer → BroadPhaseLayer [J7]
 //============================================================================
 
-class BPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface {
+class ENGINE_API BPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface {
 public:
     explicit BPLayerInterfaceImpl(const LayerConfig& config);
 
@@ -43,7 +45,7 @@ private:
 // ObjectLayerPairFilterImpl — checks if two ObjectLayers should collide [J7]
 //============================================================================
 
-class ObjectLayerPairFilterImpl final : public JPH::ObjectLayerPairFilter {
+class ENGINE_API ObjectLayerPairFilterImpl final : public JPH::ObjectLayerPairFilter {
 public:
     explicit ObjectLayerPairFilterImpl(const LayerConfig& config);
 
@@ -60,7 +62,7 @@ private:
 // ObjectVSBLayerFilterImpl — checks if ObjectLayer collides with BroadPhaseLayer
 //============================================================================
 
-class ObjectVSBLayerFilterImpl final : public JPH::ObjectVsBroadPhaseLayerFilter {
+class ENGINE_API ObjectVSBLayerFilterImpl final : public JPH::ObjectVsBroadPhaseLayerFilter {
 public:
     explicit ObjectVSBLayerFilterImpl(const LayerConfig& config,
                                       const BPLayerInterfaceImpl& bp_iface);

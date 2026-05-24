@@ -1,6 +1,9 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 4.0)
 
 project (ServerEngine C CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(ENGINE_PHYSICS_ENABLED "Enable the JoltPhysics engine subsystem" ON)
 option(BUILD_EXAMPLES "Build example programs (requires NOT EVPP_VCPKG_BUILD)" OFF)
@@ -31,34 +34,33 @@ if (UNIX)
          -fms-extensions
          -Wfloat-equal
          -Wextra
-         -std=c++11
     )
     include_directories (${PROJECT_SOURCE_DIR}
-                         ${PROJECT_SOURCE_DIR}/thirdparty)
+                         ${PROJECT_SOURCE_DIR}/runtime
+                         ${PROJECT_SOURCE_DIR}/thirdparty
+                         ${PROJECT_SOURCE_DIR}/thirdparty/libevent/include
+                         ${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include
+                         ${PROJECT_SOURCE_DIR}/thirdparty/concurrentqueue/concurrentqueue
+                         ${PROJECT_SOURCE_DIR}/thirdparty/glaze/glaze/include)
 else (UNIX)
-set (CXX_FLAGS -DWIN32 -D_WIN32 -EHsc /utf-8)
-    set(VcpkgRoot ${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET})
-    include_directories(${VcpkgRoot}/include
-                        ${PROJECT_SOURCE_DIR}
-                        ${PROJECT_SOURCE_DIR}/thirdparty/wininclude)
-
-    # On windows, vcpkg uses different lib names for debug (eventd.lib) vs release (event.lib)
-    link_directories(${VcpkgRoot}/debug/lib ${VcpkgRoot}/debug/lib/manual-link
-                     ${VcpkgRoot}/lib ${VcpkgRoot}/lib/manual-link)
+    set (CXX_FLAGS -DWIN32 -D_WIN32 -EHsc /utf-8 -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    include_directories(${PROJECT_SOURCE_DIR}
+                        ${PROJECT_SOURCE_DIR}/runtime
+                        ${PROJECT_SOURCE_DIR}/thirdparty/wininclude
+                        ${PROJECT_SOURCE_DIR}/thirdparty/libevent/include
+                        ${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include
+                        ${PROJECT_SOURCE_DIR}/thirdparty/concurrentqueue/concurrentqueue
+                        ${PROJECT_SOURCE_DIR}/thirdparty/glaze/glaze/include)
 endif (UNIX)
 
 string (REPLACE ";" " " CMAKE_CXX_FLAGS "${CXX_FLAGS}")
 
 if (UNIX)
-    SET(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g -ggdb -D_DEBUG -DGOOGLE_STRIP_LOG=0")
-    SET(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -ggdb -DNDEBUG -DGOOGLE_STRIP_LOG=1")
-    SET(DEPENDENT_LIBRARIES event glog pthread)
+    SET(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g -ggdb -D_DEBUG")
+    SET(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -ggdb -DNDEBUG")
+    SET(DEPENDENT_LIBRARIES event pthread)
 else (UNIX)
-    find_library(EVENT_LIBRARY event REQUIRED)
-    find_library(GLOG_LIBRARY glog REQUIRED)
-    SET(DEPENDENT_LIBRARIES ${EVENT_LIBRARY} ${GLOG_LIBRARY})
-    # Suppress evpp's per-frame DLOG_TRACE noise (OnTimerTriggered etc.) in Release
-    SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DGOOGLE_STRIP_LOG=1")
+    SET(DEPENDENT_LIBRARIES event)
 endif (UNIX)
 
 # Set to true if https support is needed.
@@ -94,14 +96,29 @@ message (STATUS "THRIFT_COMPILER " ${THRIFT_COMPILER})
 message (STATUS "THRIFT_INCLUDE_DIR " ${THRIFT_INCLUDE_DIR})
 message (STATUS "THRIFT_LIBRARY " ${THRIFT_LIBRARY})
 
+# ── libevent (built from source) ──────────────────────────────────────
+set(EVENT__DISABLE_TESTS ON CACHE BOOL "Disable libevent tests")
+set(EVENT__DISABLE_REGRESS ON CACHE BOOL "Disable libevent regression tests")
+set(EVENT__DISABLE_SAMPLES ON CACHE BOOL "Disable libevent samples")
+set(EVENT__DISABLE_BENCHMARK ON CACHE BOOL "Disable libevent benchmarks")
+set(EVENT__DISABLE_OPENSSL ON CACHE STRING "Disable OpenSSL support")
+set(EVENT__DISABLE_MBEDTLS ON CACHE STRING "Disable MbedTLS support")
+set(EVENT__LIBRARY_TYPE STATIC CACHE STRING "Build libevent as static library")
+set(EVENT__HAVE_WEPOLL OFF CACHE BOOL "Disable wepoll backend")
+add_subdirectory(${PROJECT_SOURCE_DIR}/thirdparty/libevent ${PROJECT_BINARY_DIR}/libevent)
+include_directories(${PROJECT_BINARY_DIR}/libevent/include)
+
+set_property(TARGET event_core_static event_extra_static event_static PROPERTY FOLDER "thirdparty")
+set_property(TARGET event_core event_extra event PROPERTY FOLDER "thirdparty")
+
 add_subdirectory (runtime)
 add_subdirectory (tests)
 add_subdirectory (server)
 
 set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT main)
 
-set (CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/build/cmake")
-include (utils)
-include (packages)
-
-include (CPack)
+# CPack packaging (requires src/build/cmake/{utils,packages}.cmake)
+# set (CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/build/cmake")
+# include (utils)
+# include (packages)
+# include (CPack)

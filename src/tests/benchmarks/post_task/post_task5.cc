@@ -1,6 +1,8 @@
 #include <evpp/event_loop.h>
 #include <evpp/event_loop_thread.h>
 
+#include "runtime/core/log/log.h"
+
 #include "tests/examples/winmain-inl.h"
 
 uint64_t clock_us() {
@@ -95,6 +97,6 @@ int main(int argc, char* argv[]) {
     PostTask p(post_count);
     p.Start();
     p.Wait();
-    LOG_WARN << argv[0] << " post_count=" << post_count << " use time: " << p.use_time() << " seconds\n";
+    ENGINE_LOG_WARN(engine::GetLogger(), "{} post_count={} use time: {} seconds\n", argv[0], post_count, p.use_time());
     return 0;
 }

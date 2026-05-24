@@ -8,6 +8,8 @@
 #include <evpp/buffer.h>
 #include <evpp/tcp_conn.h>
 
+#include "runtime/core/log/log.h"
+
 class Client;
 
 class Session {
@@ -107,13 +109,13 @@ public:
 
     void OnConnect() {
         if (++connected_count_ == session_count_) {
-            LOG_WARN << "all connected";
+            ENGINE_LOG_WARN(engine::GetLogger(), "all connected");
         }
     }
 
     void OnDisconnect(const evpp::TCPConnPtr& conn) {
         if (--connected_count_ == 0) {
-            LOG_WARN << "all disconnected";
+            ENGINE_LOG_WARN(engine::GetLogger(), "all disconnected");
 
             int64_t totalBytesRead = 0;
             int64_t totalMessagesRead = 0;
@@ -121,10 +123,10 @@ public:
                 totalBytesRead += it->bytes_read();
                 totalMessagesRead += it->messages_read();
             }
-            LOG_WARN << "name=" << name_ << " " << totalBytesRead << " total bytes read";
-            LOG_WARN << "name=" << name_ << " " << totalMessagesRead << " total messages read";
-            LOG_WARN << "name=" << name_ << " " << static_cast<double>(totalBytesRead) / static_cast<double>(totalMessagesRead) << " average message size";
-            LOG_WARN << "name=" << name_ << " " << static_cast<double>(totalBytesRead) / (timeout_ * 1024 * 1024) << " MiB/s throughput";
+            ENGINE_LOG_WARN(engine::GetLogger(), "name={} {} total bytes read", name_, totalBytesRead);
+            ENGINE_LOG_WARN(engine::GetLogger(), "name={} {} total messages read", name_, totalMessagesRead);
+            ENGINE_LOG_WARN(engine::GetLogger(), "name={} {} average message size", name_, static_cast<double>(totalBytesRead) / static_cast<double>(totalMessagesRead));
+            ENGINE_LOG_WARN(engine::GetLogger(), "name={} {} MiB/s throughput", name_, static_cast<double>(totalBytesRead) / (timeout_ * 1024 * 1024));
             loop_->QueueInLoop(std::bind(&Client::Quit, this));
         }
     }
@@ -144,7 +146,7 @@ private:
     }
 
     void HandleTimeout() {
-        LOG_WARN << "stop";
+        ENGINE_LOG_WARN(engine::GetLogger(), "stop");
         for (auto &it : sessions_) {
             it->Stop();
         }
@@ -171,8 +173,7 @@ void Session::OnConnection(const evpp::TCPConnPtr& conn) {
 }
 
 int main(int argc, char* argv[]) {
-    google::InitGoogleLogging(argv[0]);
-    FLAGS_stderrthreshold = 0;
+    engine::InitLogger({});
     if (argc != 7) {
         fprintf(stderr, "Usage: client <host_ip> <port> <threads> <blocksize> <sessions> <time_seconds>\n");
         return -1;
@@ -199,6 +200,5 @@ int main(int argc, char* argv[]) {
 
 
 #include "tests/examples/winmain-inl.h"
-
 
 

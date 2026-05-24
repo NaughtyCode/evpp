@@ -8,13 +8,15 @@
 #include <evpp/httpc/conn.h>
 #include <evpp/httpc/response.h>
 
+#include "runtime/core/log/log.h"
+
 #include "tests/examples/winmain-inl.h"
 
 static bool responsed = false;
 static void HandleHTTPResponse(const std::shared_ptr<evpp::httpc::Response>& response, evpp::httpc::Request* request) {
-    LOG_INFO << "http_code=" << response->http_code() << " [" << response->body().ToString() << "]";
+    ENGINE_LOG_INFO(engine::GetLogger(), "http_code={} [{}]", response->http_code(), response->body().ToString());
     std::string header = response->FindHeader("Connection");
-    LOG_INFO << "HTTP HEADER Connection=" << header;
+    ENGINE_LOG_INFO(engine::GetLogger(), "HTTP HEADER Connection={}", header);
     responsed = true;
     assert(request == response->request());
     delete request; // The request MUST BE deleted in EventLoop thread.
@@ -29,7 +31,7 @@ int main() {
     std::shared_ptr<evpp::httpc::ConnPool> pool(new evpp::httpc::ConnPool("www.360.cn", 80, evpp::Duration(2.0)));
 #endif
     evpp::httpc::Request* r = new evpp::httpc::Request(pool.get(), t.loop(), "/robots.txt", "");
-    LOG_INFO << "Do http request";
+    ENGINE_LOG_INFO(engine::GetLogger(), "Do http request");
     r->Execute(std::bind(&HandleHTTPResponse, std::placeholders::_1, r));
 
     while (!responsed) {
@@ -39,6 +41,6 @@ int main() {
     pool->Clear();
     pool.reset();
     t.Stop(true);
-    LOG_INFO << "EventLoopThread stopped.";
+    ENGINE_LOG_INFO(engine::GetLogger(), "EventLoopThread stopped.");
     return 0;
 }

@@ -19,7 +19,7 @@ static void Handle(evpp::InvokeTimerPtr t) {
 }
 
 static void MyEventThread() {
-    LOG_INFO << "EventLoop is running ...";
+    ENGINE_LOG_INFO(engine::GetLogger(), "EventLoop is running ...");
     loop = std::shared_ptr<evpp::EventLoop>(new evpp::EventLoop);
     loop->Run();
 
@@ -30,7 +30,7 @@ static void MyEventThread() {
 static int periodic_run_count = 0;
 static void PeriodicFunc() {
     periodic_run_count++;
-    LOG_INFO << "PeriodicFunc is called , periodic_run_count=" << periodic_run_count;
+    ENGINE_LOG_INFO(engine::GetLogger(), "PeriodicFunc is called , periodic_run_count={}", periodic_run_count);
 }
 }
 
@@ -92,7 +92,7 @@ evpp::InvokeTimerPtr invoke_timer;
 int count = 0;
 
 void Run() {
-    LOG_INFO << "Running count=" << count << " ...";
+    ENGINE_LOG_INFO(engine::GetLogger(), "Running count={} ...", count);
     if (count++ == 5) {
         invoke_timer->Cancel();
         loop->Stop();
@@ -126,9 +126,9 @@ TEST_UNIT(TestEventLoop4) {
 TEST_UNIT(TestEventLoop5) {
     evpp::EventLoop loop;
     auto fn = [&loop]() {
-        LOG_INFO << "Entering fn";
+        ENGINE_LOG_INFO(engine::GetLogger(), "Entering fn");
         auto close = [&loop]() {
-            LOG_INFO << "Entering close";
+            ENGINE_LOG_INFO(engine::GetLogger(), "Entering close");
             loop.Stop();
         };
         loop.RunAfter(evpp::Duration(1.0), close);
@@ -142,7 +142,7 @@ TEST_UNIT(TestEventLoop5) {
 // Test EventLoop's constructor and destructor
 TEST_UNIT(TestEventLoop6) {
     evpp::EventLoop* loop = new evpp::EventLoop;
-    LOG_INFO << "loop=" << loop;
+    ENGINE_LOG_INFO(engine::GetLogger(), "loop={}", loop);
     delete loop;
 }
 
@@ -158,4 +158,3 @@ TEST_UNIT(TestEventLoop6) {
 
 
 
- 

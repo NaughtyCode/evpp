@@ -1,5 +1,7 @@
 #include "runtime/evpp/inner_pre.h"
 
+#include <cstdio>
+
 #include "runtime/evpp/libevent.h"
 #include "runtime/evpp/event_watcher.h"
 #include "runtime/evpp/event_loop.h"
@@ -7,8 +9,8 @@
 
 namespace evpp {
 EventLoop::EventLoop()
-    : create_evbase_myself_(true), notified_(false), pending_functor_count_(0) {
-    DLOG_TRACE;
+    : evbase_(nullptr), create_evbase_myself_(true), notified_(false), pending_functor_count_(0) {
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
 #if LIBEVENT_VERSION_NUMBER >= 0x02001500
     struct event_config* cfg = event_config_new();
     if (cfg) {
@@ -20,27 +22,32 @@ EventLoop::EventLoop()
 #else
     evbase_ = event_base_new();
 #endif
+    if (!evbase_) {
+        std::fprintf(stderr, "[EventLoop] FATAL: failed to create event_base\n");
+        std::abort();
+    }
     Init();
 }
 
 EventLoop::EventLoop(struct event_base* base)
     : evbase_(base), create_evbase_myself_(false), notified_(false), pending_functor_count_(0) {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     Init();
 
     // When we build an EventLoop instance from an existing event_base
     // object, we will never call EventLoop::Run() method.
     // So we need to watch the task queue here.
     bool rc = watcher_->AsyncWait();
-    assert(rc);
     if (!rc) {
-        LOG_FATAL << "PipeEventWatcher init failed.";
+        std::fprintf(stderr, "[EventLoop] PipeEventWatcher::AsyncWait() failed (external base)\n");
+        ENGINE_LOG_CRITICAL(engine::GetLogger(), "PipeEventWatcher init failed.");
     }
+    assert(rc);
     status_.store(kRunning);
 }
 
 EventLoop::~EventLoop() {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     watcher_.reset();
 
     if (evbase_ != nullptr && create_evbase_myself_) {
@@ -61,7 +68,7 @@ EventLoop::~EventLoop() {
 }
 
 void EventLoop::Init() {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     status_.store(kInitializing);
 #ifdef H_HAVE_BOOST
     const size_t kPendingFunctorCount = 1024 * 16;
@@ -81,58 +88,62 @@ void EventLoop::Init() {
 
 void EventLoop::InitNotifyPipeWatcher() {
     // Initialized task queue notify pipe watcher
+    std::fprintf(stderr, "[EventLoop] InitNotifyPipeWatcher begin\n");
     watcher_.reset(new PipeEventWatcher(this, std::bind(&EventLoop::DoPendingFunctors, this)));
     int rc = watcher_->Init();
-    assert(rc);
     if (!rc) {
-        LOG_FATAL << "PipeEventWatcher init failed.";
+        std::fprintf(stderr, "[EventLoop] PipeEventWatcher::Init() failed\n");
+        ENGINE_LOG_CRITICAL(engine::GetLogger(), "PipeEventWatcher init failed.");
     }
+    assert(rc);
+    std::fprintf(stderr, "[EventLoop] InitNotifyPipeWatcher done\n");
 }
 
 void EventLoop::Run() {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     status_.store(kStarting);
     tid_ = std::this_thread::get_id(); // The actual thread id
 
     int rc = watcher_->AsyncWait();
-    assert(rc);
     if (!rc) {
-        LOG_FATAL << "PipeEventWatcher init failed.";
+        std::fprintf(stderr, "[EventLoop] PipeEventWatcher::AsyncWait() failed\n");
+        ENGINE_LOG_CRITICAL(engine::GetLogger(), "PipeEventWatcher AsyncWait failed.");
     }
+    assert(rc);
 
     // After everything have initialized, we set the status to kRunning
     status_.store(kRunning);
 
     rc = event_base_dispatch(evbase_);
     if (rc == 1) {
-        LOG_ERROR << "event_base_dispatch error: no event registered";
+        ENGINE_LOG_ERROR(engine::GetLogger(), "event_base_dispatch error: no event registered");
     } else if (rc == -1) {
-        int serrno = errno;
-        LOG_ERROR << "event_base_dispatch error " << serrno << " " << strerror(serrno);
+        int serrno = EVPP_ERRNO;
+        ENGINE_LOG_ERROR(engine::GetLogger(), "event_base_dispatch error {} {}", serrno, strerror(serrno));
     }
 
     // Make sure watcher_ does construct, initialize and destruct in the same thread.
     watcher_.reset();
-    DLOG_TRACE << "EventLoop stopped, tid=" << std::this_thread::get_id();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} EventLoop stopped, tid={}", (void*)this, std::this_thread::get_id());
 
     status_.store(kStopped);
 }
 
 void EventLoop::Stop() {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     assert(status_.load() == kRunning);
     status_.store(kStopping);
-    DLOG_TRACE << "EventLoop::Stop";
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} EventLoop::Stop", (void*)this);
     QueueInLoop(std::bind(&EventLoop::StopInLoop, this));
 }
 
 void EventLoop::StopInLoop() {
-    DLOG_TRACE << "EventLoop is stopping now, tid=" << std::this_thread::get_id();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} EventLoop is stopping now, tid={}", (void*)this, std::this_thread::get_id());
     assert(status_.load() == kStopping);
 
     auto f = [this]() {
         for (int i = 0;;i++) {
-            DLOG_TRACE << "calling DoPendingFunctors index=" << i;
+            ENGINE_LOG_TRACE(engine::GetLogger(), "this={} calling DoPendingFunctors index={}", (void*)this, i);
             DoPendingFunctors();
             if (IsPendingQueueEmpty()) {
                 break;
@@ -140,17 +151,17 @@ void EventLoop::StopInLoop() {
         }
     };
 
-    DLOG_TRACE << "before event_base_loopexit, we invoke DoPendingFunctors";
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} before event_base_loopexit, we invoke DoPendingFunctors", (void*)this);
 
     f();
 
-    DLOG_TRACE << "start event_base_loopexit";
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} start event_base_loopexit", (void*)this);
     event_base_loopexit(evbase_, nullptr);
-    DLOG_TRACE << "after event_base_loopexit, we invoke DoPendingFunctors";
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} after event_base_loopexit, we invoke DoPendingFunctors", (void*)this);
 
     f();
 
-    DLOG_TRACE << "end of StopInLoop";
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} end of StopInLoop", (void*)this);
 }
 
 void EventLoop::AfterFork() {
@@ -158,7 +169,7 @@ void EventLoop::AfterFork() {
     assert(rc == 0);
 
     if (rc != 0) {
-        LOG_FATAL << "event_reinit failed!";
+        ENGINE_LOG_CRITICAL(engine::GetLogger(), "event_reinit failed!");
         abort();
     }
 
@@ -178,45 +189,45 @@ void EventLoop::AfterFork() {
 }
 
 InvokeTimerPtr EventLoop::RunAfter(double delay_ms, const Functor& f) {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     return RunAfter(Duration(delay_ms / 1000.0), f);
 }
 
 InvokeTimerPtr EventLoop::RunAfter(double delay_ms, Functor&& f) {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     return RunAfter(Duration(delay_ms / 1000.0), std::move(f));
 }
 
 InvokeTimerPtr EventLoop::RunAfter(Duration delay, const Functor& f) {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     std::shared_ptr<InvokeTimer> t = InvokeTimer::Create(this, delay, f, false);
     t->Start();
     return t;
 }
 
 InvokeTimerPtr EventLoop::RunAfter(Duration delay, Functor&& f) {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     std::shared_ptr<InvokeTimer> t = InvokeTimer::Create(this, delay, std::move(f), false);
     t->Start();
     return t;
 }
 
 evpp::InvokeTimerPtr EventLoop::RunEvery(Duration interval, const Functor& f) {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     std::shared_ptr<InvokeTimer> t = InvokeTimer::Create(this, interval, f, true);
     t->Start();
     return t;
 }
 
 evpp::InvokeTimerPtr EventLoop::RunEvery(Duration interval, Functor&& f) {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     std::shared_ptr<InvokeTimer> t = InvokeTimer::Create(this, interval, std::move(f), true);
     t->Start();
     return t;
 }
 
 void EventLoop::RunInLoop(const Functor& functor) {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     if (IsRunning() && IsInLoopThread()) {
         functor();
     } else {
@@ -225,7 +236,7 @@ void EventLoop::RunInLoop(const Functor& functor) {
 }
 
 void EventLoop::RunInLoop(Functor&& functor) {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     if (IsRunning() && IsInLoopThread()) {
         functor();
     } else {
@@ -234,7 +245,7 @@ void EventLoop::RunInLoop(Functor&& functor) {
 }
 
 void EventLoop::QueueInLoop(const Functor& cb) {
-    DLOG_TRACE << "pending_functor_count_=" << pending_functor_count_ << " PendingQueueSize=" << GetPendingQueueSize() << " notified_=" << notified_.load();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} pending_functor_count_={} PendingQueueSize={} notified_={}", (void*)this, pending_functor_count_, GetPendingQueueSize(), notified_.load());
     {
 #ifdef H_HAVE_BOOST
         auto f = new Functor(cb);
@@ -249,35 +260,23 @@ void EventLoop::QueueInLoop(const Functor& cb) {
 #endif
     }
     ++pending_functor_count_;
-    DLOG_TRACE << "queued a new Functor. pending_functor_count_=" << pending_functor_count_ << " PendingQueueSize=" << GetPendingQueueSize() << " notified_=" << notified_.load();
-    if (!notified_.load()) {
-        DLOG_TRACE << "call watcher_->Nofity() notified_.store(true)";
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} queued a new Functor. pending_functor_count_={} PendingQueueSize={} notified_={}", (void*)this, pending_functor_count_, GetPendingQueueSize(), notified_.load());
+    if (!notified_.exchange(true)) {
+        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} call watcher_->Notify() notified_.exchange(true) returned false", (void*)this);
 
-        // We must set notified_ to true before calling `watcher_->Nodify()`
-        // otherwise there is a change that:
-        //  1. We called watcher_- > Nodify() on thread1
-        //  2. On thread2 we watched this event, so wakeup the CPU changed to run this EventLoop on thread2 and executed all the pending task
-        //  3. Then the CPU changed to run on thread1 and set notified_ to true
-        //  4. Then, some thread except thread2 call this QueueInLoop to push a task into the queue, and find notified_ is true, so there is no change to wakeup thread2 to execute this task
-        notified_.store(true);
-
-        // Sometimes one thread invoke EventLoop::QueueInLoop(...), but anther
-        // thread is invoking EventLoop::Stop() to stop this loop. At this moment
-        // this loop maybe is stopping and the watcher_ object maybe has been
-        // released already.
         if (watcher_) {
             watcher_->Notify();
         } else {
-            DLOG_TRACE << "status=" << StatusToString();
+            ENGINE_LOG_TRACE(engine::GetLogger(), "this={} status={}", (void*)this, StatusToString());
             assert(!IsRunning());
         }
     } else {
-         DLOG_TRACE << "No need to call watcher_->Nofity()";
+         ENGINE_LOG_TRACE(engine::GetLogger(), "this={} No need to call watcher_->Notify()", (void*)this);
     }
 }
 
 void EventLoop::QueueInLoop(Functor&& cb) {
-    DLOG_TRACE << "pending_functor_count_=" << pending_functor_count_ << " PendingQueueSize=" << GetPendingQueueSize() << " notified_=" << notified_.load();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} pending_functor_count_={} PendingQueueSize={} notified_={}", (void*)this, pending_functor_count_, GetPendingQueueSize(), notified_.load());
     {
 #ifdef H_HAVE_BOOST
         auto f = new Functor(std::move(cb)); // TODO Add test code for it
@@ -292,23 +291,22 @@ void EventLoop::QueueInLoop(Functor&& cb) {
 #endif
     }
     ++pending_functor_count_;
-    DLOG_TRACE << "queued a new Functor. pending_functor_count_=" << pending_functor_count_ << " PendingQueueSize=" << GetPendingQueueSize() << " notified_=" << notified_.load();
-    if (!notified_.load()) {
-        DLOG_TRACE << "call watcher_->Nofity() notified_.store(true)";
-        notified_.store(true);
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} queued a new Functor. pending_functor_count_={} PendingQueueSize={} notified_={}", (void*)this, pending_functor_count_, GetPendingQueueSize(), notified_.load());
+    if (!notified_.exchange(true)) {
+        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} call watcher_->Notify() notified_.exchange(true) returned false", (void*)this);
         if (watcher_) {
             watcher_->Notify();
         } else {
-            DLOG_TRACE << "watcher_ is empty, maybe we call EventLoop::QueueInLoop on a stopped EventLoop. status=" << StatusToString();
+            ENGINE_LOG_TRACE(engine::GetLogger(), "this={} watcher_ is empty, maybe we call EventLoop::QueueInLoop on a stopped EventLoop. status={}", (void*)this, StatusToString());
             assert(!IsRunning());
         }
     } else {
-        DLOG_TRACE << "No need to call watcher_->Nofity()";
+        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} No need to call watcher_->Notify()", (void*)this);
     }
 }
 
 void EventLoop::DoPendingFunctors() {
-    DLOG_TRACE << "pending_functor_count_=" << pending_functor_count_ << " PendingQueueSize=" << GetPendingQueueSize() << " notified_=" << notified_.load();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} pending_functor_count_={} PendingQueueSize={} notified_={}", (void*)this, pending_functor_count_, GetPendingQueueSize(), notified_.load());
 
 #ifdef H_HAVE_BOOST
     notified_.store(false);
@@ -331,14 +329,14 @@ void EventLoop::DoPendingFunctors() {
         std::lock_guard<std::mutex> lock(mutex_);
         notified_.store(false);
         pending_functors_->swap(functors);
-        DLOG_TRACE << "pending_functor_count_=" << pending_functor_count_ << " PendingQueueSize=" << GetPendingQueueSize() << " notified_=" << notified_.load();
+        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} pending_functor_count_={} PendingQueueSize={} notified_={}", (void*)this, pending_functor_count_, GetPendingQueueSize(), notified_.load());
     }
-    DLOG_TRACE << "pending_functor_count_=" << pending_functor_count_ << " PendingQueueSize=" << GetPendingQueueSize() << " notified_=" << notified_.load();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} pending_functor_count_={} PendingQueueSize={} notified_={}", (void*)this, pending_functor_count_, GetPendingQueueSize(), notified_.load());
     for (size_t i = 0; i < functors.size(); ++i) {
         functors[i]();
         --pending_functor_count_;
     }
-    DLOG_TRACE << "pending_functor_count_=" << pending_functor_count_ << " PendingQueueSize=" << GetPendingQueueSize() << " notified_=" << notified_.load();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} pending_functor_count_={} PendingQueueSize={} notified_={}", (void*)this, pending_functor_count_, GetPendingQueueSize(), notified_.load());
 #endif
 }
 

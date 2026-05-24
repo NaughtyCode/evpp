@@ -1,6 +1,8 @@
 
 #include "tests/labs/evthrift/thrift_server.h"
 
+#include "runtime/core/log/log.h"
+
 #include "gen-cpp/Echo.h"
 
 using namespace echo;
@@ -10,20 +12,13 @@ public:
     EchoHandler() {}
 
     void echo(std::string& str, const std::string& s) {
-        LOG_INFO << "EchoHandler::echo:" << s;
+        ENGINE_LOG_INFO(engine::GetLogger(), "EchoHandler::echo:{}", s);
         str = s;
     }
 
     void execute(Response& _return, const std::string& name, const Request& r) {
         using std::to_string;
-        LOG_INFO << "name=" << name
-            << "Request("
-            << "num1=" << to_string(r.num1)
-            << ", " << "num2=" << to_string(r.num2)
-            << ", " << "c=" << r.c
-            << ", " << "d=" << r.d
-            << ", " << "comment=" << (r.__isset.comment ? (r.comment) : ( "<null>"))
-            << ")";
+        ENGINE_LOG_INFO(engine::GetLogger(), "name={} Request(num1={}, num2={}, c={}, d={}, comment={})", name, to_string(r.num1), to_string(r.num2), r.c, r.d, (r.__isset.comment ? (r.comment) : ("<null>")));
         _return.result = 0;
         _return.x = r.c;
         _return.y = r.d;
@@ -32,7 +27,7 @@ public:
 
 
     void ping() {
-        LOG_INFO << "EchoHandler::ping ...";
+        ENGINE_LOG_INFO(engine::GetLogger(), "EchoHandler::ping ...");
     }
 
 };

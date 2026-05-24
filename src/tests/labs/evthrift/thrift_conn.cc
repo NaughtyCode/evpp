@@ -2,6 +2,7 @@
 
 #include <thrift/transport/TTransportException.h>
 
+#include "runtime/core/log/log.h"
 #include "tests/labs/evthrift/thrift_server.h"
 
 namespace evthrift {
@@ -71,13 +72,13 @@ void ThriftConn::Process() {
 
         conn_->Send(buf, size);
     } catch (const TTransportException& ex) {
-        LOG_ERROR << "ThriftServer TTransportException: " << ex.what();
+        ENGINE_LOG_ERROR(engine::GetLogger(), "ThriftServer TTransportException: {}", ex.what());
         Close();
     } catch (const std::exception& ex) {
-        LOG_ERROR << "ThriftServer std::exception: " << ex.what();
+        ENGINE_LOG_ERROR(engine::GetLogger(), "ThriftServer std::exception: {}", ex.what());
         Close();
     } catch (...) {
-        LOG_ERROR << "ThriftServer unknown exception";
+        ENGINE_LOG_ERROR(engine::GetLogger(), "ThriftServer unknown exception");
         Close();
     }
 }

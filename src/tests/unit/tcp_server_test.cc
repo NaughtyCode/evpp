@@ -20,10 +20,10 @@ const static std::string addr = "127.0.0.1:19099";
 void OnClientConnection(const evpp::TCPConnPtr& conn) {
     if (conn->IsConnected()) {
         conn->Send("hello");
-        LOG_INFO << "Send a message to server when connected.";
+        ENGINE_LOG_INFO(engine::GetLogger(), "Send a message to server when connected.");
         connected = true;
     } else {
-        LOG_INFO << "Disconnected from " << conn->remote_addr();
+        ENGINE_LOG_INFO(engine::GetLogger(), "Disconnected from {}", conn->remote_addr());
     }
 }
 
@@ -130,4 +130,3 @@ TEST_UNIT(testTCPServerSilenceShutdown2) {
     tsrv.reset();
     H_TEST_ASSERT(evpp::GetActiveEventCount() == 0);
 }
-

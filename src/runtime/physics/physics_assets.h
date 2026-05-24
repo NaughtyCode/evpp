@@ -16,6 +16,7 @@
 
 #include "runtime/physics/physics_config.h"
 #include "runtime/physics/physics_materials.h"
+#include "runtime/core/engine_export.h"
 
 namespace JPH {
 class PhysicsSystem;
@@ -27,7 +28,7 @@ namespace engine {
 struct PhysicsConfig;
 
 // JSON shape definition — public so tests/external callers can construct shapes
-struct JsonShapeDef {
+struct ENGINE_API JsonShapeDef {
     std::string type;
     glz::generic params;
     std::optional<std::vector<JsonShapeDef>> shapes;
@@ -40,7 +41,7 @@ struct JsonShapeDef {
 // PrototypeEntry — a dynamic body template stored in the prototype pool
 //============================================================================
 
-struct PrototypeEntry {
+struct ENGINE_API PrototypeEntry {
     std::string proto_id;
     JPH::RefConst<JPH::Shape> shape;
     float mass = 1.0f;
@@ -63,7 +64,7 @@ struct PrototypeEntry {
 // AssetLoadResult — outcome of loading a physics asset file
 //============================================================================
 
-struct AssetLoadResult {
+struct ENGINE_API AssetLoadResult {
     bool success = false;
     std::string error;           // empty on success
     int static_bodies_loaded = 0;
@@ -78,7 +79,7 @@ struct AssetLoadResult {
 // avoiding circular dependency with PhysicsWorld).
 //============================================================================
 
-class AssetLoader {
+class ENGINE_API AssetLoader {
 public:
     // Load a complete scene asset file.
     // body_interface: the Jolt BodyInterface for body creation.
@@ -104,7 +105,7 @@ public:
 
     // Create a JPH::Shape from JSON shape description.
     // Supports single shape or array of shapes (compound).
-    struct ShapeCreateResult {
+    struct ENGINE_API ShapeCreateResult {
         JPH::RefConst<JPH::Shape> shape;
         std::string error;
     };

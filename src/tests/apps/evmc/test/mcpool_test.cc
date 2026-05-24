@@ -4,6 +4,8 @@
 
 #include <evpp/gettimeofday.h>
 
+#include "runtime/core/log/log.h"
+
 #include "tests/examples/winmain-inl.h"
 
 #include <thread>
@@ -14,37 +16,37 @@ using namespace evmc;
 static struct timeval g_tv_begin;
 static struct timeval g_tv_end;
 static void OnTestSetDone(const std::string& key, int code) {
-    LOG_INFO << "+++++++++++++ OnTestSetDone code=" << code << " " << key;
+    ENGINE_LOG_INFO(engine::GetLogger(), "+++++++++++++ OnTestSetDone code={} {}", code, key);
 }
 static void OnTestGetDone(const std::string& key, const GetResult& res) {
-    LOG_INFO << "============= OnTestGetDone " << key << " code=" << res.code << " " << res.value;
+    ENGINE_LOG_INFO(engine::GetLogger(), "============= OnTestGetDone {} code={} {}", key, res.code, res.value);
 }
 
 static void OnTestPrefixDone(const std::string& prefix_key, const PrefixGetResultPtr res) {
-    LOG_INFO << "************** OnTestPrefixGetDone prefix=" << prefix_key << " code=" << res->code;
+    ENGINE_LOG_INFO(engine::GetLogger(), "************** OnTestPrefixGetDone prefix={} code={}", prefix_key, res->code);
     std::map<std::string, std::string>::const_iterator it = res->result_map_.begin();
 
     for (; it != res->result_map_.end(); ++it) {
-        LOG_INFO << "<<<<<<<<<<<<<< OnTestPrefixGetDone " << it->first << " " << it->second;
+        ENGINE_LOG_INFO(engine::GetLogger(), "<<<<<<<<<<<<<< OnTestPrefixGetDone {} {}", it->first, it->second);
     }
 }
 
 static void OnTestRemoveDone(const std::string& key, int code) {
-    LOG_INFO << "------------- OnTestRemoveDone code=" << code << " " << key;
+    ENGINE_LOG_INFO(engine::GetLogger(), "------------- OnTestRemoveDone code={} {}", code, key);
 }
 static void OnTestMultiGetDone(const MultiGetResult& res) {
     std::map<std::string, GetResult>::const_iterator it = res.begin();
 
-    LOG_INFO << ">>>>>>>>>>>>> OnTestMultiGetDone";
+    ENGINE_LOG_INFO(engine::GetLogger(), ">>>>>>>>>>>>> OnTestMultiGetDone");
     for (; it != res.end(); ++it) {
-        LOG_INFO << "<<<<<<<<<< OnTestMultiGetDone " << it->first << " " << it->second.code << " " << it->second.value;
+        ENGINE_LOG_INFO(engine::GetLogger(), "<<<<<<<<<< OnTestMultiGetDone {} {} {}", it->first, it->second.code, it->second.value);
     }
 }
 
 static void OnTestPrefixMultiGetDone(const PrefixMultiGetResult& res) {
     gettimeofday(&g_tv_end, nullptr);
-    LOG_INFO << "cost:" << (g_tv_end.tv_sec - g_tv_begin.tv_sec) * 1e6 + (g_tv_end.tv_usec - g_tv_end.tv_usec);
-    LOG_INFO << ">>>>>>>>>>>>> OnTestPrefixMultiGetDone";
+    ENGINE_LOG_INFO(engine::GetLogger(), "cost:{}", (g_tv_end.tv_sec - g_tv_begin.tv_sec) * 1e6 + (g_tv_end.tv_usec - g_tv_end.tv_usec));
+    ENGINE_LOG_INFO(engine::GetLogger(), ">>>>>>>>>>>>> OnTestPrefixMultiGetDone");
     auto it = res.begin();
     for (; it != res.end(); ++it) {
         OnTestPrefixDone(it->first, it->second);
@@ -53,12 +55,12 @@ static void OnTestPrefixMultiGetDone(const PrefixMultiGetResult& res) {
 
 static evpp::EventLoop* g_loop;
 static void StopLoop() {
-    LOG_INFO << "EventLoop is stopping ...";
+    ENGINE_LOG_INFO(engine::GetLogger(), "EventLoop is stopping ...");
     g_loop->Stop();
 }
 
 static void MyEventThread() {
-    LOG_INFO << "EventLoop is running ...";
+    ENGINE_LOG_INFO(engine::GetLogger(), "EventLoop is running ...");
     g_loop->Run();
 }
 
@@ -76,13 +78,13 @@ void VbucketConfTest() {
     VbucketConfig* conf = new VbucketConfig();
 
     if (!conf->Load("./test_kill_storage_cluster.json")) {
-        LOG_ERROR << "VbucketConfTest load error";
+        ENGINE_LOG_ERROR(engine::GetLogger(), "VbucketConfTest load error");
         return;
     }
 
     for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
         uint16_t vbucket = conf->GetVbucketByKey(keys[i], strlen(keys[i]));
-        LOG_INFO << "VbucketConfTest key=" << keys[i] << " vbucket=" << vbucket;
+        ENGINE_LOG_INFO(engine::GetLogger(), "VbucketConfTest key={} vbucket={}", keys[i], vbucket);
     }
 }
 
@@ -156,7 +158,7 @@ int main() {
         gettimeofday(&g_tv_begin, nullptr);
         //mcp.PrefixMultiGet(g_loop, mget_keys, &OnTestPrefixMultiGetDone);
     }
-    LOG_INFO << "count value:" << count;
+    ENGINE_LOG_INFO(engine::GetLogger(), "count value:{}", count);
 // mcp.PrefixMultiGet(g_loop, mget_keys, &OnTestPrefixMultiGetDone);
     //mcp.MultiGet(g_loop, mget_keys, &OnTestMultiGetDone);
 
@@ -215,5 +217,3 @@ int main() {
 #endif
     return 0;
 }
-
-

@@ -3,9 +3,11 @@
 #include <evpp/buffer.h>
 #include <evpp/tcp_conn.h>
 
+#include "runtime/core/log/log.h"
+
 void OnMessage(const evpp::TCPConnPtr& conn,
                evpp::Buffer* msg) {
-    LOG_INFO << "tid=" << std::this_thread::get_id() << " Received a message len=" << msg->size();
+    ENGINE_LOG_INFO(engine::GetLogger(), "tid={} Received a message len={}", std::this_thread::get_id(), msg->size());
     if (msg->ToString() == "quit") {
         conn->Close();
         return;
@@ -42,7 +44,7 @@ int main(int argc, char* argv[]) {
         s->Start();
         tcp_servers.push_back(s);
     }
-    
+
     loop.Run();
     return 0;
 }

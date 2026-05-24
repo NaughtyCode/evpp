@@ -50,7 +50,7 @@ static void RequestHandlerHTTPClientRetry(evpp::EventLoop* loop, const evpp::htt
 namespace {
 
     static std::vector<int> g_listening_port = { 49000, 49001 };
-    
+
     static std::string GetHttpServerURL() {
         static int i = 0;
         std::ostringstream oss;
@@ -144,7 +144,7 @@ namespace {
 
 TEST_UNIT(testHTTPClientRetry) {
     for (int i = 0; i < 1; ++i) {
-        LOG_INFO << "Running testHTTPClientRetry i=" << i;
+        ENGINE_LOG_INFO(engine::GetLogger(), "Running testHTTPClientRetry i={}", i);
         evpp::http::Server ph(i);
         ph.RegisterDefaultHandler(&DefaultRequestHandler);
         ph.RegisterHandler("/retry", &RequestHandlerHTTPClientRetry);
@@ -158,7 +158,7 @@ TEST_UNIT(testHTTPClientRetry) {
 
 TEST_UNIT(testHTTPClientRetryFailed) {
     for (int i = 0; i < 1; ++i) {
-        LOG_INFO << "Running testHTTPClientRetry i=" << i;
+        ENGINE_LOG_INFO(engine::GetLogger(), "Running testHTTPClientRetry i={}", i);
         TestHTTPClientRetryFailed();
         usleep(1000 * 1000); // sleep a while to release the listening address and port
     }

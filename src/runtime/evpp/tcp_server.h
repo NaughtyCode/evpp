@@ -36,9 +36,9 @@ class Listener;
 //     });
 //     server.SetConnectionCallback([](const evpp::TCPConnPtr& conn) {
 //         if (conn->IsConnected()) {
-//             LOG_INFO << "A new connection from " << conn->remote_addr();
+//             ENGINE_LOG_INFO(engine::GetLogger(), "A new connection from {}", conn->remote_addr());
 //         } else {
-//             LOG_INFO << "Lost the connection from " << conn->remote_addr();
+//             ENGINE_LOG_INFO(engine::GetLogger(), "Lost the connection from {}", conn->remote_addr());
 //         }
 //     });
 //     server.Init();

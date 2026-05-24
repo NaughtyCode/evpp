@@ -7,10 +7,12 @@ file(GLOB evmc_PUBLIC_HEADERS *.h)
 
 add_library(evmc_static STATIC ${evmc_SRCS})
 target_link_libraries(evmc_static ${LIBRARIES})
+set_property(TARGET evmc_static PROPERTY FOLDER "tests/apps")
 
 if (UNIX)
     add_library(evmc SHARED ${evmc_SRCS})
     target_link_libraries(evmc ${LIBRARIES})
+    set_property(TARGET evmc PROPERTY FOLDER "tests/apps")
 
     set (CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
     include (utils)

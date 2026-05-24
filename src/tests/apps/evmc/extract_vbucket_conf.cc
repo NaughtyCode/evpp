@@ -5,6 +5,9 @@
 #include "runtime/evpp/httpc/conn.h"
 #include "runtime/evpp/httpc/response.h"
 #include "tests/apps/evmc/extract_vbucket_conf.h"
+
+#include "runtime/core/log/log.h"
+
 namespace evmc {
 int GetVbucketConf::GetVbucketConfContext(const std::string& conf_addr, std::string& context) {
     if (conf_addr.substr(0, 4) == "http") {
@@ -20,7 +23,7 @@ int GetVbucketConf::GetVbucketConfContext(const std::string& conf_addr, std::str
         }
         ifs.close();
     } else {
-        LOG_WARN << "read local vbucket conf:" << conf_addr << " failed";
+        ENGINE_LOG_WARN(engine::GetLogger(), "read local vbucket conf:{} failed", conf_addr);
         return READ_VBUCKET_CONF_FAILED;
     }
     return 0;
@@ -34,7 +37,7 @@ void GetVbucketConf::OnHttpReqDone(struct evhttp_request* req, void* arg) {
         argument->retcode = 0;
     } else {
         argument->retcode = res_code;
-        LOG_WARN << "http request to get remote vbucket conf ret=" << res_code;
+        ENGINE_LOG_WARN(engine::GetLogger(), "http request to get remote vbucket conf ret={}", res_code);
         return;
     }
     evbuffer_remove(req->input_buffer, &buf, sizeof(buf) - 1);

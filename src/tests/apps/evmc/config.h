@@ -7,4 +7,4 @@
 #endif
 
 #include <evpp/platform_config.h>
-#include <evpp/logging.h>
+#include "runtime/core/log/log.h"

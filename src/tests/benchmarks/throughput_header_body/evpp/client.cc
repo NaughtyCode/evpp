@@ -6,6 +6,8 @@
 #include <evpp/tcp_conn.h>
 #include <evpp/timestamp.h>
 
+#include "runtime/core/log/log.h"
+
 #include "tests/benchmarks/throughput_header_body/evpp/header.h"
 
 class Client;
@@ -57,7 +59,7 @@ private:
     void OnConnection(const evpp::TCPConnPtr& conn);
 
     void OnMessage(const evpp::TCPConnPtr& conn, evpp::Buffer* buf) {
-        LOG_INFO << " buf->size=" << buf->size();
+        ENGINE_LOG_INFO(engine::GetLogger(), " buf->size={}", buf->size());
         const size_t kHeaderLen = sizeof(Header);
         while (buf->size() > kHeaderLen) {
             Header* header = reinterpret_cast<Header*>(const_cast<char*>(buf->data()));
@@ -67,12 +69,12 @@ private:
                 return;
             }
 
-            LOG_INFO << "full_size=" << full_size << " header.body_size_=" << ntohl(header->body_size_) << " header.packet_count_=" << ntohl(header->packet_count_);
+            ENGINE_LOG_INFO(engine::GetLogger(), "full_size={} header.body_size_={} header.packet_count_={}", full_size, ntohl(header->body_size_), ntohl(header->packet_count_));
 
             if (check_count(header)) {
                 stop_time_ = evpp::Timestamp::Now();
                 finished_ = true;
-                LOG_INFO << "stopping session " << client_.name();
+                ENGINE_LOG_INFO(engine::GetLogger(), "stopping session {}", client_.name());
                 client_.loop()->RunInLoop(std::bind(&Session::Stop, shared_from_this()));
                 break;
             } else {
@@ -129,13 +131,13 @@ public:
 
     void OnConnect() {
         if (++connected_count_ == session_count_) {
-            LOG_WARN << "all connected";
+            ENGINE_LOG_WARN(engine::GetLogger(), "all connected");
         }
     }
 
     void OnDisconnect(const evpp::TCPConnPtr& conn) {
         if (--connected_count_ == 0) {
-            LOG_WARN << "all disconnected";
+            ENGINE_LOG_WARN(engine::GetLogger(), "all disconnected");
 
             uint32_t finished_count = 0;
             uint32_t error_count = 0;
@@ -149,8 +151,8 @@ public:
                 }
             }
 
-            LOG_WARN << "name=" << name_ << " error count " << error_count;
-            LOG_WARN << "name=" << name_ << " average time(s) " << total_time.Seconds()/finished_count;
+            ENGINE_LOG_WARN(engine::GetLogger(), "name={} error count {}", name_, error_count);
+            ENGINE_LOG_WARN(engine::GetLogger(), "name={} average time(s) {}", name_, total_time.Seconds()/finished_count);
             loop_->QueueInLoop(std::bind(&Client::Quit, this));
         }
     }
@@ -167,7 +169,7 @@ private:
     }
 
     void HandleTimeout() {
-        LOG_WARN << "stop";
+        ENGINE_LOG_WARN(engine::GetLogger(), "stop");
         for (auto &it : sessions_) {
             it->Stop();
         }
@@ -207,8 +209,7 @@ void Session::OnConnection(const evpp::TCPConnPtr& conn) {
 }
 
 int main(int argc, char* argv[]) {
-    google::InitGoogleLogging(argv[0]);
-    FLAGS_stderrthreshold = 0;
+    engine::InitLogger({});
     if (argc != 6) {
         fprintf(stderr, "Usage: client <host_ip> <port> <threads> <total_count> <sessions>\n");
         return -1;
@@ -231,8 +232,8 @@ int main(int argc, char* argv[]) {
 
 
 
-#include "tests/examples/winmain-inl.h"
 
+#include "tests/examples/winmain-inl.h"
 
 
 

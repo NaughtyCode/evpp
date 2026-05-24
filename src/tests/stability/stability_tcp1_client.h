@@ -8,6 +8,8 @@
 #include <evpp/tcp_conn.h>
 #include <evpp/tcp_client.h>
 
+#include "runtime/core/log/log.h"
+
 namespace {
     static std::shared_ptr<evpp::TCPServer> tsrv;
     static std::atomic<int> connected_count(0);
@@ -16,10 +18,10 @@ namespace {
     void OnClientConnection1(const evpp::TCPConnPtr& conn) {
         if (conn->IsConnected()) {
             conn->Send("hello");
-            LOG_INFO << "Send a message to server when connected.";
+            ENGINE_LOG_INFO(engine::GetLogger(), "Send a message to server when connected.");
             connected_count++;
         } else {
-            LOG_INFO << "Disconnected from " << conn->remote_addr();
+            ENGINE_LOG_INFO(engine::GetLogger(), "Disconnected from {}", conn->remote_addr());
         }
     }
 
@@ -47,7 +49,7 @@ void TestTCPClientReconnect() {
 
     int test_count = 3;
     for (int i = 0; i < test_count; i++) {
-        LOG_INFO << "NNNNNNNNNNNNNNNN TestTCPClientReconnect i=" << i;
+        ENGINE_LOG_INFO(engine::GetLogger(), "NNNNNNNNNNNNNNNN TestTCPClientReconnect i={}", i);
         tsrv.reset(new evpp::TCPServer(tcp_server_thread->loop(), GetListenAddr(), "tcp_server", i));
         tsrv->SetMessageCallback([](const evpp::TCPConnPtr& conn,
                                     evpp::Buffer* msg) {
@@ -65,7 +67,7 @@ void TestTCPClientReconnect() {
         }
         tsrv.reset();
     }
-    LOG_INFO << "XXXXXXXXXX connected_count=" << connected_count << " message_recved_count=" << message_recved_count;
+    ENGINE_LOG_INFO(engine::GetLogger(), "XXXXXXXXXX connected_count={} message_recved_count={}", connected_count.load(), message_recved_count.load());
     tcp_client_thread->loop()->RunInLoop([client]() {client->Disconnect(); });
     tcp_client_thread->loop()->RunAfter(evpp::Duration(1.0), [client]() {delete client; });
     usleep(evpp::Duration(2.0).Microseconds());
@@ -82,6 +84,5 @@ void TestTCPClientReconnect() {
 
     assert(evpp::GetActiveEventCount() == 0);
 }
-
 
 

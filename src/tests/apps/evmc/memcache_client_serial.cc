@@ -1,6 +1,8 @@
-﻿#include "tests/apps/evmc/memcache_client_serial.h"
+#include "tests/apps/evmc/memcache_client_serial.h"
 #include "runtime/evpp/tcp_conn.h"
 #include "runtime/evpp/timestamp.h"
+
+#include "runtime/core/log/log.h"
 
 namespace evmc {
 
@@ -44,7 +46,7 @@ void MemcacheClientSerial::MultiGet(const std::vector<std::string>& keys, MultiG
 
 bool MemcacheClientSerial::Start(evpp::EventLoop* loop) {
     if (!loop) {
-        LOG_ERROR << "start with nullptr event loop";
+        ENGINE_LOG_ERROR(engine::GetLogger(), "start with nullptr event loop");
         return false;
     }
     MemcacheClientBase::Start(false);
@@ -71,10 +73,9 @@ void MemcacheClientSerial::LaunchCommand(CommandPtr& command) {
         memclient_->PushWaitingCommand(command);
     } else {
         //assert(loop_->IsInLoopThread());
-        LOG_ERROR << "connected to server, but some problems occurs!";
+        ENGINE_LOG_ERROR(engine::GetLogger(), "connected to server, but some problems occurs!");
         command->OnError(ERR_CODE_NETWORK);
     }
 }
 
 }
-

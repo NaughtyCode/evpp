@@ -1,16 +1,17 @@
-
 include_directories(${PROJECT_SOURCE_DIR}/tests/apps ${PROJECT_SOURCE_DIR}/thirdparty)
 
 if (UNIX)
-set(LIBRARIES ServerEngine event glog pthread)
-link_directories("/home/s/safe/lib" ${PROJECT_BUILD_DIR}/lib)
+    set(LIBRARIES ServerEngine event pthread)
 else(UNIX)
-set(LIBRARIES ServerEngine event glog)
-link_directories(${PROJECT_SOURCE_DIR}/vsprojects/bin/${CMAKE_BUILD_TYPE}/
-				 ${LIBRARY_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}/)
+    set(LIBRARIES ServerEngine event)
 endif(UNIX)
+
+# All test apps output under artifacts/tests
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/../artifacts/tests)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/../artifacts/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/../artifacts/lib)
+
+link_directories(${CMAKE_ARCHIVE_OUTPUT_DIRECTORY})
 
 add_subdirectory(evnsq)
 add_subdirectory(evmc)
-
-

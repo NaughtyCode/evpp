@@ -10,6 +10,8 @@
 #include <Jolt/Physics/Collision/PhysicsMaterial.h>
 #include <Jolt/Core/Color.h>
 
+#include "runtime/core/engine_export.h"
+
 namespace engine {
 
 //============================================================================
@@ -60,7 +62,7 @@ struct MaterialEntry {
     float restitution = 0.0f;
 };
 
-class MaterialTable {
+class ENGINE_API MaterialTable {
 public:
     // Parse materials from a JSON array of MaterialEntry objects.
     // Uses glaze for deserialization.

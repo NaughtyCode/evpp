@@ -8,12 +8,14 @@
 #include <evpp/httpc/conn.h>
 #include <evpp/httpc/response.h>
 
+#include "runtime/core/log/log.h"
+
 #include "tests/examples/winmain-inl.h"
 
 static int responsed = 0;
 static int retried = 0;
 static void HandleHTTPResponse(const std::shared_ptr<evpp::httpc::Response>& r, evpp::httpc::Request* req) {
-    LOG_INFO << "http_code=" << r->http_code() << " [" << r->body().ToString() << "]";
+    ENGINE_LOG_INFO(engine::GetLogger(), "http_code={} [{}]", r->http_code(), r->body().ToString());
     responsed++;
     if (retried < 3) {
         retried++;
@@ -27,7 +29,7 @@ int main() {
     evpp::EventLoopThread t;
     t.Start(true);
     evpp::httpc::Request* r = new evpp::httpc::Request(t.loop(), "http://www.360.cn/robots.txt", "", evpp::Duration(2.0));
-    LOG_INFO << "Do http request";
+    ENGINE_LOG_INFO(engine::GetLogger(), "Do http request");
     r->Execute(std::bind(&HandleHTTPResponse, std::placeholders::_1, r));
 
     while (responsed != 4) {
@@ -35,6 +37,6 @@ int main() {
     }
 
     t.Stop(true);
-    LOG_INFO << "EventLoopThread stopped.";
+    ENGINE_LOG_INFO(engine::GetLogger(), "EventLoopThread stopped.");
     return 0;
 }

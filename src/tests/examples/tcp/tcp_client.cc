@@ -2,6 +2,8 @@
 #include <evpp/buffer.h>
 #include <evpp/tcp_conn.h>
 
+#include "runtime/core/log/log.h"
+
 int main(int argc, char* argv[]) {
     std::string addr = "127.0.0.1:9099";
 
@@ -13,13 +15,13 @@ int main(int argc, char* argv[]) {
     evpp::TCPClient client(&loop, addr, "TCPPingPongClient");
     client.SetMessageCallback([&loop, &client](const evpp::TCPConnPtr& conn,
                                evpp::Buffer* msg) {
-        LOG_TRACE << "Receive a message [" << msg->ToString() << "]";
+        ENGINE_LOG_TRACE(engine::GetLogger(), "Receive a message [{}]", msg->ToString());
         client.Disconnect();
     });
 
     client.SetConnectionCallback([](const evpp::TCPConnPtr& conn) {
         if (conn->IsConnected()) {
-            LOG_INFO << "Connected to " << conn->remote_addr();
+            ENGINE_LOG_INFO(engine::GetLogger(), "Connected to {}", conn->remote_addr());
             conn->Send("hello");
         } else {
             conn->loop()->Stop();

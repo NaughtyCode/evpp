@@ -19,7 +19,7 @@
 #       start libevent.sln
 #
 
-cmake_minimum_required(VERSION 3.15 FATAL_ERROR)
+cmake_minimum_required(VERSION 4.0 FATAL_ERROR)
 
 if (POLICY CMP0074)
     cmake_policy(SET CMP0074 NEW)
@@ -596,7 +596,9 @@ unset(SYMBOLS_TO_CHECK)
 set(EVENT__HAVE_EPOLL ${EVENT__HAVE_EPOLL_CREATE})
 set(EVENT__HAVE_SIGNALFD ${EVENT__HAVE_SYS_SIGNALFD_H})
 if(WIN32 AND NOT CYGWIN)
-    set(EVENT__HAVE_WEPOLL 1)
+    if(NOT DEFINED EVENT__HAVE_WEPOLL)
+        set(EVENT__HAVE_WEPOLL 1)
+    endif()
 endif()
 
 # Get the gethostbyname_r prototype.

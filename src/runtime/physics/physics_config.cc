@@ -16,12 +16,18 @@ namespace engine {
 
 namespace {
 
-// Read entire file to string
+// Read entire file to string, stripping BOM if present
 std::string ReadFile(const std::string& path) {
     std::ifstream f(path, std::ios::binary);
     if (!f) return {};
-    return std::string(std::istreambuf_iterator<char>(f),
-                       std::istreambuf_iterator<char>());
+    std::string s{std::istreambuf_iterator<char>(f),
+                  std::istreambuf_iterator<char>()};
+    // Strip UTF-8 BOM if present
+    if (s.size() >= 3 && static_cast<uint8_t>(s[0]) == 0xEF &&
+        static_cast<uint8_t>(s[1]) == 0xBB && static_cast<uint8_t>(s[2]) == 0xBF) {
+        s.erase(0, 3);
+    }
+    return s;
 }
 
 bool FileExists(const std::string& path) {
@@ -77,7 +83,8 @@ bool PhysicsConfigManager::LoadPhysics(const std::string& path) {
         return false;
     }
     std::string buf = ReadFile(path);
-    auto ec = glz::read_json(physics_config_, buf);
+    glz::context ctx{};
+    auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(physics_config_, buf, ctx);
     if (ec) {
         std::fprintf(stderr, "PhysicsConfigManager: parse error in [%s]: %s\n",
                      path.c_str(), glz::format_error(ec, buf).c_str());
@@ -93,7 +100,8 @@ bool PhysicsConfigManager::LoadThreading(const std::string& path) {
         return false;
     }
     std::string buf = ReadFile(path);
-    auto ec = glz::read_json(threading_config_, buf);
+    glz::context ctx{};
+    auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(threading_config_, buf, ctx);
     if (ec) {
         std::fprintf(stderr, "PhysicsConfigManager: parse error in [%s]: %s\n",
                      path.c_str(), glz::format_error(ec, buf).c_str());
@@ -109,7 +117,8 @@ bool PhysicsConfigManager::LoadLogging(const std::string& path) {
         return false;
     }
     std::string buf = ReadFile(path);
-    auto ec = glz::read_json(log_config_, buf);
+    glz::context ctx{};
+    auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(log_config_, buf, ctx);
     if (ec) {
         std::fprintf(stderr, "PhysicsConfigManager: parse error in [%s]: %s\n",
                      path.c_str(), glz::format_error(ec, buf).c_str());
@@ -125,7 +134,8 @@ bool PhysicsConfigManager::LoadThresholds(const std::string& path) {
         return false;
     }
     std::string buf = ReadFile(path);
-    auto ec = glz::read_json(thresholds_config_, buf);
+    glz::context ctx{};
+    auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(thresholds_config_, buf, ctx);
     if (ec) {
         std::fprintf(stderr, "PhysicsConfigManager: parse error in [%s]: %s\n",
                      path.c_str(), glz::format_error(ec, buf).c_str());
@@ -245,7 +255,8 @@ bool PhysicsConfigManager::ReloadThresholds(const std::string& config_dir) {
         return false;
     }
 
-    auto ec = glz::read_json(new_cfg, buf);
+    glz::context ctx{};
+    auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(new_cfg, buf, ctx);
     if (ec) {
         std::fprintf(stderr, "PhysicsConfigManager: thresholds reload parse error: %s\n",
                      glz::format_error(ec, buf).c_str());
@@ -274,7 +285,8 @@ bool PhysicsConfigManager::ReloadLogLevel(const std::string& config_dir) {
     }
 
     PhysicsLogConfig new_cfg;
-    auto ec = glz::read_json(new_cfg, buf);
+    glz::context ctx{};
+    auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(new_cfg, buf, ctx);
     if (ec) {
         std::fprintf(stderr, "PhysicsConfigManager: logging reload parse error: %s\n",
                      glz::format_error(ec, buf).c_str());

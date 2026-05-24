@@ -3,10 +3,12 @@ file(GLOB evnsq_PUBLIC_HEADERS *.h)
 
 add_library(evnsq_static STATIC ${evnsq_SRCS})
 target_link_libraries(evnsq_static ${LIBRARIES})
+set_property(TARGET evnsq_static PROPERTY FOLDER "tests/apps")
 
 if (UNIX)
     add_library(evnsq SHARED ${evnsq_SRCS})
     target_link_libraries(evnsq ${LIBRARIES})
+    set_property(TARGET evnsq PROPERTY FOLDER "tests/apps")
 
     set (CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
     include (utils)

@@ -5,7 +5,8 @@ file(GLOB evpp_unittest_SRCS *.cc
      ${PROJECT_SOURCE_DIR}/thirdparty/gtest/src/gtest_main.cc)
 
 list(REMOVE_ITEM evpp_unittest_SRCS
-     ${CMAKE_CURRENT_SOURCE_DIR}/https_client_test.cc)
+     ${CMAKE_CURRENT_SOURCE_DIR}/https_client_test.cc
+     ${CMAKE_CURRENT_SOURCE_DIR}/glog_test.cc)
 
 if(MSVC)
     link_directories(${LIBRARY_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}/)

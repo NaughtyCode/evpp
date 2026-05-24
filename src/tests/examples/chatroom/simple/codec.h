@@ -1,5 +1,6 @@
 #pragma once
 
+#include "runtime/core/log/log.h"
 #include <evpp/tcp_conn.h>
 #include <evpp/buffer.h>
 
@@ -16,7 +17,7 @@ public:
         while (buf->size() >= kHeaderLen) {
             const int32_t len = buf->PeekInt32();
             if (len > 65536 || len < 0) {
-                LOG_ERROR << "Invalid length " << len;
+                ENGINE_LOG_ERROR(engine::GetLogger(), "Invalid length {}", len);
                 conn->Close();
                 break;
             }

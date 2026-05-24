@@ -1,8 +1,10 @@
-﻿#include "tests/apps/evmc/command.h"
+#include "tests/apps/evmc/command.h"
 #include <memcached/protocol_binary.h>
 #include "tests/apps/evmc/memcache_client.h"
 #include "tests/apps/evmc/vbucket_config.h"
 #include "tests/apps/evmc/likely.h"
+
+#include "runtime/core/log/log.h"
 
 namespace evmc {
 
@@ -20,9 +22,7 @@ uint16_t Command::server_id() const {
 }
 
 bool Command::ShouldRetry() const {
-    LOG_DEBUG << "ShouldRetry vbucket=" << vbucket_id()
-              << " server_id=" << server_id()
-              << " len=" << server_id_history_.size();
+    ENGINE_LOG_DEBUG(engine::GetLogger(), "ShouldRetry vbucket={} server_id={} len={}", vbucket_id(), server_id(), server_id_history_.size());
     return server_id_history_.size() < 2;
 }
 
@@ -263,5 +263,3 @@ void RemoveCommand::RequestBuffer(std::string& buf)  {
 }
 
 }
-
-

@@ -9,7 +9,7 @@ TEST_UNIT(testDNSResolver) {
         bool resolved = false;
         bool deleted = false;
         auto fn_resolved = [&resolved](const std::vector <struct in_addr>& addrs) {
-            LOG_INFO << "Entering fn_resolved";
+            ENGINE_LOG_INFO(engine::GetLogger(), "Entering fn_resolved");
             resolved = true;
         };
 
@@ -25,7 +25,7 @@ TEST_UNIT(testDNSResolver) {
         }
 
         auto fn_deleter = [&deleted, dns_resolver]() {
-            LOG_INFO << "Entering fn_deleter";
+            ENGINE_LOG_INFO(engine::GetLogger(), "Entering fn_deleter");
             deleted = true;
         };
 
@@ -48,7 +48,7 @@ TEST_UNIT(testDNSResolverTimeout) {
         std::atomic<int> resolved(0);
         bool deleted = false;
         auto fn_resolved = [&resolved](const std::vector <struct in_addr>& addrs) {
-            LOG_INFO << "Entering fn_resolved addrs.size=" << addrs.size();
+            ENGINE_LOG_INFO(engine::GetLogger(), "Entering fn_resolved addrs.size={}", addrs.size());
             resolved.fetch_add(1);
         };
 
@@ -70,7 +70,7 @@ TEST_UNIT(testDNSResolverTimeout) {
         }
 
         auto fn_deleter = [&deleted, dns_resolver]() {
-            LOG_INFO << "Entering fn_deleter";
+            ENGINE_LOG_INFO(engine::GetLogger(), "Entering fn_deleter");
             deleted = true;
         };
 

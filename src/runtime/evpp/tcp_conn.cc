@@ -1,4 +1,4 @@
-﻿#include "runtime/evpp/inner_pre.h"
+#include "runtime/evpp/inner_pre.h"
 
 #include "runtime/evpp/libevent.h"
 
@@ -29,14 +29,11 @@ TCPConn::TCPConn(EventLoop* l,
         chan_->SetWriteCallback(std::bind(&TCPConn::HandleWrite, this));
     }
 
-    DLOG_TRACE << "TCPConn::[" << name_ << "] channel=" << chan_.get() << " fd=" << sockfd << " addr=" << AddrToString();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} TCPConn::[{}] channel={} fd={} addr={}", (void*)this, name_, (void*)chan_.get(), sockfd, AddrToString());
 }
 
 TCPConn::~TCPConn() {
-    DLOG_TRACE << "name=" << name()
-        << " channel=" << chan_.get()
-        << " fd=" << fd_ << " type=" << int(type())
-        << " status=" << StatusToString() << " addr=" << AddrToString();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} name={} channel={} fd={} type={} status={} addr={}", (void*)this, name(), (void*)chan_.get(), fd_, int(type()), StatusToString(), AddrToString());
     assert(status_ == kDisconnected);
 
     if (fd_ >= 0) {
@@ -51,7 +48,7 @@ TCPConn::~TCPConn() {
 }
 
 void TCPConn::Close() {
-    DLOG_TRACE << "fd=" << fd_ << " status=" << StatusToString() << " addr=" << AddrToString();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} fd={} status={} addr={}", (void*)this, fd_, StatusToString(), AddrToString());
     status_ = kDisconnecting;
     auto c = shared_from_this();
     auto f = [c]() {
@@ -124,7 +121,7 @@ void TCPConn::SendInLoop(const void* data, size_t len) {
     assert(loop_->IsInLoopThread());
 
     if (status_ == kDisconnected) {
-        LOG_WARN << "disconnected, give up writing";
+        ENGINE_LOG_WARN(engine::GetLogger(), "disconnected, give up writing");
         return;
     }
 
@@ -141,10 +138,10 @@ void TCPConn::SendInLoop(const void* data, size_t len) {
                 loop_->QueueInLoop(std::bind(write_complete_fn_, shared_from_this()));
             }
         } else {
-            int serrno = errno;
+            int serrno = EVPP_ERRNO;
             nwritten = 0;
             if (!EVUTIL_ERR_RW_RETRIABLE(serrno)) {
-                LOG_ERROR << "SendInLoop write failed errno=" << serrno << " " << strerror(serrno);
+                ENGINE_LOG_ERROR(engine::GetLogger(), "SendInLoop write failed errno={} {}", serrno, strerror(serrno));
                 if (serrno == EPIPE || serrno == ECONNRESET) {
                     write_error = true;
                 }
@@ -185,7 +182,7 @@ void TCPConn::HandleRead() {
     } else if (n == 0) {
         if (type() == kOutgoing) {
             // This is an outgoing connection, we own it and it's done. so close it
-            DLOG_TRACE << "fd=" << fd_ << ". We read 0 bytes and close the socket.";
+            ENGINE_LOG_TRACE(engine::GetLogger(), "this={} fd={}. We read 0 bytes and close the socket.", (void*)this, fd_);
             status_ = kDisconnecting;
             HandleClose();
         } else {
@@ -193,21 +190,21 @@ void TCPConn::HandleRead() {
 
             chan_->DisableReadEvent();
             if (close_delay_.IsZero()) {
-                DLOG_TRACE << "channel (fd=" << chan_->fd() << ") DisableReadEvent. delay time " << close_delay_.Seconds() << "s. We close this connection immediately";
+                ENGINE_LOG_TRACE(engine::GetLogger(), "this={} channel (fd={}) DisableReadEvent. delay time {}s. We close this connection immediately", (void*)this, chan_->fd(), close_delay_.Seconds());
                 DelayClose();
             } else {
                 // This is an incoming connection, we need to preserve the
                 // connection for a while so that we can reply to it.
                 // And we set a timer to close the connection eventually.
-                DLOG_TRACE << "channel (fd=" << chan_->fd() << ") DisableReadEvent. And set a timer to delay close this TCPConn, delay time " << close_delay_.Seconds() << "s";
+                ENGINE_LOG_TRACE(engine::GetLogger(), "this={} channel (fd={}) DisableReadEvent. And set a timer to delay close this TCPConn, delay time {}s", (void*)this, chan_->fd(), close_delay_.Seconds());
                 delay_close_timer_ = loop_->RunAfter(close_delay_, std::bind(&TCPConn::DelayClose, shared_from_this())); // TODO leave it to user layer close.
             }
         }
     } else {
         if (EVUTIL_ERR_RW_RETRIABLE(serrno)) {
-            DLOG_TRACE << "errno=" << serrno << " " << strerror(serrno);
+            ENGINE_LOG_TRACE(engine::GetLogger(), "this={} errno={} {}", (void*)this, serrno, strerror(serrno));
         } else {
-            DLOG_TRACE << "errno=" << serrno << " " << strerror(serrno) << " We are closing this connection now.";
+            ENGINE_LOG_TRACE(engine::GetLogger(), "this={} errno={} {} We are closing this connection now.", (void*)this, serrno, strerror(serrno));
             HandleError();
         }
     }
@@ -229,10 +226,10 @@ void TCPConn::HandleWrite() {
             }
         }
     } else {
-        int serrno = errno;
+        int serrno = EVPP_ERRNO;
 
         if (EVUTIL_ERR_RW_RETRIABLE(serrno)) {
-            LOG_WARN << "this=" << this << " TCPConn::HandleWrite errno=" << serrno << " " << strerror(serrno);
+            ENGINE_LOG_WARN(engine::GetLogger(), "this={} TCPConn::HandleWrite errno={} {}", (void*)this, serrno, strerror(serrno));
         } else {
             HandleError();
         }
@@ -241,14 +238,14 @@ void TCPConn::HandleWrite() {
 
 void TCPConn::DelayClose() {
     assert(loop_->IsInLoopThread());
-    DLOG_TRACE << "addr=" << AddrToString() << " fd=" << fd_ << " status_=" << StatusToString();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} addr={} fd={} status_={}", (void*)this, AddrToString(), fd_, StatusToString());
     status_ = kDisconnecting;
     delay_close_timer_.reset();
     HandleClose();
 }
 
 void TCPConn::HandleClose() {
-    DLOG_TRACE << "addr=" << AddrToString() << " fd=" << fd_ << " status_=" << StatusToString();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} addr={} fd={} status_={}", (void*)this, AddrToString(), fd_, StatusToString());
 
     // Avoid multi calling
     if (status_ == kDisconnected) {
@@ -268,7 +265,7 @@ void TCPConn::HandleClose() {
     TCPConnPtr conn(shared_from_this());
 
     if (delay_close_timer_) {
-        DLOG_TRACE << "loop=" << loop_ << " Cancel the delay closing timer.";
+        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} loop={} Cancel the delay closing timer.", (void*)this, (void*)loop_);
         delay_close_timer_->Cancel();
         delay_close_timer_.reset();
     }
@@ -284,12 +281,12 @@ void TCPConn::HandleClose() {
     if (close_fn_) {
         close_fn_(conn);
     }
-    DLOG_TRACE << "addr=" << AddrToString() << " fd=" << fd_ << " status_=" << StatusToString() << " use_count=" << conn.use_count();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} addr={} fd={} status_={} use_count={}", (void*)this, AddrToString(), fd_, StatusToString(), conn.use_count());
     status_ = kDisconnected;
 }
 
 void TCPConn::HandleError() {
-    DLOG_TRACE << "fd=" << fd_ << " status=" << StatusToString();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} fd={} status={}", (void*)this, fd_, StatusToString());
     status_ = kDisconnecting;
     HandleClose();
 }

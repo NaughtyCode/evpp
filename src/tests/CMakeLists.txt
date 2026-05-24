@@ -1,6 +1,7 @@
 # Redirect all test executables to artifacts/tests
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/../artifacts/tests)
 
+
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty
                     ${PROJECT_SOURCE_DIR}/thirdparty/gtest)
 

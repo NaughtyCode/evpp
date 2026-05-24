@@ -40,7 +40,7 @@ TEST_UNIT(evhttpClientSample) {
 namespace httpc {
 static bool responsed = false;
 static void HandleHTTPResponse(const std::shared_ptr<evpp::httpc::Response>& r, evpp::EventLoopThread* t) {
-    LOG_INFO << "http_code=" << r->http_code() << " [" << r->body().ToString() << "]";
+    ENGINE_LOG_INFO(engine::GetLogger(), "http_code={} [{}]", r->http_code(), r->body().ToString());
     responsed = true;
     std::string h = r->FindHeader("Connection");
     H_TEST_ASSERT(h == "close");
@@ -64,7 +64,7 @@ TEST_UNIT(testHTTPRequest1) {
     std::shared_ptr<evpp::httpc::ConnPool> pool(new evpp::httpc::ConnPool("www.360.cn", 80, evpp::Duration(2.0)));
 #endif
     evpp::httpc::Request* r = new evpp::httpc::Request(pool.get(), t.loop(), "/robots.txt", "");
-    LOG_INFO << "Do http request";
+    ENGINE_LOG_INFO(engine::GetLogger(), "Do http request");
     r->Execute(std::bind(&HandleHTTPResponse, std::placeholders::_1, &t));
 
     while (!responsed) {
@@ -75,7 +75,7 @@ TEST_UNIT(testHTTPRequest1) {
     usleep(500 * 1000);
     pool.reset();
     t.Stop(true);
-    LOG_INFO << "EventLoopThread stopped.";
+    ENGINE_LOG_INFO(engine::GetLogger(), "EventLoopThread stopped.");
 }
 
 TEST_UNIT(testHTTPRequest2) {
@@ -84,7 +84,7 @@ TEST_UNIT(testHTTPRequest2) {
     evpp::EventLoopThread t;
     t.Start(true);
     evpp::httpc::Request* r = new evpp::httpc::Request(t.loop(), "http://www.360.cn/robots.txt?a=1", "", evpp::Duration(2.0));
-    LOG_INFO << "Do http request";
+    ENGINE_LOG_INFO(engine::GetLogger(), "Do http request");
     r->Execute(std::bind(&HandleHTTPResponse, std::placeholders::_1, &t));
 
     while (!responsed) {
@@ -92,7 +92,7 @@ TEST_UNIT(testHTTPRequest2) {
     }
 
     t.Stop(true);
-    LOG_INFO << "EventLoopThread stopped.";
+    ENGINE_LOG_INFO(engine::GetLogger(), "EventLoopThread stopped.");
 }
 
 
@@ -107,7 +107,7 @@ TEST_UNIT(testHTTPRequest3) {
     std::shared_ptr<evpp::httpc::ConnPool> pool(new evpp::httpc::ConnPool("www.360.cn", 80, evpp::Duration(2.0)));
 #endif
     evpp::httpc::GetRequest* r = new evpp::httpc::GetRequest(pool.get(), t.loop(), "/robots.txt");
-    LOG_INFO << "Do http request";
+    ENGINE_LOG_INFO(engine::GetLogger(), "Do http request");
     r->Execute(std::bind(&HandleHTTPResponse, std::placeholders::_1, &t));
 
     while (!responsed) {
@@ -118,7 +118,7 @@ TEST_UNIT(testHTTPRequest3) {
     usleep(500 * 1000);
     pool.reset();
     t.Stop(true);
-    LOG_INFO << "EventLoopThread stopped.";
+    ENGINE_LOG_INFO(engine::GetLogger(), "EventLoopThread stopped.");
 }
 
 TEST_UNIT(testHTTPRequest4) {
@@ -127,7 +127,7 @@ TEST_UNIT(testHTTPRequest4) {
     evpp::EventLoopThread t;
     t.Start(true);
     evpp::httpc::PostRequest* r = new evpp::httpc::PostRequest(t.loop(), "http://www.360.cn/robots.txt?a=1", "", evpp::Duration(2.0));
-    LOG_INFO << "Do http request";
+    ENGINE_LOG_INFO(engine::GetLogger(), "Do http request");
     r->Execute(std::bind(&HandleHTTPResponse, std::placeholders::_1, &t));
 
     while (!responsed) {
@@ -135,7 +135,7 @@ TEST_UNIT(testHTTPRequest4) {
     }
 
     t.Stop(true);
-    LOG_INFO << "EventLoopThread stopped.";
+    ENGINE_LOG_INFO(engine::GetLogger(), "EventLoopThread stopped.");
 }
 
 
@@ -143,7 +143,7 @@ namespace hc {
 static int responsed = 0;
 static int retried = 0;
 static void HandleHTTPResponse(const std::shared_ptr<evpp::httpc::Response>& r, evpp::httpc::Request* req, evpp::EventLoopThread* t) {
-    LOG_INFO << "http_code=" << r->http_code() << " [" << r->body().ToString() << "]";
+    ENGINE_LOG_INFO(engine::GetLogger(), "http_code={} [{}]", r->http_code(), r->body().ToString());
     responsed++;
     std::string h = r->FindHeader("Connection");
     H_TEST_ASSERT(h == "close");
@@ -165,7 +165,7 @@ TEST_UNIT(testHTTPRequest5) {
     evpp::EventLoopThread t;
     t.Start(true);
     evpp::httpc::PostRequest* r = new evpp::httpc::PostRequest(t.loop(), "http://www.360.cn/robots.txt?a=1", "", evpp::Duration(2.0));
-    LOG_INFO << "Do http request";
+    ENGINE_LOG_INFO(engine::GetLogger(), "Do http request");
     r->Execute(std::bind(&hc::HandleHTTPResponse, std::placeholders::_1, r, &t));
 
     while (hc::responsed != 4) {
@@ -173,5 +173,5 @@ TEST_UNIT(testHTTPRequest5) {
     }
     H_TEST_ASSERT(hc::retried == 3);
     t.Stop(true);
-    LOG_INFO << "EventLoopThread stopped.";
+    ENGINE_LOG_INFO(engine::GetLogger(), "EventLoopThread stopped.");
 }

@@ -11,6 +11,8 @@
 #include <evpp/httpc/conn.h>
 #include <evpp/httpc/response.h>
 
+#include "runtime/core/log/log.h"
+
 #include "runtime/evpp/http/service.h"
 #include "runtime/evpp/http/context.h"
 #include "runtime/evpp/http/http_server.h"
@@ -38,7 +40,7 @@ static void RequestHandler201(evpp::EventLoop* loop, const evpp::http::ContextPt
 }
 
 static void RequestHandler909(evpp::EventLoop* loop, const evpp::http::ContextPtr& ctx, const evpp::http::HTTPSendResponseCallback& cb) {
-    LOG_INFO << "RequestHandler909";
+    ENGINE_LOG_INFO(engine::GetLogger(), "RequestHandler909");
     std::stringstream oss;
     oss << "func=" << __FUNCTION__ << " OK"
         << " ip=" << ctx->remote_ip() << "\n"
@@ -269,23 +271,23 @@ static void Test909() {
 
 int main() {
     int i = 2;
-    LOG_INFO << "Running testHTTPServer i=" << i;
+    ENGINE_LOG_INFO(engine::GetLogger(), "Running testHTTPServer i={}", i);
     evpp::http::Server ph(i);
     ph.RegisterDefaultHandler(&DefaultRequestHandler);
     ph.RegisterHandler("/909", &RequestHandler909);
     bool r = ph.Init(g_listening_port);
     auto pid = fork();
     if (pid != 0) {
-        // In parent process 
-        LOG_INFO << "In parent process. Starting";
+        // In parent process
+        ENGINE_LOG_INFO(engine::GetLogger(), "In parent process. Starting");
         ph.Start();
-        LOG_INFO << "In parent process. Stopping";
+        ENGINE_LOG_INFO(engine::GetLogger(), "In parent process. Stopping");
         ph.Stop();
-        LOG_INFO << "In parent process. Stopped";
+        ENGINE_LOG_INFO(engine::GetLogger(), "In parent process. Stopped");
         return 0;
     }
-    
-    LOG_INFO << "In child process. Doing AfterFork";
+
+    ENGINE_LOG_INFO(engine::GetLogger(), "In child process. Doing AfterFork");
     ph.AfterFork();
     ph.Start();
     H_TEST_ASSERT(r);
@@ -294,5 +296,4 @@ int main() {
     usleep(1000 * 1000); // sleep a while to release the listening address and port
     return 0;
 }
-
 

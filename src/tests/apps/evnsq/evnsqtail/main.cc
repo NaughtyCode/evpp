@@ -1,9 +1,11 @@
 #include <evnsq/consumer.h>
 #include <evpp/event_loop.h>
 
+#include "runtime/core/log/log.h"
+
 
 int OnMessage(const evnsq::Message* msg) {
-    LOG_INFO << "Received a message, id=" << msg->id << " message=[" << msg->body.ToString() << "]";
+    ENGINE_LOG_INFO(engine::GetLogger(), "Received a message, id={} message=[{}]", msg->id, msg->body.ToString());
     return 0;
 }
 

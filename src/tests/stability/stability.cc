@@ -15,6 +15,8 @@
 #include <evpp/http/context.h>
 #include <evpp/http/http_server.h>
 
+#include "runtime/core/log/log.h"
+
 #include "tests/examples/winmain-inl.h"
 
 #include "tests/stability/stability.h"
@@ -26,7 +28,7 @@
 
 static bool g_stopping = false;
 static void RequestHandler(evpp::EventLoop* loop, const evpp::http::ContextPtr& ctx, const evpp::http::HTTPSendResponseCallback& cb) {
-    LOG_INFO << "DefaultRequestHandler loop=" << loop << " ctx.url=" << ctx->original_uri() << " tid=" << std::this_thread::get_id();
+    ENGINE_LOG_INFO(engine::GetLogger(), "DefaultRequestHandler loop={} ctx.url={} tid={}", static_cast<void*>(loop), ctx->original_uri(), std::this_thread::get_id());
     std::stringstream oss;
     oss << "func=" << __FUNCTION__ << " OK"
         << " ip=" << ctx->remote_ip() << "\n"
@@ -36,7 +38,7 @@ static void RequestHandler(evpp::EventLoop* loop, const evpp::http::ContextPtr& 
 }
 
 static void DefaultRequestHandler(evpp::EventLoop* loop, const evpp::http::ContextPtr& ctx, const evpp::http::HTTPSendResponseCallback& cb) {
-    LOG_INFO << "DefaultRequestHandler loop=" << loop << " ctx.url=" << ctx->original_uri() << " tid=" << std::this_thread::get_id();
+    ENGINE_LOG_INFO(engine::GetLogger(), "DefaultRequestHandler loop={} ctx.url={} tid={}", static_cast<void*>(loop), ctx->original_uri(), std::this_thread::get_id());
     std::stringstream oss;
     oss << "func=" << __FUNCTION__ << "\n"
         << " ip=" << ctx->remote_ip() << "\n"
@@ -65,7 +67,7 @@ namespace {
         std::string url = GetHttpServerURL() + uri;
         auto r = new evpp::httpc::Request(loop, url, "", evpp::Duration(10.0));
         auto f = [r, finished](const std::shared_ptr<evpp::httpc::Response>& response) {
-            LOG_INFO << "request=" << r << " response=" << response.get() << " tid=" << std::this_thread::get_id();
+            ENGINE_LOG_INFO(engine::GetLogger(), "request={} response={} tid={}", static_cast<void*>(r), static_cast<void*>(response.get()), std::this_thread::get_id());
             std::string result = response->body().ToString();
             assert(!result.empty());
             assert(result.find("uri=/status") != std::string::npos);
@@ -84,7 +86,7 @@ namespace {
         std::string url = GetHttpServerURL() + uri;
         auto r = new evpp::httpc::Request(loop, url, body, evpp::Duration(10.0));
         auto f = [body, r, finished](const std::shared_ptr<evpp::httpc::Response>& response) {
-            LOG_INFO << "request=" << r << " response=" << response.get() << " tid=" << std::this_thread::get_id();
+            ENGINE_LOG_INFO(engine::GetLogger(), "request={} response={} tid={}", static_cast<void*>(r), static_cast<void*>(response.get()), std::this_thread::get_id());
             std::string result = response->body().ToString();
             assert(!result.empty());
             assert(result.find("uri=/status") != std::string::npos);
@@ -102,7 +104,7 @@ namespace {
         std::string url = GetHttpServerURL() + uri;
         auto r = new evpp::httpc::Request(loop, url, "", evpp::Duration(10.0));
         auto f = [r, finished](const std::shared_ptr<evpp::httpc::Response>& response) {
-            LOG_INFO << "request=" << r << " response=" << response.get() << " tid=" << std::this_thread::get_id();
+            ENGINE_LOG_INFO(engine::GetLogger(), "request={} response={} tid={}", static_cast<void*>(r), static_cast<void*>(response.get()), std::this_thread::get_id());
             std::string result = response->body().ToString();
             assert(!result.empty());
             assert(result.find("uri=/status/method/method2/xx") != std::string::npos);
@@ -119,7 +121,7 @@ namespace {
         std::string url = GetHttpServerURL() + uri;
         auto r = new evpp::httpc::Request(loop, url, "", evpp::Duration(10.0));
         auto f = [r, finished](const std::shared_ptr<evpp::httpc::Response>& response) {
-            LOG_INFO << "request=" << r << " response=" << response.get() << " tid=" << std::this_thread::get_id();
+            ENGINE_LOG_INFO(engine::GetLogger(), "request={} response={} tid={}", static_cast<void*>(r), static_cast<void*>(response.get()), std::this_thread::get_id());
             std::string result = response->body().ToString();
             assert(!result.empty());
             assert(result.find("uri=/push/boot") != std::string::npos);
@@ -136,7 +138,7 @@ namespace {
         std::string url = GetHttpServerURL() + uri;
         auto r = new evpp::httpc::Request(loop, url, "", evpp::Duration(10.0));
         auto f = [r, finished](const std::shared_ptr<evpp::httpc::Response>& response) {
-            LOG_INFO << "request=" << r << " response=" << response.get() << " tid=" << std::this_thread::get_id();
+            ENGINE_LOG_INFO(engine::GetLogger(), "request={} response={} tid={}", static_cast<void*>(r), static_cast<void*>(response.get()), std::this_thread::get_id());
             std::string result = response->body().ToString();
             assert(!result.empty());
             assert(result.find("uri=/mod/stop") != std::string::npos);
@@ -149,7 +151,7 @@ namespace {
     }
 
     static void TestAll() {
-        LOG_INFO << "TestAll start";
+        ENGINE_LOG_INFO(engine::GetLogger(), "TestAll start");
         evpp::EventLoopThread t;
         t.Start(true);
         std::atomic<int> finished(0);
@@ -168,13 +170,13 @@ namespace {
         }
 
         t.Stop(true);
-        LOG_INFO << "TestAll end";
+        ENGINE_LOG_INFO(engine::GetLogger(), "TestAll end");
     }
 }
 
 void TestHTTPServer() {
     for (int i = 0; i < 40; ++i) {
-        LOG_INFO << "Running TestHTTPServer i=" << i;
+        ENGINE_LOG_INFO(engine::GetLogger(), "Running TestHTTPServer i={}", i);
         evpp::http::Server ph(i);
         ph.RegisterDefaultHandler(&DefaultRequestHandler);
         ph.RegisterHandler("/push/boot", &RequestHandler);
@@ -215,25 +217,25 @@ int main(int argc, char* argv[]) {
     // We are running forever
     // If the program stops at somewhere there must be a bug to be fixed.
     for (size_t i = 0;;i++) {
-        LOG_WARN << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestTCPServer1 " << i;
+        ENGINE_LOG_WARN(engine::GetLogger(), "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestTCPServer1 {}", i);
         TestTCPServer1();
-        LOG_WARN << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestHTTPServer " << i;
+        ENGINE_LOG_WARN(engine::GetLogger(), "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestHTTPServer {}", i);
         TestHTTPServer();
-        LOG_WARN << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestTCPClientReconnect " << i;
+        ENGINE_LOG_WARN(engine::GetLogger(), "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestTCPClientReconnect {}", i);
         TestTCPClientReconnect();
-        LOG_WARN << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestTCPClientConnectFailed " << i;
+        ENGINE_LOG_WARN(engine::GetLogger(), "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestTCPClientConnectFailed {}", i);
         TestTCPClientConnectFailed();
-        LOG_WARN << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestTCPClientDisconnectImmediately " << i;
+        ENGINE_LOG_WARN(engine::GetLogger(), "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestTCPClientDisconnectImmediately {}", i);
         TestTCPClientDisconnectImmediately();
-        LOG_WARN << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestTCPClientDisconnectAndDestruct " << i;
+        ENGINE_LOG_WARN(engine::GetLogger(), "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestTCPClientDisconnectAndDestruct {}", i);
         TestTCPClientDisconnectAndDestruct();
-        LOG_WARN << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestTCPClientConnectLocalhost " << i;
+        ENGINE_LOG_WARN(engine::GetLogger(), "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestTCPClientConnectLocalhost {}", i);
         TestTCPClientConnectLocalhost();
-        LOG_WARN << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestTCPServerSilenceShutdown1 " << i;
+        ENGINE_LOG_WARN(engine::GetLogger(), "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestTCPServerSilenceShutdown1 {}", i);
         TestTCPServerSilenceShutdown1();
-        LOG_WARN << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestTCPServerSilenceShutdown2 " << i;
+        ENGINE_LOG_WARN(engine::GetLogger(), "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestTCPServerSilenceShutdown2 {}", i);
         TestTCPServerSilenceShutdown2();
-        LOG_WARN << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestDNSResolver " << i;
+        ENGINE_LOG_WARN(engine::GetLogger(), "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Running test loop TestDNSResolver {}", i);
         TestDNSResolver();
     }
     return 0;

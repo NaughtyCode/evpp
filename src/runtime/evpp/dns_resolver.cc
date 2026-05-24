@@ -1,4 +1,3 @@
-
 #include "runtime/evpp/dns_resolver.h"
 #include "runtime/evpp/event_loop.h"
 #include "runtime/evpp/event_watcher.h"
@@ -7,11 +6,11 @@
 namespace evpp {
 DNSResolver::DNSResolver(EventLoop* evloop, const std::string& h, Duration timeout, const Functor& f)
     : loop_(evloop), dnsbase_(nullptr), dns_req_(nullptr), host_(h), timeout_(timeout), functor_(f) {
-    DLOG_TRACE << "tid=" << std::this_thread::get_id() << " this=" << this;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::this_thread::get_id(), (void*)this);
 }
 
 DNSResolver::~DNSResolver() {
-    DLOG_TRACE << "tid=" << std::this_thread::get_id() << " this=" << this;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::this_thread::get_id(), (void*)this);
     assert(dnsbase_ == nullptr);
 
 #if LIBEVENT_VERSION_NUMBER >= 0x02001500
@@ -21,7 +20,7 @@ DNSResolver::~DNSResolver() {
 
 void DNSResolver::Start() {
     auto f = [this]() {
-        DLOG_TRACE << "tid=" << std::this_thread::get_id() << " this=" << this;
+        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::this_thread::get_id(), (void*)this);
         assert(loop_->IsInLoopThread());
 
 #if LIBEVENT_VERSION_NUMBER >= 0x02001500
@@ -34,7 +33,7 @@ void DNSResolver::Start() {
 }
 
 void DNSResolver::SyncDNSResolve() {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     /* Build the hints to tell getaddrinfo how to act. */
     struct addrinfo hints;
     memset(&hints, 0, sizeof(hints));
@@ -47,7 +46,7 @@ void DNSResolver::SyncDNSResolve() {
     struct addrinfo* answer = nullptr;
     int err = getaddrinfo(host_.c_str(), nullptr, &hints, &answer);
     if (err != 0) {
-        LOG_ERROR << "this=" << this << " getaddrinfo failed. err=" << err << " " << gai_strerror(err);
+        ENGINE_LOG_ERROR(engine::GetLogger(), "this={} getaddrinfo failed. err={} {}", (void*)this, err, gai_strerror(err));
     } else {
         for (struct addrinfo* rp = answer; rp != nullptr; rp = rp->ai_next) {
             struct sockaddr_in* a = reinterpret_cast<struct sockaddr_in*>(rp->ai_addr);
@@ -57,7 +56,7 @@ void DNSResolver::SyncDNSResolve() {
             }
 
             addrs_.push_back(a->sin_addr);
-            DLOG_TRACE << "host=" << host_ << " resolved a ip=" << inet_ntoa(a->sin_addr);
+            ENGINE_LOG_TRACE(engine::GetLogger(), "this={} host={} resolved a ip={}", (void*)this, host_, inet_ntoa(a->sin_addr));
         }
     }
     evutil_freeaddrinfo(answer);
@@ -65,7 +64,7 @@ void DNSResolver::SyncDNSResolve() {
 }
 
 void DNSResolver::Cancel() {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     assert(loop_->IsInLoopThread());
     if (timer_) {
         timer_->Cancel();
@@ -75,7 +74,7 @@ void DNSResolver::Cancel() {
 }
 
 void DNSResolver::AsyncWait() {
-    DLOG_TRACE << "tid=" << std::this_thread::get_id() << " this=" << this;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::this_thread::get_id(), (void*)this);
     timer_.reset(new TimerEventWatcher(loop_, std::bind(&DNSResolver::OnTimeout, this), timeout_));
     timer_->SetCancelCallback(std::bind(&DNSResolver::OnCanceled, this));
     timer_->Init();
@@ -83,7 +82,7 @@ void DNSResolver::AsyncWait() {
 }
 
 void DNSResolver::OnTimeout() {
-    DLOG_TRACE << "tid=" << std::this_thread::get_id() << " this=" << this;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::this_thread::get_id(), (void*)this);
 #if LIBEVENT_VERSION_NUMBER >= 0x02001500
     evdns_getaddrinfo_cancel(dns_req_);
     dns_req_ = nullptr;
@@ -93,7 +92,7 @@ void DNSResolver::OnTimeout() {
 }
 
 void DNSResolver::OnCanceled() {
-    DLOG_TRACE << "tid=" << std::this_thread::get_id() << " this=" << this;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::this_thread::get_id(), (void*)this);
 #if LIBEVENT_VERSION_NUMBER >= 0x02001500
     evdns_getaddrinfo_cancel(dns_req_);
     dns_req_ = nullptr;
@@ -103,7 +102,7 @@ void DNSResolver::OnCanceled() {
 
 #if LIBEVENT_VERSION_NUMBER >= 0x02001500
 void DNSResolver::AsyncDNSResolve() {
-    DLOG_TRACE;
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
 
     // Set a timer to watch the DNS resolving
     AsyncWait();
@@ -117,7 +116,7 @@ void DNSResolver::AsyncDNSResolve() {
     hints.ai_flags = AI_PASSIVE;    /* For wildcard IP address */
 
 
-    DLOG_TRACE << "call shared_from_this";
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} call shared_from_this", (void*)this);
     std::shared_ptr<DNSResolver> p = shared_from_this();
     std::shared_ptr<DNSResolver> *pp = new std::shared_ptr<DNSResolver>(p);
     dnsbase_ = evdns_base_new(loop_->event_base(), 1);
@@ -129,7 +128,7 @@ void DNSResolver::AsyncDNSResolve() {
                                  , &DNSResolver::OnResolved
                                  , pp);
     if (!dns_req_) {
-        LOG_ERROR << "evdns_getaddrinfo failed.";
+        ENGINE_LOG_ERROR(engine::GetLogger(), "evdns_getaddrinfo failed.");
         delete pp;
         evdns_base_free(dnsbase_, 0);
         dnsbase_ = nullptr;
@@ -143,14 +142,12 @@ void DNSResolver::OnResolved(int errcode, struct addrinfo* addr) {
     if (errcode != 0) {
         if (errcode != EVUTIL_EAI_CANCEL) {
             ClearTimer();
-            LOG_ERROR << "DNS resolve failed, "
-                << ", error code: " << errcode
-                << ", error msg: " << evutil_gai_strerror(errcode);
+            ENGINE_LOG_ERROR(engine::GetLogger(), "DNS resolve failed, error code: {}, error msg: {}", errcode, evutil_gai_strerror(errcode));
         } else {
-            DLOG_WARN << "DNS resolve cancel, may be timeout";
+            ENGINE_LOG_WARN(engine::GetLogger(), "this={} DNS resolve cancel, may be timeout", (void*)this);
         }
 
-        DLOG_WARN << "delete DNS base. errcode=" << errcode << " " << strerror(errcode);
+        ENGINE_LOG_WARN(engine::GetLogger(), "this={} delete DNS base. errcode={} {}", (void*)this, errcode, strerror(errcode));
         evdns_base_free(dnsbase_, 0);
         dnsbase_ = nullptr;
         OnResolved();
@@ -159,9 +156,9 @@ void DNSResolver::OnResolved(int errcode, struct addrinfo* addr) {
 
 
     if (addr == nullptr) {
-        LOG_ERROR << "this=" << this << " dns resolve error, addr can not be nullptr";
+        ENGINE_LOG_ERROR(engine::GetLogger(), "this={} dns resolve error, addr can not be nullptr", (void*)this);
 
-        DLOG_TRACE << "delete dns base";
+        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} delete dns base", (void*)this);
         evdns_base_free(dnsbase_, 0);
         dnsbase_ = nullptr;
         ClearTimer();
@@ -171,7 +168,7 @@ void DNSResolver::OnResolved(int errcode, struct addrinfo* addr) {
 
 
     if (addr->ai_canonname) {
-        DLOG_TRACE << "resolve canon name: " << addr->ai_canonname;
+        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} resolve canon name: {}", (void*)this, addr->ai_canonname);
     }
 
     for (struct addrinfo* rp = addr; rp != nullptr; rp = rp->ai_next) {
@@ -182,12 +179,12 @@ void DNSResolver::OnResolved(int errcode, struct addrinfo* addr) {
         }
 
         addrs_.push_back(a->sin_addr);
-        DLOG_TRACE << "host=" << host_ << " resolved a ip=" << inet_ntoa(a->sin_addr);
+        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} host={} resolved a ip={}", (void*)this, host_, inet_ntoa(a->sin_addr));
     }
     evutil_freeaddrinfo(addr);
     ClearTimer();
 
-    DLOG_TRACE << "delete DNS base";
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} delete DNS base", (void*)this);
     evdns_base_free(dnsbase_, 0); //TODO Do we need to free dns_req_?
     dnsbase_ = nullptr;
     OnResolved();
@@ -195,7 +192,7 @@ void DNSResolver::OnResolved(int errcode, struct addrinfo* addr) {
 
 void DNSResolver::OnResolved(int errcode, struct addrinfo* addr, void* arg) {
     std::shared_ptr<DNSResolver>* pp = reinterpret_cast<std::shared_ptr<DNSResolver>*>(arg);
-    LOG_TRACE << "this->use_count=" << pp->use_count();
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this->use_count={}", pp->use_count());
     (*pp)->OnResolved(errcode, addr);
     delete pp;
 }

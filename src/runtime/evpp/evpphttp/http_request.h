@@ -4,7 +4,7 @@
 #include <map>
 namespace evpp {
 namespace evpphttp {
-class HttpRequest {
+class EVPP_EXPORT HttpRequest {
 public:
     inline bool completed() const {
         return is_completed;

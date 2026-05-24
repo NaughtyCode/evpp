@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <iostream>
 #include <string>
 
@@ -38,6 +39,7 @@ struct WinSockGuard {
 } // namespace
 
 int main(int argc, char* argv[]) {
+    std::fprintf(stderr, "[main] starting\n");
     WinSockGuard winsock_guard;
 
     // Load config from JSON files
@@ -46,6 +48,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Failed to load config from " << config_dir << std::endl;
         return 1;
     }
+    std::fprintf(stderr, "[main] config loaded\n");
 
     // CLI arguments override config values
     for (int i = 1; i < argc; ++i) {
@@ -59,8 +62,10 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    std::fprintf(stderr, "[main] calling Engine::Init()\n");
     auto& engine = engine::Engine::Instance();
     engine.Init(engine::ConfigManager::Instance().GetEngineConfig());
+    std::fprintf(stderr, "[main] Engine::Init() returned, calling Engine::Run()\n");
     engine.Run();
 
     engine::ShutdownLogger();

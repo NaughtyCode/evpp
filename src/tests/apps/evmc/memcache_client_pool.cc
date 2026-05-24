@@ -1,8 +1,10 @@
-﻿#include "tests/apps/evmc/memcache_client_pool.h"
+#include "tests/apps/evmc/memcache_client_pool.h"
 
 #include "tests/apps/evmc/vbucket_config.h"
 #include "runtime/evpp/event_loop_thread_pool.h"
 #include "tests/apps/evmc/likely.h"
+
+#include "runtime/core/log/log.h"
 
 namespace evmc {
 
@@ -41,13 +43,13 @@ namespace evmc {
         bool ok = loop_pool_.Start(true);
 
         if (UNLIKELY(!ok)) {
-            LOG_ERROR << "loop pool start failed";
+            ENGINE_LOG_ERROR(engine::GetLogger(), "loop pool start failed");
             return false;
         }
 
         if (!MemcacheClientBase::Start(true)) {
             loop_pool_.Stop(true);
-            LOG_ERROR << "vbucket init failed";
+            ENGINE_LOG_ERROR(engine::GetLogger(), "vbucket init failed");
             return false;
         }
         auto server_list = vbucket_config()->server_list();
@@ -214,7 +216,7 @@ namespace evmc {
             uint16_t vbucket = command->vbucket_id();
             server_id = vbconf->SelectServerId(vbucket, command->server_id());
             if (UNLIKELY(server_id == BAD_SERVER_ID)) {
-                LOG_ERROR << "bad server id";
+                ENGINE_LOG_ERROR(engine::GetLogger(), "bad server id");
                 command->OnError(ERR_CODE_DISCONNECT);
                 return;
             }
@@ -225,7 +227,7 @@ namespace evmc {
 
         if (UNLIKELY(client_map == nullptr)) {
             command->OnError(ERR_CODE_DISCONNECT);
-            LOG_INFO << "DoLaunchCommand thread pool empty";
+            ENGINE_LOG_INFO(engine::GetLogger(), "DoLaunchCommand thread pool empty");
             return;
         }
 
@@ -248,7 +250,7 @@ namespace evmc {
             it->second->PushWaitingCommand(command);
         } else {
             if (command->ShouldRetry()) {
-                LOG_INFO << "OnClientConnection disconnect retry";
+                ENGINE_LOG_INFO(engine::GetLogger(), "OnClientConnection disconnect retry");
                 command->set_id(0);
                 command->set_server_id(command->server_id());
                 LaunchCommand(command);
@@ -258,4 +260,3 @@ namespace evmc {
         }
     }
     }
-

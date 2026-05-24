@@ -4,6 +4,8 @@
 #include <evpp/buffer.h>
 #include <evpp/tcp_conn.h>
 
+#include "runtime/core/log/log.h"
+
 #include "tests/examples/winmain-inl.h"
 
 // Example from http://twistedmatrix.com/trac/#pubsubserver
@@ -29,7 +31,7 @@ private:
     void OnMessage(const evpp::TCPConnPtr& conn,
                    evpp::Buffer* msg) {
         std::string s = msg->NextAllString();
-        LOG_INFO << "Received a message [" << s << "]";
+        ENGINE_LOG_INFO(engine::GetLogger(), "Received a message [{}]", s);
         if (s == "quit" || s == "exit") {
             conn->Close();
         }
@@ -41,10 +43,10 @@ private:
 
     void OnConnection(const evpp::TCPConnPtr& conn) {
         if (conn->IsConnected()) {
-            LOG_INFO << "A new connection from " << conn->remote_addr() << " to " << server_->listen_addr() << " is UP";
+            ENGINE_LOG_INFO(engine::GetLogger(), "A new connection from {} to {} is UP", conn->remote_addr(), server_->listen_addr());
             conns_.insert(conn);
         } else {
-            LOG_INFO << "Disconnected from " << conn->remote_addr();
+            ENGINE_LOG_INFO(engine::GetLogger(), "Disconnected from {}", conn->remote_addr());
             conns_.erase(conn);
         }
     }
@@ -60,7 +62,7 @@ int main(int argc, char* argv[]) {
     if (argc == 2) {
         port = std::atoi(argv[1]);
     }
-    
+
     Server s(port);
     s.Run();
     return 0;

@@ -4,6 +4,8 @@
 #include "tests/apps/evnsq/command.h"
 #include "tests/apps/evnsq/nsq_conn.h"
 
+#include "runtime/core/log/log.h"
+
 namespace evnsq {
 
 Producer::Producer(evpp::EventLoop* l, const Option& ops)
@@ -49,7 +51,7 @@ bool Producer::PublishBinaryCommand(evpp::Buffer* command_binary_buf) {
     assert(loop_->IsInLoopThread());
     auto conn = GetNextConn();
     if (!conn.get()) {
-        LOG_ERROR << "No available NSQD to use.";
+        ENGINE_LOG_ERROR(engine::GetLogger(), "No available NSQD to use.");
         return false;
     }
 
@@ -64,7 +66,7 @@ bool Producer::Publish(const CommandPtr& cmd) {
     }
 
     if (conns_.empty()) {
-        LOG_ERROR << "No available NSQD to use.";
+        ENGINE_LOG_ERROR(engine::GetLogger(), "No available NSQD to use.");
         return false;
     }
 
@@ -84,7 +86,7 @@ bool Producer::PublishInLoop(const CommandPtr& cmd) {
     assert(loop_->IsInLoopThread());
     auto conn = GetNextConn();
     if (!conn.get()) {
-        LOG_ERROR << "No available NSQD to use.";
+        ENGINE_LOG_ERROR(engine::GetLogger(), "No available NSQD to use.");
         return false;
     }
 
@@ -135,9 +137,7 @@ NSQConnPtr Producer::GetNextConn() {
 }
 
 void Producer::PrintStats() {
-    LOG_WARN << "published_count=" << published_count_
-             << " published_ok_count=" << published_ok_count_
-             << " published_failed_count=" << published_failed_count_;
+    ENGINE_LOG_WARN(engine::GetLogger(), "published_count={} published_ok_count={} published_failed_count={}", published_count_, published_ok_count_, published_failed_count_);
     published_count_ = 0;
     published_ok_count_ = 0;
     published_failed_count_ = 0;

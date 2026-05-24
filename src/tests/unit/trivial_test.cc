@@ -1,11 +1,10 @@
 #include "test_common.h"
 
 #include <evpp/sockets.h>
-#include <evpp/logging.h>
+#include "runtime/core/log/log.h"
 
 TEST_UNIT(Teststrerror) {
-    LOG_ERROR << evpp::strerror(EAGAIN);
+    ENGINE_LOG_ERROR(engine::GetLogger(), "{}", evpp::strerror(EAGAIN));
 }
-
 
 

@@ -54,9 +54,12 @@ ScriptVM& Engine::GetScriptVM() {
 //============================================================================
 
 void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
+    std::fprintf(stderr, "[engine] Init() begin\n");
+    std::fprintf(stderr, "[engine] InitLogger...\n");
     InitLogger(config.log);
 
     auto* logger = GetLogger();
+    std::fprintf(stderr, "[engine] logger created\n");
 
     // ── Profiler initialization ────────────────────────────────────────
     {
@@ -67,6 +70,7 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
         ENGINE_LOG_INFO(logger, "profiler initialized and session started, "
                         "enabled=[{}]", ProfilerManager::IsEnabled());
     }
+    std::fprintf(stderr, "[engine] profiler initialized\n");
 
     ENGINE_PROFILE_SCOPE("engine", "Init");
 
@@ -77,6 +81,7 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
                     config.scripts_dir, config.frame.interval_ms,
                     (external_loop != nullptr));
 
+    std::fprintf(stderr, "[engine] creating TimerManager...\n");
     TimerManager::create_instance();
     ENGINE_LOG_INFO(logger, "timer manager initialized");
 
@@ -84,8 +89,10 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
         loop_ = external_loop;
         running_ = true;  // library mode: engine is immediately "running"
     } else {
+        std::fprintf(stderr, "[engine] creating EventLoop...\n");
         owned_loop_ = std::make_unique<evpp::EventLoop>();
         loop_ = owned_loop_.get();
+        std::fprintf(stderr, "[engine] EventLoop created\n");
     }
     if (config.frame.target_fps > 0) {
         frame_interval_ = std::chrono::milliseconds(1000 / config.frame.target_fps);
@@ -95,11 +102,13 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
 
     script_vm_ = std::make_unique<ScriptVM>();
     ENGINE_LOG_INFO(logger, "lua vm initialized, version=[{}]", ScriptVM::LuaVersion());
+    std::fprintf(stderr, "[engine] ScriptVM created\n");
 
     // ── Physics system initialization ──────────────────────────────────
     // Loads config + creates physics-dedicated ScriptVM + loads scripts.
     // Does NOT start the physics thread (requires explicit Start() by upper layer).
     {
+        std::fprintf(stderr, "[engine] initializing physics...\n");
         bool ok = PhysicsEngineBridge::Instance().Initialize(
             "resources/physics/configs",
             "resources/physics/data/scene.json",
@@ -111,6 +120,7 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
             ENGINE_LOG_INFO(logger, "physics system initialized, fixed_delta_time=[{}s]",
                             fixed_delta_time_);
         }
+        std::fprintf(stderr, "[engine] physics init done (ok=%d)\n", ok);
     }
 
     script_vm_->SetImportPath(config.scripts_dir);
@@ -120,13 +130,17 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
     last_work_time_ = last_frame_time_;
 
     if (!config.scripts_dir.empty()) {
+        std::fprintf(stderr, "[engine] loading scripts from [%s]...\n", config.scripts_dir.c_str());
         size_t failed = script_vm_->DoDirectory(config.scripts_dir);
         if (failed > 0) {
             ENGINE_LOG_WARN(logger, "scripts dir [{}]: [{}] file(s) failed to load",
                             config.scripts_dir, failed);
         }
         script_vm_->InitScript();
+        std::fprintf(stderr, "[engine] scripts loaded\n");
     }
+
+    std::fprintf(stderr, "[engine] Init() complete\n");
 }
 
 //============================================================================
@@ -134,6 +148,7 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
 //============================================================================
 
 void Engine::Start() {
+    std::fprintf(stderr, "[engine] Start() begin\n");
     ENGINE_PROFILE_SCOPE("engine", "Start");
 
     auto* logger = GetLogger();
@@ -145,6 +160,7 @@ void Engine::Start() {
     // If Initialize() failed, Start() is a safe no-op.
     PhysicsEngineBridge::Instance().Start();
 
+#ifndef _WIN32
     sigint_watcher_ = std::make_unique<evpp::SignalEventWatcher>(
         SIGINT, loop_, [this]() {
             auto* logger = GetLogger();
@@ -155,7 +171,6 @@ void Engine::Start() {
         ENGINE_LOG_ERROR(logger, "failed to initialize SIGINT watcher");
     }
 
-#ifndef _WIN32
     sigterm_watcher_ = std::make_unique<evpp::SignalEventWatcher>(
         SIGTERM, loop_, [this]() {
             auto* logger = GetLogger();
@@ -174,6 +189,7 @@ void Engine::Start() {
     running_ = true;
     last_frame_time_ = std::chrono::steady_clock::now();
     last_work_time_ = last_frame_time_;
+    std::fprintf(stderr, "[engine] Start() complete, running_=true\n");
 }
 
 //============================================================================
@@ -181,12 +197,15 @@ void Engine::Start() {
 //============================================================================
 
 void Engine::Run() {
+    std::fprintf(stderr, "[engine] Run() begin, calling Start()\n");
     Start();
 
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "entering main loop");
+    std::fprintf(stderr, "[engine] entering main loop (loop_->Run())\n");
     loop_->Run();
     ENGINE_LOG_INFO(logger, "main loop exited, frame_count=[{}]", frame_count_);
+    std::fprintf(stderr, "[engine] main loop exited\n");
 
     Cleanup();
 }

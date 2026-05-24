@@ -4,6 +4,8 @@
 #include "tests/apps/evmc/likely.h"
 #include <mutex>
 
+#include "runtime/core/log/log.h"
+
 namespace evmc {
 
 MemcacheClientBase::~MemcacheClientBase() {
@@ -36,9 +38,9 @@ void MemcacheClientBase::DoReloadConf() {
     if (success) {
         std::lock_guard<std::mutex> lck(vbucket_config_mutex_);
         vbconf_cur_ = vbconf;
-        LOG_DEBUG << "DoReloadConf load ok, file=" << vbucket_conf_;
+        ENGINE_LOG_DEBUG(engine::GetLogger(), "DoReloadConf load ok, file={}", vbucket_conf_);
     } else {
-        LOG_WARN << "DoReloadConf load err, file=" << vbucket_conf_;
+        ENGINE_LOG_WARN(engine::GetLogger(), "DoReloadConf load err, file={}", vbucket_conf_);
     }
     return;
 }
@@ -52,7 +54,7 @@ MultiModeVbucketConfig*  MemcacheClientBase::vbucket_config() {
 
 void MemcacheClientBase::LoadThread() {
     load_loop_->Run();
-    LOG_ERROR << "load thread exit...";
+    ENGINE_LOG_ERROR(engine::GetLogger(), "load thread exit...");
 }
 
 
@@ -60,7 +62,7 @@ void MemcacheClientBase::BuilderMemClient(evpp::EventLoop* loop, std::string& se
     evpp::TCPClient* tcp_client = new evpp::TCPClient(loop, server, "evmc");
     MemcacheClientPtr memc_client = std::make_shared<MemcacheClient>(loop, tcp_client, this, timeout_ms);
 
-    LOG_INFO << "Start new tcp_client=" << tcp_client << " server=" << server << " timeout=" << timeout_ms;
+    ENGINE_LOG_INFO(engine::GetLogger(), "Start new tcp_client={} server={} timeout={}", (void*)tcp_client, server, timeout_ms);
 
     tcp_client->SetConnectionCallback(std::bind(&MemcacheClientBase::OnClientConnection, this,
                                                 std::placeholders::_1, memc_client));
@@ -82,7 +84,7 @@ bool MemcacheClientBase::Start(bool is_reload) {
         load_loop_ = new evpp::EventLoop();
         assert(load_loop_);
         if (!vbconf_2_->Load(vbucket_conf_.c_str())) {
-            LOG_ERROR << "load error .file=" << vbucket_conf_;
+            ENGINE_LOG_ERROR(engine::GetLogger(), "load error .file={}", vbucket_conf_);
             delete load_loop_;
             return false;
         }
@@ -99,10 +101,10 @@ bool MemcacheClientBase::Start(bool is_reload) {
 }
 
 void MemcacheClientBase::OnClientConnection(const evpp::TCPConnPtr& conn, MemcacheClientPtr memc_client) {
-    LOG_INFO << "OnClientConnection conn=" << conn.get() << " memc_conn=" << memc_client->conn().get();
+    ENGINE_LOG_INFO(engine::GetLogger(), "OnClientConnection conn={} memc_conn={}", (void*)conn.get(), (void*)memc_client->conn().get());
 
     if (conn && conn->IsConnected()) {
-        LOG_INFO << "OnClientConnection connect ok";
+        ENGINE_LOG_INFO(engine::GetLogger(), "OnClientConnection connect ok");
         CommandPtr command;
 
         while (command = memc_client->PopWaitingCommand()) {
@@ -111,9 +113,9 @@ void MemcacheClientBase::OnClientConnection(const evpp::TCPConnPtr& conn, Memcac
         }
     } else {
         if (conn) {
-            LOG_INFO << "Disconnected from " << conn->remote_addr();
+            ENGINE_LOG_INFO(engine::GetLogger(), "Disconnected from {}", conn->remote_addr());
         } else {
-            LOG_INFO << "Connect init error";
+            ENGINE_LOG_INFO(engine::GetLogger(), "Connect init error");
         }
 
         CommandPtr command;
@@ -141,5 +143,3 @@ void MemcacheClientBase::OnClientConnection(const evpp::TCPConnPtr& conn, Memcac
 }
 
 }
-
-

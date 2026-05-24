@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <set>
 
+#include "runtime/core/log/log.h"
+
 class ChatServer {
 public:
     ChatServer(evpp::EventLoop* loop,
@@ -27,7 +29,7 @@ public:
 
 private:
     void OnConnection(const evpp::TCPConnPtr& conn) {
-        LOG_INFO << conn->AddrToString() << " is " << (conn->IsConnected() ? "UP" : "DOWN");
+        ENGINE_LOG_INFO(engine::GetLogger(), "{} is {}", conn->AddrToString(), (conn->IsConnected() ? "UP" : "DOWN"));
         if (conn->IsConnected()) {
             connections_.insert(conn);
         } else {

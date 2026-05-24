@@ -1,4 +1,4 @@
-﻿#include "tests/apps/evmc/vbucket_config.h"
+#include "tests/apps/evmc/vbucket_config.h"
 
 #include <map>
 #include <cassert>
@@ -13,6 +13,8 @@
 #include "tests/apps/evmc/random.h"
 #include "tests/apps/evmc/extract_vbucket_conf.h"
 #include "tests/apps/evmc/likely.h"
+
+#include "runtime/core/log/log.h"
 
 
 namespace evmc {
@@ -73,7 +75,7 @@ uint16_t VbucketConfig::SelectServerId(uint16_t vbucket, uint16_t last_id) const
 
         if (total_weight > 0) {
             server_id = weighted_items.upper_bound(rand_->Next() % total_weight)->second;
-            LOG_DEBUG << "SelectServerId selected_server_id=" << server_id << " last_id=" << last_id;
+            ENGINE_LOG_DEBUG(engine::GetLogger(), "SelectServerId selected_server_id={} last_id={}", server_id, last_id);
         } else {
             return BAD_SERVER_ID;
         }
@@ -119,7 +121,7 @@ bool VbucketConfig::Load(const char* json_info) {
     algorithm_ = d["hashAlgorithm"].GetString();
 
     rapidjson::Value& servers = d["serverList"];
-    LOG_DEBUG << "server count = " << servers.Size();
+    ENGINE_LOG_DEBUG(engine::GetLogger(), "server count = {}", servers.Size());
 
     for (rapidjson::SizeType i = 0; i < servers.Size(); i++) {
         server_list_.emplace_back(servers[i].GetString());
@@ -215,4 +217,3 @@ const std::vector<std::string>& MultiModeVbucketConfig::server_list() const {
 }
 
 }
-

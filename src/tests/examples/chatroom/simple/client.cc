@@ -8,6 +8,8 @@
 #include <iostream>
 #include <stdio.h>
 
+#include "runtime/core/log/log.h"
+
 class ChatClient {
 public:
     ChatClient(evpp::EventLoop* loop, const std::string& serverAddr)
@@ -36,7 +38,7 @@ public:
 
 private:
     void OnConnection(const evpp::TCPConnPtr& conn) {
-        LOG_INFO << conn->AddrToString() << " is " << (conn->IsConnected() ? "UP" : "DOWN");
+        ENGINE_LOG_INFO(engine::GetLogger(), "{} is {}", conn->AddrToString(), (conn->IsConnected() ? "UP" : "DOWN"));
 
         std::lock_guard<std::mutex> lock(mutex_);
         if (conn->IsConnected()) {
