@@ -24,8 +24,8 @@ int VMCustomPtrStore::Push(void* ptr) {
     return lua_pushcustomptr(L_, ptr);
 }
 
-bool VMCustomPtrStore::Remove(int index) {
-    return lua_removecustomptr(L_, index) != 0;
+void VMCustomPtrStore::SetNull(int index) {
+    lua_nullcustomptr(L_, index);
 }
 
 void VMCustomPtrStore::Clear() {

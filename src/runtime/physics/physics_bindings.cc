@@ -282,20 +282,16 @@ int LuaGetStats(lua_State* L) {
 }
 
 //============================================================================
+// Physics-specific log API — logger obtained via custom-ptr store from
+// PhysicsThread each call, so it stays valid after PhysicsSystem::Start().
 //============================================================================
-// Physics-specific log API — logger obtained from PhysicsScriptVM each call,
-// so it stays valid after PhysicsSystem::Start() sets the logger on the VM.
-//============================================================================
-
-namespace {
-PhysicsScriptVM* g_phys_vm = nullptr;
-}
 
 #define PHYSICS_LUA_LOG_CALL(name, macro)                            \
     int LuaLog##name(lua_State* L) {                                  \
         const char* msg = luaL_checkstring(L, 1);                     \
-        if (g_phys_vm) {                                              \
-            auto* __logger = g_phys_vm->GetPhysicsLogger();           \
+        auto* __thread = PhysicsSystem::GetThreadFromState(L);        \
+        if (__thread) {                                               \
+            auto* __logger = __thread->GetLogger();                   \
             if (__logger) {                                           \
                 macro(__logger, "[physics_lua] {}", msg);             \
             }                                                         \
@@ -345,10 +341,6 @@ const luaL_Reg kPhysicsModule[] = {
 //============================================================================
 
 void Register(ScriptVM& vm) {
-    // Stash the VM so Lua log callbacks can get the physics logger from it.
-    // The logger is set on PhysicsScriptVM by PhysicsSystem::Start() later.
-    g_phys_vm = static_cast<PhysicsScriptVM*>(&vm);
-
     vm.RegisterModule("physics", kPhysicsModule);
 }
 

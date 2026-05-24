@@ -38,7 +38,7 @@ namespace engine {
 //   int idx = store.Push(myObject);          // append
 //   store.Set(idx, otherObject);             // overwrite
 //   auto* obj = store.GetAs<MyClass>(1);     // typed read
-//   store.Remove(2);                         // remove & shift
+//   store.SetNull(2);                        // zero a slot
 //   store.Clear();                           // drop all
 //=============================================================================
 
@@ -141,23 +141,23 @@ public:
     int Push(void* ptr);
 
     //-------------------------------------------------------------------------
-    // Remove(index)
+    // SetNull(index)
     //-------------------------------------------------------------------------
     //
-    /// Remove the pointer at the given 1‑based index.  All elements above
-    /// the removed position shift down, so indices of those elements
-    /// decrease by 1.  Negative indices are resolved from the end.
+    /// Set the slot at the given 1‑based index to nullptr.  The slot
+    /// remains in the array; Count() does NOT change and elements at
+    /// higher indices keep their positions.  Negative indices are
+    /// resolved from the end.
     ///
-    /// Returns true on success, false if the index is out of range
-    /// (including 0).
+    /// If the index is out of range (0, or beyond Count()) this is a
+    /// silent no-op.  If the slot already stores nullptr the call is
+    /// harmless.
     ///
     /// Side effects:
-    ///   - Count() decreases by 1.
-    ///   - Indices of trailing elements are invalidated (they shift).
-    ///   - Capacity is NOT reduced — memory is retained for reuse.
-    ///   - No destructor or finalizer is called on the removed pointer;
-    ///     the caller must manage the pointed-to object's lifetime.
-    bool Remove(int index);
+    ///   - The single slot becomes nullptr.
+    ///   - No reallocation.  Count() and Capacity() are unchanged.
+    ///   - No destructor or finalizer is called on the overwritten pointer.
+    void SetNull(int index);
 
     //-------------------------------------------------------------------------
     // Clear()

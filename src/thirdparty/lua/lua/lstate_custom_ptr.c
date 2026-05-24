@@ -9,8 +9,6 @@
 
 #include "lprefix.h"
 
-#include <string.h>
-
 #include "lua.h"
 
 #include "lapi.h"
@@ -104,21 +102,13 @@ LUA_API int lua_pushcustomptr (lua_State *L, void *ptr) {
 }
 
 
-LUA_API int lua_removecustomptr (lua_State *L, int index) {
+LUA_API void lua_nullcustomptr (lua_State *L, int index) {
   global_State *g = G(L);
   lua_lock(L);
   int i = absindex(g, index);
-  if (i < 0) {
-    lua_unlock(L);
-    return 0;
-  }
-  int nmove = g->customptr_len - i - 1;
-  if (nmove > 0)
-    memmove(&g->customptrs[i], &g->customptrs[i + 1],
-            cast_sizet(nmove) * sizeof(void*));
-  g->customptr_len--;
+  if (i >= 0)
+    g->customptrs[i] = NULL;
   lua_unlock(L);
-  return 1;
 }
 
 

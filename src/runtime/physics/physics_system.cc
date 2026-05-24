@@ -11,6 +11,7 @@
 
 #include "runtime/physics/physics_log.h"
 #include "runtime/physics/physics_vm.h"
+#include "runtime/vm/custom_ptr_store.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {
@@ -70,8 +71,48 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
     }
 
     is_initialized_ = true;
+
+    // Register subsystem objects in the VM's custom-pointer store so they
+    // can be retrieved from any lua_State* via typed accessors.
+    InitCustomPtrStore();
+
     ENGINE_LOG_INFO(GetLogger(), "PhysicsSystem: initialized (physics thread NOT started)");
     return true;
+}
+
+//============================================================================
+// InitCustomPtrStore — register subsystem objects in the VM [custom ptr array]
+//============================================================================
+
+void PhysicsSystem::InitCustomPtrStore() {
+    if (!script_vm_) return;
+    script_vm_->RegisterSubsystemObjects(
+        this, &physics_thread_, &physics_thread_.GetWorld());
+    // Note: RegisterSubsystemObjects handles Reserve(4) internally.
+}
+
+//============================================================================
+// Typed accessors — retrieve subsystem objects from any physics lua_State
+//============================================================================
+
+PhysicsSystem* PhysicsSystem::GetSystemFromState(lua_State* L) {
+    VMCustomPtrStore store(L);
+    return store.GetAs<PhysicsSystem>(kPhysPtrSystem);
+}
+
+PhysicsThread* PhysicsSystem::GetThreadFromState(lua_State* L) {
+    VMCustomPtrStore store(L);
+    return store.GetAs<PhysicsThread>(kPhysPtrThread);
+}
+
+PhysicsWorld* PhysicsSystem::GetWorldFromState(lua_State* L) {
+    VMCustomPtrStore store(L);
+    return store.GetAs<PhysicsWorld>(kPhysPtrWorld);
+}
+
+PhysicsScriptVM* PhysicsSystem::GetScriptVMFromState(lua_State* L) {
+    VMCustomPtrStore store(L);
+    return store.GetAs<PhysicsScriptVM>(kPhysPtrScriptVM);
 }
 
 //============================================================================
@@ -101,10 +142,6 @@ bool PhysicsSystem::Start() {
     }
 
     PHYSICS_LOG_INFO(physics_thread_.GetLogger(), "PhysicsSystem: physics thread started");
-
-    // Associate the physics logger with the ScriptVM so Lua callbacks use it
-    script_vm_->SetPhysicsLogger(physics_thread_.GetLogger());
-
     return true;
 }
 

@@ -105,22 +105,22 @@ LUA_API int (lua_pushcustomptr) (lua_State *L, void *ptr);
 
 /*
 ** ---------------------------------------------------------------------------
-** lua_removecustomptr(L, index)
+** lua_nullcustomptr(L, index)
 ** ---------------------------------------------------------------------------
 **
-** Remove the pointer at 'index' (1‑based, negative allowed).
-** All elements above the removed slot shift down by one position, so
-** indices of those elements decrease by 1.
+** Set the pointer at 'index' to NULL (1‑based, negative allowed).
+** The slot remains in the array; the length does NOT change and elements
+** above keep their indices.
 **
-** Returns 1 on success, 0 if 'index' is out of range (including 0).
+** If 'index' is out of range (0, or beyond the current length) this is
+** a silent no-op.  If the slot already stores NULL the call is harmless.
 **
 ** Side effects:
-**   - len decreased by 1.
-**   - Elements at higher indices move (index shift).
-**   - Capacity is NOT reduced — the array never shrinks automatically.
-**   - No destructor/finalizer is called on the removed pointer.
+**   - The single slot at 'index' becomes NULL.
+**   - No reallocation.  Length and capacity are unchanged.
+**   - No destructor/finalizer is called on the overwritten pointer.
 */
-LUA_API int (lua_removecustomptr) (lua_State *L, int index);
+LUA_API void (lua_nullcustomptr) (lua_State *L, int index);
 
 
 /*

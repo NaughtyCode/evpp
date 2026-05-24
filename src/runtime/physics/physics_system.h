@@ -109,6 +109,21 @@ public:
     PhysicsScriptVM& GetPhysicsScriptVM() { return *script_vm_; }
     const PhysicsScriptVM& GetPhysicsScriptVM() const { return *script_vm_; }
 
+    // ── Custom pointer store — register subsystem objects in the VM ─────
+    //
+    // Populates the physics VM's VMCustomPtrStore with PhysicsSystem,
+    // PhysicsThread, PhysicsWorld, and PhysicsScriptVM pointers so they
+    // can be retrieved from any lua_State* via the typed accessors below.
+    void InitCustomPtrStore();
+
+    // Retrieve subsystem objects from the custom-pointer array of any
+    // physics-initialized lua_State.  Returns nullptr if the slot is empty
+    // or the state was never initialized via InitCustomPtrStore().
+    static PhysicsSystem*    GetSystemFromState(lua_State* L);
+    static PhysicsThread*    GetThreadFromState(lua_State* L);
+    static PhysicsWorld*     GetWorldFromState(lua_State* L);
+    static PhysicsScriptVM*  GetScriptVMFromState(lua_State* L);
+
     // ── Lua script update (main thread, after FetchResult) ─────────────
     void UpdateScript();
 

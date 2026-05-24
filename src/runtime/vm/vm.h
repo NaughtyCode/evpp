@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "runtime/core/engine_api.h"
+#include "runtime/vm/custom_ptr_store.h"
 #include "runtime/vm/script_importer.h"
 
 extern "C" {
@@ -95,6 +96,63 @@ public:
     // loading via require().
     void RegisterModuleOpen(std::string_view name, lua_CFunction openf,
                             bool make_global = true);
+
+    //=================================================================
+    // Custom pointer store — per-VM void* array (backed by global_State)
+    //=================================================================
+
+    // Pre-allocate capacity for at least 'total_slots' pointers.
+    // Returns true on success, false on allocation failure.
+    bool ReserveCustomPtrSlots(int total_slots);
+
+    // Store a pointer at a 1-based index.  If index > Count()+1 the
+    // array is extended and intermediate slots are filled with nullptr.
+    // Index 0 or out-of-range negative indices are no-ops.
+    void SetCustomPtr(int index, void* ptr);
+
+    // Return the pointer at a 1-based index, or nullptr if out of range
+    // or if the slot genuinely stores nullptr.
+    void* GetCustomPtr(int index) const;
+
+    // Typed variant of GetCustomPtr.
+    template <typename T>
+    T* GetCustomPtrAs(int index) const {
+        return static_cast<T*>(GetCustomPtr(index));
+    }
+
+    // Append a pointer; returns its new 1-based index.  Returns 0 on
+    // allocation failure.
+    int PushCustomPtr(void* ptr);
+
+    // Set the slot at a 1-based index to nullptr.  The slot stays in the
+    // array; Count() is unchanged and higher indices are undisturbed.
+    // Out-of-range indices (0, or beyond Count()) are silent no-ops.
+    void SetNullCustomPtr(int index);
+
+    // Drop all stored pointers (length = 0).  Capacity is preserved.
+    void ClearCustomPtrs();
+
+    // Number of pointers currently stored.
+    int CustomPtrCount() const;
+
+    // Current allocated capacity.
+    int CustomPtrCapacity() const;
+
+    // True if the array has a (non-null) pointer at the given index.
+    bool HasCustomPtr(int index) const;
+
+    // Find the 1-based index of a pointer value, or -1 if not found.
+    int FindCustomPtr(void* ptr) const;
+
+    // True if the pointer value exists in the array.
+    bool ContainsCustomPtr(void* ptr) const;
+
+    // Copy at most max_count pointers into dst.  Returns the number
+    // written (min(Count(), max_count)).
+    int CopyCustomPtrsTo(void** dst, int max_count) const;
+
+    // Replace the entire array with count pointers from src.
+    void CopyCustomPtrsFrom(void* const* src, int count);
 
     //=================================================================
     // Convenience getters / setters for globals
