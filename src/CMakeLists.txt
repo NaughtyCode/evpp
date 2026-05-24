@@ -98,6 +98,8 @@ add_subdirectory (runtime)
 add_subdirectory (tests)
 add_subdirectory (server)
 
+set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT main)
+
 set (CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/build/cmake")
 include (utils)
 include (packages)
