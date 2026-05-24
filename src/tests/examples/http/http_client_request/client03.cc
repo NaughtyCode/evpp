@@ -8,7 +8,7 @@
 #include <evpp/httpc/conn.h>
 #include <evpp/httpc/response.h>
 
-#include "../../../examples/winmain-inl.h"
+#include "tests/examples/winmain-inl.h"
 
 static bool responsed = false;
 static void HandleHTTPResponse(const std::shared_ptr<evpp::httpc::Response>& response, evpp::httpc::Request* request) {

@@ -4,11 +4,11 @@
 
 #include <memcached/protocol_binary.h>
 
-#include "evpp/buffer.h"
-#include "evpp/tcp_conn.h"
-#include "evpp/timestamp.h"
+#include "runtime/evpp/buffer.h"
+#include "runtime/evpp/tcp_conn.h"
+#include "runtime/evpp/timestamp.h"
 
-#include "command.h"
+#include "tests/apps/evmc/command.h"
 
 namespace evmc {
 

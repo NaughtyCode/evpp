@@ -1,14 +1,14 @@
-#include "script/timer_bind.h"
+#include "runtime/script/timer_bind.h"
 
 #include <cstdint>
 #include <memory>
 #include <unordered_map>
 #include <vector>
 
-#include "core/log/log.h"
-#include "core/timer/timer_core.h"
-#include "core/timer/timer_manager.h"
-#include "vm/vm.h"
+#include "runtime/core/log/log.h"
+#include "runtime/core/timer/timer_core.h"
+#include "runtime/core/timer/timer_manager.h"
+#include "runtime/vm/vm.h"
 
 namespace engine {
 namespace script {

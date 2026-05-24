@@ -1,6 +1,6 @@
 #ifdef ENGINE_PHYSICS_ENABLED
 
-#include "physics/physics_assets.h"
+#include "runtime/physics/physics_assets.h"
 
 #include <cmath>
 #include <cstdio>

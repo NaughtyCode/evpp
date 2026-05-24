@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "test_common.h"
+#include "tests/test_common.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,9 +13,9 @@
 #include <evpp/httpc/conn.h>
 #include <evpp/httpc/response.h>
 
-#include "evpp/evpphttp/service.h"
-#include "evpp/evpphttp/http_request.h"
-#include "evpp/evpphttp/http_response.h"
+#include "runtime/evpp/evpphttp/service.h"
+#include "runtime/evpp/evpphttp/http_request.h"
+#include "runtime/evpp/evpphttp/http_response.h"
 using namespace evpp::evpphttp;
 
 TEST_UNIT(testHttpRequest1) {

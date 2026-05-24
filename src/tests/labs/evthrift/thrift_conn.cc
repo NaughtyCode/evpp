@@ -1,8 +1,8 @@
-#include "thrift_conn.h"
+#include "tests/labs/evthrift/thrift_conn.h"
 
 #include <thrift/transport/TTransportException.h>
 
-#include "thrift_server.h"
+#include "tests/labs/evthrift/thrift_server.h"
 
 namespace evthrift {
 

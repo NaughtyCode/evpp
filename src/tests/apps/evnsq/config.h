@@ -2,7 +2,7 @@
 
 
 #ifdef _WIN32
-#include "evnsq/windows_port.h"
+#include "tests/apps/evnsq/windows_port.h"
 #else
 #define EVNSQ_EXPORT
 #endif

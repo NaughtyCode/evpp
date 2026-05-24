@@ -10,7 +10,7 @@
 #include <winsock2.h>
 #endif
 
-#include "engine/engine.h"
+#include "runtime/engine/engine.h"
 
 #include <csignal>
 #include <cstdio>
@@ -21,13 +21,13 @@
 #include <evpp/event_watcher.h>
 #include <evpp/invoke_timer.h>
 
-#include "core/log/log.h"
-#include "core/timer/timer_manager.h"
-#include "physics/physics_engine_bridge.h"
-#include "profiler/profiler_core.h"
-#include "profiler/profiler_events.h"
-#include "script/script_bind.h"
-#include "vm/vm.h"
+#include "runtime/core/log/log.h"
+#include "runtime/core/timer/timer_manager.h"
+#include "runtime/physics/physics_engine_bridge.h"
+#include "runtime/profiler/profiler_core.h"
+#include "runtime/profiler/profiler_events.h"
+#include "runtime/script/script_bind.h"
+#include "runtime/vm/vm.h"
 
 namespace engine {
 

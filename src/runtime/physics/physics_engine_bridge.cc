@@ -1,8 +1,8 @@
 #ifdef ENGINE_PHYSICS_ENABLED
 
-#include "physics/physics_engine_bridge.h"
+#include "runtime/physics/physics_engine_bridge.h"
 
-#include "physics/physics_system.h"
+#include "runtime/physics/physics_system.h"
 
 namespace engine {
 

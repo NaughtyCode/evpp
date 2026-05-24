@@ -1,6 +1,6 @@
-#include "test_common.h"
+#include "tests/test_common.h"
 
-#include "evpp/libevent.h"
+#include "runtime/evpp/libevent.h"
 
 namespace {
 #ifdef WIN32

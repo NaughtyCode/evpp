@@ -1,12 +1,12 @@
 #pragma once
 
-#include "evpp/event_watcher.h"
-#include "evpp/event_loop_thread.h"
-#include "evpp/buffer.h"
-#include "evpp/tcp_conn.h"
-#include "evpp/tcp_client.h"
+#include "runtime/evpp/event_watcher.h"
+#include "runtime/evpp/event_loop_thread.h"
+#include "runtime/evpp/buffer.h"
+#include "runtime/evpp/tcp_conn.h"
+#include "runtime/evpp/tcp_client.h"
 
-#include "evmc/config.h"
+#include "tests/apps/evmc/config.h"
 
 namespace evmc {
 

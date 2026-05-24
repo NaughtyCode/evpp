@@ -2,16 +2,16 @@
 
 #include <queue>
 
-#include "evpp/tcp_conn.h"
-#include "evpp/tcp_client.h"
+#include "runtime/evpp/tcp_conn.h"
+#include "runtime/evpp/tcp_client.h"
 
-#include "evpp/event_watcher.h"
-#include "evpp/event_loop.h"
-#include "evpp/event_loop_thread_pool.h"
+#include "runtime/evpp/event_watcher.h"
+#include "runtime/evpp/event_loop.h"
+#include "runtime/evpp/event_loop_thread_pool.h"
 
-#include "mctypes.h"
-#include "command.h"
-#include "memcache_client_base.h"
+#include "tests/apps/evmc/mctypes.h"
+#include "tests/apps/evmc/command.h"
+#include "tests/apps/evmc/memcache_client_base.h"
 
 namespace evmc {
 class BinaryCodec;

@@ -4,13 +4,13 @@
 
 // Category declarations must be visible before STATIC_STORAGE since
 // the storage expansion references kCategoryCount, kCategories, etc.
-#include "profiler/profiler_categories.h"
+#include "runtime/profiler/profiler_categories.h"
 
 // Must appear in global scope, before any namespace, in exactly one .cc file.
 // Must be in the same scope as PERFETTO_DEFINE_CATEGORIES (global scope).
 PERFETTO_TRACK_EVENT_STATIC_STORAGE();
 
-#include "profiler/profiler_core.h"
+#include "runtime/profiler/profiler_core.h"
 
 #include <chrono>
 #include <cstdio>
@@ -19,8 +19,8 @@ PERFETTO_TRACK_EVENT_STATIC_STORAGE();
 #include <iomanip>
 #include <sstream>
 
-#include "core/log/log.h"
-#include "core/log/log_macros.h"
+#include "runtime/core/log/log.h"
+#include "runtime/core/log/log_macros.h"
 
 namespace engine {
 
@@ -220,12 +220,12 @@ void ProfilerManager::WriteTraceToFile(const std::string& path,
 // so that std::unique_ptr<perfetto::TracingSession> in the header
 // can be properly compiled and destroyed.
 
-#include "profiler/profiler_core.h"
+#include "runtime/profiler/profiler_core.h"
 
 #include "thirdparty/perfetto/perfetto.h"
 
-#include "core/log/log.h"
-#include "core/log/log_macros.h"
+#include "runtime/core/log/log.h"
+#include "runtime/core/log/log_macros.h"
 
 namespace engine {
 

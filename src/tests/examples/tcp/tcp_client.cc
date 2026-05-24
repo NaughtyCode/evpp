@@ -30,4 +30,4 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-#include "../echo/tcpecho/winmain-inl.h"
+#include "tests/examples/winmain-inl.h"

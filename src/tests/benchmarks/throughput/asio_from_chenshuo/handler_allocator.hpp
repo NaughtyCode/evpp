@@ -11,7 +11,7 @@
 #ifndef HANDLER_ALLOCATOR_HPP
 #define HANDLER_ALLOCATOR_HPP
 
-#include "asio.hpp"
+#include "tests/benchmarks/throughput/asio_from_chenshuo/asio.hpp"
 #include <boost/aligned_storage.hpp>
 #include <boost/noncopyable.hpp>
 

@@ -24,5 +24,5 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-#include "../winmain-inl.h"
+#include "tests/examples/winmain-inl.h"
 

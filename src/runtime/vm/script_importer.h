@@ -4,7 +4,7 @@
 #include <string_view>
 #include <vector>
 
-#include "engine_export.h"
+#include "runtime/core/engine_export.h"
 
 struct lua_State;
 

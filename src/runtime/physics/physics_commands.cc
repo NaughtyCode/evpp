@@ -1,6 +1,6 @@
 #ifdef ENGINE_PHYSICS_ENABLED
 
-#include "physics/physics_commands.h"
+#include "runtime/physics/physics_commands.h"
 
 // Data structures defined in header.
 // .cc exists for future non-inline helpers (serialization, debug formatting).

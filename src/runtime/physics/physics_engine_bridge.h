@@ -9,7 +9,7 @@
 
 #ifdef ENGINE_PHYSICS_ENABLED
 // Full definitions available
-#include "physics/physics_commands.h"
+#include "runtime/physics/physics_commands.h"
 #endif
 
 namespace engine {

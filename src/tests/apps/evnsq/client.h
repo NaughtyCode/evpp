@@ -7,12 +7,12 @@
 #include <map>
 #include <set>
 
-#include "evnsq/config.h"
-#include "option.h"
-#include "message.h"
-#include "nsq_conn.h"
+#include "tests/apps/evnsq/config.h"
+#include "tests/apps/evnsq/option.h"
+#include "tests/apps/evnsq/message.h"
+#include "tests/apps/evnsq/nsq_conn.h"
 
-#include "evpp/invoke_timer.h"
+#include "runtime/evpp/invoke_timer.h"
 
 namespace evpp {
 namespace httpc {

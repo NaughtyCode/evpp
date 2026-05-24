@@ -8,7 +8,7 @@
 #include <evpp/event_loop.h>
 #include <evpp/dns_resolver.h>
 
-#include "../examples/winmain-inl.h"
+#include "tests/examples/winmain-inl.h"
 
 void TestDNSResolver() {
     for (int i = 0; i < 40; i++) {

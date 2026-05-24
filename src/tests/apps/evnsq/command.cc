@@ -1,4 +1,4 @@
-#include "command.h"
+#include "tests/apps/evnsq/command.h"
 
 namespace evnsq {
 void Command::WriteTo(evpp::Buffer* buf) const {

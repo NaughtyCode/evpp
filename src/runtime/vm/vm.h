@@ -6,8 +6,8 @@
 #include <string_view>
 #include <vector>
 
-#include "engine_export.h"
-#include "vm/script_importer.h"
+#include "runtime/core/engine_export.h"
+#include "runtime/vm/script_importer.h"
 
 extern "C" {
 #include "lua.h"

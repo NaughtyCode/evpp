@@ -2,10 +2,10 @@
 
 #include <queue>
 
-#include "mctypes.h"
-#include "vbucket_config.h"
-#include "memcache_client_base.h"
-#include "evpp/event_loop_thread_pool.h"
+#include "tests/apps/evmc/mctypes.h"
+#include "tests/apps/evmc/vbucket_config.h"
+#include "tests/apps/evmc/memcache_client_base.h"
+#include "runtime/evpp/event_loop_thread_pool.h"
 
 namespace evmc {
 

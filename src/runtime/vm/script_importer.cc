@@ -1,9 +1,9 @@
-#include "vm/script_importer.h"
+#include "runtime/vm/script_importer.h"
 
 #include <algorithm>
 #include <filesystem>
 
-#include "core/log/log.h"
+#include "runtime/core/log/log.h"
 
 extern "C" {
 #include "lua.h"

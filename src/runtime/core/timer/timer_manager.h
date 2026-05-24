@@ -6,7 +6,7 @@
 // clock sources, and timekeeping into a single, easy-to-use interface.
 //
 // Usage:
-//   #include "core/timer/timer.h"
+//   #include "runtime/core/timer/timer.h"
 //
 //   engine::TimerManager tm;
 //   tm.initialize();
@@ -25,11 +25,11 @@
 
 #pragma once
 
-#include "core/timer/timer_core.h"
-#include "core/timer/hr_timer.h"
-#include "core/timer/timer_wheel.h"
-#include "core/timer/alarm_timer.h"
-#include "core/timer/clock_source.h"
+#include "runtime/core/timer/timer_core.h"
+#include "runtime/core/timer/hr_timer.h"
+#include "runtime/core/timer/timer_wheel.h"
+#include "runtime/core/timer/alarm_timer.h"
+#include "runtime/core/timer/clock_source.h"
 
 #include <atomic>
 #include <functional>

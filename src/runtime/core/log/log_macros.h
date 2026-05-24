@@ -2,7 +2,7 @@
 
 #include <quill/LogMacros.h>
 
-#include "core/log/log_context.h"
+#include "runtime/core/log/log_context.h"
 
 // Plain logging macros
 #define ENGINE_LOG_TRACE(logger, fmt, ...)   LOG_TRACE_L1(logger, fmt, ##__VA_ARGS__)

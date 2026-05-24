@@ -14,8 +14,8 @@
 #include <Jolt/Physics/EActivation.h>
 #include <Jolt/Physics/EPhysicsUpdateError.h>
 
-#include "physics/physics_config.h"
-#include "physics/physics_materials.h"
+#include "runtime/physics/physics_config.h"
+#include "runtime/physics/physics_materials.h"
 
 namespace JPH {
 class PhysicsSystem;

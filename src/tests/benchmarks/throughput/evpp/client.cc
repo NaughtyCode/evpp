@@ -188,7 +188,7 @@ int main(int argc, char* argv[]) {
 
 
 
-#include "../../../examples/echo/tcpecho/winmain-inl.h"
+#include "tests/examples/winmain-inl.h"
 
 
 

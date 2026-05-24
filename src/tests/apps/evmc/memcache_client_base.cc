@@ -1,7 +1,7 @@
-#include "memcache_client_base.h"
-#include "vbucket_config.h"
-#include "evpp/event_loop_thread_pool.h"
-#include "likely.h"
+#include "tests/apps/evmc/memcache_client_base.h"
+#include "tests/apps/evmc/vbucket_config.h"
+#include "runtime/evpp/event_loop_thread_pool.h"
+#include "tests/apps/evmc/likely.h"
 #include <mutex>
 
 namespace evmc {

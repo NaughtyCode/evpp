@@ -1,4 +1,4 @@
-#include "script/msgpack_bind.h"
+#include "runtime/script/msgpack_bind.h"
 
 #include <cmath>
 #include <cstdint>
@@ -6,9 +6,9 @@
 #include <limits>
 #include <vector>
 
-#include "config/config.h"
-#include "core/log/log.h"
-#include "vm/vm.h"
+#include "runtime/config/config.h"
+#include "runtime/core/log/log.h"
+#include "runtime/vm/vm.h"
 
 namespace engine {
 namespace script {

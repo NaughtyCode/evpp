@@ -1,4 +1,4 @@
-#include "thrift_server.h"
+#include "tests/labs/evthrift/thrift_server.h"
 
 namespace evthrift {
 

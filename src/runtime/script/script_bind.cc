@@ -1,13 +1,13 @@
-#include "script/script_bind.h"
+#include "runtime/script/script_bind.h"
 
-#include "core/log/log.h"
-#include "profiler/profiler_events.h"
-#include "script/log_bind.h"
-#include "script/timer_bind.h"
-#include "script/msgpack_bind.h"
-#include "script/net_bind.h"
-#include "script/import_bind.h"
-#include "vm/vm.h"
+#include "runtime/core/log/log.h"
+#include "runtime/profiler/profiler_events.h"
+#include "runtime/script/log_bind.h"
+#include "runtime/script/timer_bind.h"
+#include "runtime/script/msgpack_bind.h"
+#include "runtime/script/net_bind.h"
+#include "runtime/script/import_bind.h"
+#include "runtime/vm/vm.h"
 
 namespace engine {
 namespace script {

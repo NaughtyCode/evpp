@@ -1,7 +1,7 @@
 #include <atomic>
 
 #include <evpp/http/http_server.h>
-#include "../../winmain-inl.h"
+#include "tests/examples/winmain-inl.h"
 
 // Example from // Example from http://twistedmatrix.com/trac/#webserver
 

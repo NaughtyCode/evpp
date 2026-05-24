@@ -1,6 +1,6 @@
-#include "invoke_timer.h"
-#include "event_watcher.h"
-#include "winmain-inl.h"
+#include "tests/examples/recipes/self_control_timer/periodic_04/invoke_timer.h"
+#include "tests/examples/recipes/self_control_timer/periodic_04/event_watcher.h"
+#include "tests/examples/winmain-inl.h"
 
 #include <event2/event.h>
 

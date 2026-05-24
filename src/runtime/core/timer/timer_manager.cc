@@ -3,7 +3,7 @@
 //
 // TimerManager implementation.
 
-#include "core/timer/timer_manager.h"
+#include "runtime/core/timer/timer_manager.h"
 
 #include <algorithm>
 #include <cassert>
@@ -11,7 +11,7 @@
 #include <iostream>
 #include <unordered_map>
 
-#include "profiler/profiler_events.h"
+#include "runtime/profiler/profiler_events.h"
 
 namespace engine {
 

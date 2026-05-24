@@ -1,8 +1,8 @@
-#include "script/import_bind.h"
+#include "runtime/script/import_bind.h"
 
-#include "core/log/log.h"
-#include "vm/script_importer.h"
-#include "vm/vm.h"
+#include "runtime/core/log/log.h"
+#include "runtime/vm/script_importer.h"
+#include "runtime/vm/vm.h"
 
 extern "C" {
 #include "lua.h"

@@ -1,6 +1,6 @@
 #include <evpp/http/http_server.h>
 
-#include "../../../examples/winmain-inl.h"
+#include "tests/examples/winmain-inl.h"
 
 void DefaultHandler(evpp::EventLoop* loop,
                     const evpp::http::ContextPtr& ctx,

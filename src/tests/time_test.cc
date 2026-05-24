@@ -1,8 +1,8 @@
 
-#include "./test_common.h"
-#include "evpp/duration.h"
-#include "evpp/timestamp.h"
-#include "evpp/gettimeofday.h"
+#include "tests/test_common.h"
+#include "runtime/evpp/duration.h"
+#include "runtime/evpp/timestamp.h"
+#include "runtime/evpp/gettimeofday.h"
 
 TEST_UNIT(testDuration) {
     evpp::Duration d0(0);

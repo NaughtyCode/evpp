@@ -45,4 +45,4 @@ private:
     const static size_t kHeaderLen = sizeof(int32_t);
 };
 
-#include "../../winmain-inl.h"
+#include "tests/examples/winmain-inl.h"

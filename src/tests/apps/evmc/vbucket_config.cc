@@ -1,4 +1,4 @@
-﻿#include "vbucket_config.h"
+﻿#include "tests/apps/evmc/vbucket_config.h"
 
 #include <map>
 #include <cassert>
@@ -10,9 +10,9 @@
 
 #include <libhashkit/hashkit.h>
 
-#include "random.h"
-#include "extract_vbucket_conf.h"
-#include "likely.h"
+#include "tests/apps/evmc/random.h"
+#include "tests/apps/evmc/extract_vbucket_conf.h"
+#include "tests/apps/evmc/likely.h"
 
 
 namespace evmc {

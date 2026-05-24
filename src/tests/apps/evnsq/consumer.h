@@ -7,9 +7,9 @@
 
 #include <evpp/tcp_callbacks.h>
 
-#include "evnsq/config.h"
+#include "tests/apps/evnsq/config.h"
 
-#include "client.h"
+#include "tests/apps/evnsq/client.h"
 
 namespace evnsq {
 class Command;

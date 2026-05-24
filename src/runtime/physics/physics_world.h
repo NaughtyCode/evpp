@@ -18,12 +18,12 @@
 
 #include <quill/Logger.h>
 
-#include "physics/physics_config.h"
-#include "physics/physics_commands.h"
-#include "physics/physics_layers.h"
-#include "physics/physics_materials.h"
-#include "physics/physics_assets.h"
-#include "physics/physics_diff.h"
+#include "runtime/physics/physics_config.h"
+#include "runtime/physics/physics_commands.h"
+#include "runtime/physics/physics_layers.h"
+#include "runtime/physics/physics_materials.h"
+#include "runtime/physics/physics_assets.h"
+#include "runtime/physics/physics_diff.h"
 
 namespace JPH {
 class JobSystem;

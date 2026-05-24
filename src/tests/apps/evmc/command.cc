@@ -1,8 +1,8 @@
-﻿#include "command.h"
+﻿#include "tests/apps/evmc/command.h"
 #include <memcached/protocol_binary.h>
-#include "memcache_client.h"
-#include "vbucket_config.h"
-#include "likely.h"
+#include "tests/apps/evmc/memcache_client.h"
+#include "tests/apps/evmc/vbucket_config.h"
+#include "tests/apps/evmc/likely.h"
 
 namespace evmc {
 

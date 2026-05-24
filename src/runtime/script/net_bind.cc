@@ -1,4 +1,4 @@
-#include "script/net_bind.h"
+#include "runtime/script/net_bind.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -20,10 +20,10 @@
 #include <evpp/httpc/request.h>
 #include <evpp/httpc/response.h>
 
-#include "config/config.h"
-#include "core/log/log.h"
-#include "engine/engine.h"
-#include "vm/vm.h"
+#include "runtime/config/config.h"
+#include "runtime/core/log/log.h"
+#include "runtime/engine/engine.h"
+#include "runtime/vm/vm.h"
 
 namespace engine {
 namespace script {

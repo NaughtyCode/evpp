@@ -1,6 +1,6 @@
 #ifdef ENGINE_PHYSICS_ENABLED
 
-#include "physics/physics_config.h"
+#include "runtime/physics/physics_config.h"
 
 #include <cstdio>
 #include <fstream>

@@ -2,7 +2,7 @@
 #include <evpp/buffer.h>
 #include <evpp/tcp_conn.h>
 
-#include "header.h"
+#include "tests/benchmarks/throughput_header_body/evpp/header.h"
 
 uint32_t g_total_count = 100;
 
@@ -69,6 +69,6 @@ int main(int argc, char* argv[]) {
 }
 
 
-#include "../../../examples/echo/tcpecho/winmain-inl.h"
+#include "tests/examples/winmain-inl.h"
 
 

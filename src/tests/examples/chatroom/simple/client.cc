@@ -1,4 +1,4 @@
-#include "codec.h"
+#include "tests/examples/chatroom/simple/codec.h"
 
 #include <evpp/event_loop.h>
 #include <evpp/event_loop_thread.h>

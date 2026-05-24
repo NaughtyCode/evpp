@@ -2,7 +2,7 @@
 #include <chrono>
 #include <thread>
 
-#include "test_common.h"
+#include "tests/test_common.h"
 
 #include <evpp/event_loop_thread.h>
 #include <evpp/httpc/request.h>

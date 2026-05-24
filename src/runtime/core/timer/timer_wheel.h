@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include "core/timer/timer_core.h"
+#include "runtime/core/timer/timer_core.h"
 
 #include <array>
 #include <atomic>

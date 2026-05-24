@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include "platform_config.h"
+#include "runtime/evpp/platform_config.h"
 
 #ifdef H_OS_WINDOWS
 #include <ws2tcpip.h>

@@ -6,7 +6,7 @@
 
 #include <evpp/tcp_server.h>
 
-#include "thrift_conn.h"
+#include "tests/labs/evthrift/thrift_conn.h"
 
 namespace evthrift {
 

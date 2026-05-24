@@ -1,6 +1,6 @@
 #ifdef ENGINE_PHYSICS_ENABLED
 
-#include "physics/physics_bindings.h"
+#include "runtime/physics/physics_bindings.h"
 
 #include <cstring>
 
@@ -8,8 +8,8 @@
 #include <Jolt/Math/Vec3.h>
 #include <Jolt/Math/Quat.h>
 
-#include "physics/physics_system.h"
-#include "vm/vm.h"
+#include "runtime/physics/physics_system.h"
+#include "runtime/vm/vm.h"
 
 namespace engine {
 namespace physics_bindings {

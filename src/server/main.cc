@@ -11,10 +11,10 @@
 #include <winsock2.h>
 #endif
 
-#include "config/config.h"
-#include "core/log/log.h"
-#include "core/log/log_macros.h"
-#include "engine/engine.h"
+#include "runtime/config/config.h"
+#include "runtime/core/log/log.h"
+#include "runtime/core/log/log_macros.h"
+#include "runtime/engine/engine.h"
 
 namespace {
 

@@ -1,6 +1,6 @@
-﻿#include "memcache_client_serial.h"
-#include "evpp/tcp_conn.h"
-#include "evpp/timestamp.h"
+﻿#include "tests/apps/evmc/memcache_client_serial.h"
+#include "runtime/evpp/tcp_conn.h"
+#include "runtime/evpp/timestamp.h"
 
 namespace evmc {
 

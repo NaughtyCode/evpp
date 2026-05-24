@@ -1,4 +1,4 @@
-#include "consumer.h"
+#include "tests/apps/evnsq/consumer.h"
 
 #include <evpp/event_loop.h>
 #include <evpp/tcp_client.h>
@@ -9,8 +9,8 @@
 
 #include <rapidjson/document.h>
 
-#include "command.h"
-#include "option.h"
+#include "tests/apps/evnsq/command.h"
+#include "tests/apps/evnsq/option.h"
 
 namespace evnsq {
 Consumer::Consumer(evpp::EventLoop* l, const std::string& topic, const std::string& channel, const Option& ops)

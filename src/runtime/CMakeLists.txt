@@ -13,8 +13,7 @@ option(ENGINE_PROFILER_ENABLED "Enable perfetto profiler" OFF)
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include)
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty/lua/lua)
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty/glaze/include)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})  # for "engine/xxx.h", "core/xxx.h", "evpp/xxx.h" etc.
-include_directories(${PROJECT_SOURCE_DIR})  # for "thirdparty/xxx.h" includes
+include_directories(${PROJECT_SOURCE_DIR})  # all project includes are src/-relative
 
 if (MSVC)
     add_definitions(-D_WIN32_WINNT=0x0A00)
@@ -122,9 +121,9 @@ source_group("profiler" FILES ${PROFILER_SOURCES})
 
 # ── Export header ─────────────────────────────────────────────────
 set(EXPORT_HEADER
-    engine_export.h
+    core/engine_export.h
 )
-source_group("runtime" FILES ${EXPORT_HEADER})
+source_group("core" FILES ${EXPORT_HEADER})
 
 # ── Evpp network library (inlined into engine) ──────────────────────────
 file(GLOB EVPP_SOURCES
@@ -151,7 +150,6 @@ add_library(engine SHARED
 )
 
 target_include_directories(engine PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include
     ${PROJECT_SOURCE_DIR}/thirdparty/lua/lua
@@ -172,8 +170,64 @@ set_target_properties(Jolt PROPERTIES FOLDER "thirdparty")
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# ── Physics module ──────────────────────────────────────────────────
-add_subdirectory(physics)
+# ═════════════════════════════════════════════════════════════════════
+# Physics module (merged from physics/CMakeLists.txt)
+# ═════════════════════════════════════════════════════════════════════
+set(PHYSICS_SOURCES
+    physics/physics_config.cc
+    physics/physics_config.h
+    physics/physics_commands.cc
+    physics/physics_commands.h
+    physics/physics_layers.cc
+    physics/physics_layers.h
+    physics/physics_materials.cc
+    physics/physics_materials.h
+    physics/physics_diff.cc
+    physics/physics_diff.h
+    physics/physics_assets.cc
+    physics/physics_assets.h
+    physics/physics_world.cc
+    physics/physics_world.h
+    physics/physics_thread.cc
+    physics/physics_thread.h
+    physics/physics_system.cc
+    physics/physics_system.h
+    physics/physics_engine_bridge.cc
+    physics/physics_engine_bridge.h
+    physics/physics_bindings.cc
+    physics/physics_bindings.h
+)
+
+source_group("engine\\physics" FILES ${PHYSICS_SOURCES})
+
+if(ENGINE_PHYSICS_ENABLED)
+    add_library(engine_physics STATIC ${PHYSICS_SOURCES})
+
+    target_compile_definitions(engine_physics PUBLIC ENGINE_PHYSICS_ENABLED)
+
+    if(ENGINE_PROFILER_ENABLED)
+        target_compile_definitions(engine_physics PRIVATE ENGINE_PROFILER_ENABLED)
+    endif()
+
+    if(MSVC)
+        target_compile_options(engine_physics PRIVATE /FS /Z7)
+    endif()
+
+    target_include_directories(engine_physics PUBLIC
+        ${PROJECT_SOURCE_DIR}
+        ${PROJECT_SOURCE_DIR}/thirdparty/JoltPhysics/JoltPhysics
+        ${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include
+        ${PROJECT_SOURCE_DIR}/thirdparty/glaze/include
+        ${PROJECT_SOURCE_DIR}/thirdparty/concurrentqueue/concurrentqueue
+        ${PROJECT_SOURCE_DIR}/thirdparty/lua/lua
+    )
+
+    target_link_libraries(engine_physics
+        Jolt
+    )
+else()
+    add_library(engine_physics INTERFACE)
+endif()
 
 target_link_libraries(engine ${LIBRARIES} engine_physics)
 

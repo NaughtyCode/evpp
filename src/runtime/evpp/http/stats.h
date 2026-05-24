@@ -7,7 +7,7 @@
 #endif
 
 #include <atomic>
-#include "evpp/duration.h"
+#include "runtime/evpp/duration.h"
 
 namespace evpp {
 namespace http {

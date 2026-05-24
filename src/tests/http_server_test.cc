@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "test_common.h"
+#include "tests/test_common.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,9 +13,9 @@
 #include <evpp/httpc/conn.h>
 #include <evpp/httpc/response.h>
 
-#include "evpp/http/service.h"
-#include "evpp/http/context.h"
-#include "evpp/http/http_server.h"
+#include "runtime/evpp/http/service.h"
+#include "runtime/evpp/http/context.h"
+#include "runtime/evpp/http/http_server.h"
 
 static bool g_stopping = false;
 static void RequestHandler(evpp::EventLoop* loop, const evpp::http::ContextPtr& ctx, const evpp::http::HTTPSendResponseCallback& cb) {

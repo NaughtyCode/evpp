@@ -8,10 +8,10 @@
 
 #include <evpp/timestamp.h>
 
-#include "evnsq/config.h"
-#include "option.h"
-#include "message.h"
-#include "command.h"
+#include "tests/apps/evnsq/config.h"
+#include "tests/apps/evnsq/option.h"
+#include "tests/apps/evnsq/message.h"
+#include "tests/apps/evnsq/command.h"
 
 namespace evpp {
 class EventLoop;

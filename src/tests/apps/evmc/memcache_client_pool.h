@@ -1,9 +1,9 @@
 ﻿#pragma once
 
-#include "memcache_client.h"
-#include "vbucket_config.h"
-#include "command.h"
-#include "memcache_client_base.h"
+#include "tests/apps/evmc/memcache_client.h"
+#include "tests/apps/evmc/vbucket_config.h"
+#include "tests/apps/evmc/command.h"
+#include "tests/apps/evmc/memcache_client_base.h"
 
 namespace evmc {
 

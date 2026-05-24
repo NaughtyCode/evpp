@@ -8,7 +8,7 @@
 #include <evpp/httpc/conn.h>
 #include <evpp/httpc/response.h>
 
-#include "../../../examples/winmain-inl.h"
+#include "tests/examples/winmain-inl.h"
 
 static int responsed = 0;
 static int retried = 0;

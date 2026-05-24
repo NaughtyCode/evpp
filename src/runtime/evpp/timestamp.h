@@ -1,6 +1,6 @@
 #pragma once
 
-#include "duration.h"
+#include "runtime/evpp/duration.h"
 #include <chrono>
 
 
@@ -49,5 +49,5 @@ private:
 };
 } // namespace evpp
 
-#include "timestamp.inl.h"
+#include "runtime/evpp/timestamp.inl.h"
 

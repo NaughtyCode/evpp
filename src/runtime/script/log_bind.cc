@@ -1,7 +1,7 @@
-#include "script/log_bind.h"
+#include "runtime/script/log_bind.h"
 
-#include "core/log/log.h"
-#include "vm/vm.h"
+#include "runtime/core/log/log.h"
+#include "runtime/vm/vm.h"
 
 namespace engine {
 namespace script {

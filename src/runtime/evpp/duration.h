@@ -1,7 +1,7 @@
 // Modeled after the time.Duration of Golang project.
 #pragma once
 
-#include "evpp/inner_pre.h"
+#include "runtime/evpp/inner_pre.h"
 
 namespace evpp {
 
@@ -58,5 +58,5 @@ private:
 };
 } // namespace evpp
 
-#include "duration.inl.h"
+#include "runtime/evpp/duration.inl.h"
 

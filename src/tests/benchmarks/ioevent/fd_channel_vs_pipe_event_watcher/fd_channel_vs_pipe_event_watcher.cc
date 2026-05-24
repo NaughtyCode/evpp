@@ -14,7 +14,7 @@
 #include <sys/socket.h>
 #endif
 
-#include "../../../examples/winmain-inl.h"
+#include "tests/examples/winmain-inl.h"
 
 using namespace evpp;
 

@@ -11,9 +11,9 @@
 
 #include <concurrentqueue.h>
 
-#include "physics/physics_config.h"
-#include "physics/physics_commands.h"
-#include "physics/physics_world.h"
+#include "runtime/physics/physics_config.h"
+#include "runtime/physics/physics_commands.h"
+#include "runtime/physics/physics_world.h"
 
 namespace engine {
 

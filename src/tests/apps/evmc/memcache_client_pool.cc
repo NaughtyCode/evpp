@@ -1,8 +1,8 @@
-﻿#include "memcache_client_pool.h"
+﻿#include "tests/apps/evmc/memcache_client_pool.h"
 
-#include "vbucket_config.h"
-#include "evpp/event_loop_thread_pool.h"
-#include "likely.h"
+#include "tests/apps/evmc/vbucket_config.h"
+#include "runtime/evpp/event_loop_thread_pool.h"
+#include "tests/apps/evmc/likely.h"
 
 namespace evmc {
 

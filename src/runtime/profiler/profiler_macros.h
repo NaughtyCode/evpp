@@ -2,7 +2,7 @@
 
 #ifdef ENGINE_PROFILER_ENABLED
 
-#include "profiler/profiler_categories.h"
+#include "runtime/profiler/profiler_categories.h"
 
 // ── RAII scope event (preferred for most uses) ──────────────────────────
 // cat: string literal category name, e.g. "engine"

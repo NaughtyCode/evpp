@@ -1,8 +1,8 @@
-#include "producer.h"
+#include "tests/apps/evnsq/producer.h"
 
 #include <evpp/event_loop.h>
-#include "command.h"
-#include "nsq_conn.h"
+#include "tests/apps/evnsq/command.h"
+#include "tests/apps/evnsq/nsq_conn.h"
 
 namespace evnsq {
 

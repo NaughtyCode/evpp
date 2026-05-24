@@ -1,7 +1,7 @@
-#include "evpp/httpc/ssl.h"
+#include "runtime/evpp/httpc/ssl.h"
 
 #if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL)
-#include "evpp/logging.h"
+#include "runtime/evpp/logging.h"
 
 #include <openssl/rand.h>
 #include <openssl/err.h>

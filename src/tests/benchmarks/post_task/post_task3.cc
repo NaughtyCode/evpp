@@ -1,7 +1,7 @@
 #include <evpp/event_loop.h>
 #include <evpp/event_loop_thread.h>
 
-#include "../../examples/winmain-inl.h"
+#include "tests/examples/winmain-inl.h"
 
 uint64_t clock_us() {
     return std::chrono::steady_clock::now().time_since_epoch().count() / 1000;

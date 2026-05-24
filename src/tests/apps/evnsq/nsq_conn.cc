@@ -1,4 +1,4 @@
-#include "nsq_conn.h"
+#include "tests/apps/evnsq/nsq_conn.h"
 
 #include <evpp/event_loop.h>
 #include <evpp/tcp_client.h>
@@ -9,10 +9,10 @@
 
 #include <rapidjson/document.h>
 
-#include "command.h"
-#include "option.h"
-#include "client.h"
-#include "producer.h"
+#include "tests/apps/evnsq/command.h"
+#include "tests/apps/evnsq/option.h"
+#include "tests/apps/evnsq/client.h"
+#include "tests/apps/evnsq/producer.h"
 
 namespace evnsq {
 static const std::string kNSQMagic = "  V2";

@@ -1,5 +1,5 @@
-#include "invoke_timer.h"
-#include "event_watcher.h"
+#include "tests/examples/recipes/self_control_timer/basic_01/invoke_timer.h"
+#include "tests/examples/recipes/self_control_timer/basic_01/event_watcher.h"
 
 #include <thread>
 #include <iostream>

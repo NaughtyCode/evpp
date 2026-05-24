@@ -4,7 +4,7 @@
 #include <evpp/buffer.h>
 #include <evpp/tcp_conn.h>
 
-#include "../../winmain-inl.h"
+#include "tests/examples/winmain-inl.h"
 
 // Example from http://twistedmatrix.com/trac/#pubsubserver
 

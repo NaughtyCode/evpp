@@ -1,6 +1,6 @@
-﻿#include "binary_codec.h"
+﻿#include "tests/apps/evmc/binary_codec.h"
 
-#include "memcache_client.h"
+#include "tests/apps/evmc/memcache_client.h"
 
 namespace evmc {
 

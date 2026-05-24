@@ -1,5 +1,5 @@
 #pragma once
 
-#include "evmc/config.h"
-#include "evmc/memcache_client_pool.h"
-#include "evmc/memcache_client_serial.h"
+#include "tests/apps/evmc/config.h"
+#include "tests/apps/evmc/memcache_client_pool.h"
+#include "tests/apps/evmc/memcache_client_serial.h"

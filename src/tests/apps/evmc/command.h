@@ -1,9 +1,9 @@
 ﻿#pragma once
 
-#include "evmc/config.h"
+#include "tests/apps/evmc/config.h"
 
-#include "mctypes.h"
-#include "likely.h"
+#include "tests/apps/evmc/mctypes.h"
+#include "tests/apps/evmc/likely.h"
 
 namespace evmc {
 

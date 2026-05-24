@@ -6,7 +6,7 @@
 #include <evpp/tcp_conn.h>
 #include <evpp/timestamp.h>
 
-#include "header.h"
+#include "tests/benchmarks/throughput_header_body/evpp/header.h"
 
 class Client;
 
@@ -231,7 +231,7 @@ int main(int argc, char* argv[]) {
 
 
 
-#include "../../../examples/echo/tcpecho/winmain-inl.h"
+#include "tests/examples/winmain-inl.h"
 
 
 

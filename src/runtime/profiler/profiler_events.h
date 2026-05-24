@@ -1,6 +1,6 @@
 #pragma once
 
-#include "profiler/profiler_macros.h"
+#include "runtime/profiler/profiler_macros.h"
 
 #ifdef ENGINE_PROFILER_ENABLED
 

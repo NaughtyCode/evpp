@@ -1,7 +1,7 @@
 #include <evpp/event_loop.h>
 
 #ifdef _WIN32
-#include "../echo/tcpecho/winmain-inl.h"
+#include "tests/examples/winmain-inl.h"
 #endif
 
 int main() {

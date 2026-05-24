@@ -1,6 +1,6 @@
 #ifdef ENGINE_PHYSICS_ENABLED
 
-#include "physics/physics_materials.h"
+#include "runtime/physics/physics_materials.h"
 
 #include <vector>
 

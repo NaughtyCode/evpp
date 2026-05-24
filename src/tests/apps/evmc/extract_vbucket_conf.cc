@@ -1,10 +1,10 @@
 #include <fstream>
-#include "evpp/httpc/url_parser.h"
-#include "evpp/libevent.h"
-#include "evpp/httpc/request.h"
-#include "evpp/httpc/conn.h"
-#include "evpp/httpc/response.h"
-#include "extract_vbucket_conf.h"
+#include "runtime/evpp/httpc/url_parser.h"
+#include "runtime/evpp/libevent.h"
+#include "runtime/evpp/httpc/request.h"
+#include "runtime/evpp/httpc/conn.h"
+#include "runtime/evpp/httpc/response.h"
+#include "tests/apps/evmc/extract_vbucket_conf.h"
 namespace evmc {
 int GetVbucketConf::GetVbucketConfContext(const std::string& conf_addr, std::string& context) {
     if (conf_addr.substr(0, 4) == "http") {

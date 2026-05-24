@@ -1,6 +1,6 @@
 #ifdef ENGINE_PHYSICS_ENABLED
 
-#include "physics/physics_thread.h"
+#include "runtime/physics/physics_thread.h"
 
 #include <chrono>
 #include <cstdio>
@@ -10,10 +10,10 @@
 #include <windows.h>
 #endif
 
-#include "config/config.h"
-#include "core/log/log.h"
-#include "core/log/log_macros.h"
-#include "profiler/profiler_events.h"
+#include "runtime/config/config.h"
+#include "runtime/core/log/log.h"
+#include "runtime/core/log/log_macros.h"
+#include "runtime/profiler/profiler_events.h"
 
 namespace engine {
 

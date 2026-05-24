@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include "core/timer/timer_core.h"
-#include "core/timer/timer_queue.h"
+#include "runtime/core/timer/timer_core.h"
+#include "runtime/core/timer/timer_queue.h"
 
 #include <cassert>
 #include <functional>

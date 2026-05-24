@@ -1,8 +1,8 @@
-#include "memcache_client.h"
+#include "tests/apps/evmc/memcache_client.h"
 
-#include "binary_codec.h"
-#include "memcache_client_pool.h"
-#include "likely.h"
+#include "tests/apps/evmc/binary_codec.h"
+#include "tests/apps/evmc/memcache_client_pool.h"
+#include "tests/apps/evmc/likely.h"
 
 namespace evmc {
 

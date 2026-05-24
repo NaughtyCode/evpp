@@ -8,12 +8,12 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 
-#include "asio.hpp"
+#include "tests/benchmarks/throughput/asio_from_chenshuo/asio.hpp"
 #include <algorithm>
 #include <boost/bind.hpp>
 #include <iostream>
 #include <list>
-#include "handler_allocator.hpp"
+#include "tests/benchmarks/throughput/asio_from_chenshuo/handler_allocator.hpp"
 
 class session
 {

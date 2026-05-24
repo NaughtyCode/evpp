@@ -3,7 +3,7 @@
 
 #include <iostream>
 
-#include "event_watcher.h"
+#include "tests/examples/recipes/self_control_timer/basic_02/event_watcher.h"
 
 namespace recipes {
 

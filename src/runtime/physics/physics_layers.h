@@ -10,7 +10,7 @@
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
 #include <Jolt/Physics/Collision/ObjectLayer.h>
 
-#include "physics/physics_config.h"
+#include "runtime/physics/physics_config.h"
 
 namespace engine {
 

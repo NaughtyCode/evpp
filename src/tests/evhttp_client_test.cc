@@ -1,4 +1,4 @@
-#include "test_common.h"
+#include "tests/test_common.h"
 
 #include <stdio.h>
 #include <stdlib.h>

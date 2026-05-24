@@ -1,4 +1,4 @@
-#include "core/log/log.h"
+#include "runtime/core/log/log.h"
 
 #include <chrono>
 #include <cstdio>
@@ -13,7 +13,7 @@
 #include <quill/sinks/ConsoleSink.h>
 #include <quill/sinks/RotatingFileSink.h>
 
-#include "config/config.h"
+#include "runtime/config/config.h"
 
 namespace engine {
 

@@ -15,14 +15,14 @@
 #include <evpp/http/context.h>
 #include <evpp/http/http_server.h>
 
-#include "../examples/winmain-inl.h"
+#include "tests/examples/winmain-inl.h"
 
-#include "stability.h"
+#include "tests/stability/stability.h"
 
-#include "stability_dns.h"
-#include "stability_tcp1_client.h"
-#include "stability_tcp2_client.h"
-#include "stability_tcp3.h"
+#include "tests/stability/stability_dns.h"
+#include "tests/stability/stability_tcp1_client.h"
+#include "tests/stability/stability_tcp2_client.h"
+#include "tests/stability/stability_tcp3.h"
 
 static bool g_stopping = false;
 static void RequestHandler(evpp::EventLoop* loop, const evpp::http::ContextPtr& ctx, const evpp::http::HTTPSendResponseCallback& cb) {

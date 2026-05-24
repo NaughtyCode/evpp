@@ -1,6 +1,6 @@
 #ifdef ENGINE_PHYSICS_ENABLED
 
-#include "physics/physics_world.h"
+#include "runtime/physics/physics_world.h"
 
 #include <cmath>
 #include <cstdio>
@@ -23,8 +23,8 @@
 #include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
 #include <Jolt/Physics/StateRecorderImpl.h>
 
-#include "core/log/log_macros.h"
-#include "profiler/profiler_events.h"
+#include "runtime/core/log/log_macros.h"
+#include "runtime/profiler/profiler_events.h"
 
 namespace engine {
 

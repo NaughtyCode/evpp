@@ -2,8 +2,8 @@
 
 #include <list>
 #include <vector>
-#include "client.h"
-#include "command.h"
+#include "tests/apps/evnsq/client.h"
+#include "tests/apps/evnsq/command.h"
 
 namespace evnsq {
 class Command;

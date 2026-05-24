@@ -3,7 +3,7 @@
 #include <evpp/tcp_conn.h>
 
 #ifdef _WIN32
-#include "../../winmain-inl.h"
+#include "tests/examples/winmain-inl.h"
 #endif
 
 void OnMessage(const evpp::TCPConnPtr& conn,

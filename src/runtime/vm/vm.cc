@@ -1,10 +1,10 @@
-#include "vm/vm.h"
+#include "runtime/vm/vm.h"
 
 #include <chrono>
 #include <filesystem>
 
-#include "core/log/log.h"
-#include "profiler/profiler_events.h"
+#include "runtime/core/log/log.h"
+#include "runtime/profiler/profiler_events.h"
 
 namespace engine {
 

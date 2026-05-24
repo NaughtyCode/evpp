@@ -1,4 +1,4 @@
-#include "option.h"
+#include "tests/apps/evnsq/option.h"
 
 #include <rapidjson/rapidjson.h>
 #include <rapidjson/document.h>

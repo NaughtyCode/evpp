@@ -39,5 +39,5 @@ int main(int argc, char* argv[]) {
 }
 
 #ifdef WIN32
-#include "../winmain-inl.h"
+#include "tests/examples/winmain-inl.h"
 #endif

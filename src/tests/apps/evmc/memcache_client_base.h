@@ -4,12 +4,12 @@
 #include <mutex>
 
 
-#include "evmc/config.h"
+#include "tests/apps/evmc/config.h"
 
-#include "evpp/event_loop_thread_pool.h"
+#include "runtime/evpp/event_loop_thread_pool.h"
 
-#include "vbucket_config.h"
-#include "memcache_client.h"
+#include "tests/apps/evmc/vbucket_config.h"
+#include "tests/apps/evmc/memcache_client.h"
 
 namespace evmc {
 class MemcacheClientBase {

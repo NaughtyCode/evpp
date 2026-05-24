@@ -1,6 +1,6 @@
 #include <thrift/protocol/TCompactProtocol.h>
 
-#include "evthrift/thrift_server.h"
+#include "tests/labs/evthrift/thrift_server.h"
 
 #include "gen-cpp/Ping.h"
 
@@ -35,4 +35,4 @@ int main(int argc, char **argv) {
 }
 
 
-#include "../../../../examples/winmain-inl.h"
+#include "tests/examples/winmain-inl.h"

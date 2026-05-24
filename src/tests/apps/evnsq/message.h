@@ -1,6 +1,6 @@
 #pragma once
 
-#include "evnsq/config.h"
+#include "tests/apps/evnsq/config.h"
 #include <evpp/buffer.h>
 #include <evpp/slice.h>
 
