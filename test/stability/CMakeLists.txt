@@ -8,6 +8,7 @@
 
 file(GLOB SROUCES *.cc *.h)
 add_executable(test_evpp_stability ${SROUCES})
+set_target_properties(test_evpp_stability PROPERTIES FOLDER "tests")
 target_link_libraries(test_evpp_stability evpp_static ${DEPENDENT_LIBRARIES})
 
 if (UNIX)

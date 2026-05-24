@@ -12,10 +12,12 @@ link_directories(${LIBRARY_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}/)
 endif (MSVC)
 
 add_executable(evpp_unittest ${evpp_unittest_SRCS})
+set_target_properties(evpp_unittest PROPERTIES FOLDER "tests")
 target_link_libraries(evpp_unittest evpp_static ${DEPENDENT_LIBRARIES})
 
 if (HTTPS)
 add_executable(evpp_https_unittest ${evpp_https_unittest_SRCS})
+set_target_properties(evpp_https_unittest PROPERTIES FOLDER "tests")
 target_link_libraries(evpp_https_unittest evpp_https_static ${DEPENDENT_LIBRARIES})
 endif (HTTPS)
 
@@ -37,7 +39,7 @@ endif (UNIX)
 
 # ── Physics smoke test ────────────────────────────────────────────────
 add_executable(physics_smoke physics_smoke.cc)
-set_target_properties(physics_smoke PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
+set_target_properties(physics_smoke PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON FOLDER "tests")
 target_compile_definitions(physics_smoke PRIVATE ENGINE_PHYSICS_ENABLED)
 target_include_directories(physics_smoke PRIVATE
     ${PROJECT_SOURCE_DIR}

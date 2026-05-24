@@ -155,6 +155,7 @@ endif()
 # C++23 for downstream targets.
 add_subdirectory(${PROJECT_SOURCE_DIR}/3rdparty/JoltPhysics/Build
                  ${CMAKE_BINARY_DIR}/jolt)
+set_target_properties(Jolt PROPERTIES FOLDER "thirdparty")
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
