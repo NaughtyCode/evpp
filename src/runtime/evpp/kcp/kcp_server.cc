@@ -13,6 +13,10 @@ extern "C" {
 namespace evpp {
 namespace kcp {
 
+// KCP header overhead in bytes (24-byte KCP header per protocol spec).
+// Defined in ikcp.c as a global but not declared in ikcp.h, so we redeclare.
+static constexpr int kKcpOverhead = 24;
+
 // KCP‑compatible signed time difference (handles 32‑bit wrap‑around).
 static inline IINT32 kcp_timediff(IUINT32 later, IUINT32 earlier) {
     return static_cast<IINT32>(later - earlier);
@@ -155,8 +159,7 @@ public:
         : fd_(INVALID_SOCKET), server_(srv), port_(-1), status_(kStopped) {}
 
     ~RecvThread() {
-        EVUTIL_CLOSESOCKET(fd_);
-        fd_ = INVALID_SOCKET;
+        status_.store(kStopping);
         if (thread_ && thread_->joinable()) {
             try {
                 thread_->join();
@@ -164,6 +167,8 @@ public:
                 ENGINE_LOG_ERROR(engine::GetLogger(), "Caught a system_error:{}", e.what());
             }
         }
+        EVUTIL_CLOSESOCKET(fd_);
+        fd_ = INVALID_SOCKET;
     }
 
     bool Listen(int p) {
@@ -371,7 +376,7 @@ void Server::RecvingLoop(RecvThread* th) {
         int readn = ::recvfrom(th->fd(), raw_buf, sizeof(raw_buf), 0,
                                sock::sockaddr_cast(&from_addr), &addr_len);
 
-        if (readn >= static_cast<int>(IKCP_OVERHEAD)) {
+        if (readn >= kKcpOverhead) {
             IUINT32 conv = ikcp_getconv(raw_buf);
 
             // Look up or create the session for this conversation.

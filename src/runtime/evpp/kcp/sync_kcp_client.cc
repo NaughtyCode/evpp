@@ -195,10 +195,18 @@ std::string Client::DoRequest(const std::string& data, uint32_t timeout_ms) {
         // Drive the KCP state machine.
         ikcp_update(kcp_, now);
 
-        // Check for a complete application‑level response.
+        // Check for a complete application‑level response first — if the
+        // response arrived just before the connection died, return it.
         int hr = ikcp_recv(kcp_, kcp_buf, sizeof(kcp_buf));
         if (hr > 0) {
             return std::string(kcp_buf, static_cast<size_t>(hr));
+        }
+
+        // Connection declared dead (dead_link exceeded).
+        if (kcp_->state == static_cast<IUINT32>(-1)) {
+            ENGINE_LOG_ERROR(engine::GetLogger(),
+                "KCP client DoRequest connection dead");
+            return "";
         }
 
         usleep(1000); // 1 ms back‑off
