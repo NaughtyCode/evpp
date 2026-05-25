@@ -167,6 +167,12 @@ public:
         int64_t interval_ns = interval.count();
         int64_t overruns = delta_ns / interval_ns + 1;
 
+        // Clamp overruns to avoid signed overflow in the multiplication below.
+        // In practice this only fires when a repeating timer is extremely late
+        // (e.g., the process was suspended for hours).
+        int64_t max_overruns = INT64_MAX / interval_ns;
+        if (overruns > max_overruns) overruns = max_overruns;
+
         // Advance by overruns * interval
         Duration advance = Duration(overruns * interval_ns);
         expires_.store(time_add_safe(exp, advance));
@@ -285,6 +291,7 @@ public:
     }
 
     void restart(HrTimerNode* timer) {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
         start_expires(timer, TimerMode::kAbsolute | (timer->mode() & TimerMode::kHard));
     }
 
@@ -328,6 +335,7 @@ public:
 
     // Get the expiration time of the next timer to fire
     TimePoint next_expiry() const {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
         return queue_.first_expiry();
     }
 
@@ -341,6 +349,7 @@ public:
 
     // Next expiry excluding a specific timer
     TimePoint next_expiry_without(const HrTimerNode* exclude) const {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
         auto* next = queue_.next_expiring(TimePoint::min(), const_cast<HrTimerNode*>(exclude));
         return next ? next->expires() : kTimeMax;
     }
@@ -449,15 +458,25 @@ public:
     // Statistics
     //-----------------------------------------------------------------
 
-    const TimerStats& stats() const { return stats_; }
-    size_t active_count() const { return queue_.size(); }
-    void reset_stats()  { stats_ = TimerStats{}; }
+    TimerStats stats() const {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        return stats_;
+    }
+    size_t active_count() const {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        return queue_.size();
+    }
+    void reset_stats() {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        stats_ = TimerStats{};
+    }
 
     //-----------------------------------------------------------------
     // Debug
     //-----------------------------------------------------------------
 
     void show_timers(std::function<void(HrTimerNode*)> visitor) const {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
         queue_.for_each([&](HrTimerNode* node) { visitor(node); });
     }
 

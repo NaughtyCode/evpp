@@ -20,7 +20,7 @@
  * ========================================================================= */
 
 extern "C" const char* game_version(void) {
-    return GAME_CLIENT_VERSION_STRING;
+    return CLIENT_VERSION_STRING;
 }
 
 /* =========================================================================

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -50,8 +51,8 @@ private:
 
     ProfilerConfig config_;
     std::unique_ptr<perfetto::TracingSession> session_;
-    bool initialized_ = false;
-    bool session_active_ = false;
+    std::atomic<bool> initialized_{false};
+    std::atomic<bool> session_active_{false};
 };
 
 } // namespace engine

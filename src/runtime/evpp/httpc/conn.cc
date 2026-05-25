@@ -80,13 +80,19 @@ bool Conn::Init() {
         bufferevent_openssl_set_allow_dirty_shutdown(bufferevent_, 1);
     }
     evhttp_conn_ = evhttp_connection_base_bufferevent_new(loop_->event_base(), NULL, bufferevent_, host_.c_str(), port_);
+    if (!evhttp_conn_) {
+        ENGINE_LOG_ERROR(engine::GetLogger(), "evhttp_connection_new failed.");
+        bufferevent_free(bufferevent_);
+        bufferevent_ = nullptr;
+        return false;
+    }
 #else
     evhttp_conn_ = evhttp_connection_base_new(loop_->event_base(), nullptr, host_.c_str(), port_);
-#endif
     if (!evhttp_conn_) {
         ENGINE_LOG_ERROR(engine::GetLogger(), "evhttp_connection_new failed.");
         return false;
     }
+#endif
 
     if (!timeout_.IsZero()) {
 #if LIBEVENT_VERSION_NUMBER >= 0x02010500

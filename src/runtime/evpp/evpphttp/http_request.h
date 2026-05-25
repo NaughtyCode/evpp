@@ -61,7 +61,7 @@ private:
     void swap(HttpRequest & hr) {
         body.Swap(hr.body);
         field_value.swap(hr.field_value);
-        parser = hr.parser;
+        std::swap(parser, hr.parser);
         remote_ip.swap(hr.remote_ip);
         field.swap(hr.field);
         value.swap(hr.value);

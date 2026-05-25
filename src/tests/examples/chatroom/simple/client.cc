@@ -32,7 +32,14 @@ public:
     void Write(const evpp::Slice& message) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (connection_) {
-            codec_.Send(connection_, message);
+            auto conn = connection_;
+            auto* loop = conn->loop();
+            if (loop) {
+                std::string msg(message.data(), message.size());
+                loop->RunInLoop([conn, &codec = codec_, msg = std::move(msg)]() {
+                    codec.Send(conn, msg);
+                });
+            }
         }
     }
 

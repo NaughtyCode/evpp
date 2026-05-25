@@ -37,7 +37,7 @@ struct TimerEntry {
  * thread — still, guard for correctness. */
 std::unordered_map<int, TimerEntry> g_timers;
 std::mutex g_timer_mutex;
-int g_next_timer_id = 1;
+unsigned int g_next_timer_id = 1;
 
 /* Lua trampoline: called by the Lua timer system, dispatches to C callback. */
 int timer_trampoline(lua_State* L) {

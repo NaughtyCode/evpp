@@ -346,6 +346,7 @@ size_t EventLoop::GetPendingQueueSize() {
 #elif defined(H_HAVE_CAMERON314_CONCURRENTQUEUE)
     return pending_functors_->size_approx();
 #else
+    std::lock_guard<std::mutex> lock(mutex_);
     return pending_functors_->size();
 #endif
 }
@@ -356,6 +357,7 @@ bool EventLoop::IsPendingQueueEmpty() {
 #elif defined(H_HAVE_CAMERON314_CONCURRENTQUEUE)
     return pending_functors_->size_approx() == 0;
 #else
+    std::lock_guard<std::mutex> lock(mutex_);
     return pending_functors_->empty();
 #endif
 }

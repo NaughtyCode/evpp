@@ -586,7 +586,9 @@ std::optional<JPH::Vec3> PhysicsWorld::GetVelocity(uint32_t body_id) const {
 
 bool PhysicsWorld::IsActive(uint32_t body_id) const {
     JPH::BodyID jid(body_id);
-    return system_.GetBodyInterfaceNoLock().IsActive(jid);
+    JPH::BodyLockRead lock(system_.GetBodyLockInterface(), jid);
+    if (!lock.Succeeded()) return false;
+    return lock.GetBody().IsActive();
 }
 
 PhysicsWorld::Stats PhysicsWorld::GetStats() const {

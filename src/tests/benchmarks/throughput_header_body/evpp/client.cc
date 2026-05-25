@@ -80,8 +80,8 @@ private:
             } else {
                 header->body_size_ = htonl(get_body_len());
                 header->inc_packet_count();
-                conn->Send(buf->data(), full_size + 1); // trick here
-                buf->Skip(full_size); // only skip full_size, not full_size+1
+                conn->Send(buf->data(), full_size);
+                buf->Skip(full_size);
             }
         }
     }

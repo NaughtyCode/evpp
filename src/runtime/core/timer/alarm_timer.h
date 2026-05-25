@@ -222,6 +222,9 @@ public:
         int64_t interval_ns = interval.count();
         int64_t overruns = delta_ns / interval_ns + 1;
 
+        int64_t max_overruns = INT64_MAX / interval_ns;
+        if (overruns > max_overruns) overruns = max_overruns;
+
         alarm->expires_ = time_add_ns(exp, overruns * interval_ns);
         return overruns;
     }
@@ -302,7 +305,10 @@ public:
         }
     }
 
-    Duration total_sleep_duration() const { return total_sleep_dur_; }
+    Duration total_sleep_duration() const {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        return total_sleep_dur_;
+    }
 
     //-----------------------------------------------------------------
     // Statistics
@@ -319,8 +325,14 @@ public:
         void record_cancel()            { ++cancel_count; }
     };
 
-    const AlarmStats& stats() const { return stats_; }
-    void reset_stats() { stats_ = AlarmStats{}; }
+    AlarmStats stats() const {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        return stats_;
+    }
+    void reset_stats() {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        stats_ = AlarmStats{};
+    }
 
 private:
     TimePoint get_now_for(AlarmType type) const {
