@@ -402,6 +402,12 @@ int l_net_server_listen(lua_State* L) {
                 ENGINE_LOG_INFO(logger,
                     "[net.server] conn closed: conn=[{}]", raw_id);
 
+                // Guard against re-entrant disconnect through on_close →
+                // conn:close() or server:stop(). Setting disposed before
+                // dispatch blocks the re-entrant path and makes conn:close()
+                // return false so the outer cleanup below always runs.
+                conn_ctx->disposed = true;
+
                 int conn_ref = conn_ctx->instance_ref;
                 int sv_ref   = conn_ctx->server_inst_ref;
 
@@ -413,12 +419,12 @@ int l_net_server_listen(lua_State* L) {
                                            conn_ref, remote);
                 }
 
-                // If on_close called conn:close() re-entrantly, ConnCtx was
-                // already cleaned up — avoid double-unref / double-delete.
-                if (conn_ctx->disposed) return;
+                // l_conn_close sets instance_ref = LUA_NOREF after unref;
+                // if that happened re-entrantly the inner call already
+                // cleaned up — skip outer cleanup to avoid double-unref.
+                if (conn_ctx->instance_ref == LUA_NOREF) return;
 
                 // Clean up ConnCtx
-                conn_ctx->disposed = true;
                 lua_rawgeti(L_ptr, LUA_REGISTRYINDEX, conn_ref);
                 lua_pushnil(L_ptr);
                 lua_setfield(L_ptr, -2, "_ctx");
@@ -426,6 +432,7 @@ int l_net_server_listen(lua_State* L) {
 
                 if (conn_ref != LUA_NOREF) {
                     luaL_unref(L_ptr, LUA_REGISTRYINDEX, conn_ref);
+                    conn_ctx->instance_ref = LUA_NOREF;
                 }
                 conn->set_context(evpp::Any());
 
