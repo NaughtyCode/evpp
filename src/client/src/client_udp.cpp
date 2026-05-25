@@ -266,7 +266,7 @@ void game_udp_close(game_udp_client_t** udp_ptr) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, ref); /* t            */
         lua_getfield(L, -1, "close");           /* t, close     */
         lua_insert(L, -2);                      /* close, t     */
-        lua_pcall(L, 1, 0, 0);                 /* (empty)      */
+        if (lua_pcall(L, 1, 0, 0) != LUA_OK) { lua_pop(L, 1); }                 /* (empty)      */
         luaL_unref(L, LUA_REGISTRYINDEX, ref);
     }
     delete udp;
@@ -351,6 +351,7 @@ game_error_t game_udp_listen(game_client_t* client, int port,
         return GAME_ERR_NETWORK;
     }
 
+    if (lua_gettop(L) >= 2) lua_pop(L, 1);  /* discard padded nil */
     int ref = luaL_ref(L, LUA_REGISTRYINDEX);
     srv->ctx = reinterpret_cast<void*>(static_cast<intptr_t>(ref));
 
@@ -374,7 +375,7 @@ void game_udp_server_stop(game_udp_server_t** server_ptr) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
         lua_getfield(L, -1, "stop");
         lua_insert(L, -2);
-        lua_pcall(L, 1, 0, 0);
+        if (lua_pcall(L, 1, 0, 0) != LUA_OK) { lua_pop(L, 1); }
         luaL_unref(L, LUA_REGISTRYINDEX, ref);
     }
     delete srv;
@@ -392,7 +393,7 @@ void game_udp_server_pause(game_udp_server_t* srv) {
     lua_rawgeti(L, LUA_REGISTRYINDEX, get_udp_srv_ref(srv));
     lua_getfield(L, -1, "pause");
     lua_insert(L, -2);
-    lua_pcall(L, 1, 0, 0);
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK) { lua_pop(L, 1); }
 }
 
 void game_udp_server_resume(game_udp_server_t* srv) {
@@ -402,7 +403,7 @@ void game_udp_server_resume(game_udp_server_t* srv) {
     lua_rawgeti(L, LUA_REGISTRYINDEX, get_udp_srv_ref(srv));
     lua_getfield(L, -1, "continue");
     lua_insert(L, -2);
-    lua_pcall(L, 1, 0, 0);
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK) { lua_pop(L, 1); }
 }
 
 bool game_udp_server_is_running(game_udp_server_t* srv) {
@@ -444,7 +445,7 @@ void game_udp_server_set_on_message(game_udp_server_t* srv,
     } else {
         lua_pushnil(L);
     }
-    lua_pcall(L, 2, 0, 0);
+    if (lua_pcall(L, 2, 0, 0) != LUA_OK) { lua_pop(L, 1); }
 }
 
 } /* extern "C" */

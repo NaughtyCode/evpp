@@ -51,7 +51,11 @@ extern "C" game_error_t game_client_init(game_client_t* client,
     /* Library mode: create our own EventLoop so the user can drive it with
      * game_client_tick(). The loop is passed to Engine::Init as external_loop,
      * which means Engine won't start a frame timer — we own the cadence. */
-    auto* loop = new evpp::EventLoop();
+    auto* loop = new (std::nothrow) evpp::EventLoop();
+    if (!loop) {
+        set_error(client, "EventLoop allocation failed");
+        return GAME_ERR_OUT_OF_MEMORY;
+    }
     client->owns_loop = true;
 
     engine::EngineConfig cfg;

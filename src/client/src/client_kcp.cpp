@@ -108,6 +108,7 @@ game_error_t game_kcp_connect(game_client_t* client,
         return GAME_ERR_NETWORK;
     }
 
+    if (lua_gettop(L) >= 2) lua_pop(L, 1);  /* discard padded nil */
     int ref = luaL_ref(L, LUA_REGISTRYINDEX);
     kcp->ctx = reinterpret_cast<void*>(static_cast<intptr_t>(ref));
 
@@ -174,7 +175,7 @@ game_error_t game_kcp_client_connect(game_kcp_client_t* kcp,
         lua_pop(L, 2);
         return GAME_ERR_NETWORK;
     }
-    lua_pop(L, 1); /* pop the nil error */
+    lua_pop(L, 2); /* pop result + padded nil */
     return GAME_OK;
 }
 
@@ -244,7 +245,7 @@ void game_kcp_close(game_kcp_client_t** kcp_ptr) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
         lua_getfield(L, -1, "close");
         lua_insert(L, -2);
-        lua_pcall(L, 1, 0, 0);
+        if (lua_pcall(L, 1, 0, 0) != LUA_OK) { lua_pop(L, 1); }
         luaL_unref(L, LUA_REGISTRYINDEX, ref);
     }
     delete kcp;
@@ -276,7 +277,7 @@ void game_kcp_set_nodelay(game_kcp_client_t* kcp,
     lua_pushinteger(L, interval);
     lua_pushinteger(L, resend);
     lua_pushinteger(L, nc);
-    lua_pcall(L, 5, 0, 0);
+    if (lua_pcall(L, 5, 0, 0) != LUA_OK) { lua_pop(L, 1); }
 }
 
 void game_kcp_set_wnd_size(game_kcp_client_t* kcp, int sndwnd, int rcvwnd) {
@@ -288,7 +289,7 @@ void game_kcp_set_wnd_size(game_kcp_client_t* kcp, int sndwnd, int rcvwnd) {
     lua_insert(L, -2);
     lua_pushinteger(L, sndwnd);
     lua_pushinteger(L, rcvwnd);
-    lua_pcall(L, 3, 0, 0);
+    if (lua_pcall(L, 3, 0, 0) != LUA_OK) { lua_pop(L, 1); }
 }
 
 void game_kcp_set_mtu(game_kcp_client_t* kcp, int mtu) {
@@ -299,7 +300,7 @@ void game_kcp_set_mtu(game_kcp_client_t* kcp, int mtu) {
     lua_getfield(L, -1, "set_kcp_mtu");
     lua_insert(L, -2);
     lua_pushinteger(L, mtu);
-    lua_pcall(L, 2, 0, 0);
+    if (lua_pcall(L, 2, 0, 0) != LUA_OK) { lua_pop(L, 1); }
 }
 
 void game_kcp_set_conv(game_kcp_client_t* kcp, uint32_t conv) {
@@ -310,7 +311,7 @@ void game_kcp_set_conv(game_kcp_client_t* kcp, uint32_t conv) {
     lua_getfield(L, -1, "set_kcp_conv");
     lua_insert(L, -2);
     lua_pushinteger(L, conv);
-    lua_pcall(L, 2, 0, 0);
+    if (lua_pcall(L, 2, 0, 0) != LUA_OK) { lua_pop(L, 1); }
 }
 
 /* =========================================================================
@@ -369,6 +370,7 @@ game_error_t game_kcp_listen(game_client_t* client, int port,
         return GAME_ERR_NETWORK;
     }
 
+    if (lua_gettop(L) >= 2) lua_pop(L, 1);  /* discard padded nil */
     int ref = luaL_ref(L, LUA_REGISTRYINDEX);
     srv->ctx = reinterpret_cast<void*>(static_cast<intptr_t>(ref));
 
@@ -392,7 +394,7 @@ void game_kcp_server_stop(game_kcp_server_t** server_ptr) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
         lua_getfield(L, -1, "stop");
         lua_insert(L, -2);
-        lua_pcall(L, 1, 0, 0);
+        if (lua_pcall(L, 1, 0, 0) != LUA_OK) { lua_pop(L, 1); }
         luaL_unref(L, LUA_REGISTRYINDEX, ref);
     }
     delete srv;
@@ -410,7 +412,7 @@ void game_kcp_server_pause(game_kcp_server_t* srv) {
     lua_rawgeti(L, LUA_REGISTRYINDEX, get_kcp_srv_ref(srv));
     lua_getfield(L, -1, "pause");
     lua_insert(L, -2);
-    lua_pcall(L, 1, 0, 0);
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK) { lua_pop(L, 1); }
 }
 
 void game_kcp_server_resume(game_kcp_server_t* srv) {
@@ -420,7 +422,7 @@ void game_kcp_server_resume(game_kcp_server_t* srv) {
     lua_rawgeti(L, LUA_REGISTRYINDEX, get_kcp_srv_ref(srv));
     lua_getfield(L, -1, "continue");
     lua_insert(L, -2);
-    lua_pcall(L, 1, 0, 0);
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK) { lua_pop(L, 1); }
 }
 
 bool game_kcp_server_is_running(game_kcp_server_t* srv) {
@@ -462,7 +464,7 @@ void game_kcp_server_set_on_message(game_kcp_server_t* srv,
     } else {
         lua_pushnil(L);
     }
-    lua_pcall(L, 2, 0, 0);
+    if (lua_pcall(L, 2, 0, 0) != LUA_OK) { lua_pop(L, 1); }
 }
 
 void game_kcp_server_set_nodelay(game_kcp_server_t* srv,
@@ -478,7 +480,7 @@ void game_kcp_server_set_nodelay(game_kcp_server_t* srv,
     lua_pushinteger(L, interval);
     lua_pushinteger(L, resend);
     lua_pushinteger(L, nc);
-    lua_pcall(L, 5, 0, 0);
+    if (lua_pcall(L, 5, 0, 0) != LUA_OK) { lua_pop(L, 1); }
 }
 
 void game_kcp_server_set_wnd_size(game_kcp_server_t* srv,
@@ -491,7 +493,7 @@ void game_kcp_server_set_wnd_size(game_kcp_server_t* srv,
     lua_insert(L, -2);
     lua_pushinteger(L, sndwnd);
     lua_pushinteger(L, rcvwnd);
-    lua_pcall(L, 3, 0, 0);
+    if (lua_pcall(L, 3, 0, 0) != LUA_OK) { lua_pop(L, 1); }
 }
 
 void game_kcp_server_set_mtu(game_kcp_server_t* srv, int mtu) {
@@ -502,7 +504,7 @@ void game_kcp_server_set_mtu(game_kcp_server_t* srv, int mtu) {
     lua_getfield(L, -1, "set_kcp_mtu");
     lua_insert(L, -2);
     lua_pushinteger(L, mtu);
-    lua_pcall(L, 2, 0, 0);
+    if (lua_pcall(L, 2, 0, 0) != LUA_OK) { lua_pop(L, 1); }
 }
 
 void game_kcp_server_set_session_timeout(game_kcp_server_t* srv,
@@ -514,7 +516,7 @@ void game_kcp_server_set_session_timeout(game_kcp_server_t* srv,
     lua_getfield(L, -1, "set_session_timeout");
     lua_insert(L, -2);
     lua_pushinteger(L, timeout_ms);
-    lua_pcall(L, 2, 0, 0);
+    if (lua_pcall(L, 2, 0, 0) != LUA_OK) { lua_pop(L, 1); }
 }
 
 } /* extern "C" */
