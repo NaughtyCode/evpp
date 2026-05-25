@@ -283,6 +283,15 @@ int l_server_set_on_close(lua_State* L) {
     return 0;
 }
 
+int l_server_set_on_message(lua_State* L) {
+    auto* ctx = GetServerCtxFromTable(L, 1);
+    if (!ctx) return luaL_error(L, "server: invalid context");
+    if (ctx->disposed) return luaL_error(L, "server: closed");
+    lua_settop(L, 2);
+    lua_setfield(L, 1, "on_message");
+    return 0;
+}
+
 int l_server_gc(lua_State* L) {
     auto* ctx = GetServerCtxFromTable(L, 1);
     if (!ctx || ctx->disposed) return 0;
@@ -499,9 +508,10 @@ const luaL_Reg kConnMethods[] = {
 };
 
 const luaL_Reg kServerMethods[] = {
-    {"stop",             l_server_stop},
-    {"set_on_connect",   l_server_set_on_connect},
-    {"set_on_close",     l_server_set_on_close},
+    {"stop",              l_server_stop},
+    {"set_on_connect",    l_server_set_on_connect},
+    {"set_on_close",      l_server_set_on_close},
+    {"set_on_message",    l_server_set_on_message},
     {nullptr, nullptr},
 };
 

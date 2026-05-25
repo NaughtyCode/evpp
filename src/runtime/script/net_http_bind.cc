@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -58,6 +59,45 @@ std::atomic<bool> g_net_alive{true};
 // when the request hasn't completed yet. Without this, refs held by
 // in-flight HTTP requests would leak in the Lua registry.
 std::vector<int> g_http_pending_refs;
+std::mutex g_http_mutex;
+
+// Common HTTP response handling: dispatches to Lua callback, then cleans up
+// the registry ref under mutex. The TOCTOU-safe interaction with
+// ShutdownHttpBindings works as follows:
+//   - If g_net_alive is false on entry, ShutdownHttpBindings already owns
+//     the pending refs → return immediately, let shutdown handle cleanup.
+//   - After dispatching to Lua, re-check g_net_alive under the mutex
+//     before unlinking the ref. If ShutdownHttpBindings concurrently set
+//     g_net_alive=false and moved the pending vector, we bail out
+//     without touching the ref (shutdown already released it).
+void HandleHttpResponse(lua_State* L, int ref,
+                        const std::shared_ptr<evpp::httpc::Response>& resp) {
+    if (ref == LUA_NOREF) {
+        std::lock_guard<std::mutex> lock(g_http_mutex);
+        auto it = std::find(g_http_pending_refs.begin(),
+                            g_http_pending_refs.end(), ref);
+        if (it != g_http_pending_refs.end()) g_http_pending_refs.erase(it);
+        return;
+    }
+
+    if (!g_net_alive.load()) return;
+
+    if (resp) {
+        std::string body(resp->body().data(), resp->body().size());
+        call_lua_http_handler(L, ref, resp->http_code(), body);
+    } else {
+        call_lua_http_handler(L, ref, 0, "");
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(g_http_mutex);
+        if (!g_net_alive.load()) return;
+        luaL_unref(L, LUA_REGISTRYINDEX, ref);
+        auto it = std::find(g_http_pending_refs.begin(),
+                            g_http_pending_refs.end(), ref);
+        if (it != g_http_pending_refs.end()) g_http_pending_refs.erase(it);
+    }
+}
 
 // ── l_net_http_get(url, on_response) ─────────────────────────────────────
 int l_net_http_get(lua_State* L) {
@@ -71,34 +111,17 @@ int l_net_http_get(lua_State* L) {
 
     lua_pushvalue(L, 2);
     int ref = luaL_ref(L, LUA_REGISTRYINDEX);
-    g_http_pending_refs.push_back(ref);
+    {
+        std::lock_guard<std::mutex> lock(g_http_mutex);
+        g_http_pending_refs.push_back(ref);
+    }
 
     double timeout = ConfigManager::Instance().GetServerConfig().http.timeout_sec;
     auto req = std::make_shared<evpp::httpc::GetRequest>(
         loop, url, evpp::Duration(timeout));
 
     req->Execute([L, ref](const std::shared_ptr<evpp::httpc::Response>& resp) {
-        auto erase_ref = [&]() {
-            luaL_unref(L, LUA_REGISTRYINDEX, ref);
-            auto it = std::find(g_http_pending_refs.begin(),
-                                g_http_pending_refs.end(), ref);
-            if (it != g_http_pending_refs.end()) g_http_pending_refs.erase(it);
-        };
-        // If engine is shutting down, ShutdownHttpBindings already released
-        // all pending refs — skip erase_ref to avoid double-unref.
-        if (!g_net_alive.load()) {
-            return;
-        }
-        if (ref == LUA_NOREF) {
-            return;
-        }
-        if (resp) {
-            std::string body(resp->body().data(), resp->body().size());
-            call_lua_http_handler(L, ref, resp->http_code(), body);
-        } else {
-            call_lua_http_handler(L, ref, 0, "");
-        }
-        erase_ref();
+        HandleHttpResponse(L, ref, resp);
     });
 
     return 0;
@@ -118,28 +141,17 @@ int l_net_http_post(lua_State* L) {
 
     lua_pushvalue(L, 3);
     int ref = luaL_ref(L, LUA_REGISTRYINDEX);
-    g_http_pending_refs.push_back(ref);
+    {
+        std::lock_guard<std::mutex> lock(g_http_mutex);
+        g_http_pending_refs.push_back(ref);
+    }
 
     double timeout = ConfigManager::Instance().GetServerConfig().http.timeout_sec;
     auto req = std::make_shared<evpp::httpc::PostRequest>(
         loop, url, std::string(body, body_len), evpp::Duration(timeout));
 
     req->Execute([L, ref](const std::shared_ptr<evpp::httpc::Response>& resp) {
-        auto erase_ref = [&]() {
-            luaL_unref(L, LUA_REGISTRYINDEX, ref);
-            auto it = std::find(g_http_pending_refs.begin(),
-                                g_http_pending_refs.end(), ref);
-            if (it != g_http_pending_refs.end()) g_http_pending_refs.erase(it);
-        };
-        if (!g_net_alive.load()) return;
-        if (ref == LUA_NOREF) { erase_ref(); return; }
-        if (resp) {
-            std::string body_str(resp->body().data(), resp->body().size());
-            call_lua_http_handler(L, ref, resp->http_code(), body_str);
-        } else {
-            call_lua_http_handler(L, ref, 0, "");
-        }
-        erase_ref();
+        HandleHttpResponse(L, ref, resp);
     });
 
     return 0;
@@ -168,11 +180,15 @@ void ShutdownHttpBindings() {
     // Prevent any in-flight HTTP callbacks from touching a freed Lua state.
     g_net_alive.store(false);
 
-    // Move pending refs to a local before iterating — any callback that
-    // already passed the g_net_alive check may still call erase_ref(),
-    // and g_http_pending_refs is not locked.
+    // Atomically take ownership of pending refs. Callbacks that already
+    // passed the g_net_alive check will re-check under the mutex inside
+    // HandleHttpResponse and bail out, leaving cleanup to us.
     lua_State* L = Engine::Instance().GetScriptVM().GetState();
-    auto pending = std::move(g_http_pending_refs);
+    std::vector<int> pending;
+    {
+        std::lock_guard<std::mutex> lock(g_http_mutex);
+        pending = std::move(g_http_pending_refs);
+    }
     if (!pending.empty()) {
         if (L) {
             for (int ref : pending) {

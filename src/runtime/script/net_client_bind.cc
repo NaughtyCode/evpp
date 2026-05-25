@@ -148,6 +148,7 @@ int l_net_client_connect(lua_State* L) {
                         lua_setfield(L_ptr, -2, "_ctx");   // prevent use-after-free
                         lua_pop(L_ptr, 1);
                         luaL_unref(L_ptr, LUA_REGISTRYINDEX, inst_ref);
+                        ctx_ptr->instance_ref = LUA_NOREF;
                     }
                     auto* loop = Engine::Instance().GetEventLoop();
                     if (loop) {
