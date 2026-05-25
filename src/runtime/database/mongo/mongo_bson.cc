@@ -206,6 +206,10 @@ bool BsonDocument::HasField(const char* key) const {
     return bson_has_field(static_cast<const bson_t*>(RawBson()), key);
 }
 
+bool BsonDocument::Empty() const {
+    return bson_empty(static_cast<const bson_t*>(RawBson()));
+}
+
 bool BsonDocument::Equal(const BsonDocument& other) const {
     return bson_equal(static_cast<const bson_t*>(RawBson()),
                       static_cast<const bson_t*>(other.RawBson()));
@@ -422,6 +426,24 @@ bool BsonIter::FindDescendant(const char* dotkey, BsonIter* descendant) {
                                       static_cast<bson_iter_t*>(descendant->RawIter()));
 }
 
+bool BsonIter::InitFind(const BsonDocument& doc, const char* key) {
+    return bson_iter_init_find(static_cast<bson_iter_t*>(RawIter()),
+                               static_cast<const bson_t*>(doc.RawBson()), key);
+}
+
+bool BsonIter::InitFindCase(const BsonDocument& doc, const char* key) {
+    return bson_iter_init_find_case(static_cast<bson_iter_t*>(RawIter()),
+                                    static_cast<const bson_t*>(doc.RawBson()), key);
+}
+
+const char* BsonIter::KeyUnsafe() const {
+    return bson_iter_key_unsafe(static_cast<const bson_iter_t*>(RawIter()));
+}
+
+char* BsonIter::DupUtf8(uint32_t* length) const {
+    return bson_iter_dup_utf8(static_cast<const bson_iter_t*>(RawIter()), length);
+}
+
 BsonIter BsonIter::Recurse() const {
     BsonIter child;
     bson_iter_recurse(static_cast<const bson_iter_t*>(RawIter()),
@@ -551,6 +573,43 @@ bool BsonArrayBuilder::AppendValue(const void* bson_value) {
     return bson_array_builder_append_value(
         static_cast<bson_array_builder_t*>(ptr_),
         static_cast<const bson_value_t*>(bson_value));
+}
+
+bool BsonArrayBuilder::AppendMinkey() {
+    return bson_array_builder_append_minkey(static_cast<bson_array_builder_t*>(ptr_));
+}
+
+bool BsonArrayBuilder::AppendMaxkey() {
+    return bson_array_builder_append_maxkey(static_cast<bson_array_builder_t*>(ptr_));
+}
+
+bool BsonArrayBuilder::AppendUndefined() {
+    return bson_array_builder_append_undefined(static_cast<bson_array_builder_t*>(ptr_));
+}
+
+bool BsonArrayBuilder::AppendSymbol(const char* value) {
+    return bson_array_builder_append_symbol(
+        static_cast<bson_array_builder_t*>(ptr_), value, -1);
+}
+
+bool BsonArrayBuilder::AppendDBPointer(const char* collection, const MongoOid& oid) {
+    return bson_array_builder_append_dbpointer(
+        static_cast<bson_array_builder_t*>(ptr_), collection,
+        reinterpret_cast<const bson_oid_t*>(oid.data()));
+}
+
+bool BsonArrayBuilder::AppendTimeT(time_t value) {
+    return bson_array_builder_append_time_t(static_cast<bson_array_builder_t*>(ptr_), value);
+}
+
+bool BsonArrayBuilder::AppendNowUtc() {
+    return bson_array_builder_append_now_utc(static_cast<bson_array_builder_t*>(ptr_));
+}
+
+bool BsonArrayBuilder::AppendDecimal128(const MongoDecimal128& value) {
+    return bson_array_builder_append_decimal128(
+        static_cast<bson_array_builder_t*>(ptr_),
+        reinterpret_cast<const bson_decimal128_t*>(&value));
 }
 
 bool BsonArrayBuilder::AppendDocumentBegin(BsonDocument* subdoc) {

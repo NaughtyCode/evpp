@@ -39,6 +39,7 @@ public:
     // ── Server / metadata ──────────────────────────────────────────────
     int64_t GetId() const;
     uint32_t GetServerId() const;
+    void GetHost(void* host_out) const;
     void SetMaxAwaitTimeMs(uint32_t max_await_ms);
     uint32_t GetMaxAwaitTimeMs() const;
 

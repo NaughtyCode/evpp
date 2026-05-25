@@ -110,6 +110,11 @@ uint32_t MongoCursor::GetServerId() const {
     return impl_ && impl_->cursor ? mongoc_cursor_get_server_id(impl_->cursor) : 0;
 }
 
+void MongoCursor::GetHost(void* host_out) const {
+    if (impl_ && impl_->cursor && host_out)
+        mongoc_cursor_get_host(impl_->cursor, static_cast<mongoc_host_list_t*>(host_out));
+}
+
 void MongoCursor::SetMaxAwaitTimeMs(uint32_t max_await_ms) {
     if (impl_ && impl_->cursor)
         mongoc_cursor_set_max_await_time_ms(impl_->cursor, max_await_ms);

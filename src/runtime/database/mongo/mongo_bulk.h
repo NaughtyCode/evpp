@@ -53,6 +53,8 @@ public:
     void SetWriteConcern(const MongoWriteConcern& write_concern);
     void SetServerId(uint32_t server_id);
     uint32_t GetServerId() const;
+    void SetDatabase(const char* database);
+    void SetCollection(const char* collection);
 
     void* RawBulkOperation(); // returns mongoc_bulk_operation_t*
     void SetRawBulkOperation(void* bulk); // takes ownership

@@ -63,6 +63,16 @@ const void* MongoReadPrefs::RawReadPrefs() const {
     return impl_ ? impl_->prefs : nullptr;
 }
 
+const void* MongoReadPrefs::GetTags() const {
+    return impl_ && impl_->prefs ? mongoc_read_prefs_get_tags(impl_->prefs) : nullptr;
+}
+
+void MongoReadPrefs::SetTags(const BsonDocument& tags) {
+    if (impl_ && impl_->prefs)
+        mongoc_read_prefs_set_tags(impl_->prefs,
+            static_cast<const bson_t*>(tags.RawBson()));
+}
+
 bool MongoReadPrefs::AddTag(const BsonDocument& tag) {
     if (!impl_ || !impl_->prefs) return false;
     mongoc_read_prefs_add_tag(impl_->prefs,
@@ -78,6 +88,16 @@ int MongoReadPrefs::GetMaxStalenessSeconds() const {
 void MongoReadPrefs::SetMaxStalenessSeconds(int max_staleness_seconds) {
     if (impl_ && impl_->prefs)
         mongoc_read_prefs_set_max_staleness_seconds(impl_->prefs, static_cast<int64_t>(max_staleness_seconds));
+}
+
+const void* MongoReadPrefs::GetHedge() const {
+    return impl_ && impl_->prefs ? mongoc_read_prefs_get_hedge(impl_->prefs) : nullptr;
+}
+
+void MongoReadPrefs::SetHedge(const BsonDocument& hedge) {
+    if (impl_ && impl_->prefs)
+        mongoc_read_prefs_set_hedge(impl_->prefs,
+            static_cast<const bson_t*>(hedge.RawBson()));
 }
 
 bool MongoReadPrefs::IsValid() const {

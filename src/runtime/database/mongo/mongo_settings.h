@@ -34,9 +34,13 @@ public:
     void SetMode(Mode mode);
 
     // Tag sets (used for targeting specific replicas)
+    const void* GetTags() const;
+    void SetTags(const BsonDocument& tags);
     bool AddTag(const BsonDocument& tag);
     int GetMaxStalenessSeconds() const;
     void SetMaxStalenessSeconds(int max_staleness_seconds);
+    const void* GetHedge() const;
+    void SetHedge(const BsonDocument& hedge);
     bool IsValid() const;
 
     void* RawReadPrefs();       // returns mongoc_read_prefs_t*

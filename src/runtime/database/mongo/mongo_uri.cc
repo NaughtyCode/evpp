@@ -1,4 +1,5 @@
 #include "runtime/database/mongo/mongo_uri.h"
+#include "runtime/database/mongo/mongo_bson.h"
 
 #include <mongoc/mongoc.h>
 
@@ -165,6 +166,99 @@ void MongoUri::SetReadConcern(const MongoReadConcern& read_concern) {
     if (impl_ && impl_->uri)
         mongoc_uri_set_read_concern(impl_->uri,
             static_cast<const mongoc_read_concern_t*>(read_concern.RawReadConcern()));
+}
+
+// ── Hosts / Options / Mechanism ─────────────────────────────────────
+
+const void* MongoUri::GetHosts() const {
+    return impl_ && impl_->uri ? mongoc_uri_get_hosts(impl_->uri) : nullptr;
+}
+
+const void* MongoUri::GetOptions() const {
+    return impl_ && impl_->uri ? mongoc_uri_get_options(impl_->uri) : nullptr;
+}
+
+bool MongoUri::GetMechanismProperties(BsonDocument& properties) const {
+    if (!impl_ || !impl_->uri) return false;
+    return mongoc_uri_get_mechanism_properties(impl_->uri,
+        static_cast<bson_t*>(properties.RawBson()));
+}
+
+bool MongoUri::SetMechanismProperties(const BsonDocument& properties) {
+    if (!impl_ || !impl_->uri) return false;
+    return mongoc_uri_set_mechanism_properties(impl_->uri,
+        static_cast<const bson_t*>(properties.RawBson()));
+}
+
+// ── Settings getters ──────────────────────────────────────────────────
+
+const void* MongoUri::GetReadPrefs() const {
+    return impl_ && impl_->uri ? mongoc_uri_get_read_prefs_t(impl_->uri) : nullptr;
+}
+
+const void* MongoUri::GetWriteConcern() const {
+    return impl_ && impl_->uri ? mongoc_uri_get_write_concern(impl_->uri) : nullptr;
+}
+
+const void* MongoUri::GetReadConcern() const {
+    return impl_ && impl_->uri ? mongoc_uri_get_read_concern(impl_->uri) : nullptr;
+}
+
+// ── Server monitoring mode ───────────────────────────────────────────
+
+const char* MongoUri::GetServerMonitoringMode() const {
+    return impl_ && impl_->uri ? mongoc_uri_get_server_monitoring_mode(impl_->uri) : nullptr;
+}
+
+bool MongoUri::SetServerMonitoringMode(const char* value) {
+    return impl_ && impl_->uri && mongoc_uri_set_server_monitoring_mode(impl_->uri, value);
+}
+
+// ── Option type checks (static) ──────────────────────────────────────
+
+bool MongoUri::OptionIsInt32(const char* key) { return mongoc_uri_option_is_int32(key); }
+bool MongoUri::OptionIsInt64(const char* key) { return mongoc_uri_option_is_int64(key); }
+bool MongoUri::OptionIsBool(const char* key)  { return mongoc_uri_option_is_bool(key); }
+bool MongoUri::OptionIsUtf8(const char* key)  { return mongoc_uri_option_is_utf8(key); }
+
+// ── Generic option getters ────────────────────────────────────────────
+
+int32_t MongoUri::GetOptionAsInt32(const char* option, int32_t fallback) const {
+    return impl_ && impl_->uri
+        ? mongoc_uri_get_option_as_int32(impl_->uri, option, fallback) : fallback;
+}
+
+int64_t MongoUri::GetOptionAsInt64(const char* option, int64_t fallback) const {
+    return impl_ && impl_->uri
+        ? mongoc_uri_get_option_as_int64(impl_->uri, option, fallback) : fallback;
+}
+
+bool MongoUri::GetOptionAsBool(const char* option, bool fallback) const {
+    return impl_ && impl_->uri
+        ? mongoc_uri_get_option_as_bool(impl_->uri, option, fallback) : fallback;
+}
+
+const char* MongoUri::GetOptionAsUtf8(const char* option, const char* fallback) const {
+    return impl_ && impl_->uri
+        ? mongoc_uri_get_option_as_utf8(impl_->uri, option, fallback) : fallback;
+}
+
+// ── Generic option setters ────────────────────────────────────────────
+
+bool MongoUri::SetOptionAsInt32(const char* option, int32_t value) {
+    return impl_ && impl_->uri && mongoc_uri_set_option_as_int32(impl_->uri, option, value);
+}
+
+bool MongoUri::SetOptionAsInt64(const char* option, int64_t value) {
+    return impl_ && impl_->uri && mongoc_uri_set_option_as_int64(impl_->uri, option, value);
+}
+
+bool MongoUri::SetOptionAsBool(const char* option, bool value) {
+    return impl_ && impl_->uri && mongoc_uri_set_option_as_bool(impl_->uri, option, value);
+}
+
+bool MongoUri::SetOptionAsUtf8(const char* option, const char* value) {
+    return impl_ && impl_->uri && mongoc_uri_set_option_as_utf8(impl_->uri, option, value);
 }
 
 } // namespace mongo

@@ -171,11 +171,15 @@ source_group("evpp" FILES ${EVPP_SOURCES})
 set(MONGO_SOURCES
     database/mongo/mongo_bson.cc database/mongo/mongo_bson.h
     database/mongo/mongo_bulk.cc database/mongo/mongo_bulk.h
+    database/mongo/mongo_change_stream.cc database/mongo/mongo_change_stream.h
     database/mongo/mongo_client.cc database/mongo/mongo_client.h
+    database/mongo/mongo_client_pool.cc database/mongo/mongo_client_pool.h
     database/mongo/mongo_cursor.cc database/mongo/mongo_cursor.h
     database/mongo/mongo_error.cc database/mongo/mongo_error.h
+    database/mongo/mongo_find_and_modify_opts.cc database/mongo/mongo_find_and_modify_opts.h
     database/mongo/mongo_forward.h
     database/mongo/mongo_oid.cc database/mongo/mongo_oid.h
+    database/mongo/mongo_server_api.cc database/mongo/mongo_server_api.h
     database/mongo/mongo_session.cc database/mongo/mongo_session.h
     database/mongo/mongo_settings.cc database/mongo/mongo_settings.h
     database/mongo/mongo_system.cc database/mongo/mongo_system.h

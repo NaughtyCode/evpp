@@ -148,6 +148,16 @@ uint32_t MongoBulkOperation::GetServerId() const {
     return impl_ && impl_->bulk ? mongoc_bulk_operation_get_server_id(impl_->bulk) : 0;
 }
 
+void MongoBulkOperation::SetDatabase(const char* database) {
+    if (impl_ && impl_->bulk)
+        mongoc_bulk_operation_set_database(impl_->bulk, database);
+}
+
+void MongoBulkOperation::SetCollection(const char* collection) {
+    if (impl_ && impl_->bulk)
+        mongoc_bulk_operation_set_collection(impl_->bulk, collection);
+}
+
 void* MongoBulkOperation::RawBulkOperation() {
     return impl_ ? impl_->bulk : nullptr;
 }

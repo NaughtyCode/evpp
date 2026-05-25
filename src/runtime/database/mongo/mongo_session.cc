@@ -235,6 +235,14 @@ bool MongoSession::AppendToOpts(BsonDocument* opts, MongoError* error) {
         error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 }
 
+void* MongoSession::GetClient() const {
+    return impl_ && impl_->session ? mongoc_client_session_get_client(impl_->session) : nullptr;
+}
+
+const void* MongoSession::GetOpts() const {
+    return impl_ && impl_->session ? mongoc_client_session_get_opts(impl_->session) : nullptr;
+}
+
 void* MongoSession::RawSession() {
     return impl_ ? impl_->session : nullptr;
 }

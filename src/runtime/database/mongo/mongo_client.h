@@ -21,11 +21,16 @@ public:
     // Settings
     void SetSocketTimeoutMs(int32_t timeout_ms);
     void SetAppname(const char* appname);
+    void SetSslOpts(const void* ssl_opts);
     MongoUri GetUri() const;
     void SetReadPrefs(const MongoReadPrefs& read_prefs);
     void SetWriteConcern(const MongoWriteConcern& write_concern);
     void SetReadConcern(const MongoReadConcern& read_concern);
+    const void* GetReadPrefs() const;
+    const void* GetWriteConcern() const;
+    const void* GetReadConcern() const;
     void SetErrorApi(uint32_t version);
+    bool SetServerApi(const MongoServerApi& api, MongoError* error);
     void Reset();
 
     // Get child objects (caller owns the returned pointer; must call Destroy()).
@@ -34,23 +39,42 @@ public:
     MongoCollection* GetCollection(const char* db_name, const char* coll_name);
 
     // Run a raw command on a database, returning the server reply in `reply`.
-    // Returns true on success.
     bool CommandSimple(const char* db_name, const BsonDocument& command,
                        const MongoReadPrefs* read_prefs,
                        BsonDocument* reply, MongoError* error);
+    bool ReadCommandWithOpts(const char* db_name, const BsonDocument& command,
+                             const MongoReadPrefs* read_prefs, const BsonDocument* opts,
+                             BsonDocument* reply, MongoError* error);
+    bool WriteCommandWithOpts(const char* db_name, const BsonDocument& command,
+                              const BsonDocument* opts,
+                              BsonDocument* reply, MongoError* error);
+    bool ReadWriteCommandWithOpts(const char* db_name, const BsonDocument& command,
+                                  const MongoReadPrefs* read_prefs, const BsonDocument* opts,
+                                  BsonDocument* reply, MongoError* error);
 
     // ── Session ────────────────────────────────────────────────────
     MongoSession* StartSession(const MongoSessionOpts* opts, MongoError* error);
 
-    // ── Database names ──────────────────────────────────────────────
-    // Returns nullptr on error; check `error` for details.
+    // ── Database names / listing ────────────────────────────────────
     // Caller must bson_free() the returned string array.
     char** GetDatabaseNames(MongoError* error);
+    char** GetDatabaseNamesWithOpts(const BsonDocument* opts, MongoError* error);
+    MongoCursor* FindDatabasesWithOpts(const BsonDocument* opts);
+
+    // ── Change stream ────────────────────────────────────────────────
+    MongoChangeStream* Watch(const BsonDocument& pipeline, const BsonDocument* opts);
 
     // Internal access
     void* RawClient(); // returns mongoc_client_t*
 
+    // For pool use: release ownership (client is now managed by the pool).
+    void ReleaseFromPool();
+
+    // Static factory for pool-owned clients.
+    static MongoClient* FromPooled(void* raw_client);
+
 private:
+    friend class MongoClientPool;
     struct Impl;
     std::unique_ptr<Impl> impl_;
 
@@ -74,18 +98,39 @@ public:
     MongoCollection* CreateCollection(const char* name, const BsonDocument* options, MongoError* error);
 
     bool Drop(MongoError* error);
+    bool DropWithOpts(const BsonDocument* opts, MongoError* error);
     bool HasCollection(const char* name, MongoError* error);
 
     bool CommandSimple(const BsonDocument& command, const MongoReadPrefs* read_prefs,
                        BsonDocument* reply, MongoError* error);
+    bool ReadCommandWithOpts(const BsonDocument& command, const MongoReadPrefs* read_prefs,
+                             const BsonDocument* opts, BsonDocument* reply, MongoError* error);
+    bool WriteCommandWithOpts(const BsonDocument& command, const BsonDocument* opts,
+                              BsonDocument* reply, MongoError* error);
+    bool ReadWriteCommandWithOpts(const BsonDocument& command, const MongoReadPrefs* read_prefs,
+                                  const BsonDocument* opts, BsonDocument* reply, MongoError* error);
+    bool CommandWithOpts(const BsonDocument& command, const MongoReadPrefs* read_prefs,
+                         const BsonDocument* opts, BsonDocument* reply, MongoError* error);
+
+    // ── Read/Write settings ─────────────────────────────────────────
+    const void* GetReadPrefs() const;
+    void SetReadPrefs(const MongoReadPrefs& read_prefs);
+    const void* GetWriteConcern() const;
+    void SetWriteConcern(const MongoWriteConcern& write_concern);
+    const void* GetReadConcern() const;
+    void SetReadConcern(const MongoReadConcern& read_concern);
 
     // ── Aggregate ──────────────────────────────────────────────────
     MongoCursor* Aggregate(const BsonDocument& pipeline, const BsonDocument* opts,
                            const MongoReadPrefs* read_prefs);
 
-    // ── Collection names ────────────────────────────────────────────
-    // Returns nullptr on error; check `error` for details.
+    // ── Change stream ────────────────────────────────────────────────
+    MongoChangeStream* Watch(const BsonDocument& pipeline, const BsonDocument* opts);
+
+    // ── Collection names / listing ──────────────────────────────────
     char** GetCollectionNames(MongoError* error);
+    char** GetCollectionNamesWithOpts(const BsonDocument* opts, MongoError* error);
+    MongoCursor* FindCollectionsWithOpts(const BsonDocument* opts);
 
     // ── User management ─────────────────────────────────────────────
     bool AddUser(const char* username, const char* password,
@@ -114,6 +159,14 @@ public:
     void Destroy();
 
     const char* GetName() const;
+
+    // ── Read/Write settings ─────────────────────────────────────────
+    const void* GetReadPrefs() const;
+    void SetReadPrefs(const MongoReadPrefs& read_prefs);
+    const void* GetReadConcern() const;
+    void SetReadConcern(const MongoReadConcern& read_concern);
+    const void* GetWriteConcern() const;
+    void SetWriteConcern(const MongoWriteConcern& write_concern);
 
     // ── Insert ──────────────────────────────────────────────────────
     bool InsertOne(const BsonDocument& document, const BsonDocument* opts,
@@ -151,14 +204,23 @@ public:
                     const BsonDocument* opts, BsonDocument* reply, MongoError* error);
 
     // ── Find and modify ────────────────────────────────────────────
-    bool FindAndModify(const BsonDocument& query, const void* find_and_modify_opts,
+    bool FindAndModify(const BsonDocument& query, const MongoFindAndModifyOpts* opts,
                        BsonDocument* reply, MongoError* error);
+
+    // ── Change stream ────────────────────────────────────────────────
+    MongoChangeStream* Watch(const BsonDocument& pipeline, const BsonDocument* opts);
 
     // ── Drop / indexes ──────────────────────────────────────────────
     bool Drop(MongoError* error);
+    bool DropWithOpts(const BsonDocument* opts, MongoError* error);
     bool DropIndex(const char* index_name, MongoError* error);
+    bool DropIndexWithOpts(const char* index_name, const BsonDocument* opts, MongoError* error);
     bool CreateIndex(const BsonDocument& keys, const BsonDocument* opts,
                      BsonDocument* reply, MongoError* error);
+    MongoCursor* FindIndexes(const BsonDocument* opts);
+
+    // ── Utilities ───────────────────────────────────────────────────
+    char* KeysToIndexString() const;
 
     // ── Rename ──────────────────────────────────────────────────────
     bool Rename(const char* new_db, const char* new_name, bool drop_target_before_rename,

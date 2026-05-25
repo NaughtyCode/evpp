@@ -95,6 +95,7 @@ public:
     // ── Query / access ──────────────────────────────────────────────
     uint32_t CountKeys() const;
     bool HasField(const char* key) const;
+    bool Empty() const;
     bool Equal(const BsonDocument& other) const;
     int Compare(const BsonDocument& other) const;
     bool Concat(const BsonDocument& src);
@@ -163,6 +164,12 @@ public:
     bool FindCase(const char* key);
     bool FindDescendant(const char* dotkey, BsonIter* descendant);
 
+    // Init-and-find (initialize iterator and find key in one call)
+    bool InitFind(const BsonDocument& doc, const char* key);
+    bool InitFindCase(const BsonDocument& doc, const char* key);
+    const char* KeyUnsafe() const;
+    char* DupUtf8(uint32_t* length) const;
+
     // Recursion into sub-documents
     BsonIter Recurse() const;
 
@@ -200,6 +207,14 @@ public:
     bool AppendCodeWithScope(const char* javascript, const BsonDocument& scope);
     bool AppendIter(const BsonIter& iter);
     bool AppendValue(const void* bson_value);
+    bool AppendMinkey();
+    bool AppendMaxkey();
+    bool AppendUndefined();
+    bool AppendSymbol(const char* value);
+    bool AppendDBPointer(const char* collection, const MongoOid& oid);
+    bool AppendTimeT(time_t value);
+    bool AppendNowUtc();
+    bool AppendDecimal128(const MongoDecimal128& value);
 
     // Sub-document building within the builder
     bool AppendDocumentBegin(BsonDocument* subdoc);
