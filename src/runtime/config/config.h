@@ -1,5 +1,7 @@
 #pragma once
 
+#include <mutex>
+#include <shared_mutex>
 #include <string>
 
 #include "runtime/config/config_constants.h"
@@ -115,6 +117,7 @@ public:
 private:
     ConfigManager() = default;
 
+    mutable std::shared_mutex config_mutex_;
     RuntimeConfig runtime_config_;
     ClientConfig client_config_;
     ServerConfig server_config_;

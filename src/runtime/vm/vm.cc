@@ -272,7 +272,7 @@ void ScriptVM::RegisterModule(std::string_view name, const luaL_Reg* functions) 
 
 void ScriptVM::RegisterModuleOpen(std::string_view name, lua_CFunction openf,
                             bool make_global) {
-    if (!L_) return;
+    if (!L_ || !openf) return;
 
     luaL_requiref(L_, std::string(name).c_str(), openf, make_global ? 1 : 0);
     lua_pop(L_, 1);

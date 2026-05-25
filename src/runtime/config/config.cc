@@ -128,23 +128,34 @@ bool ConfigManager::Reload(const std::string& config_dir) {
         return false;
     }
 
-    runtime_config_ = std::move(new_runtime);
-
+    bool have_client = false;
     std::error_code ec2;
     std::string client_path = config_dir + kClientConfigFile;
     if (std::filesystem::exists(client_path, ec2)) {
         buf.clear();
         auto ec3 = glz::read_file_json(new_client, client_path, buf);
         if (!ec3) {
-            client_config_ = std::move(new_client);
+            have_client = true;
         }
     }
 
+    bool have_server = false;
     std::string server_path = config_dir + kServerConfigFile;
     if (std::filesystem::exists(server_path, ec2)) {
         buf.clear();
         auto ec3 = glz::read_file_json(new_server, server_path, buf);
         if (!ec3) {
+            have_server = true;
+        }
+    }
+
+    {
+        std::lock_guard<std::shared_mutex> lock(config_mutex_);
+        runtime_config_ = std::move(new_runtime);
+        if (have_client) {
+            client_config_ = std::move(new_client);
+        }
+        if (have_server) {
             server_config_ = std::move(new_server);
         }
     }
