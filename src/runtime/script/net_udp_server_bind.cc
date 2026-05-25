@@ -9,7 +9,7 @@
 #include <atomic>
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <unordered_set>
 
 #include <runtime/evpp/udp/udp_server.h>
 #include <runtime/evpp/udp/udp_message.h>
@@ -28,31 +28,46 @@ namespace script {
 namespace {
 
 // ======================================================================
-// UDP Server bindings
+// UDP Server bindings (light userdata + Lua class)
 // ======================================================================
 
 struct UdpServerCtx {
     std::unique_ptr<evpp::udp::Server> server;
     lua_State* L = nullptr;
+    int instance_ref = LUA_NOREF;        // Lua instance table ref
     // Atomic: written from main thread (listen/set_on_message/stop),
-    // read from RecvThread inside MessageHandler after weak_ptr lock.
+    // read from RecvThread inside MessageHandler.
     std::atomic<int> on_message_ref{LUA_NOREF};
+    bool disposed = false;
 };
 
-std::unordered_map<int64_t, std::shared_ptr<UdpServerCtx>> g_udp_servers;
-std::atomic<int64_t> g_next_udp_server_id{1};
+const char* kUdpServerMetaName = "net.udp_server.instance";
 
-// ── Bind the MessageHandler using weak_ptr (same pattern as TCP server) ──
-void BindMessageHandler(const std::shared_ptr<UdpServerCtx>& ctx) {
+// Lightweight set of active UdpServerCtx pointers, used ONLY by
+// ShutdownUdpServerBindings to find and stop all servers during engine shutdown.
+// Normal operations (stop, pause, continue, is_running, set_on_message)
+// never touch this set.
+std::unordered_set<UdpServerCtx*> g_udp_server_ctxs;
+
+// ── Internal helpers ─────────────────────────────────────────────────
+
+UdpServerCtx* GetUdpServerCtxFromTable(lua_State* L, int idx) {
+    lua_getfield(L, idx, "_ctx");
+    auto* ctx = static_cast<UdpServerCtx*>(lua_touserdata(L, -1));
+    lua_pop(L, 1);
+    return ctx;
+}
+
+// ── Bind the MessageHandler ─────────────────────────────────────────
+// ctx is guaranteed to be alive while the handler runs because
+// Stop(true) waits for all recv threads to exit before the caller
+// can release instance_ref or delete ctx.
+void BindMessageHandler(UdpServerCtx* ctx) {
     auto* main_loop = Engine::Instance().GetEventLoop();
-    std::weak_ptr<UdpServerCtx> weak_ctx = ctx;
 
     ctx->server->SetMessageHandler(
-        [weak_ctx, main_loop](evpp::EventLoop*, evpp::udp::MessagePtr& msg) {
-            auto sp = weak_ctx.lock();
-            if (!sp) return;
-
-            int msg_ref = sp->on_message_ref;
+        [ctx, main_loop](evpp::EventLoop*, evpp::udp::MessagePtr& msg) {
+            int msg_ref = ctx->on_message_ref;
             if (msg_ref == LUA_NOREF) return;
             if (!main_loop) return;
 
@@ -60,7 +75,7 @@ void BindMessageHandler(const std::shared_ptr<UdpServerCtx>& ctx) {
             // recv thread on the next iteration.
             std::string data(msg->data(), msg->size());
             std::string remote_ip = msg->remote_ip();
-            lua_State* L_ptr = sp->L;
+            lua_State* L_ptr = ctx->L;
 
             main_loop->RunInLoop([L_ptr, msg_ref, data, remote_ip]() {
                 if (!L_ptr || msg_ref == LUA_NOREF) return;
@@ -81,9 +96,43 @@ void BindMessageHandler(const std::shared_ptr<UdpServerCtx>& ctx) {
         });
 }
 
-// ── l_udp_server_listen(port_or_ports, on_message) → server_id ─────────
+// ── Internal cleanup ─────────────────────────────────────────────────
+
+void ReleaseUdpServer(lua_State* L, UdpServerCtx* ctx) {
+    ctx->disposed = true;
+
+    // Remove from shutdown tracking BEFORE Stop() — Stop(true) waits for
+    // recv threads.  A Lua callback queued during the wait could
+    // theoretically call server:stop() re-entrantly and hit the set.
+    g_udp_server_ctxs.erase(ctx);
+
+    ctx->server->Stop(true);   // wait for recv threads to exit
+
+    lua_pushnil(L);
+    lua_setfield(L, 1, "_ctx");
+
+    if (ctx->on_message_ref != LUA_NOREF) {
+        luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
+        ctx->on_message_ref = LUA_NOREF;
+    }
+
+    if (ctx->instance_ref != LUA_NOREF) {
+        luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
+        ctx->instance_ref = LUA_NOREF;
+    }
+
+    auto* loop = Engine::Instance().GetEventLoop();
+    if (loop) {
+        UdpServerCtx* del_ctx = ctx;
+        loop->RunInLoop([del_ctx] { delete del_ctx; });
+    } else {
+        delete ctx;
+    }
+}
+
+// ── net.udp_server.listen(port_or_ports, on_message) → server_instance ─
 int l_udp_server_listen(lua_State* L) {
-    auto ctx = std::make_shared<UdpServerCtx>();
+    auto* ctx = new UdpServerCtx();
     ctx->L = L;
 
     if (lua_gettop(L) >= 2 && lua_isfunction(L, 2)) {
@@ -91,7 +140,6 @@ int l_udp_server_listen(lua_State* L) {
         ctx->on_message_ref = luaL_ref(L, LUA_REGISTRYINDEX);
     }
 
-    int64_t sid = g_next_udp_server_id.fetch_add(1);
     ctx->server = std::make_unique<evpp::udp::Server>();
 
     bool ok = false;
@@ -108,10 +156,23 @@ int l_udp_server_listen(lua_State* L) {
         if (ctx->on_message_ref != LUA_NOREF) {
             luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
         }
+        delete ctx;
         lua_pushnil(L);
         lua_pushstring(L, "udp_server init failed");
         return 2;
     }
+
+    // Build Lua class instance table
+    lua_newtable(L);
+
+    lua_pushlightuserdata(L, ctx);
+    lua_setfield(L, -2, "_ctx");
+
+    luaL_getmetatable(L, kUdpServerMetaName);
+    lua_setmetatable(L, -2);
+
+    lua_pushvalue(L, -1);
+    ctx->instance_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
     BindMessageHandler(ctx);
 
@@ -119,101 +180,80 @@ int l_udp_server_listen(lua_State* L) {
         if (ctx->on_message_ref != LUA_NOREF) {
             luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
         }
+        luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
+        ctx->instance_ref = LUA_NOREF;
+        lua_pushnil(L);
+        lua_setfield(L, -2, "_ctx");  // null _ctx before delete
+        delete ctx;
+        lua_pop(L, 1);                // pop instance table
         lua_pushnil(L);
         lua_pushstring(L, "udp_server start failed");
         return 2;
     }
 
-    g_udp_servers[sid] = ctx;
+    // Track for shutdown (after everything succeeds)
+    g_udp_server_ctxs.insert(ctx);
 
     auto* logger = GetLogger();
     std::string display = (lua_type(L, 1) == LUA_TNUMBER)
         ? std::to_string(lua_tointeger(L, 1))
         : std::string(lua_tostring(L, 1));
-    ENGINE_LOG_INFO(logger, "[net.udp_server] listening on [{}], server=[{}]",
-                    display, sid);
+    ENGINE_LOG_INFO(logger, "[net.udp_server] listening on [{}]", display);
 
-    lua_pushinteger(L, static_cast<lua_Integer>(sid));
-    return 1;
+    return 1;  // return the server instance table
 }
 
-// ── l_udp_server_stop(server_id) → bool ─────────────────────────────────
+// ── server:stop() → bool ───────────────────────────────────────────
 int l_udp_server_stop(lua_State* L) {
-    int64_t sid = luaL_checkinteger(L, 1);
-
-    auto it = g_udp_servers.find(sid);
-    if (it == g_udp_servers.end()) {
+    auto* ctx = GetUdpServerCtxFromTable(L, 1);
+    if (!ctx || ctx->disposed) {
         lua_pushboolean(L, 0);
         return 1;
     }
 
     auto* logger = GetLogger();
-    ENGINE_LOG_INFO(logger, "[net.udp_server] stopping server=[{}]", sid);
+    ENGINE_LOG_INFO(logger, "[net.udp_server] stopping server");
 
-    auto ctx = it->second;
-    ctx->server->Stop(true);   // wait for recv threads to exit
-
-    if (ctx->on_message_ref != LUA_NOREF) {
-        luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
-        ctx->on_message_ref = LUA_NOREF;
-    }
-
-    g_udp_servers.erase(it);
+    ReleaseUdpServer(L, ctx);
 
     lua_pushboolean(L, 1);
     return 1;
 }
 
-// ── l_udp_server_pause(server_id) ──────────────────────────────────────
+// ── server:pause() ─────────────────────────────────────────────────
 int l_udp_server_pause(lua_State* L) {
-    int64_t sid = luaL_checkinteger(L, 1);
-
-    auto it = g_udp_servers.find(sid);
-    if (it == g_udp_servers.end()) {
-        return luaL_error(L, "udp_server not found: %lld", (long long)sid);
-    }
-
-    it->second->server->Pause();
+    auto* ctx = GetUdpServerCtxFromTable(L, 1);
+    if (!ctx) return luaL_error(L, "udp_server: invalid context");
+    if (ctx->disposed) return luaL_error(L, "udp_server: closed");
+    ctx->server->Pause();
     return 0;
 }
 
-// ── l_udp_server_continue(server_id) ────────────────────────────────────
+// ── server:continue() ──────────────────────────────────────────────
 int l_udp_server_continue(lua_State* L) {
-    int64_t sid = luaL_checkinteger(L, 1);
-
-    auto it = g_udp_servers.find(sid);
-    if (it == g_udp_servers.end()) {
-        return luaL_error(L, "udp_server not found: %lld", (long long)sid);
-    }
-
-    it->second->server->Continue();
+    auto* ctx = GetUdpServerCtxFromTable(L, 1);
+    if (!ctx) return luaL_error(L, "udp_server: invalid context");
+    if (ctx->disposed) return luaL_error(L, "udp_server: closed");
+    ctx->server->Continue();
     return 0;
 }
 
-// ── l_udp_server_is_running(server_id) → bool ──────────────────────────
+// ── server:is_running() → bool ─────────────────────────────────────
 int l_udp_server_is_running(lua_State* L) {
-    int64_t sid = luaL_checkinteger(L, 1);
-
-    auto it = g_udp_servers.find(sid);
-    if (it == g_udp_servers.end()) {
+    auto* ctx = GetUdpServerCtxFromTable(L, 1);
+    if (!ctx || ctx->disposed) {
         lua_pushboolean(L, 0);
         return 1;
     }
-
-    lua_pushboolean(L, it->second->server->IsRunning() ? 1 : 0);
+    lua_pushboolean(L, ctx->server->IsRunning() ? 1 : 0);
     return 1;
 }
 
-// ── l_udp_server_set_on_message(server_id, callback) ────────────────────
+// ── server:set_on_message(callback) ────────────────────────────────
 int l_udp_server_set_on_message(lua_State* L) {
-    int64_t sid = luaL_checkinteger(L, 1);
-
-    auto it = g_udp_servers.find(sid);
-    if (it == g_udp_servers.end()) {
-        return luaL_error(L, "udp_server not found: %lld", (long long)sid);
-    }
-
-    auto& ctx = it->second;
+    auto* ctx = GetUdpServerCtxFromTable(L, 1);
+    if (!ctx) return luaL_error(L, "udp_server: invalid context");
+    if (ctx->disposed) return luaL_error(L, "udp_server: closed");
 
     // Release old callback
     if (ctx->on_message_ref != LUA_NOREF) {
@@ -233,13 +273,29 @@ int l_udp_server_set_on_message(lua_State* L) {
     return 0;
 }
 
-const luaL_Reg kUdpServerFunctions[] = {
-    {"listen",          l_udp_server_listen},
+// ── __gc metamethod ────────────────────────────────────────────────
+int l_udp_server_gc(lua_State* L) {
+    auto* ctx = GetUdpServerCtxFromTable(L, 1);
+    if (!ctx || ctx->disposed) return 0;
+
+    ReleaseUdpServer(L, ctx);
+
+    return 0;
+}
+
+// ── Instance method table ──────────────────────────────────────────
+const luaL_Reg kUdpServerMethods[] = {
     {"stop",            l_udp_server_stop},
     {"pause",           l_udp_server_pause},
     {"continue",        l_udp_server_continue},
     {"is_running",      l_udp_server_is_running},
     {"set_on_message",  l_udp_server_set_on_message},
+    {nullptr, nullptr},
+};
+
+// ── net.udp_server static functions ────────────────────────────────
+const luaL_Reg kUdpServerFunctions[] = {
+    {"listen",  l_udp_server_listen},
     {nullptr, nullptr},
 };
 
@@ -249,34 +305,52 @@ const luaL_Reg kUdpServerFunctions[] = {
 // Public API
 // ======================================================================
 
+void RegisterUdpServerMetaTable(lua_State* L) {
+    if (!L) return;
+
+    // Register metatable for instance methods and __gc
+    luaL_newmetatable(L, kUdpServerMetaName);
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -2, "__index");              // mt.__index = mt
+    luaL_setfuncs(L, kUdpServerMethods, 0);
+    lua_pushcfunction(L, l_udp_server_gc);
+    lua_setfield(L, -2, "__gc");
+    lua_pop(L, 1);
+}
+
 void PushUdpServerLibrary(lua_State* L) {
     if (!L) return;
+
+    // net.udp_server table (static functions only: listen)
     luaL_newlib(L, kUdpServerFunctions);
 }
 
 void ShutdownUdpServerBindings() {
     auto* logger = GetLogger();
 
-    // Move to local before iterating — Stop(true) waits for threads;
+    // Move to local before iterating — Stop(true) waits for recv threads;
     // a Lua callback queued before stop could theoretically call
-    // net.udp_server.stop() which would mutate g_udp_servers.
-    auto servers = std::move(g_udp_servers);
-    for (auto& [sid, ctx] : servers) {
-        (void)sid;
+    // server:stop() which would mutate g_udp_server_ctxs.
+    auto ctxs = std::move(g_udp_server_ctxs);
+    for (auto* ctx : ctxs) {
+        if (ctx->disposed) continue;
+        ctx->disposed = true;
         ctx->server->Stop(true);
         if (ctx->L) {
             if (ctx->on_message_ref != LUA_NOREF) {
                 luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_message_ref);
                 ctx->on_message_ref = LUA_NOREF;
             }
+            if (ctx->instance_ref != LUA_NOREF) {
+                luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->instance_ref);
+                ctx->instance_ref = LUA_NOREF;
+            }
         }
+        delete ctx;
     }
 
-    size_t server_count = servers.size();
-    servers.clear();
-
-    if (server_count > 0) {
-        ENGINE_LOG_INFO(logger, "ScriptBind: shut down [{}] UDP server(s)", server_count);
+    if (!ctxs.empty()) {
+        ENGINE_LOG_INFO(logger, "ScriptBind: shut down [{}] UDP server(s)", ctxs.size());
     } else {
         ENGINE_LOG_DEBUG(logger, "ScriptBind: no active UDP server bindings to shut down");
     }

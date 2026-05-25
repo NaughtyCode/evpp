@@ -229,46 +229,45 @@ function net.udp_client.send_to(host, port, data) end
 -- Wraps evpp::udp::Server.  Messages are received on internal recv threads
 -- and dispatched to the main EventLoop thread for Lua callback invocation.
 --
--- Servers are identified by an integer server_id returned from listen().
+-- Each server returned by net.udp_server.listen() is a Lua class instance
+-- (table with metatable).  The C++ context is stored as light userdata in
+-- the _ctx field and cleaned up by Lua GC (__gc metamethod) or explicitly
+-- via :stop().
+--
 -- Unlike TCP, UDP is connectionless — there are no per-connection state or
 -- callbacks.  Each message delivers (data, remote_ip) to the on_message
 -- callback.
 --
--- Static functions:
---   net.udp_server.listen(port_or_ports, on_message) -> server_id
---   net.udp_server.stop(server_id) -> bool
---   net.udp_server.pause(server_id)
---   net.udp_server.continue(server_id)
---   net.udp_server.is_running(server_id) -> bool
---   net.udp_server.set_on_message(server_id, callback)
+-- Instance methods:
+--   server:stop() -> bool
+--   server:pause()
+--   server:continue()
+--   server:is_running() -> bool
+--   server:set_on_message(callback)
 
 --- Create and start a UDP server listening on port(s).
 --- Accepts a single port integer, or a port string like "53,5353".
 ---@param port_or_ports integer|string  single port or comma-separated list
----@param on_message    fun(data: string, remote_ip: string)  message callback
----@return integer server_id   success: server identifier
----@return nil, string errmsg  failure: error message
+---@param on_message    fun(data: string, remote_ip: string)?  message callback
+---@return table server  instance with methods
+---@return nil, string   error message on failure
 function net.udp_server.listen(port_or_ports, on_message) end
 
 --- Stop the UDP server and release its callback.
----@param server_id integer
----@return boolean stopped  true if found and stopped, false if not found
-function net.udp_server.stop(server_id) end
+---@return boolean stopped  true if still active, false if already stopped
+function server:stop() end
 
 --- Pause message receiving (no callbacks will fire).
----@param server_id integer
-function net.udp_server.pause(server_id) end
+function server:pause() end
 
 --- Resume message receiving after a pause.
----@param server_id integer
-function net.udp_server.continue(server_id) end
+function server:continue() end
 
 --- Check whether the server is currently running.
----@param server_id integer
 ---@return boolean running
-function net.udp_server.is_running(server_id) end
+function server:is_running() end
 
 --- Replace the on_message callback for a running server.
----@param server_id integer
+--- Pass nil or no argument to remove the callback.
 ---@param callback  fun(data: string, remote_ip: string)?
-function net.udp_server.set_on_message(server_id, callback) end
+function server:set_on_message(callback) end

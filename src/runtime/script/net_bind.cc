@@ -23,6 +23,7 @@ void ExportNet(ScriptVM& vm) {
     RegisterUdpClientMetaTable(L);
     RegisterServerMetaTable(L);
     RegisterConnMetaTable(L);
+    RegisterUdpServerMetaTable(L);
 
     // Build nested "net" table:
     //   net = { client = { ... }, server = { ... }, http = { ... },
