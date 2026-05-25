@@ -51,6 +51,7 @@ MongoUri::MongoUri(MongoUri&& other) noexcept : impl_(std::move(other.impl_)) {}
 
 MongoUri& MongoUri::operator=(MongoUri&& other) noexcept {
     if (this != &other) {
+        if (impl_ && impl_->uri) mongoc_uri_destroy(impl_->uri);
         impl_ = std::move(other.impl_);
     }
     return *this;

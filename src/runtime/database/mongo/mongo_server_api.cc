@@ -36,7 +36,10 @@ MongoServerApi::~MongoServerApi() {
 MongoServerApi::MongoServerApi(MongoServerApi&& other) noexcept : impl_(std::move(other.impl_)) {}
 
 MongoServerApi& MongoServerApi::operator=(MongoServerApi&& other) noexcept {
-    if (this != &other) impl_ = std::move(other.impl_);
+    if (this != &other) {
+        if (impl_ && impl_->api) mongoc_server_api_destroy(impl_->api);
+        impl_ = std::move(other.impl_);
+    }
     return *this;
 }
 

@@ -420,7 +420,11 @@ struct MongoApmCallbacks::Impl {
             mongoc_apm_##name##_get_context(event));                                \
         if (ctx && ctx->name) {                                                     \
             MongoApm##typename##Event wrapper(event);                               \
-            ctx->name(wrapper);                                                     \
+            try {                                                                   \
+                ctx->name(wrapper);                                                 \
+            } catch (...) {                                                         \
+                /* Do not let exceptions unwind through C stack frames */           \
+            }                                                                       \
         }                                                                           \
     }
 

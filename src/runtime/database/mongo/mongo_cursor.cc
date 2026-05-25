@@ -21,7 +21,10 @@ MongoCursor::~MongoCursor() {
 MongoCursor::MongoCursor(MongoCursor&& other) noexcept : impl_(std::move(other.impl_)) {}
 
 MongoCursor& MongoCursor::operator=(MongoCursor&& other) noexcept {
-    if (this != &other) impl_ = std::move(other.impl_);
+    if (this != &other) {
+        Destroy();
+        impl_ = std::move(other.impl_);
+    }
     return *this;
 }
 

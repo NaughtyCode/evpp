@@ -401,7 +401,7 @@ int l_db_get_name(lua_State* L) {
 
 int l_db_drop(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kDatabaseMetaName);
-    if (!db) { lua_pushboolean(L, false); return 1; }
+    if (!db) { lua_pushboolean(L, false); lua_pushnil(L); return 2; }
     mongo::MongoError error;
     bool ok = db->Drop(&error);
     lua_pushboolean(L, ok);
@@ -504,7 +504,7 @@ int l_coll_count(lua_State* L) {
 
 int l_coll_drop(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kCollectionMetaName);
-    if (!coll) { lua_pushboolean(L, false); return 1; }
+    if (!coll) { lua_pushboolean(L, false); lua_pushnil(L); return 2; }
     mongo::MongoError error;
     bool ok = coll->Drop(&error);
     lua_pushboolean(L, ok);

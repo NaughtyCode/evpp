@@ -22,7 +22,10 @@ MongoChangeStream::MongoChangeStream(MongoChangeStream&& other) noexcept
     : impl_(std::move(other.impl_)) {}
 
 MongoChangeStream& MongoChangeStream::operator=(MongoChangeStream&& other) noexcept {
-    if (this != &other) impl_ = std::move(other.impl_);
+    if (this != &other) {
+        Destroy();
+        impl_ = std::move(other.impl_);
+    }
     return *this;
 }
 

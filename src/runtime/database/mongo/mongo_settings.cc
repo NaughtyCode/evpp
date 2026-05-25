@@ -31,7 +31,10 @@ MongoReadPrefs::~MongoReadPrefs() {
 MongoReadPrefs::MongoReadPrefs(MongoReadPrefs&& other) noexcept : impl_(std::move(other.impl_)) {}
 
 MongoReadPrefs& MongoReadPrefs::operator=(MongoReadPrefs&& other) noexcept {
-    if (this != &other) impl_ = std::move(other.impl_);
+    if (this != &other) {
+        if (impl_ && impl_->prefs) mongoc_read_prefs_destroy(impl_->prefs);
+        impl_ = std::move(other.impl_);
+    }
     return *this;
 }
 
@@ -125,7 +128,10 @@ MongoWriteConcern::~MongoWriteConcern() {
 MongoWriteConcern::MongoWriteConcern(MongoWriteConcern&& other) noexcept : impl_(std::move(other.impl_)) {}
 
 MongoWriteConcern& MongoWriteConcern::operator=(MongoWriteConcern&& other) noexcept {
-    if (this != &other) impl_ = std::move(other.impl_);
+    if (this != &other) {
+        if (impl_ && impl_->wc) mongoc_write_concern_destroy(impl_->wc);
+        impl_ = std::move(other.impl_);
+    }
     return *this;
 }
 
@@ -238,7 +244,10 @@ MongoReadConcern::~MongoReadConcern() {
 MongoReadConcern::MongoReadConcern(MongoReadConcern&& other) noexcept : impl_(std::move(other.impl_)) {}
 
 MongoReadConcern& MongoReadConcern::operator=(MongoReadConcern&& other) noexcept {
-    if (this != &other) impl_ = std::move(other.impl_);
+    if (this != &other) {
+        if (impl_ && impl_->rc) mongoc_read_concern_destroy(impl_->rc);
+        impl_ = std::move(other.impl_);
+    }
     return *this;
 }
 

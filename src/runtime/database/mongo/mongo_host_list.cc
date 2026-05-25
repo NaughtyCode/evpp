@@ -23,7 +23,14 @@ MongoHostList::~MongoHostList() {
 }
 
 MongoHostList::MongoHostList(MongoHostList&&) noexcept = default;
-MongoHostList& MongoHostList::operator=(MongoHostList&&) noexcept = default;
+MongoHostList& MongoHostList::operator=(MongoHostList&& other) noexcept {
+    if (this != &other) {
+        delete impl_->next;
+        impl_->next = nullptr;
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 const char* MongoHostList::GetHost() const { return impl_->entry.host; }
 const char* MongoHostList::GetHostAndPort() const { return impl_->entry.host_and_port; }

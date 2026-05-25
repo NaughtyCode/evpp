@@ -48,7 +48,13 @@ BsonContext::~BsonContext() {
 }
 
 BsonContext::BsonContext(BsonContext&&) noexcept = default;
-BsonContext& BsonContext::operator=(BsonContext&&) noexcept = default;
+BsonContext& BsonContext::operator=(BsonContext&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->ctx && impl_->owned) bson_context_destroy(impl_->ctx);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void* BsonContext::Raw() { return impl_ ? impl_->ctx : nullptr; }
 
@@ -156,7 +162,13 @@ BsonJsonReader::~BsonJsonReader() {
 }
 
 BsonJsonReader::BsonJsonReader(BsonJsonReader&&) noexcept = default;
-BsonJsonReader& BsonJsonReader::operator=(BsonJsonReader&&) noexcept = default;
+BsonJsonReader& BsonJsonReader::operator=(BsonJsonReader&& other) noexcept {
+    if (this != &other) {
+        Destroy();
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void BsonJsonReader::Destroy() {
     if (impl_ && impl_->reader) {
@@ -202,7 +214,13 @@ BsonJsonDataReader::~BsonJsonDataReader() {
 }
 
 BsonJsonDataReader::BsonJsonDataReader(BsonJsonDataReader&&) noexcept = default;
-BsonJsonDataReader& BsonJsonDataReader::operator=(BsonJsonDataReader&&) noexcept = default;
+BsonJsonDataReader& BsonJsonDataReader::operator=(BsonJsonDataReader&& other) noexcept {
+    if (this != &other) {
+        Destroy();
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void BsonJsonDataReader::Destroy() {
     if (impl_ && impl_->reader) {
@@ -261,7 +279,13 @@ BsonReader::~BsonReader() {
 }
 
 BsonReader::BsonReader(BsonReader&&) noexcept = default;
-BsonReader& BsonReader::operator=(BsonReader&&) noexcept = default;
+BsonReader& BsonReader::operator=(BsonReader&& other) noexcept {
+    if (this != &other) {
+        Destroy();
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void BsonReader::Destroy() {
     if (impl_ && impl_->reader) {
@@ -333,7 +357,13 @@ BsonWriter::~BsonWriter() {
 }
 
 BsonWriter::BsonWriter(BsonWriter&&) noexcept = default;
-BsonWriter& BsonWriter::operator=(BsonWriter&&) noexcept = default;
+BsonWriter& BsonWriter::operator=(BsonWriter&& other) noexcept {
+    if (this != &other) {
+        Destroy();
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void BsonWriter::Destroy() {
     if (impl_ && impl_->writer) {
@@ -453,7 +483,13 @@ BsonJsonOpts::~BsonJsonOpts() {
 }
 
 BsonJsonOpts::BsonJsonOpts(BsonJsonOpts&&) noexcept = default;
-BsonJsonOpts& BsonJsonOpts::operator=(BsonJsonOpts&&) noexcept = default;
+BsonJsonOpts& BsonJsonOpts::operator=(BsonJsonOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) bson_json_opts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void BsonJsonOpts::SetOutermostArray(bool is_outermost_array) {
     if (impl_ && impl_->opts)
