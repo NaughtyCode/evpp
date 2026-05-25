@@ -116,7 +116,8 @@ MongoServerDescription** MongoTopologyDescription::GetServers(size_t* n) const {
     auto** result = static_cast<MongoServerDescription**>(
         bson_malloc(count * sizeof(MongoServerDescription*)));
     for (size_t i = 0; i < count; ++i) {
-        result[i] = new MongoServerDescription(raw_servers[i]);
+        MongoServerDescription tmp(raw_servers[i]);
+        result[i] = MongoServerDescription::NewCopy(&tmp);
     }
     bson_free(raw_servers);
     if (n) *n = count;

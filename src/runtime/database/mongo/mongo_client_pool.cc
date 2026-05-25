@@ -54,7 +54,7 @@ MongoClient* MongoClientPool::Pop() {
     if (!impl_ || !impl_->pool) return nullptr;
     mongoc_client_t* c = mongoc_client_pool_pop(impl_->pool);
     if (!c) return nullptr;
-    // mongoc_client_destroy on a pooled client auto-returns it to the pool.
+    // The pooled client must be returned via MongoClientPool::Push() before destruction.
     return MongoClient::FromPooled(c);
 }
 

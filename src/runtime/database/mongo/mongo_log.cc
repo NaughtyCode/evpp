@@ -23,7 +23,11 @@ bool g_handler_set = false;
 void LogBridge(mongoc_log_level_t level, const char* domain, const char* message, void*) {
     std::lock_guard<std::mutex> lock(g_log_mutex);
     if (g_log_handler) {
-        g_log_handler(static_cast<MongoLogLevel>(level), domain, message);
+        try {
+            g_log_handler(static_cast<MongoLogLevel>(level), domain, message);
+        } catch (...) {
+            // Do not let exceptions unwind through C stack frames
+        }
     }
 }
 

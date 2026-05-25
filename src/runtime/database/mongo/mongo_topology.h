@@ -53,8 +53,9 @@ public:
     bool HasWritableServer() const;
     const char* Type() const;
 
-    // Returns newly allocated array of server descriptions. Caller must free each
-    // with MongoServerDescription::DestroyCopy() and the array itself with free().
+    // Returns newly allocated array of owning server descriptions. Caller must:
+    //  1. Call DestroyCopy() on each element (then delete it)
+    //  2. Free the array with bson_free()
     MongoServerDescription** GetServers(size_t* n) const;
 
     void DestroyCopy(); // call after NewCopy

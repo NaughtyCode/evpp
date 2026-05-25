@@ -65,7 +65,13 @@ MongoAutoEncryptionOpts::~MongoAutoEncryptionOpts() {
 }
 
 MongoAutoEncryptionOpts::MongoAutoEncryptionOpts(MongoAutoEncryptionOpts&&) noexcept = default;
-MongoAutoEncryptionOpts& MongoAutoEncryptionOpts::operator=(MongoAutoEncryptionOpts&&) noexcept = default;
+MongoAutoEncryptionOpts& MongoAutoEncryptionOpts::operator=(MongoAutoEncryptionOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_auto_encryption_opts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoAutoEncryptionOpts::SetKeyvaultClient(void* client) {
     if (impl_ && impl_->opts)
@@ -160,7 +166,13 @@ MongoClientEncryptionOpts::~MongoClientEncryptionOpts() {
 }
 
 MongoClientEncryptionOpts::MongoClientEncryptionOpts(MongoClientEncryptionOpts&&) noexcept = default;
-MongoClientEncryptionOpts& MongoClientEncryptionOpts::operator=(MongoClientEncryptionOpts&&) noexcept = default;
+MongoClientEncryptionOpts& MongoClientEncryptionOpts::operator=(MongoClientEncryptionOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_client_encryption_opts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoClientEncryptionOpts::SetKeyvaultClient(void* keyvault_client) {
     if (impl_ && impl_->opts)
@@ -220,7 +232,13 @@ MongoClientEncryptionEncryptOpts::~MongoClientEncryptionEncryptOpts() {
 }
 
 MongoClientEncryptionEncryptOpts::MongoClientEncryptionEncryptOpts(MongoClientEncryptionEncryptOpts&&) noexcept = default;
-MongoClientEncryptionEncryptOpts& MongoClientEncryptionEncryptOpts::operator=(MongoClientEncryptionEncryptOpts&&) noexcept = default;
+MongoClientEncryptionEncryptOpts& MongoClientEncryptionEncryptOpts::operator=(MongoClientEncryptionEncryptOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_client_encryption_encrypt_opts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoClientEncryptionEncryptOpts::SetKeyId(const void* keyid) {
     if (impl_ && impl_->opts)
@@ -280,7 +298,13 @@ MongoClientEncryptionEncryptRangeOpts::~MongoClientEncryptionEncryptRangeOpts() 
 }
 
 MongoClientEncryptionEncryptRangeOpts::MongoClientEncryptionEncryptRangeOpts(MongoClientEncryptionEncryptRangeOpts&&) noexcept = default;
-MongoClientEncryptionEncryptRangeOpts& MongoClientEncryptionEncryptRangeOpts::operator=(MongoClientEncryptionEncryptRangeOpts&&) noexcept = default;
+MongoClientEncryptionEncryptRangeOpts& MongoClientEncryptionEncryptRangeOpts::operator=(MongoClientEncryptionEncryptRangeOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_client_encryption_encrypt_range_opts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoClientEncryptionEncryptRangeOpts::SetTrimFactor(int32_t trim_factor) {
     if (impl_ && impl_->opts)
@@ -329,7 +353,13 @@ MongoClientEncryptionEncryptTextPrefixOpts::~MongoClientEncryptionEncryptTextPre
 }
 
 MongoClientEncryptionEncryptTextPrefixOpts::MongoClientEncryptionEncryptTextPrefixOpts(MongoClientEncryptionEncryptTextPrefixOpts&&) noexcept = default;
-MongoClientEncryptionEncryptTextPrefixOpts& MongoClientEncryptionEncryptTextPrefixOpts::operator=(MongoClientEncryptionEncryptTextPrefixOpts&&) noexcept = default;
+MongoClientEncryptionEncryptTextPrefixOpts& MongoClientEncryptionEncryptTextPrefixOpts::operator=(MongoClientEncryptionEncryptTextPrefixOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_client_encryption_encrypt_text_prefix_opts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoClientEncryptionEncryptTextPrefixOpts::SetStrMaxQueryLength(int32_t len) {
     if (impl_ && impl_->opts)
@@ -361,7 +391,13 @@ MongoClientEncryptionEncryptTextSuffixOpts::~MongoClientEncryptionEncryptTextSuf
 }
 
 MongoClientEncryptionEncryptTextSuffixOpts::MongoClientEncryptionEncryptTextSuffixOpts(MongoClientEncryptionEncryptTextSuffixOpts&&) noexcept = default;
-MongoClientEncryptionEncryptTextSuffixOpts& MongoClientEncryptionEncryptTextSuffixOpts::operator=(MongoClientEncryptionEncryptTextSuffixOpts&&) noexcept = default;
+MongoClientEncryptionEncryptTextSuffixOpts& MongoClientEncryptionEncryptTextSuffixOpts::operator=(MongoClientEncryptionEncryptTextSuffixOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_client_encryption_encrypt_text_suffix_opts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoClientEncryptionEncryptTextSuffixOpts::SetStrMaxQueryLength(int32_t len) {
     if (impl_ && impl_->opts)
@@ -393,7 +429,13 @@ MongoClientEncryptionEncryptTextSubstringOpts::~MongoClientEncryptionEncryptText
 }
 
 MongoClientEncryptionEncryptTextSubstringOpts::MongoClientEncryptionEncryptTextSubstringOpts(MongoClientEncryptionEncryptTextSubstringOpts&&) noexcept = default;
-MongoClientEncryptionEncryptTextSubstringOpts& MongoClientEncryptionEncryptTextSubstringOpts::operator=(MongoClientEncryptionEncryptTextSubstringOpts&&) noexcept = default;
+MongoClientEncryptionEncryptTextSubstringOpts& MongoClientEncryptionEncryptTextSubstringOpts::operator=(MongoClientEncryptionEncryptTextSubstringOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_client_encryption_encrypt_text_substring_opts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoClientEncryptionEncryptTextSubstringOpts::SetStrMaxLength(int32_t len) {
     if (impl_ && impl_->opts)
@@ -430,7 +472,13 @@ MongoClientEncryptionEncryptTextOpts::~MongoClientEncryptionEncryptTextOpts() {
 }
 
 MongoClientEncryptionEncryptTextOpts::MongoClientEncryptionEncryptTextOpts(MongoClientEncryptionEncryptTextOpts&&) noexcept = default;
-MongoClientEncryptionEncryptTextOpts& MongoClientEncryptionEncryptTextOpts::operator=(MongoClientEncryptionEncryptTextOpts&&) noexcept = default;
+MongoClientEncryptionEncryptTextOpts& MongoClientEncryptionEncryptTextOpts::operator=(MongoClientEncryptionEncryptTextOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_client_encryption_encrypt_text_opts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoClientEncryptionEncryptTextOpts::SetPrefix(const void* popts) {
     if (impl_ && impl_->opts)
@@ -479,7 +527,13 @@ MongoClientEncryptionDatakeyOpts::~MongoClientEncryptionDatakeyOpts() {
 }
 
 MongoClientEncryptionDatakeyOpts::MongoClientEncryptionDatakeyOpts(MongoClientEncryptionDatakeyOpts&&) noexcept = default;
-MongoClientEncryptionDatakeyOpts& MongoClientEncryptionDatakeyOpts::operator=(MongoClientEncryptionDatakeyOpts&&) noexcept = default;
+MongoClientEncryptionDatakeyOpts& MongoClientEncryptionDatakeyOpts::operator=(MongoClientEncryptionDatakeyOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_client_encryption_datakey_opts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoClientEncryptionDatakeyOpts::SetMasterkey(const BsonDocument& masterkey) {
     if (impl_ && impl_->opts)

@@ -197,7 +197,10 @@ const char* MongoWriteConcern::GetWTag() const {
 }
 
 int32_t MongoWriteConcern::SetWTag(const char* tag) {
-    if (impl_ && impl_->wc) mongoc_write_concern_set_wtag(impl_->wc, tag);
+    if (impl_ && impl_->wc) {
+        mongoc_write_concern_set_wtag(impl_->wc, tag);
+        return 1;
+    }
     return 0;
 }
 
