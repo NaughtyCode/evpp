@@ -11,10 +11,6 @@
 -- new instances see the latest code. The super chain is also updated to
 -- point to the latest version of the parent class.
 --
--- Anonymous classes (classname = nil) are not registered and not
--- hot-reloadable. Their __name is nil so tostring() uses the standard
--- Lua format and super-resolution never matches by accident.
---
 -- Usage:
 --   local Animal = Class("Animal")
 --   function Animal:__ctor(name)
@@ -39,18 +35,16 @@
 local _registry = setmetatable({}, { __mode = "v" })
 
 local function Class(classname, super)
+    assert(type(classname) == "string" and classname ~= "",
+        "bad argument #1 to 'Class' (non-empty string expected, got " .. type(classname) .. ")")
     if super ~= nil then
         assert(type(super) == "table",
             "bad argument #2 to 'Class' (table expected, got " .. type(super) .. ")")
     end
 
-    -- Only caller-provided classnames participate in hot-reload.
-    -- Anonymous classes (nil) are excluded.
-    local named = classname ~= nil
-
     -- Hot-reload: reuse existing class table so existing instances
     -- whose __index points to it continue to work.
-    local cls = named and _registry[classname]
+    local cls = _registry[classname]
     if cls then
         -- Resolve super to the latest registered version so the
         -- inheritance chain points to up-to-date class tables.
@@ -81,7 +75,7 @@ local function Class(classname, super)
     -- Metatable applied to the class table itself.
     -- __call makes cls(...) create instances.
     -- __index (when super is set) provides class-level method inheritance.
-    -- __name lets Lua 5.5 tostring() print the class name (nil for anonymous).
+    -- __name lets Lua 5.5 tostring() print the class name.
     local mt = {
         __call = function(self, ...)
             local instance = setmetatable({}, {
@@ -136,9 +130,7 @@ local function Class(classname, super)
     end
 
     -- Register for hot-reload.
-    if named then
-        _registry[classname] = cls
-    end
+    _registry[classname] = cls
 
     return cls
 end
