@@ -11,6 +11,10 @@
 -- new instances see the latest code. The super chain is also updated to
 -- point to the latest version of the parent class.
 --
+-- Anonymous classes (classname = nil) are not registered and not
+-- hot-reloadable. Their __name is nil so tostring() uses the standard
+-- Lua format and super-resolution never matches by accident.
+--
 -- Usage:
 --   local Animal = Class("Animal")
 --   function Animal:__ctor(name)
@@ -40,9 +44,8 @@ local function Class(classname, super)
             "bad argument #2 to 'Class' (table expected, got " .. type(super) .. ")")
     end
 
-    -- Determine if this class should participate in hot-reload.
-    -- Only caller-provided names go into the registry — anonymous
-    -- classes (nil classname) can't be reliably looked up across modules.
+    -- Only caller-provided classnames participate in hot-reload.
+    -- Anonymous classes (nil) are excluded.
     local named = classname ~= nil
 
     -- Hot-reload: reuse existing class table so existing instances
@@ -70,7 +73,7 @@ local function Class(classname, super)
 
     -- First load: create a new class table.
     cls = {}
-    cls.__name = classname or "anonymous"
+    cls.__name = classname
     if super then
         cls.__super = super
     end
@@ -78,7 +81,7 @@ local function Class(classname, super)
     -- Metatable applied to the class table itself.
     -- __call makes cls(...) create instances.
     -- __index (when super is set) provides class-level method inheritance.
-    -- __name lets Lua 5.5 tostring() print the class name.
+    -- __name lets Lua 5.5 tostring() print the class name (nil for anonymous).
     local mt = {
         __call = function(self, ...)
             local instance = setmetatable({}, {
@@ -91,7 +94,7 @@ local function Class(classname, super)
             end
             return instance
         end,
-        __name = classname or "anonymous",
+        __name = classname,
     }
     if super then
         mt.__index = super
