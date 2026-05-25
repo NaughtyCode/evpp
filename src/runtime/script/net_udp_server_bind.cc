@@ -106,32 +106,51 @@ void ReleaseUdpServer(lua_State* L, UdpServerCtx* ctx) {
     // theoretically call server:stop() re-entrantly and hit the set.
     g_udp_server_ctxs.erase(ctx);
 
+    // Atomically clear on_message_ref so no new message lambda captures
+    // the old ref after we begin teardown.
+    int old_msg_ref = ctx->on_message_ref.exchange(LUA_NOREF);
+
     ctx->server->Stop(true);   // wait for recv threads to exit
 
     lua_pushnil(L);
     lua_setfield(L, 1, "_ctx");
 
-    if (ctx->on_message_ref != LUA_NOREF) {
-        luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
-        ctx->on_message_ref = LUA_NOREF;
-    }
-
-    if (ctx->instance_ref != LUA_NOREF) {
-        luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
-        ctx->instance_ref = LUA_NOREF;
-    }
+    int old_inst_ref = ctx->instance_ref;
+    ctx->instance_ref = LUA_NOREF;
 
     auto* loop = Engine::Instance().GetEventLoop();
     if (loop) {
-        UdpServerCtx* del_ctx = ctx;
-        loop->RunInLoop([del_ctx] { delete del_ctx; });
+        // Defer unref + delete so pending RunInLoop message callbacks
+        // (queued before Stop returned) execute before we free the refs.
+        loop->RunInLoop([L, old_msg_ref, old_inst_ref, ctx] {
+            if (old_msg_ref != LUA_NOREF) {
+                luaL_unref(L, LUA_REGISTRYINDEX, old_msg_ref);
+            }
+            if (old_inst_ref != LUA_NOREF) {
+                luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
+            }
+            delete ctx;
+        });
     } else {
+        if (old_msg_ref != LUA_NOREF) {
+            luaL_unref(L, LUA_REGISTRYINDEX, old_msg_ref);
+        }
+        if (old_inst_ref != LUA_NOREF) {
+            luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
+        }
         delete ctx;
     }
 }
 
 // ── net.udp_server.listen(port_or_ports, on_message) → server_instance ─
 int l_udp_server_listen(lua_State* L) {
+    // Validate arg type before allocation — luaL_checkstring errors via
+    // longjmp, which would leak ctx if we had already allocated it.
+    int arg1_type = lua_type(L, 1);
+    if (arg1_type != LUA_TNUMBER && arg1_type != LUA_TSTRING) {
+        return luaL_error(L, "expected number or string for port");
+    }
+
     auto* ctx = new UdpServerCtx();
     ctx->L = L;
 
@@ -144,7 +163,7 @@ int l_udp_server_listen(lua_State* L) {
 
     bool ok = false;
     // Number → single port; string → pass through (handles "5353" and "53,5353")
-    if (lua_type(L, 1) == LUA_TNUMBER) {
+    if (arg1_type == LUA_TNUMBER) {
         int port = static_cast<int>(luaL_checkinteger(L, 1));
         ok = ctx->server->Init(port);
     } else {
@@ -255,11 +274,10 @@ int l_udp_server_set_on_message(lua_State* L) {
     if (!ctx) return luaL_error(L, "udp_server: invalid context");
     if (ctx->disposed) return luaL_error(L, "udp_server: closed");
 
-    // Release old callback
-    if (ctx->on_message_ref != LUA_NOREF) {
-        luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
-        ctx->on_message_ref = LUA_NOREF;
-    }
+    // Atomically swap old ref for LUA_NOREF so new message lambdas
+    // don't capture it; defer unref so pending RunInLoop tasks that
+    // already captured the old ref can still use it.
+    int old_ref = ctx->on_message_ref.exchange(LUA_NOREF);
 
     // Store new callback (or leave cleared if absent/nil)
     if (lua_gettop(L) >= 2 && lua_isfunction(L, 2)) {
@@ -269,6 +287,18 @@ int l_udp_server_set_on_message(lua_State* L) {
 
     // Re-bind the MessageHandler so the new ref is captured
     BindMessageHandler(ctx);
+
+    if (old_ref != LUA_NOREF) {
+        auto* loop = Engine::Instance().GetEventLoop();
+        if (loop) {
+            lua_State* L_ptr = L;
+            loop->RunInLoop([L_ptr, old_ref] {
+                luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_ref);
+            });
+        } else {
+            luaL_unref(L, LUA_REGISTRYINDEX, old_ref);
+        }
+    }
 
     return 0;
 }

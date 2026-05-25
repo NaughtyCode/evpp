@@ -120,6 +120,9 @@ int l_udp_client_do_request(lua_State* L) {
     if (t < 0) {
         return luaL_error(L, "timeout must be >= 0");
     }
+    if (t > UINT32_MAX) {
+        return luaL_error(L, "timeout too large");
+    }
     auto timeout_ms = static_cast<uint32_t>(t);
 
     std::string resp = ctx->client->DoRequest(std::string(data, len), timeout_ms);
@@ -189,6 +192,9 @@ int l_udp_client_do_request_static(lua_State* L) {
     lua_Integer t = luaL_optinteger(L, 4, 3000);
     if (t < 0) {
         return luaL_error(L, "timeout must be >= 0");
+    }
+    if (t > UINT32_MAX) {
+        return luaL_error(L, "timeout too large");
     }
     auto timeout_ms = static_cast<uint32_t>(t);
 
