@@ -18,8 +18,8 @@ option(CLIENT_BUILD_EXAMPLES "Build example programs" ON)
 #
 # Override EVPP_SRC_DIR and EVPP_ARTIFACTS_DIR if your layout differs.
 
-set(EVPP_SRC_DIR      "${CMAKE_SOURCE_DIR}/.."          CACHE PATH "Path to src/ (contains runtime/ headers)")
-set(EVPP_ARTIFACTS_DIR "${CMAKE_SOURCE_DIR}/../../artifacts"    CACHE PATH "Path to artifacts/ (contains bin/ and lib/)")
+set(EVPP_SRC_DIR      "${CMAKE_SOURCE_DIR}"             CACHE PATH "Path to src/ (contains runtime/ headers)")
+set(EVPP_ARTIFACTS_DIR "${CMAKE_SOURCE_DIR}/../artifacts" CACHE PATH "Path to artifacts/ (contains bin/ and lib/)")
 
 # ── Source files ────────────────────────────────────────────────────────
 

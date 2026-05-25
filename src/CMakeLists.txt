@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(ENGINE_PHYSICS_ENABLED "Enable the JoltPhysics engine subsystem" ON)
 option(BUILD_EXAMPLES "Build example programs (requires NOT EVPP_VCPKG_BUILD)" OFF)
 option(BUILD_BENCHMARKS "Build benchmark programs (requires NOT EVPP_VCPKG_BUILD)" OFF)
+option(BUILD_CLIENT "Build GameClient library" ON)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
@@ -114,7 +115,9 @@ set_property(TARGET event_core event_extra event PROPERTY FOLDER "thirdparty")
 add_subdirectory (runtime)
 add_subdirectory (tests)
 add_subdirectory (server)
-add_subdirectory (client)
+if(BUILD_CLIENT)
+    add_subdirectory (client)
+endif()
 
 set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT main)
 
