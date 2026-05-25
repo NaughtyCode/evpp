@@ -13,10 +13,12 @@ Listener::Listener(EventLoop* l, const std::string& addr)
 }
 
 Listener::~Listener() {
-    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} fd={}", (void*)this, chan_->fd());
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} fd={}", (void*)this, (chan_ ? chan_->fd() : INVALID_SOCKET));
     chan_.reset();
-    EVUTIL_CLOSESOCKET(fd_);
-    fd_ = INVALID_SOCKET;
+    if (fd_ >= 0) {
+        EVUTIL_CLOSESOCKET(fd_);
+        fd_ = INVALID_SOCKET;
+    }
 }
 
 void Listener::Listen(int backlog) {

@@ -97,11 +97,14 @@ namespace evpp {
 			if (ecdh == NULL) {
 				ENGINE_LOG_ERROR(engine::GetLogger(), "EC_KEY_new_by_curve_name failed");
 				ERR_print_errors_fp(stderr);
+				SSL_CTX_free(ctx);
 				return false;
 			}
 			/* Set ECDH ephemeral public key */
 			if (1 != SSL_CTX_set_tmp_ecdh (ctx, ecdh)) {
 				ENGINE_LOG_ERROR(engine::GetLogger(), "SSL_CTX_set_tmp_ecdh failed");
+				EC_KEY_free(ecdh);
+				SSL_CTX_free(ctx);
 				return false;
 			}
 			/* Load certificate chain file (must be PEM format, Base64 encoded) */
@@ -110,6 +113,8 @@ namespace evpp {
 							ctx, certificate_chain_file_.c_str())) {
 				ENGINE_LOG_ERROR(engine::GetLogger(), "Load certificate chain file({})failed.", certificate_chain_file_.c_str());
 				ERR_print_errors_fp(stderr);
+				EC_KEY_free(ecdh);
+				SSL_CTX_free(ctx);
 				return false;
 			}
 			/* Load private key file */
@@ -117,12 +122,16 @@ namespace evpp {
 							ctx, private_key_file_.c_str(), SSL_FILETYPE_PEM)) {
 				ENGINE_LOG_ERROR(engine::GetLogger(), "Load private key file({})failed.", private_key_file_.c_str());
 				ERR_print_errors_fp(stderr);
+				EC_KEY_free(ecdh);
+				SSL_CTX_free(ctx);
 				return false;
 			}
 			/* Verify that private key matches the certificate */
 			if (1 != SSL_CTX_check_private_key (ctx)) {
-				ENGINE_LOG_ERROR(engine::GetLogger(), "EC_KEY_new_by_curve_name failed");
+				ENGINE_LOG_ERROR(engine::GetLogger(), "SSL_CTX_check_private_key failed");
 				ERR_print_errors_fp(stderr);
+				EC_KEY_free(ecdh);
+				SSL_CTX_free(ctx);
 				return false;
 			}
 			auto bevcb = [](struct event_base *base, void *arg)

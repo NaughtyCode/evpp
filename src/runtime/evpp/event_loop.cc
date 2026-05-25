@@ -246,6 +246,7 @@ void EventLoop::RunInLoop(Functor&& functor) {
 
 void EventLoop::QueueInLoop(const Functor& cb) {
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={} pending_functor_count_={} PendingQueueSize={} notified_={}", (void*)this, pending_functor_count_.load(), GetPendingQueueSize(), notified_.load());
+    ++pending_functor_count_;
     {
 #ifdef H_HAVE_BOOST
         auto f = new Functor(cb);
@@ -259,7 +260,6 @@ void EventLoop::QueueInLoop(const Functor& cb) {
         pending_functors_->emplace_back(cb);
 #endif
     }
-    ++pending_functor_count_;
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={} queued a new Functor. pending_functor_count_={} PendingQueueSize={} notified_={}", (void*)this, pending_functor_count_.load(), GetPendingQueueSize(), notified_.load());
     if (!notified_.exchange(true)) {
         ENGINE_LOG_TRACE(engine::GetLogger(), "this={} call watcher_->Notify() notified_.exchange(true) returned false", (void*)this);
@@ -277,6 +277,7 @@ void EventLoop::QueueInLoop(const Functor& cb) {
 
 void EventLoop::QueueInLoop(Functor&& cb) {
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={} pending_functor_count_={} PendingQueueSize={} notified_={}", (void*)this, pending_functor_count_.load(), GetPendingQueueSize(), notified_.load());
+    ++pending_functor_count_;
     {
 #ifdef H_HAVE_BOOST
         auto f = new Functor(std::move(cb)); // TODO Add test code for it
@@ -290,7 +291,6 @@ void EventLoop::QueueInLoop(Functor&& cb) {
         pending_functors_->emplace_back(std::move(cb));
 #endif
     }
-    ++pending_functor_count_;
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={} queued a new Functor. pending_functor_count_={} PendingQueueSize={} notified_={}", (void*)this, pending_functor_count_.load(), GetPendingQueueSize(), notified_.load());
     if (!notified_.exchange(true)) {
         ENGINE_LOG_TRACE(engine::GetLogger(), "this={} call watcher_->Notify() notified_.exchange(true) returned false", (void*)this);

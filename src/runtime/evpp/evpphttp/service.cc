@@ -17,7 +17,9 @@ bool Service::Init(const ConnectionCallback& cb) {
     tcp_srv_->SetMessageCallback(std::bind(&Service::OnMessage, this, std::placeholders::_1, std::placeholders::_2));
     if (!tcp_srv_->Init()) {
         delete listen_loop_;
+        listen_loop_ = nullptr;
         delete tcp_srv_;
+        tcp_srv_ = nullptr;
         is_stopped_ = true;
         ENGINE_LOG_WARN(engine::GetLogger(), "tcpserver on {} init failed", listen_addr_);
         return false;
@@ -57,9 +59,10 @@ void Service::AfterFork() {
 }
 
 void Service::Stop() {
+    if (is_stopped_) return;
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http service is stopping", (void*)this);
-    tcp_srv_->Stop();
-    listen_loop_->Stop();
+    if (tcp_srv_) tcp_srv_->Stop();
+    if (listen_loop_) listen_loop_->Stop();
     if (listen_thr_ && listen_thr_->joinable()) {
         listen_thr_->join();
     }

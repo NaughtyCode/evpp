@@ -190,8 +190,10 @@ void Connector::HandleError() {
         dns_resolver_.reset();
     }
 
-    timer_->Cancel();
-    timer_.reset();
+    if (timer_) {
+        timer_->Cancel();
+        timer_.reset();
+    }
 
     // If the connection is refused or it will not try again,
     // We need to notify the user layer that the connection established failed.

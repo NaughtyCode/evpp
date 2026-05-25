@@ -272,8 +272,6 @@ public:
     // ReadByte reads and returns the next byte from the buffer.
     // If no byte is available, it returns '\0'.
     char ReadByte() {
-        assert(length() >= 1);
-
         if (length() == 0) {
             return '\0';
         }
@@ -284,7 +282,7 @@ public:
     // UnreadBytes unreads the last n bytes returned
     // by the most recent read operation.
     void UnreadBytes(size_t n) {
-        assert(n < read_index_);
+        assert(n <= read_index_);
         read_index_ -= n;
     }
 

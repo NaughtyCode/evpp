@@ -70,19 +70,17 @@ void TCPClient::DisconnectInLoop() {
         ENGINE_LOG_TRACE(engine::GetLogger(), "this={} Close the TCPConn {} status={}", (void*)this, (void*)conn_.get(), conn_->StatusToString());
         assert(!conn_->IsDisconnected() && !conn_->IsDisconnecting());
         conn_->Close();
-    } else {
-        // When connector_ is connecting to the remote server ...
-        assert(connector_ && !connector_->IsConnected());
     }
 
-    if (connector_->IsConnected() || connector_->IsDisconnected()) {
-        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} Nothing to do with connector_, Connector::status={}", (void*)this, connector_->status());
-    } else {
-        // When connector_ is trying to connect to the remote server we should cancel it to release the resources.
-        connector_->Cancel();
+    if (connector_) {
+        if (connector_->IsConnected() || connector_->IsDisconnected()) {
+            ENGINE_LOG_TRACE(engine::GetLogger(), "this={} Nothing to do with connector_, Connector::status={}", (void*)this, connector_->status());
+        } else {
+            // When connector_ is trying to connect to the remote server we should cancel it to release the resources.
+            connector_->Cancel();
+        }
+        connector_.reset(); // Free connector_ in loop thread immediately
     }
-
-    connector_.reset(); // Free connector_ in loop thread immediately
 }
 
 void TCPClient::Reconnect() {

@@ -135,7 +135,6 @@ void PhysicsThread::Stop() {
     thread_.reset();
 
     PHYSICS_LOG_INFO(logger_,"PhysicsThread: stopped");
-    logger_ = nullptr;  // logger is managed by quill, no explicit delete
 }
 
 //============================================================================

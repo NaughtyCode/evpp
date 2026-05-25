@@ -33,7 +33,10 @@ bool Client::Connect(const struct sockaddr_storage& addr) {
 }
 
 bool Client::Connect(const char* addr/*host:port*/) {
-    remote_addr_ = sock::ParseFromIPPort(addr);
+    if (!sock::ParseFromIPPort(addr, remote_addr_)) {
+        ENGINE_LOG_ERROR(engine::GetLogger(), "Failed to parse address: {}", addr);
+        return false;
+    }
     return Connect();
 }
 

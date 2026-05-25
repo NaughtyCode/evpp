@@ -211,6 +211,7 @@ void DNSResolver::OnResolved() {
 }
 
 void DNSResolver::ClearTimer() {
+    if (!timer_) return;
     timer_->SetCancelCallback(TimerEventWatcher::Handler());
     timer_->Cancel();
     timer_.reset();

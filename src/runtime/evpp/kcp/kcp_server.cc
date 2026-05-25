@@ -438,7 +438,11 @@ void Server::RecvingLoop(RecvThread* th) {
                             hash = sock::sockaddr_in_cast(&from_addr)->sin_addr.s_addr;
                         } else if (from_addr.ss_family == AF_INET6) {
                             const auto* sin6 = sock::sockaddr_in6_cast(&from_addr);
-                            memcpy(&hash, &sin6->sin6_addr, sizeof(hash));
+                            const auto* bytes = reinterpret_cast<const uint8_t*>(&sin6->sin6_addr);
+                            uint64_t lo = 0, hi = 0;
+                            memcpy(&lo, bytes, 8);
+                            memcpy(&hi, bytes + 8, 8);
+                            hash = lo ^ hi;
                         }
                         loop = tpool_->GetNextLoopWithHash(hash);
                     }
