@@ -541,7 +541,7 @@ void PhysicsWorld::CollectCollisionEvents(PhysicsFrameResult& result) {
 
 void PhysicsWorld::GenerateDiffs(PhysicsFrameResult& result) {
     JPH::BodyInterface& bi = system_.GetBodyInterfaceNoLock();
-    const ThresholdsConfig& thresholds = thresholds_;
+    ThresholdsConfig thresholds = thresholds_;
 
     for (auto& [body_id, previous] : state_snapshots_) {
         JPH::BodyID jid(body_id);

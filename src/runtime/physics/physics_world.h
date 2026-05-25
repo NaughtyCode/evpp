@@ -208,8 +208,8 @@ private:
     ThresholdsConfig thresholds_;
 
     // Per-frame stats tracking (updated in Step, returned by GetStats)
-    int last_body_pairs_ = 0;
-    int last_contact_constraints_ = 0;
+    std::atomic<int> last_body_pairs_{0};
+    std::atomic<int> last_contact_constraints_{0};
 
     // Static guard for one-time Jolt init steps 1-3
     static std::atomic<bool> s_jolt_registered_;
