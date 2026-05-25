@@ -207,6 +207,9 @@ void Server::Stop() {
 
 	// Firstly we pause all the listening threads to accept new requests.
 	substatus_.store(kStoppingListener);
+	if (listen_threads_.empty()) {
+		promise.set_value();
+	}
 	for (auto& lt : listen_threads_) {
 		std::shared_ptr<Service>& hs = lt.hservice;
 		auto fn = [&count, &promise, this, hs]() {

@@ -21,7 +21,7 @@ FdChannel::FdChannel(EventLoop* l, evpp_socket_t f, bool r, bool w)
 
 FdChannel::~FdChannel() {
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={} fd={}", (void*)this, fd_);
-    assert(event_ == nullptr);
+    Close();
 }
 
 void FdChannel::Close() {

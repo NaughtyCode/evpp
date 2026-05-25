@@ -72,8 +72,6 @@ void ConnPool::Clear() {
         }
         m.second.clear();
     }
-
-    pool_.clear();
 }
 }
 }

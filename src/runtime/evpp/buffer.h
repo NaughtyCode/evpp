@@ -76,6 +76,7 @@ public:
 
     // Skip advances the reading index of the buffer
     void Skip(size_t len) {
+        assert(len <= length());
         if (len < length()) {
             read_index_ += len;
         } else {

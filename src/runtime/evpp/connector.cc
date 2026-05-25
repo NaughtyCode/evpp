@@ -77,8 +77,7 @@ void Connector::Cancel() {
         dns_resolver_.reset();
     }
 
-    assert(timer_);
-    if(timer_) {
+    if (timer_) {
         timer_->Cancel();
         timer_.reset();
     }
@@ -104,8 +103,12 @@ void Connector::Connect() {
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={} {} status={}", (void*)this, remote_addr_, StatusToString());
     assert(fd_ == INVALID_SOCKET);
     fd_ = sock::CreateNonblockingSocket();
+    if (fd_ < 0) {
+        ENGINE_LOG_ERROR(engine::GetLogger(), "CreateNonblockingSocket failed errno={} {}", EVPP_ERRNO, strerror(EVPP_ERRNO));
+        HandleError();
+        return;
+    }
     own_fd_ = true;
-    assert(fd_ >= 0);
     const std::string& laddr = owner_tcp_client_->local_addr();
     if (!laddr.empty()) {
         struct sockaddr_storage ss = sock::ParseFromIPPort(laddr.data());
@@ -211,9 +214,11 @@ void Connector::HandleError() {
         reconnect_timer_.reset();
     }
 
-    // Capture auto_reconnect before invoking user callback, since the
-    // callback may delete the TCPClient (owner_tcp_client_).
+    // Capture values before invoking user callback — the callback may
+    // delete the TCPClient (owner_tcp_client_), making any subsequent
+    // access to it a use-after-free.
     bool do_reconnect = owner_tcp_client_->auto_reconnect();
+    Duration reconnect_interval = owner_tcp_client_->reconnect_interval();
 
     // If the connection is refused or it will not try again,
     // We need to notify the user layer that the connection established failed.
@@ -238,8 +243,8 @@ void Connector::HandleError() {
             fd_ = INVALID_SOCKET;
         }
 
-        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} loop={} auto reconnect in {}s thread={}", (void*)this, (void*)loop_, owner_tcp_client_->reconnect_interval().Seconds(), std::hash<std::thread::id>{}(std::this_thread::get_id()));
-        reconnect_timer_ = loop_->RunAfter(owner_tcp_client_->reconnect_interval(), std::bind(&Connector::Start, shared_from_this()));
+        ENGINE_LOG_TRACE(engine::GetLogger(), "this={} loop={} auto reconnect in {}s thread={}", (void*)this, (void*)loop_, reconnect_interval.Seconds(), std::hash<std::thread::id>{}(std::this_thread::get_id()));
+        reconnect_timer_ = loop_->RunAfter(reconnect_interval, std::bind(&Connector::Start, shared_from_this()));
     }
 }
 

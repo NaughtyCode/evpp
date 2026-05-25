@@ -55,10 +55,10 @@ bool EventWatcher::Watch(Duration timeout) {
 
     if (attached_) {
         // When InvokerTimer::periodic_ == true, EventWatcher::Watch will be called many times
-        // so we need to remove it from event_base before we add it into event_base
+        // so we need to remove it from event_base before we add it into event_base.
+        // event_del returns -1 when the event is not pending (e.g. after firing), which is expected.
         if (EventDel(event_) != 0) {
-            ENGINE_LOG_ERROR(engine::GetLogger(), "event_del failed. fd={} event_={}", this->event_->ev_fd, (void*)event_);
-            // TODO how to deal with it when failed?
+            ENGINE_LOG_TRACE(engine::GetLogger(), "event_del fd={} event_={} (may already be non-pending)", this->event_->ev_fd, (void*)event_);
         }
         attached_ = false;
     }

@@ -117,7 +117,11 @@ void EventLoopThreadPool::Stop(bool wait_thread_exit, DoneCallback fn) {
     }
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={} after promise wait", (void*)this);
 
-    status_.store(kStopped);
+    // Only set kStopped here if the threads have actually exited.
+    // Otherwise OnThreadExited will set it when the last thread finishes.
+    if (wait_thread_exit) {
+        status_.store(kStopped);
+    }
 }
 
 void EventLoopThreadPool::Join() {

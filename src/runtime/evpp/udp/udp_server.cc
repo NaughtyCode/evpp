@@ -245,6 +245,7 @@ void Server::RecvingLoop(RecvThread* thread) {
             }
 
             ENGINE_LOG_ERROR(engine::GetLogger(), "errno={} {}", eno, strerror(eno));
+            break;
         }
     }
 

@@ -40,6 +40,9 @@ private:
     Functor functor_;
     std::unique_ptr<TimerEventWatcher> timer_;
     std::vector<struct in_addr> addrs_;
+    // Owned by libevent callback; must be deleted manually on cancel/timeout
+    // since evdns_getaddrinfo_cancel prevents the callback from firing.
+    std::shared_ptr<DNSResolver>* evdns_cb_arg_ = nullptr;
 };
 
 }

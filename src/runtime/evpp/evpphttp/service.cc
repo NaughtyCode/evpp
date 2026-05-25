@@ -122,6 +122,10 @@ void Service::OnMessage(const evpp::TCPConnPtr& conn, evpp::Buffer* buf) {
         HttpRequest *hr = tmpreq.get();
         ret = RequestHandler(conn, buf, *hr);
         if (ret != 0) {
+            if (ret < 0) {
+                Any empty;
+                conn->set_context(empty);
+            }
             return;
         }
         Any empty;
