@@ -289,13 +289,19 @@ int l_net_server_stop(lua_State* L) {
     ENGINE_LOG_INFO(logger, "[net.server] stopping server=[{}]", sid);
 
     auto ctx = it->second;
+    // Erase from g_servers BEFORE Stop() — Stop() fires Lua callbacks that
+    // may call net.server.stop() re-entrantly. If we erased after Stop(),
+    // the re-entrant erase invalidates `it` and causes UB at g_servers.erase(it).
+    g_servers.erase(it);
+
     ctx->server->Stop();
 
     // Release server-wide Lua callbacks
     if (ctx->on_connect_ref != LUA_NOREF) luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_connect_ref);
     if (ctx->on_message_ref != LUA_NOREF) luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
     if (ctx->on_close_ref != LUA_NOREF)   luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_close_ref);
-    // Release per-connection callback refs
+    // Release per-connection callback refs (may have been partially cleaned
+    // by disconnect callbacks fired during Stop() above).
     for (auto& [conn_id, ref] : ctx->conn_on_message_refs) {
         (void)conn_id;
         if (ref != LUA_NOREF) luaL_unref(L, LUA_REGISTRYINDEX, ref);
@@ -307,7 +313,6 @@ int l_net_server_stop(lua_State* L) {
     }
     ctx->conn_on_close_refs.clear();
     ctx->conns.clear();
-    g_servers.erase(it);
 
     lua_pushboolean(L, 1);
     return 1;
