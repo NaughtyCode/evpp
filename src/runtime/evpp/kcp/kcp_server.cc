@@ -459,7 +459,9 @@ void Server::RecvingLoop(RecvThread* th) {
             if (!EVUTIL_ERR_RW_RETRIABLE(eno)) {
                 ENGINE_LOG_ERROR(engine::GetLogger(),
                     "recvfrom errno={} {}", eno, strerror(eno));
-                break;
+                
+                // don't add break
+                //break;
             }
         }
 
