@@ -58,7 +58,7 @@ void call_lua_callback_str(lua_State* L, int ref, const std::string& s) {
     lua_pushlstring(L, s.data(), s.size());
     if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
         auto* logger = GetLogger();
-        ENGINE_LOG_ERROR(logger, "[net] callback error: {}",
+        ENGINE_LOG_ERROR(logger, "[net.server] callback error: {}",
                          lua_tostring(L, -1));
         lua_pop(L, 1);
     }
@@ -73,7 +73,7 @@ void call_lua_callback_int_str(lua_State* L, int ref, int64_t n, const std::stri
     lua_pushlstring(L, s.data(), s.size());
     if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
         auto* logger = GetLogger();
-        ENGINE_LOG_ERROR(logger, "[net] callback error: {}",
+        ENGINE_LOG_ERROR(logger, "[net.server] callback error: {}",
                          lua_tostring(L, -1));
         lua_pop(L, 1);
     }
@@ -452,7 +452,11 @@ void PushServerLibrary(lua_State* L) {
 void ShutdownServerBindings() {
     auto* logger = GetLogger();
 
-    for (auto& [sid, ctx] : g_servers) {
+    // Move g_servers to a local before iterating — Stop() fires Lua
+    // callbacks that may call net.server.stop(), which erases from
+    // g_servers and would invalidate the range-for iterator.
+    auto servers = std::move(g_servers);
+    for (auto& [sid, ctx] : servers) {
         (void)sid;
         ctx->server->Stop();
         if (ctx->L) {
@@ -486,8 +490,8 @@ void ShutdownServerBindings() {
         }
         ctx->conns.clear();
     }
-    size_t server_count = g_servers.size();
-    g_servers.clear();
+    size_t server_count = servers.size();
+    servers.clear();
 
     if (server_count > 0) {
         ENGINE_LOG_INFO(logger, "ScriptBind: shut down [{}] server(s)", server_count);

@@ -130,10 +130,8 @@ int l_net_http_post(lua_State* L) {
                                 g_http_pending_refs.end(), ref);
             if (it != g_http_pending_refs.end()) g_http_pending_refs.erase(it);
         };
-        if (!g_net_alive.load() || ref == LUA_NOREF) {
-            erase_ref();
-            return;
-        }
+        if (!g_net_alive.load()) return;
+        if (ref == LUA_NOREF) { erase_ref(); return; }
         if (resp) {
             std::string body_str(resp->body().data(), resp->body().size());
             call_lua_http_handler(L, ref, resp->http_code(), body_str);
