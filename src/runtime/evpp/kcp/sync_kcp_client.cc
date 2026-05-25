@@ -61,25 +61,25 @@ void Client::SetKcpMtu(int mtu) {
     kcp_mtu_ = mtu;
 }
 
-bool Client::Connect(const struct sockaddr_in& addr, IUINT32 conv) {
+bool Client::Connect(const struct sockaddr_in& addr, uint32_t conv) {
     memcpy(&remote_addr_, &addr, sizeof(addr));
     conv_ = conv;
     return Connect();
 }
 
-bool Client::Connect(const char* host, int port, IUINT32 conv) {
+bool Client::Connect(const char* host, int port, uint32_t conv) {
     char buf[64];
     snprintf(buf, sizeof buf, "%s:%d", host, port);
     return Connect(buf, conv);
 }
 
-bool Client::Connect(const struct sockaddr_storage& addr, IUINT32 conv) {
+bool Client::Connect(const struct sockaddr_storage& addr, uint32_t conv) {
     memcpy(&remote_addr_, &addr, sizeof(remote_addr_));
     conv_ = conv;
     return Connect();
 }
 
-bool Client::Connect(const char* addr, IUINT32 conv) {
+bool Client::Connect(const char* addr, uint32_t conv) {
     conv_ = conv;
     remote_addr_ = sock::ParseFromIPPort(addr);
     return Connect();
@@ -102,17 +102,24 @@ bool Client::Connect() {
     }
 
     connected_ = true;
-    InitKcp();
+    if (!InitKcp()) {
+        ENGINE_LOG_ERROR(engine::GetLogger(), "KCP client ikcp_create failed");
+        Close();
+        return false;
+    }
     return true;
 }
 
-void Client::InitKcp() {
+bool Client::InitKcp() {
     kcp_ = ikcp_create(conv_, this);
-    assert(kcp_);
+    if (!kcp_) {
+        return false;
+    }
     ikcp_setoutput(kcp_, kcp_output_callback);
     ikcp_wndsize(kcp_, kcp_sndwnd_, kcp_rcvwnd_);
     ikcp_setmtu(kcp_, kcp_mtu_);
     ikcp_nodelay(kcp_, kcp_nodelay_, kcp_interval_, kcp_resend_, kcp_nc_);
+    return true;
 }
 
 void Client::Close() {
@@ -172,8 +179,16 @@ std::string Client::DoRequest(const std::string& data, uint32_t timeout_ms) {
             int n = ::recv(sockfd_, raw_buf, sizeof(raw_buf), 0);
             if (n > 0) {
                 ikcp_input(kcp_, raw_buf, n);
+            } else if (n == 0) {
+                break; // graceful shutdown on connected UDP socket
             } else {
-                break; // no more data (or error)
+                int eno = EVPP_ERRNO;
+                if (EVUTIL_ERR_RW_RETRIABLE(eno)) {
+                    break; // timeout or would-block, no more data for now
+                }
+                ENGINE_LOG_ERROR(engine::GetLogger(),
+                    "KCP client recv fatal errno={} {}", eno, strerror(eno));
+                return ""; // fatal socket error
             }
         }
 
@@ -192,7 +207,7 @@ std::string Client::DoRequest(const std::string& data, uint32_t timeout_ms) {
 
 std::string Client::DoRequest(const std::string& remote_ip, int port,
                               const std::string& data, uint32_t timeout_ms,
-                              IUINT32 conv) {
+                              uint32_t conv) {
     Client c;
     c.SetKcpConv(conv);
     if (!c.Connect(remote_ip.c_str(), port, conv)) {

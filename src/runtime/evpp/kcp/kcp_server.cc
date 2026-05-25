@@ -39,16 +39,21 @@ static inline IUINT32 kcp_clock() {
 class Server::KcpSession {
 public:
     KcpSession(IUINT32 conv, const struct sockaddr_storage& remote_addr,
-               evpp_socket_t fd, int sndwnd, int rcvwnd, int mtu,
+               socklen_t addrlen, evpp_socket_t fd,
+               int sndwnd, int rcvwnd, int mtu,
                int nodelay, int interval, int resend, int nc)
         : conv_(conv)
         , remote_addr_(remote_addr)
         , fd_(fd)
+        , addrlen_(addrlen)
         , last_active_(kcp_clock())
         , alive_(true)
     {
         kcp_ = ikcp_create(conv, this);
-        assert(kcp_);
+        if (!kcp_) {
+            alive_ = false;
+            return;
+        }
         ikcp_setoutput(kcp_, &KcpSession::OutputCallback);
         ikcp_wndsize(kcp_, sndwnd, rcvwnd);
         ikcp_setmtu(kcp_, mtu);
@@ -69,6 +74,7 @@ public:
 
     // Feed a raw UDP packet into KCP.
     int Input(const char* data, long size) {
+        if (!kcp_) return -1;
         last_active_ = kcp_clock();
         return ikcp_input(kcp_, data, size);
     }
@@ -77,6 +83,7 @@ public:
     // Returns the number of bytes written to buffer, or a negative value
     // (EAGAIN / EMSGSIZE) when nothing is available.
     int Recv(char* buffer, int len) {
+        if (!kcp_) return -1;
         int n = ikcp_recv(kcp_, buffer, len);
         if (n > 0) {
             last_active_ = kcp_clock();
@@ -86,17 +93,20 @@ public:
 
     // Peek the size of the next message in the recv queue.
     int PeekSize() const {
+        if (!kcp_) return -1;
         return ikcp_peeksize(kcp_);
     }
 
     // Queue application data for sending.
     int Send(const char* buffer, int len) {
+        if (!kcp_) return -1;
         last_active_ = kcp_clock();
         return ikcp_send(kcp_, buffer, len);
     }
 
     // Call ikcp_update if it is time to do so; returns the new deadline.
     IUINT32 Update(IUINT32 now) {
+        if (!kcp_) return now + 100; // IKCP default interval as fallback
         if (kcp_timediff(now, next_update_) >= 0) {
             ikcp_update(kcp_, now);
             next_update_ = ikcp_check(kcp_, now);
@@ -116,8 +126,7 @@ public:
     // Called by KCP when it needs to emit a raw UDP packet.
     int OnOutput(const char* buf, int len) {
         struct sockaddr* addr = sock::sockaddr_cast(&remote_addr_);
-        socklen_t addrlen = sizeof(remote_addr_);
-        int sent = ::sendto(fd_, buf, len, 0, addr, addrlen);
+        int sent = ::sendto(fd_, buf, len, 0, addr, addrlen_);
         return (sent >= 0) ? 0 : -1;
     }
 
@@ -131,6 +140,7 @@ private:
     IUINT32               conv_;
     struct sockaddr_storage remote_addr_;
     evpp_socket_t         fd_;
+    socklen_t             addrlen_ = 0;
     IUINT32               next_update_ = 0;
     IUINT32               last_active_ = 0;
     bool                  alive_ = true;
@@ -356,7 +366,7 @@ void Server::RecvingLoop(RecvThread* th) {
         }
 
         // --- Try to receive a raw UDP packet --------------------------------
-        struct sockaddr_storage from_addr;
+        struct sockaddr_storage from_addr = {};
         socklen_t addr_len = sizeof(from_addr);
         int readn = ::recvfrom(th->fd(), raw_buf, sizeof(raw_buf), 0,
                                sock::sockaddr_cast(&from_addr), &addr_len);
@@ -377,9 +387,15 @@ void Server::RecvingLoop(RecvThread* th) {
                 }
             } else {
                 session = std::make_shared<KcpSession>(
-                    conv, from_addr, th->fd(),
+                    conv, from_addr, addr_len, th->fd(),
                     kcp_sndwnd_, kcp_rcvwnd_, kcp_mtu_,
                     kcp_nodelay_, kcp_interval_, kcp_resend_, kcp_nc_);
+                if (!session->alive()) {
+                    ENGINE_LOG_ERROR(engine::GetLogger(),
+                        "KCP session init failed conv={} remote={}",
+                        conv, sock::ToIPPort(&from_addr));
+                    continue;
+                }
                 th->sessions_[conv] = session;
                 ENGINE_LOG_INFO(engine::GetLogger(),
                     "KCP session created conv={} remote={}", conv,

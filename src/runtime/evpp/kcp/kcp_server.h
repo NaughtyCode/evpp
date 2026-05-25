@@ -5,12 +5,9 @@
 
 #include "runtime/evpp/kcp/kcp_message.h"
 
-#include <thread>
+#include <cstdint>
 #include <memory>
-#include <unordered_map>
-
-struct IKCPCB;
-typedef struct IKCPCB ikcpcb;
+#include <vector>
 
 namespace evpp {
 

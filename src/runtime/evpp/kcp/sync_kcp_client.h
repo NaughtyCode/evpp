@@ -2,8 +2,6 @@
 
 #include "runtime/evpp/inner_pre.h"
 
-#include "runtime/evpp/kcp/kcp_message.h"
-
 #include <cstdint>
 
 // Forward declaration — full definition comes from ikcp.h via the .cc file.
@@ -59,7 +57,7 @@ public:
 
 private:
     bool Connect();
-    void InitKcp();
+    bool InitKcp();
 
     evpp_socket_t          sockfd_ = INVALID_SOCKET;
     bool                   connected_ = false;
