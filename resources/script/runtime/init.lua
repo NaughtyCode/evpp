@@ -7,6 +7,9 @@
 
 log_info("=== Runtime module loaded ===")
 
+-- Load class system (available to all runtime scripts)
+import("runtime.common.class")
+
 -- Load additional runtime sub-modules as needed:
 -- import("runtime.helpers")
 -- import("runtime.common_config")
