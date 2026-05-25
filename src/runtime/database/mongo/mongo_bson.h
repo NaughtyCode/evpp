@@ -10,6 +10,25 @@
 namespace engine {
 namespace mongo {
 
+// 16-byte IEEE 754 decimal128 floating-point value.
+// Binary-compatible with bson_decimal128_t.
+class ENGINE_API MongoDecimal128 {
+public:
+    MongoDecimal128() : high_(0), low_(0) {}
+    explicit MongoDecimal128(uint64_t high, uint64_t low) : high_(high), low_(low) {}
+
+    uint64_t high() const { return high_; }
+    uint64_t low()  const { return low_; }
+
+    bool FromString(const char* str);
+    std::string ToString() const;
+
+private:
+    uint64_t high_;
+    uint64_t low_;
+};
+static_assert(sizeof(MongoDecimal128) == 16, "MongoDecimal128 must be 16 bytes");
+
 // RAII wrapper around bson_t (128 bytes, stack-allocatable inline storage).
 // Default-constructs empty, append fields, then pass to mongo operations.
 //
@@ -53,6 +72,19 @@ public:
     bool AppendDateTime(const char* key, int64_t msec_since_epoch);
     bool AppendNull(const char* key);
     bool AppendTimestamp(const char* key, uint32_t timestamp, uint32_t increment);
+    bool AppendCode(const char* key, const char* javascript);
+    bool AppendCodeWithScope(const char* key, const char* javascript, const BsonDocument& scope);
+    bool AppendRegex(const char* key, const char* regex, const char* options);
+    bool AppendSymbol(const char* key, const char* symbol);
+    bool AppendUndefined(const char* key);
+    bool AppendMinkey(const char* key);
+    bool AppendMaxkey(const char* key);
+    bool AppendDBPointer(const char* key, const char* collection, const MongoOid& oid);
+    bool AppendTimeT(const char* key, time_t value);
+    bool AppendNowUtc(const char* key);
+    bool AppendDecimal128(const char* key, const MongoDecimal128& value);
+    bool AppendValue(const char* key, const void* bson_value);
+    bool AppendIter(const char* key, const BsonIter& iter);
 
     // ── Sub-document building ───────────────────────────────────────
     bool AppendDocumentBegin(const char* key, BsonDocument* subdoc);
@@ -79,6 +111,11 @@ public:
     // ── Static initializers ─────────────────────────────────────────
     static BsonDocument NewFromJson(const char* json, size_t len);
     static BsonDocument NewFromJson(const uint8_t* data, size_t len);
+    static BsonDocument NewFromData(const uint8_t* data, size_t length);
+
+    // ── Validation ──────────────────────────────────────────────────
+    bool Validate(MongoError* error = nullptr) const;
+    void Reinit(); // reinitialize as an empty document
 
     // ── Internal access (database/mongo/ layer only) ────────────────
     void* RawBson();         // returns bson_t*
@@ -114,6 +151,17 @@ public:
     int64_t      AsDateTime() const;
     void         AsBinary(int* subtype, uint32_t* length, const uint8_t** data) const;
     void         AsDocument(uint32_t* length, const uint8_t** data) const;
+    const char*  AsCode() const;
+    void         AsCodeWithScope(uint32_t* code_length, const char** code, BsonDocument* scope) const;
+    void         AsRegex(const char** regex, const char** options) const;
+    const char*  AsSymbol() const;
+    void         AsTimestamp(uint32_t* timestamp, uint32_t* increment) const;
+    time_t       AsTimeT() const;
+    bool         AsDecimal128(MongoDecimal128* dec) const;
+
+    // Find variants
+    bool FindCase(const char* key);
+    bool FindDescendant(const char* dotkey, BsonIter* descendant);
 
     // Recursion into sub-documents
     BsonIter Recurse() const;
@@ -141,6 +189,21 @@ public:
     bool AppendInt64(int64_t value);
     bool AppendBool(bool value);
     bool AppendOid(const MongoOid& oid);
+    bool AppendNull();
+    bool AppendDateTime(int64_t msec_since_epoch);
+    bool AppendTimestamp(uint32_t timestamp, uint32_t increment);
+    bool AppendDocument(const BsonDocument& doc);
+    bool AppendArray(const BsonDocument& array);
+    bool AppendBinary(int subtype, const uint8_t* data, uint32_t length);
+    bool AppendRegex(const char* regex, const char* options);
+    bool AppendCode(const char* javascript);
+    bool AppendCodeWithScope(const char* javascript, const BsonDocument& scope);
+    bool AppendIter(const BsonIter& iter);
+    bool AppendValue(const void* bson_value);
+
+    // Sub-document building within the builder
+    bool AppendDocumentBegin(BsonDocument* subdoc);
+    static bool AppendDocumentEnd(BsonArrayBuilder* builder, BsonDocument* subdoc);
 
     // Finalize into a document (writes array into the given BsonDocument).
     bool Build(BsonDocument* out);

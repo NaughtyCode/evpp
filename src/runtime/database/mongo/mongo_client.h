@@ -21,6 +21,12 @@ public:
     // Settings
     void SetSocketTimeoutMs(int32_t timeout_ms);
     void SetAppname(const char* appname);
+    MongoUri GetUri() const;
+    void SetReadPrefs(const MongoReadPrefs& read_prefs);
+    void SetWriteConcern(const MongoWriteConcern& write_concern);
+    void SetReadConcern(const MongoReadConcern& read_concern);
+    void SetErrorApi(uint32_t version);
+    void Reset();
 
     // Get child objects (caller owns the returned pointer; must call Destroy()).
     MongoDatabase* GetDatabase(const char* name);
@@ -32,6 +38,14 @@ public:
     bool CommandSimple(const char* db_name, const BsonDocument& command,
                        const MongoReadPrefs* read_prefs,
                        BsonDocument* reply, MongoError* error);
+
+    // ── Session ────────────────────────────────────────────────────
+    MongoSession* StartSession(const MongoSessionOpts* opts, MongoError* error);
+
+    // ── Database names ──────────────────────────────────────────────
+    // Returns nullptr on error; check `error` for details.
+    // Caller must bson_free() the returned string array.
+    char** GetDatabaseNames(MongoError* error);
 
     // Internal access
     void* RawClient(); // returns mongoc_client_t*
@@ -64,6 +78,20 @@ public:
 
     bool CommandSimple(const BsonDocument& command, const MongoReadPrefs* read_prefs,
                        BsonDocument* reply, MongoError* error);
+
+    // ── Aggregate ──────────────────────────────────────────────────
+    MongoCursor* Aggregate(const BsonDocument& pipeline, const BsonDocument* opts,
+                           const MongoReadPrefs* read_prefs);
+
+    // ── Collection names ────────────────────────────────────────────
+    // Returns nullptr on error; check `error` for details.
+    char** GetCollectionNames(MongoError* error);
+
+    // ── User management ─────────────────────────────────────────────
+    bool AddUser(const char* username, const char* password,
+                 const BsonDocument* roles, const BsonDocument* custom_data, MongoError* error);
+    bool RemoveUser(const char* username, MongoError* error);
+    bool RemoveAllUsers(MongoError* error);
 
     void* RawDatabase(); // returns mongoc_database_t*
 
@@ -114,10 +142,34 @@ public:
                            const MongoReadPrefs* read_prefs,
                            BsonDocument* reply, MongoError* error);
 
+    // ── Aggregate ──────────────────────────────────────────────────
+    MongoCursor* Aggregate(const BsonDocument& pipeline, const BsonDocument* opts,
+                           const MongoReadPrefs* read_prefs);
+
+    // ── Insert many ─────────────────────────────────────────────────
+    bool InsertMany(const BsonDocument* documents[], size_t count,
+                    const BsonDocument* opts, BsonDocument* reply, MongoError* error);
+
+    // ── Find and modify ────────────────────────────────────────────
+    bool FindAndModify(const BsonDocument& query, const void* find_and_modify_opts,
+                       BsonDocument* reply, MongoError* error);
+
     // ── Drop / indexes ──────────────────────────────────────────────
     bool Drop(MongoError* error);
+    bool DropIndex(const char* index_name, MongoError* error);
     bool CreateIndex(const BsonDocument& keys, const BsonDocument* opts,
                      BsonDocument* reply, MongoError* error);
+
+    // ── Rename ──────────────────────────────────────────────────────
+    bool Rename(const char* new_db, const char* new_name, bool drop_target_before_rename,
+                MongoError* error);
+
+    // ── Estimated count ─────────────────────────────────────────────
+    int64_t EstimatedDocumentCount(const BsonDocument* opts, const MongoReadPrefs* read_prefs,
+                                    MongoError* error);
+
+    // ── Bulk operation ─────────────────────────────────────────────
+    MongoBulkOperation* CreateBulkOperation(bool ordered, const void* session_raw);
 
     void* RawCollection(); // returns mongoc_collection_t*
 

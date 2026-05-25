@@ -23,7 +23,24 @@ public:
 
     bool Next(BsonDocument* out);
     bool HasError(MongoError* error) const;
+
+    // ── Cursor control ────────────────────────────────────────────────
+    const BsonDocument* Current() const;       // returns current doc without advancing
+    bool More();                               // is there another doc?
+    bool ErrorDocument(MongoError* error, const BsonDocument** doc) const;
+    MongoCursor* Clone() const;               // clone cursor (not fully supported in 2.x — prefer re-query)
+
+    // ── Batch / limit ──────────────────────────────────────────────────
     void SetBatchSize(uint32_t batch_size);
+    uint32_t GetBatchSize() const;
+    void SetLimit(int64_t limit);
+    int64_t GetLimit() const;
+
+    // ── Server / metadata ──────────────────────────────────────────────
+    int64_t GetId() const;
+    uint32_t GetServerId() const;
+    void SetMaxAwaitTimeMs(uint32_t max_await_ms);
+    uint32_t GetMaxAwaitTimeMs() const;
 
     // Internal: set from collection find. Not for public use.
     void SetCursor(void* cursor); // mongoc_cursor_t*

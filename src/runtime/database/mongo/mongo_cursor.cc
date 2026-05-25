@@ -62,5 +62,62 @@ void MongoCursor::SetCursor(void* cursor) {
     impl_->cursor = static_cast<mongoc_cursor_t*>(cursor);
 }
 
+const BsonDocument* MongoCursor::Current() const {
+    if (!impl_ || !impl_->cursor) return nullptr;
+    const bson_t* doc = mongoc_cursor_current(impl_->cursor);
+    return reinterpret_cast<const BsonDocument*>(doc);
+}
+
+bool MongoCursor::More() {
+    if (!impl_ || !impl_->cursor) return false;
+    return mongoc_cursor_more(impl_->cursor);
+}
+
+bool MongoCursor::ErrorDocument(MongoError* error, const BsonDocument** doc) const {
+    if (!impl_ || !impl_->cursor) return false;
+    return mongoc_cursor_error_document(impl_->cursor,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr,
+        reinterpret_cast<const bson_t**>(doc));
+}
+
+MongoCursor* MongoCursor::Clone() const {
+    if (!impl_ || !impl_->cursor) return nullptr;
+    mongoc_cursor_t* cloned = mongoc_cursor_clone(impl_->cursor);
+    if (!cloned) return nullptr;
+    auto* result = new MongoCursor();
+    result->SetCursor(cloned);
+    return result;
+}
+
+uint32_t MongoCursor::GetBatchSize() const {
+    return impl_ && impl_->cursor ? mongoc_cursor_get_batch_size(impl_->cursor) : 0;
+}
+
+void MongoCursor::SetLimit(int64_t limit) {
+    if (impl_ && impl_->cursor)
+        mongoc_cursor_set_limit(impl_->cursor, limit);
+}
+
+int64_t MongoCursor::GetLimit() const {
+    return impl_ && impl_->cursor ? mongoc_cursor_get_limit(impl_->cursor) : 0;
+}
+
+int64_t MongoCursor::GetId() const {
+    return impl_ && impl_->cursor ? mongoc_cursor_get_id(impl_->cursor) : 0;
+}
+
+uint32_t MongoCursor::GetServerId() const {
+    return impl_ && impl_->cursor ? mongoc_cursor_get_server_id(impl_->cursor) : 0;
+}
+
+void MongoCursor::SetMaxAwaitTimeMs(uint32_t max_await_ms) {
+    if (impl_ && impl_->cursor)
+        mongoc_cursor_set_max_await_time_ms(impl_->cursor, max_await_ms);
+}
+
+uint32_t MongoCursor::GetMaxAwaitTimeMs() const {
+    return impl_ && impl_->cursor ? mongoc_cursor_get_max_await_time_ms(impl_->cursor) : 0;
+}
+
 } // namespace mongo
 } // namespace engine

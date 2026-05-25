@@ -2,9 +2,13 @@
 
 #include <mongoc/mongoc.h>
 
+#include <vector>
+
 #include "runtime/database/mongo/mongo_bson.h"
+#include "runtime/database/mongo/mongo_bulk.h"
 #include "runtime/database/mongo/mongo_cursor.h"
 #include "runtime/database/mongo/mongo_error.h"
+#include "runtime/database/mongo/mongo_session.h"
 #include "runtime/database/mongo/mongo_settings.h"
 #include "runtime/database/mongo/mongo_uri.h"
 
@@ -339,6 +343,181 @@ bool MongoCollection::CreateIndex(const BsonDocument& keys, const BsonDocument* 
 
 void* MongoCollection::RawCollection() {
     return impl_ ? impl_->coll : nullptr;
+}
+
+// ── MongoClient: new methods ───────────────────────────────────────────
+
+MongoUri MongoClient::GetUri() const {
+    MongoUri result;
+    if (impl_ && impl_->client) {
+        const mongoc_uri_t* uri = mongoc_client_get_uri(impl_->client);
+        if (uri) {
+            result.SetRawUri(mongoc_uri_copy(uri));
+        }
+    }
+    return result;
+}
+
+void MongoClient::SetReadPrefs(const MongoReadPrefs& read_prefs) {
+    if (impl_ && impl_->client)
+        mongoc_client_set_read_prefs(impl_->client,
+            static_cast<const mongoc_read_prefs_t*>(read_prefs.RawReadPrefs()));
+}
+
+void MongoClient::SetWriteConcern(const MongoWriteConcern& write_concern) {
+    if (impl_ && impl_->client)
+        mongoc_client_set_write_concern(impl_->client,
+            static_cast<const mongoc_write_concern_t*>(write_concern.RawWriteConcern()));
+}
+
+void MongoClient::SetReadConcern(const MongoReadConcern& read_concern) {
+    if (impl_ && impl_->client)
+        mongoc_client_set_read_concern(impl_->client,
+            static_cast<const mongoc_read_concern_t*>(read_concern.RawReadConcern()));
+}
+
+void MongoClient::SetErrorApi(uint32_t version) {
+    if (impl_ && impl_->client)
+        mongoc_client_set_error_api(impl_->client, static_cast<int32_t>(version));
+}
+
+void MongoClient::Reset() {
+    if (impl_ && impl_->client)
+        mongoc_client_reset(impl_->client);
+}
+
+MongoSession* MongoClient::StartSession(const MongoSessionOpts* opts, MongoError* error) {
+    if (!impl_ || !impl_->client) return nullptr;
+    mongoc_client_session_t* session = mongoc_client_start_session(impl_->client,
+        opts ? static_cast<const mongoc_session_opt_t*>(opts->RawSessionOpts()) : nullptr,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+    if (!session) return nullptr;
+    auto* result = new MongoSession();
+    result->SetRawSession(session);
+    return result;
+}
+
+char** MongoClient::GetDatabaseNames(MongoError* error) {
+    if (!impl_ || !impl_->client) return nullptr;
+    return mongoc_client_get_database_names_with_opts(impl_->client, nullptr,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+}
+
+// ── MongoDatabase: new methods ─────────────────────────────────────────
+
+MongoCursor* MongoDatabase::Aggregate(const BsonDocument& pipeline, const BsonDocument* opts,
+                                       const MongoReadPrefs* read_prefs) {
+    if (!impl_ || !impl_->db) return nullptr;
+    mongoc_cursor_t* cursor = mongoc_database_aggregate(impl_->db,
+        static_cast<const bson_t*>(pipeline.RawBson()),
+        opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr,
+        read_prefs ? static_cast<const mongoc_read_prefs_t*>(read_prefs->RawReadPrefs()) : nullptr);
+    if (!cursor) return nullptr;
+    auto* result = new MongoCursor();
+    result->SetCursor(cursor);
+    return result;
+}
+
+char** MongoDatabase::GetCollectionNames(MongoError* error) {
+    if (!impl_ || !impl_->db) return nullptr;
+    return mongoc_database_get_collection_names_with_opts(impl_->db, nullptr,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+}
+
+bool MongoDatabase::AddUser(const char* username, const char* password,
+                             const BsonDocument* roles, const BsonDocument* custom_data,
+                             MongoError* error) {
+    if (!impl_ || !impl_->db) return false;
+    return mongoc_database_add_user(impl_->db, username, password,
+        roles ? static_cast<const bson_t*>(roles->RawBson()) : nullptr,
+        custom_data ? static_cast<const bson_t*>(custom_data->RawBson()) : nullptr,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+}
+
+bool MongoDatabase::RemoveUser(const char* username, MongoError* error) {
+    if (!impl_ || !impl_->db) return false;
+    return mongoc_database_remove_user(impl_->db, username,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+}
+
+bool MongoDatabase::RemoveAllUsers(MongoError* error) {
+    if (!impl_ || !impl_->db) return false;
+    return mongoc_database_remove_all_users(impl_->db,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+}
+
+// ── MongoCollection: new methods ────────────────────────────────────────
+
+MongoCursor* MongoCollection::Aggregate(const BsonDocument& pipeline, const BsonDocument* opts,
+                                         const MongoReadPrefs* read_prefs) {
+    if (!impl_ || !impl_->coll) return nullptr;
+    mongoc_cursor_t* cursor = mongoc_collection_aggregate(impl_->coll,
+        static_cast<mongoc_query_flags_t>(0),
+        static_cast<const bson_t*>(pipeline.RawBson()),
+        opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr,
+        read_prefs ? static_cast<const mongoc_read_prefs_t*>(read_prefs->RawReadPrefs()) : nullptr);
+    if (!cursor) return nullptr;
+    auto* result = new MongoCursor();
+    result->SetCursor(cursor);
+    return result;
+}
+
+bool MongoCollection::InsertMany(const BsonDocument* documents[], size_t count,
+                                  const BsonDocument* opts, BsonDocument* reply, MongoError* error) {
+    if (!impl_ || !impl_->coll) return false;
+    // Build array of raw bson_t* pointers
+    std::vector<const bson_t*> docs(count);
+    for (size_t i = 0; i < count; ++i)
+        docs[i] = static_cast<const bson_t*>(documents[i]->RawBson());
+    return mongoc_collection_insert_many(impl_->coll, docs.data(), count,
+        opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr,
+        reply ? static_cast<bson_t*>(reply->RawBson()) : nullptr,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+}
+
+bool MongoCollection::FindAndModify(const BsonDocument& query, const void* find_and_modify_opts,
+                                     BsonDocument* reply, MongoError* error) {
+    if (!impl_ || !impl_->coll) return false;
+    return mongoc_collection_find_and_modify_with_opts(impl_->coll,
+        static_cast<const bson_t*>(query.RawBson()),
+        static_cast<const mongoc_find_and_modify_opts_t*>(find_and_modify_opts),
+        reply ? static_cast<bson_t*>(reply->RawBson()) : nullptr,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+}
+
+bool MongoCollection::DropIndex(const char* index_name, MongoError* error) {
+    if (!impl_ || !impl_->coll) return false;
+    return mongoc_collection_drop_index_with_opts(impl_->coll, index_name, nullptr,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+}
+
+bool MongoCollection::Rename(const char* new_db, const char* new_name,
+                              bool drop_target_before_rename, MongoError* error) {
+    if (!impl_ || !impl_->coll) return false;
+    return mongoc_collection_rename_with_opts(impl_->coll, new_db, new_name,
+        drop_target_before_rename, nullptr,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+}
+
+int64_t MongoCollection::EstimatedDocumentCount(const BsonDocument* opts,
+                                                  const MongoReadPrefs* read_prefs,
+                                                  MongoError* error) {
+    if (!impl_ || !impl_->coll) return -1;
+    return mongoc_collection_estimated_document_count(impl_->coll,
+        opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr,
+        read_prefs ? static_cast<const mongoc_read_prefs_t*>(read_prefs->RawReadPrefs()) : nullptr,
+        nullptr,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+}
+
+MongoBulkOperation* MongoCollection::CreateBulkOperation(bool ordered, const void* session_raw) {
+    if (!impl_ || !impl_->coll) return nullptr;
+    mongoc_bulk_operation_t* bulk = mongoc_collection_create_bulk_operation_with_opts(
+        impl_->coll, nullptr);
+    if (!bulk) return nullptr;
+    auto* result = new MongoBulkOperation();
+    result->SetRawBulkOperation(bulk);
+    return result;
 }
 
 } // namespace mongo

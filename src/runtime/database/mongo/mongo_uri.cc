@@ -2,6 +2,8 @@
 
 #include <mongoc/mongoc.h>
 
+#include "runtime/database/mongo/mongo_settings.h"
+
 namespace engine {
 namespace mongo {
 
@@ -110,6 +112,59 @@ void* MongoUri::RawUri() {
 
 const void* MongoUri::RawUri() const {
     return impl_ ? impl_->uri : nullptr;
+}
+
+void MongoUri::SetRawUri(void* uri) {
+    if (impl_ && impl_->uri) mongoc_uri_destroy(impl_->uri);
+    impl_->uri = static_cast<mongoc_uri_t*>(uri);
+}
+
+// ── New URI accessors ────────────────────────────────────────────────
+
+const char* MongoUri::GetSrvHostname() const {
+    return impl_ && impl_->uri ? mongoc_uri_get_srv_hostname(impl_->uri) : nullptr;
+}
+
+const char* MongoUri::GetSrvServiceName() const {
+    return impl_ && impl_->uri ? mongoc_uri_get_srv_service_name(impl_->uri) : nullptr;
+}
+
+const void* MongoUri::GetCompressors() const {
+    return impl_ && impl_->uri ? mongoc_uri_get_compressors(impl_->uri) : nullptr;
+}
+
+const void* MongoUri::GetCredentials() const {
+    return impl_ && impl_->uri ? mongoc_uri_get_credentials(impl_->uri) : nullptr;
+}
+
+bool MongoUri::GetTls() const {
+    return impl_ && impl_->uri && mongoc_uri_get_tls(impl_->uri);
+}
+
+bool MongoUri::HasOption(const char* key) const {
+    return impl_ && impl_->uri && mongoc_uri_has_option(impl_->uri, key);
+}
+
+bool MongoUri::SetCompressors(const char* compressors) {
+    return impl_ && impl_->uri && mongoc_uri_set_compressors(impl_->uri, compressors);
+}
+
+void MongoUri::SetReadPrefs(const MongoReadPrefs& read_prefs) {
+    if (impl_ && impl_->uri)
+        mongoc_uri_set_read_prefs_t(impl_->uri,
+            static_cast<const mongoc_read_prefs_t*>(read_prefs.RawReadPrefs()));
+}
+
+void MongoUri::SetWriteConcern(const MongoWriteConcern& write_concern) {
+    if (impl_ && impl_->uri)
+        mongoc_uri_set_write_concern(impl_->uri,
+            static_cast<const mongoc_write_concern_t*>(write_concern.RawWriteConcern()));
+}
+
+void MongoUri::SetReadConcern(const MongoReadConcern& read_concern) {
+    if (impl_ && impl_->uri)
+        mongoc_uri_set_read_concern(impl_->uri,
+            static_cast<const mongoc_read_concern_t*>(read_concern.RawReadConcern()));
 }
 
 } // namespace mongo

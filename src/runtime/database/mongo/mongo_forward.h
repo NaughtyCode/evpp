@@ -10,6 +10,7 @@ namespace mongo {
 class BsonDocument;
 class BsonIter;
 class BsonArrayBuilder;
+class MongoDecimal128;
 class MongoOid;
 class MongoError;
 class MongoUri;
@@ -19,6 +20,9 @@ class MongoCollection;
 class MongoCursor;
 class MongoBulkOperation;
 class MongoSession;
+class MongoTransactionOpts;
+class MongoSessionOpts;
+class MongoChangeStream;
 class MongoReadPrefs;
 class MongoWriteConcern;
 class MongoReadConcern;

@@ -1,4 +1,5 @@
 #include "runtime/database/mongo/mongo_settings.h"
+#include "runtime/database/mongo/mongo_bson.h"
 
 #include <mongoc/mongoc.h>
 
@@ -60,6 +61,27 @@ void* MongoReadPrefs::RawReadPrefs() {
 
 const void* MongoReadPrefs::RawReadPrefs() const {
     return impl_ ? impl_->prefs : nullptr;
+}
+
+bool MongoReadPrefs::AddTag(const BsonDocument& tag) {
+    if (!impl_ || !impl_->prefs) return false;
+    mongoc_read_prefs_add_tag(impl_->prefs,
+        static_cast<const bson_t*>(tag.RawBson()));
+    return true;
+}
+
+int MongoReadPrefs::GetMaxStalenessSeconds() const {
+    return impl_ && impl_->prefs
+        ? static_cast<int>(mongoc_read_prefs_get_max_staleness_seconds(impl_->prefs)) : 0;
+}
+
+void MongoReadPrefs::SetMaxStalenessSeconds(int max_staleness_seconds) {
+    if (impl_ && impl_->prefs)
+        mongoc_read_prefs_set_max_staleness_seconds(impl_->prefs, static_cast<int64_t>(max_staleness_seconds));
+}
+
+bool MongoReadPrefs::IsValid() const {
+    return impl_ && impl_->prefs && mongoc_read_prefs_is_valid(impl_->prefs);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -124,6 +146,49 @@ bool MongoWriteConcern::IsAcknowledged() const {
     return impl_ && impl_->wc && mongoc_write_concern_is_acknowledged(impl_->wc);
 }
 
+bool MongoWriteConcern::JournalIsSet() const {
+    return impl_ && impl_->wc && mongoc_write_concern_journal_is_set(impl_->wc);
+}
+
+int64_t MongoWriteConcern::GetWTimeoutInt64() const {
+    return impl_ && impl_->wc ? mongoc_write_concern_get_wtimeout_int64(impl_->wc) : 0;
+}
+
+void MongoWriteConcern::SetWTimeoutInt64(int64_t timeout_ms) {
+    if (impl_ && impl_->wc) mongoc_write_concern_set_wtimeout_int64(impl_->wc, timeout_ms);
+}
+
+bool MongoWriteConcern::GetWMajority() const {
+    return impl_ && impl_->wc && mongoc_write_concern_get_wmajority(impl_->wc);
+}
+
+void MongoWriteConcern::SetWMajority(bool wmajority) {
+    if (impl_ && impl_->wc) mongoc_write_concern_set_wmajority(impl_->wc, static_cast<int32_t>(wmajority));
+}
+
+const char* MongoWriteConcern::GetWTag() const {
+    return impl_ && impl_->wc ? mongoc_write_concern_get_wtag(impl_->wc) : nullptr;
+}
+
+int32_t MongoWriteConcern::SetWTag(const char* tag) {
+    if (impl_ && impl_->wc) mongoc_write_concern_set_wtag(impl_->wc, tag);
+    return 0;
+}
+
+bool MongoWriteConcern::IsValid() const {
+    return impl_ && impl_->wc && mongoc_write_concern_is_valid(impl_->wc);
+}
+
+bool MongoWriteConcern::IsDefault() const {
+    return impl_ && impl_->wc && mongoc_write_concern_is_default(impl_->wc);
+}
+
+bool MongoWriteConcern::AppendToOpts(BsonDocument& opts) const {
+    if (!impl_ || !impl_->wc) return false;
+    auto* cmd = static_cast<bson_t*>(opts.RawBson());
+    return mongoc_write_concern_append(impl_->wc, cmd);
+}
+
 void* MongoWriteConcern::RawWriteConcern() {
     return impl_ ? impl_->wc : nullptr;
 }
@@ -172,6 +237,16 @@ const char* MongoReadConcern::GetLevel() const {
 
 bool MongoReadConcern::SetLevel(const char* level) {
     return impl_ && impl_->rc && mongoc_read_concern_set_level(impl_->rc, level);
+}
+
+bool MongoReadConcern::IsDefault() const {
+    return impl_ && impl_->rc && mongoc_read_concern_is_default(impl_->rc);
+}
+
+bool MongoReadConcern::AppendToOpts(BsonDocument& opts) const {
+    if (!impl_ || !impl_->rc) return false;
+    auto* cmd = static_cast<bson_t*>(opts.RawBson());
+    return mongoc_read_concern_append(impl_->rc, cmd);
 }
 
 void* MongoReadConcern::RawReadConcern() {

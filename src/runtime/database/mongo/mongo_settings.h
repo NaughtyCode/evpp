@@ -33,6 +33,12 @@ public:
     Mode GetMode() const;
     void SetMode(Mode mode);
 
+    // Tag sets (used for targeting specific replicas)
+    bool AddTag(const BsonDocument& tag);
+    int GetMaxStalenessSeconds() const;
+    void SetMaxStalenessSeconds(int max_staleness_seconds);
+    bool IsValid() const;
+
     void* RawReadPrefs();       // returns mongoc_read_prefs_t*
     const void* RawReadPrefs() const;
 
@@ -64,9 +70,19 @@ public:
     void SetW(int32_t w);
     bool GetJournal() const;
     void SetJournal(bool journal);
+    bool JournalIsSet() const;
     int32_t GetWTimeout() const;
     void SetWTimeout(int32_t timeout_ms);
+    int64_t GetWTimeoutInt64() const;
+    void SetWTimeoutInt64(int64_t timeout_ms);
+    bool GetWMajority() const;
+    void SetWMajority(bool wmajority);
+    const char* GetWTag() const;
+    int32_t SetWTag(const char* tag);
     bool IsAcknowledged() const;
+    bool IsValid() const;
+    bool IsDefault() const;
+    bool AppendToOpts(BsonDocument& opts) const;
 
     void* RawWriteConcern();       // returns mongoc_write_concern_t*
     const void* RawWriteConcern() const;
@@ -96,6 +112,8 @@ public:
 
     const char* GetLevel() const;
     bool SetLevel(const char* level);
+    bool IsDefault() const;
+    bool AppendToOpts(BsonDocument& opts) const;
 
     void* RawReadConcern();       // returns mongoc_read_concern_t*
     const void* RawReadConcern() const;
