@@ -279,7 +279,7 @@ public:
     MongoCursor* FindIndexes(const BsonDocument* opts);
 
     // ── Utilities ───────────────────────────────────────────────────
-    char* KeysToIndexString() const;
+    char* KeysToIndexString(const BsonDocument& keys) const;
 
     // ── Rename ──────────────────────────────────────────────────────
     bool Rename(const char* new_db, const char* new_name, bool drop_target_before_rename,

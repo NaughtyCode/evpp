@@ -102,6 +102,8 @@ public:
     bool Equal(const BsonDocument& other) const;
     int Compare(const BsonDocument& other) const;
     bool Concat(const BsonDocument& src);
+    bool CopyTo(BsonDocument& dst) const; // copy contents into an existing document
+    bool ReserveBuffer(uint32_t size);    // pre-allocate buffer space
 
     // ── Serialization ───────────────────────────────────────────────
     const uint8_t* GetData() const;
@@ -109,12 +111,14 @@ public:
 
     char* AsCanonicalExtendedJson(size_t* length) const;
     char* AsRelaxedExtendedJson(size_t* length) const;
+    char* AsLegacyExtendedJson(size_t* length) const;
     char* AsJson(size_t* length) const;
     char* AsJsonWithOpts(size_t* length, const void* opts) const; // bson_json_opts_t*
     std::string ToJson() const;  // returns AsJson() as std::string, caller owns
 
     static char* ArrayAsCanonicalExtendedJson(const BsonDocument& array, size_t* length);
     static char* ArrayAsRelaxedExtendedJson(const BsonDocument& array, size_t* length);
+    static char* ArrayAsLegacyExtendedJson(const BsonDocument& array, size_t* length);
 
     // ── Static initializers ─────────────────────────────────────────
     static BsonDocument NewFromJson(const char* json, size_t len);
@@ -124,9 +128,10 @@ public:
                                        void* realloc_func, void* realloc_func_ctx);
     static BsonDocument SizedNew(size_t size);
 
-    // ── Validation ──────────────────────────────────────────────────
+    // ── Validation / Reinit ─────────────────────────────────────────
     bool Validate(MongoError* error = nullptr) const;
     void Reinit(); // reinitialize as an empty document
+    bool InitFromJson(const char* json, ssize_t len, MongoError* error = nullptr);
 
     // ── Steal (move bson_t buffer; src is left empty) ───────────────
     static void Steal(BsonDocument& dst, BsonDocument& src);
@@ -157,18 +162,21 @@ public:
 
     // Typed value accessors — call the right one for the field type.
     double       AsDouble() const;
+    double       AsDoubleCoerce() const; // converts int32/int64 to double
     int32_t      AsInt32() const;
     int64_t      AsInt64() const;
+    int64_t      AsInt64Coerce() const; // converts int32/double to int64
     const char*  AsUtf8(uint32_t* length) const;
     bool         AsBool() const;
     MongoOid     AsOid() const;
     int64_t      AsDateTime() const;
     void         AsBinary(int* subtype, uint32_t* length, const uint8_t** data) const;
     void         AsDocument(uint32_t* length, const uint8_t** data) const;
-    const char*  AsCode() const;
+    void         AsArray(uint32_t* array_len, const uint8_t** array) const;
+    const char*  AsCode(uint32_t* length = nullptr) const;
     void         AsCodeWithScope(uint32_t* code_length, const char** code, BsonDocument* scope) const;
     void         AsRegex(const char** regex, const char** options) const;
-    const char*  AsSymbol() const;
+    const char*  AsSymbol(uint32_t* length = nullptr) const;
     void         AsTimestamp(uint32_t* timestamp, uint32_t* increment) const;
     time_t       AsTimeT() const;
     bool         AsDecimal128(MongoDecimal128* dec) const;

@@ -25,6 +25,7 @@ class MongoSessionOpts;
 class MongoChangeStream;
 class MongoClientPool;
 class MongoFindAndModifyOpts;
+class MongoIndexModel;
 class MongoServerApi;
 class MongoReadPrefs;
 class MongoWriteConcern;

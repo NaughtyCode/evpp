@@ -178,6 +178,8 @@ set(MONGO_SOURCES
     database/mongo/mongo_error.cc database/mongo/mongo_error.h
     database/mongo/mongo_find_and_modify_opts.cc database/mongo/mongo_find_and_modify_opts.h
     database/mongo/mongo_forward.h
+    database/mongo/mongo_gridfs.cc database/mongo/mongo_gridfs.h
+    database/mongo/mongo_index_model.cc database/mongo/mongo_index_model.h
     database/mongo/mongo_oid.cc database/mongo/mongo_oid.h
     database/mongo/mongo_server_api.cc database/mongo/mongo_server_api.h
     database/mongo/mongo_session.cc database/mongo/mongo_session.h

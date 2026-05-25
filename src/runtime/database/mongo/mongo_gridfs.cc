@@ -172,10 +172,6 @@ bool MongoGridFsFile::Seek(int64_t pos, int whence) {
     return impl_ && impl_->file && mongoc_gridfs_file_seek(impl_->file, pos, whence);
 }
 
-bool MongoGridFsFile::SetChunkSize(int32_t chunk_size) {
-    return impl_ && impl_->file && mongoc_gridfs_file_set_chunk_size(impl_->file, chunk_size);
-}
-
 void MongoGridFsFile::Remove(MongoError* error) {
     if (impl_ && impl_->file)
         mongoc_gridfs_file_remove(impl_->file,
@@ -214,9 +210,13 @@ MongoGridFsFile* MongoGridFsFileList::Next(MongoError* error) {
 
 void* MongoGridFsFileList::Raw() { return impl_ ? impl_->list : nullptr; }
 
+bool MongoGridFsFileList::Error(MongoError* error) const {
+    return impl_ && impl_->list && mongoc_gridfs_file_list_error(impl_->list,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // MongoGridFs
-// ═══════════════════════════════════════════════════════════════════════
 
 struct MongoGridFs::Impl {
     mongoc_gridfs_t* gridfs = nullptr;

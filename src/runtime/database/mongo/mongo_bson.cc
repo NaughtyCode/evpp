@@ -59,6 +59,15 @@ BsonDocument BsonDocument::Copy() const {
     return result;
 }
 
+bool BsonDocument::CopyTo(BsonDocument& dst) const {
+    return bson_copy_to(static_cast<const bson_t*>(RawBson()),
+                        static_cast<bson_t*>(dst.RawBson()));
+}
+
+bool BsonDocument::ReserveBuffer(uint32_t size) {
+    return bson_reserve_buffer(static_cast<bson_t*>(RawBson()), size);
+}
+
 void BsonDocument::Clear() {
     bson_destroy(static_cast<bson_t*>(RawBson()));
     bson_init(static_cast<bson_t*>(RawBson()));
@@ -252,6 +261,10 @@ char* BsonDocument::AsRelaxedExtendedJson(size_t* length) const {
     return bson_as_relaxed_extended_json(static_cast<const bson_t*>(RawBson()), length);
 }
 
+char* BsonDocument::AsLegacyExtendedJson(size_t* length) const {
+    return bson_as_legacy_extended_json(static_cast<const bson_t*>(RawBson()), length);
+}
+
 char* BsonDocument::AsJson(size_t* length) const {
     return bson_as_relaxed_extended_json(static_cast<const bson_t*>(RawBson()), length);
 }
@@ -268,6 +281,11 @@ char* BsonDocument::ArrayAsCanonicalExtendedJson(const BsonDocument& array, size
 
 char* BsonDocument::ArrayAsRelaxedExtendedJson(const BsonDocument& array, size_t* length) {
     return bson_array_as_relaxed_extended_json(
+        static_cast<const bson_t*>(array.RawBson()), length);
+}
+
+char* BsonDocument::ArrayAsLegacyExtendedJson(const BsonDocument& array, size_t* length) {
+    return bson_array_as_legacy_extended_json(
         static_cast<const bson_t*>(array.RawBson()), length);
 }
 
@@ -353,6 +371,11 @@ void BsonDocument::Reinit() {
     bson_reinit(static_cast<bson_t*>(RawBson()));
 }
 
+bool BsonDocument::InitFromJson(const char* json, ssize_t len, MongoError* error) {
+    return bson_init_from_json(static_cast<bson_t*>(RawBson()), json, len,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+}
+
 void* BsonDocument::RawBson() { return static_cast<void*>(storage_); }
 const void* BsonDocument::RawBson() const { return static_cast<const void*>(storage_); }
 
@@ -388,6 +411,9 @@ int BsonIter::Type() const {
 double BsonIter::AsDouble() const {
     return bson_iter_double(static_cast<const bson_iter_t*>(RawIter()));
 }
+double BsonIter::AsDoubleCoerce() const {
+    return bson_iter_as_double(static_cast<const bson_iter_t*>(RawIter()));
+}
 
 int32_t BsonIter::AsInt32() const {
     return bson_iter_int32(static_cast<const bson_iter_t*>(RawIter()));
@@ -395,6 +421,9 @@ int32_t BsonIter::AsInt32() const {
 
 int64_t BsonIter::AsInt64() const {
     return bson_iter_int64(static_cast<const bson_iter_t*>(RawIter()));
+}
+int64_t BsonIter::AsInt64Coerce() const {
+    return bson_iter_as_int64(static_cast<const bson_iter_t*>(RawIter()));
 }
 
 const char* BsonIter::AsUtf8(uint32_t* length) const {
@@ -427,10 +456,12 @@ void BsonIter::AsBinary(int* subtype, uint32_t* length, const uint8_t** data) co
 void BsonIter::AsDocument(uint32_t* length, const uint8_t** data) const {
     bson_iter_document(static_cast<const bson_iter_t*>(RawIter()), length, data);
 }
+void BsonIter::AsArray(uint32_t* array_len, const uint8_t** array) const {
+    bson_iter_array(static_cast<const bson_iter_t*>(RawIter()), array_len, array);
+}
 
-const char* BsonIter::AsCode() const {
-    uint32_t len;
-    return bson_iter_code(static_cast<const bson_iter_t*>(RawIter()), &len);
+const char* BsonIter::AsCode(uint32_t* length) const {
+    return bson_iter_code(static_cast<const bson_iter_t*>(RawIter()), length);
 }
 
 void BsonIter::AsCodeWithScope(uint32_t* code_length, const char** code, BsonDocument* scope) const {
@@ -451,9 +482,8 @@ void BsonIter::AsRegex(const char** regex, const char** options) const {
     *regex = bson_iter_regex(static_cast<const bson_iter_t*>(RawIter()), options);
 }
 
-const char* BsonIter::AsSymbol() const {
-    uint32_t len;
-    return bson_iter_symbol(static_cast<const bson_iter_t*>(RawIter()), &len);
+const char* BsonIter::AsSymbol(uint32_t* length) const {
+    return bson_iter_symbol(static_cast<const bson_iter_t*>(RawIter()), length);
 }
 
 void BsonIter::AsTimestamp(uint32_t* timestamp, uint32_t* increment) const {

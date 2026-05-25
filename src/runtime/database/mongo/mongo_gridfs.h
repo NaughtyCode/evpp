@@ -48,6 +48,7 @@ public:
     const char* GetMd5() const;
     void GetId(BsonDocument* out) const;
     void GetMetadata(BsonDocument* out) const;
+    void GetAliases(BsonDocument* out) const;
 
     // Setters
     void SetMd5(const char* md5);
@@ -66,7 +67,6 @@ public:
     ssize_t Writev(const void* iov, size_t iovcnt, int32_t timeout_msec);
     bool Save();
     bool Seek(int64_t pos, int whence);
-    bool SetChunkSize(int32_t chunk_size);
 
     void Remove(MongoError* error);
 
@@ -91,6 +91,7 @@ public:
     void Destroy();
 
     MongoGridFsFile* Next(MongoError* error);
+    bool Error(MongoError* error) const;
 
     void* Raw(); // returns mongoc_gridfs_file_list_t*
 

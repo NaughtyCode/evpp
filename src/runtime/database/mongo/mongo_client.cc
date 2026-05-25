@@ -917,10 +917,10 @@ MongoCursor* MongoCollection::FindIndexes(const BsonDocument* opts) {
     return result;
 }
 
-char* MongoCollection::KeysToIndexString() const {
-    // Generates an index string from the collection name and an empty keys doc
+char* MongoCollection::KeysToIndexString(const BsonDocument& keys) const {
     if (!impl_ || !impl_->coll) return nullptr;
-    return mongoc_collection_keys_to_index_string(nullptr);
+    return mongoc_collection_keys_to_index_string(
+        static_cast<const bson_t*>(keys.RawBson()));
 }
 
 MongoCursor* MongoCollection::Aggregate(const BsonDocument& pipeline, const BsonDocument* opts,
