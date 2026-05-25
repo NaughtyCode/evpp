@@ -24,6 +24,7 @@
 
 #include "runtime/core/log/log.h"
 #include "runtime/core/timer/timer_manager.h"
+#include "runtime/database/mongo/mongo_system.h"
 #include "runtime/physics/physics_engine_bridge.h"
 #include "runtime/profiler/profiler_core.h"
 #include "runtime/profiler/profiler_events.h"
@@ -101,6 +102,13 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
         loop_ = owned_loop_.get();
         std::fprintf(stderr, "[engine] EventLoop created\n");
     }
+
+    // ── MongoDB driver initialization ──────────────────────────────────
+    {
+        bool mongo_ok = mongo::MongoSystem::Instance().Initialize();
+        ENGINE_LOG_INFO(logger, "mongo system initialized, ok=[{}]", mongo_ok);
+    }
+
     if (runtime_cfg.frame.target_fps > 0) {
         frame_interval_ = std::chrono::milliseconds(1000 / runtime_cfg.frame.target_fps);
     } else {
@@ -268,6 +276,9 @@ void Engine::Cleanup() {
 
     // Shutdown physics (stops thread + destroys physics VM) — before engine VM
     PhysicsEngineBridge::Instance().Shutdown();
+
+    // Shutdown mongo driver
+    mongo::MongoSystem::Instance().Shutdown();
 
     // Cancel frame timer before destroying Lua state.
     if (frame_timer_) {

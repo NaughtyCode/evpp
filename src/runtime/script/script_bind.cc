@@ -7,6 +7,7 @@
 #include "runtime/script/msgpack_bind.h"
 #include "runtime/script/net_bind.h"
 #include "runtime/script/import_bind.h"
+#include "runtime/database/mongo_bind/mongo_bind.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {
@@ -21,6 +22,7 @@ void ExportAll(ScriptVM& vm) {
     { ENGINE_PROFILE_SCRIPT_EXPORT("net");    ExportNet(vm);    }
     { ENGINE_PROFILE_SCRIPT_EXPORT("msgpack"); ExportMsgPack(vm); }
     { ENGINE_PROFILE_SCRIPT_EXPORT("import"); engine::ExportImport(vm); }
+    { ENGINE_PROFILE_SCRIPT_EXPORT("mongo");  ExportMongo(vm);  }
 
     ENGINE_LOG_INFO(logger, "ScriptBind: all APIs exported");
 }

@@ -167,6 +167,26 @@ file(GLOB EVPP_SOURCES
 )
 source_group("evpp" FILES ${EVPP_SOURCES})
 
+# ── Mongo wrapper (database/mongo/) ───────────────────────────────────
+set(MONGO_SOURCES
+    database/mongo/mongo_bson.cc database/mongo/mongo_bson.h
+    database/mongo/mongo_client.cc database/mongo/mongo_client.h
+    database/mongo/mongo_cursor.cc database/mongo/mongo_cursor.h
+    database/mongo/mongo_error.cc database/mongo/mongo_error.h
+    database/mongo/mongo_forward.h
+    database/mongo/mongo_oid.cc database/mongo/mongo_oid.h
+    database/mongo/mongo_settings.cc database/mongo/mongo_settings.h
+    database/mongo/mongo_system.cc database/mongo/mongo_system.h
+    database/mongo/mongo_uri.cc database/mongo/mongo_uri.h
+)
+source_group("database\\mongo" FILES ${MONGO_SOURCES})
+
+# ── Mongo Lua bindings (database/mongo_bind/) ─────────────────────────
+set(MONGO_BIND_SOURCES
+    database/mongo_bind/mongo_bind.cc database/mongo_bind/mongo_bind.h
+)
+source_group("database\\mongo_bind" FILES ${MONGO_BIND_SOURCES})
+
 # ═══════════════════════════════════════════════════════════════════════
 # ServerEngine library
 # ═══════════════════════════════════════════════════════════════════════
@@ -188,6 +208,8 @@ set(SERVERENGINE_SOURCES
     ${PROFILER_SOURCES}
     ${PHYSICS_HEADERS}
     ${EVPP_SOURCES}
+    ${MONGO_SOURCES}
+    ${MONGO_BIND_SOURCES}
 )
 
 if(ENGINE_PHYSICS_ENABLED)
