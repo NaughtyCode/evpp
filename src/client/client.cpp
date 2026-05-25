@@ -6,6 +6,16 @@
  *   engine::ScriptVM — Lua VM (DoString/DoFile/RegisterFunction)
  */
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#endif
+
 #include "client_internal.h"
 
 #include "runtime/core/log/log.h"
@@ -49,6 +59,17 @@ extern "C" game_error_t game_client_init(game_client_t* client,
     if (config_dir && *config_dir) {
         cfg_mgr.Load(config_dir);
     }
+
+    /* WinSock must be initialised before creating the EventLoop because
+     * its constructor opens a socket pair for the notification pipe. */
+#ifdef _WIN32
+    WSADATA wsa_data;
+    int wsa_err = WSAStartup(MAKEWORD(2, 2), &wsa_data);
+    if (wsa_err) {
+        set_error_f(client, "WSAStartup failed: %d", wsa_err);
+        return GAME_ERR_NETWORK;
+    }
+#endif
 
     /* Library mode: create our own EventLoop so the user can drive it with
      * game_client_tick(). The loop is passed to Engine::Init as external_loop,
@@ -98,14 +119,18 @@ extern "C" void game_client_destroy(game_client_t** client) {
     game_client_t* c = *client;
     if (c->initialized) {
         auto& engine = engine::Engine::Instance();
+
+        /* Save the loop pointer before Cleanup() sets loop_ to nullptr. */
+        evpp::EventLoop* loop = engine.GetEventLoop();
+
         engine.Cleanup();
 
-        if (c->owns_loop) {
-            auto* loop = engine.GetEventLoop();
-            if (loop) {
-                delete loop;
-            }
+        if (c->owns_loop && loop) {
+            delete loop;
         }
+#ifdef _WIN32
+        WSACleanup();
+#endif
         c->initialized = false;
     }
 

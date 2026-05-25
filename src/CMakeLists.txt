@@ -119,7 +119,7 @@ if(BUILD_CLIENT)
     add_subdirectory (client)
 endif()
 
-set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT main)
+set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT server)
 
 # CPack packaging (requires src/build/cmake/{utils,packages}.cmake)
 # set (CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/build/cmake")
