@@ -116,8 +116,10 @@ void DNSResolver::OnTimeout() {
 void DNSResolver::OnCanceled() {
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={} tid={} this={}", (void*)this, std::hash<std::thread::id>{}(std::this_thread::get_id()), (void*)this);
 #if LIBEVENT_VERSION_NUMBER >= 0x02001500
-    evdns_getaddrinfo_cancel(dns_req_);
-    dns_req_ = nullptr;
+    if (dns_req_) {
+        evdns_getaddrinfo_cancel(dns_req_);
+        dns_req_ = nullptr;
+    }
 #endif
     if (evdns_cb_arg_) {
         delete evdns_cb_arg_;
