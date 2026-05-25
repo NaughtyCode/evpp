@@ -89,6 +89,7 @@ bool Conn::Init() {
         ENGINE_LOG_ERROR(engine::GetLogger(), "evhttp_connection_new failed.");
         bufferevent_free(bufferevent_);
         bufferevent_ = nullptr;
+        ssl_ = nullptr;
         return false;
     }
 #else

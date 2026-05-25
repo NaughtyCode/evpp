@@ -15,7 +15,7 @@ HttpResponse::HttpResponse(const HttpRequest& hr): hp_(hr.parser) {
 
 void HttpResponse::add_content_len(const int64_t size, Buffer& buf) {
     char len[42];
-    snprintf(len, sizeof(len), "Content-Length:%" PRId64 "\r\n", size);
+    snprintf(len, sizeof(len), "Content-Length: %" PRId64 "\r\n", size);
     buf.Append(len, strlen(len));
 }
 
@@ -33,20 +33,23 @@ void HttpResponse::add_date(Buffer& buf) {
     cur_p = &cur;
 #endif
     if (strftime(date, sizeof(date),
-                 "Date:%a, %d %b %Y %H:%M:%S GMT\r\n", cur_p) != 0) {
+                 "Date: %a, %d %b %Y %H:%M:%S GMT\r\n", cur_p) != 0) {
         buf.Append(date, strlen(date));
     }
 }
 void HttpResponse::MakeHttpResponse(const int response_code, const int64_t body_size, const std::map<std::string, std::string>& header_field_value, Buffer& buf) {
     //HTTP/%d.%d code reson\r\n
     auto response_code_iter = http_status_code.find(response_code);
-    if (response_code_iter == http_status_code.end()) {
-        response_code_iter = http_status_code.find(808);
-    }
     char status[16];
-    snprintf(status, sizeof status, "HTTP/%d.%d %d ", hp_.http_major, hp_.http_minor, response_code_iter->first);
-    buf.Append(status);
-    buf.Append(response_code_iter->second);
+    if (response_code_iter == http_status_code.end()) {
+        snprintf(status, sizeof status, "HTTP/%d.%d %d ", hp_.http_major, hp_.http_minor, response_code);
+        buf.Append(status);
+        buf.Append("Unknown");
+    } else {
+        snprintf(status, sizeof status, "HTTP/%d.%d %d ", hp_.http_major, hp_.http_minor, response_code_iter->first);
+        buf.Append(status);
+        buf.Append(response_code_iter->second);
+    }
     buf.Append("\r\n");
     if (response_code == 400) { //Bad request
         buf.Append("\r\n");
@@ -62,7 +65,7 @@ void HttpResponse::MakeHttpResponse(const int response_code, const int64_t body_
             chunked_ = true;
         }
         if (close_ || (hp_.http_minor == 0 && !keep_alive_)) {
-            buf.Append("Connection:close\r\n");
+            buf.Append("Connection: close\r\n");
             close_ = true;
         } else {
             if (!chunked_) {
