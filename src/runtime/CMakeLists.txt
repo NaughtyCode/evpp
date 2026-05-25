@@ -17,6 +17,14 @@ include_directories(${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include)
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty/lua/lua)
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty/glaze/glaze/include)
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty/concurrentqueue/concurrentqueue)
+if(TARGET bson_static)
+    include_directories(${PROJECT_SOURCE_DIR}/thirdparty/mongo-c-driver/src/libbson/src)
+    include_directories(${PROJECT_BINARY_DIR}/mongo-c-driver/src/libbson/src)
+endif()
+if(TARGET mongoc_static)
+    include_directories(${PROJECT_SOURCE_DIR}/thirdparty/mongo-c-driver/src/libmongoc/src)
+    include_directories(${PROJECT_BINARY_DIR}/mongo-c-driver/src/libmongoc/src)
+endif()
 
 # ── Platform settings ────────────────────────────────────────────────
 if(MSVC)
@@ -216,6 +224,17 @@ if(ENGINE_PHYSICS_ENABLED)
         ${PROJECT_SOURCE_DIR}/thirdparty/JoltPhysics/JoltPhysics
     )
     target_link_libraries(ServerEngine PUBLIC Jolt)
+endif()
+
+# ── Link mongo-c-driver ─────────────────────────────────────────────────
+if(TARGET bson_static)
+    target_link_libraries(ServerEngine PUBLIC bson_static)
+endif()
+if(TARGET mongoc_static)
+    target_link_libraries(ServerEngine PUBLIC mongoc_static)
+    if(WIN32)
+        target_link_libraries(ServerEngine PUBLIC secur32 crypt32 Bcrypt ncrypt Dnsapi)
+    endif()
 endif()
 
 # ── Link system libraries ─────────────────────────────────────────────

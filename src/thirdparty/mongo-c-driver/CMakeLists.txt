@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.15...4.0)
+cmake_minimum_required (VERSION 3.15...5.0)
 
 list (INSERT CMAKE_MODULE_PATH 0 "${CMAKE_CURRENT_LIST_DIR}/build/cmake")
 # Defines BUILD_VERSION, which we use throughout:
