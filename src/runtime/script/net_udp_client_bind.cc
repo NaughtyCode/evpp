@@ -125,7 +125,11 @@ int l_udp_client_do_request(lua_State* L) {
 
     size_t len = 0;
     const char* data = luaL_checklstring(L, 2, &len);
-    uint32_t timeout_ms = static_cast<uint32_t>(luaL_optinteger(L, 3, 3000));
+    lua_Integer t = luaL_optinteger(L, 3, 3000);
+    if (t < 0) {
+        return luaL_error(L, "timeout must be >= 0");
+    }
+    auto timeout_ms = static_cast<uint32_t>(t);
 
     std::string resp = ctx->client->DoRequest(std::string(data, len), timeout_ms);
     lua_pushlstring(L, resp.data(), resp.size());
@@ -192,13 +196,20 @@ int l_udp_client_gc(lua_State* L) {
 // ── Static: net.udp_client.do_request(host, port, data, timeout_ms) → string ──
 int l_udp_client_do_request_static(lua_State* L) {
     const char* host = luaL_checkstring(L, 1);
+    if (!*host) {
+        return luaL_error(L, "host must not be empty");
+    }
     int port = static_cast<int>(luaL_checkinteger(L, 2));
     if (port <= 0 || port > 65535) {
         return luaL_error(L, "port out of range");
     }
     size_t len = 0;
     const char* data = luaL_checklstring(L, 3, &len);
-    uint32_t timeout_ms = static_cast<uint32_t>(luaL_optinteger(L, 4, 3000));
+    lua_Integer t = luaL_optinteger(L, 4, 3000);
+    if (t < 0) {
+        return luaL_error(L, "timeout must be >= 0");
+    }
+    auto timeout_ms = static_cast<uint32_t>(t);
 
     std::string resp = evpp::udp::sync::Client::DoRequest(host, port,
         std::string(data, len), timeout_ms);
@@ -209,6 +220,9 @@ int l_udp_client_do_request_static(lua_State* L) {
 // ── Static: net.udp_client.send_to(host, port, data) → bool ────────────
 int l_udp_client_send_to(lua_State* L) {
     const char* host = luaL_checkstring(L, 1);
+    if (!*host) {
+        return luaL_error(L, "host must not be empty");
+    }
     int port = static_cast<int>(luaL_checkinteger(L, 2));
     if (port <= 0 || port > 65535) {
         return luaL_error(L, "port out of range");
@@ -219,9 +233,9 @@ int l_udp_client_send_to(lua_State* L) {
     evpp::udp::sync::Client tmp;
     if (!tmp.Connect(host, port)) {
         auto* logger = GetLogger();
-        ENGINE_LOG_ERROR(logger, "[net.udp_client] send_to: failed to resolve {}", host);
+        ENGINE_LOG_ERROR(logger, "[net.udp_client] send_to: failed to connect to {}:{}", host, port);
         lua_pushboolean(L, 0);
-        lua_pushstring(L, "failed to resolve host");
+        lua_pushstring(L, "failed to connect to host");
         return 2;
     }
     bool ok = tmp.Send(data, len);

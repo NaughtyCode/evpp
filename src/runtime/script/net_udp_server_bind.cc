@@ -34,7 +34,9 @@ namespace {
 struct UdpServerCtx {
     std::unique_ptr<evpp::udp::Server> server;
     lua_State* L = nullptr;
-    int on_message_ref = LUA_NOREF;
+    // Atomic: written from main thread (listen/set_on_message/stop),
+    // read from RecvThread inside MessageHandler after weak_ptr lock.
+    std::atomic<int> on_message_ref{LUA_NOREF};
     int64_t server_id = 0;
 };
 
