@@ -1,0 +1,266 @@
+#include "runtime/script/net_udp_client_bind.h"
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
+
+#include <memory>
+#include <string>
+
+#include <runtime/evpp/udp/sync_udp_client.h>
+#include <runtime/evpp/udp/udp_message.h>
+
+#include "runtime/core/log/log.h"
+#include "runtime/engine/engine.h"
+
+extern "C" {
+#include "lauxlib.h"
+}
+
+namespace engine {
+namespace script {
+
+namespace {
+
+// ======================================================================
+// UDP Client bindings (light userdata + Lua class)
+// ======================================================================
+
+struct UdpClientCtx {
+    std::unique_ptr<evpp::udp::sync::Client> client;
+    lua_State* L = nullptr;
+    int instance_ref = LUA_NOREF;
+    bool disposed = false;
+};
+
+const char* kUdpClientMetaName = "net.udp_client.instance";
+
+// ── Internal helpers ─────────────────────────────────────────────────
+
+UdpClientCtx* GetUdpClientCtxFromTable(lua_State* L, int idx) {
+    lua_getfield(L, idx, "_ctx");
+    auto* ctx = static_cast<UdpClientCtx*>(lua_touserdata(L, -1));
+    lua_pop(L, 1);
+    return ctx;
+}
+
+// ── l_udp_client_connect(host, port) → instance_table ──
+int l_udp_client_connect(lua_State* L) {
+    const char* host = luaL_checkstring(L, 1);
+    int port = static_cast<int>(luaL_checkinteger(L, 2));
+    if (!*host) {
+        return luaL_error(L, "host must not be empty");
+    }
+    if (port <= 0 || port > 65535) {
+        return luaL_error(L, "port out of range");
+    }
+
+    auto* ctx = new UdpClientCtx();
+    ctx->L = L;
+
+    // Build Lua class instance table
+    lua_newtable(L);
+
+    // Store light userdata (UdpClientCtx*) as _ctx
+    lua_pushlightuserdata(L, ctx);
+    lua_setfield(L, -2, "_ctx");
+
+    // Apply metatable with methods and __gc
+    luaL_getmetatable(L, kUdpClientMetaName);
+    lua_setmetatable(L, -2);
+
+    // Ref instance table in registry
+    lua_pushvalue(L, -1);
+    ctx->instance_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+    // Create SyncUDPClient and connect
+    ctx->client = std::make_unique<evpp::udp::sync::Client>();
+    if (!ctx->client->Connect(host, port)) {
+        auto* logger = GetLogger();
+        ENGINE_LOG_ERROR(logger, "[net.udp_client] failed to connect to {}:{}", host, port);
+        ctx->disposed = true;
+        luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
+        ctx->instance_ref = LUA_NOREF;
+        ctx->client.reset();
+        delete ctx;
+        lua_pop(L, 1);
+        lua_pushnil(L);
+        lua_pushfstring(L, "udp connect failed: %s:%d", host, port);
+        return 2;
+    }
+
+    auto* logger = GetLogger();
+    ENGINE_LOG_INFO(logger, "[net.udp_client] connected to [{}:{}]", host, port);
+
+    return 1;
+}
+
+// ── instance:send(data) → bool ─────────────────────────────────────────
+int l_udp_client_send(lua_State* L) {
+    auto* ctx = GetUdpClientCtxFromTable(L, 1);
+    if (!ctx) return luaL_error(L, "udp_client: invalid context");
+    if (ctx->disposed) return luaL_error(L, "udp_client: closed");
+
+    size_t len = 0;
+    const char* data = luaL_checklstring(L, 2, &len);
+
+    bool ok = ctx->client->Send(data, len);
+    lua_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+// ── instance:do_request(data, timeout_ms) → string ─────────────────────
+int l_udp_client_do_request(lua_State* L) {
+    auto* ctx = GetUdpClientCtxFromTable(L, 1);
+    if (!ctx) return luaL_error(L, "udp_client: invalid context");
+    if (ctx->disposed) return luaL_error(L, "udp_client: closed");
+
+    size_t len = 0;
+    const char* data = luaL_checklstring(L, 2, &len);
+    uint32_t timeout_ms = static_cast<uint32_t>(luaL_optinteger(L, 3, 3000));
+
+    std::string resp = ctx->client->DoRequest(std::string(data, len), timeout_ms);
+    lua_pushlstring(L, resp.data(), resp.size());
+    return 1;
+}
+
+// ── instance:close() ────────────────────────────────────────────────────
+int l_udp_client_close(lua_State* L) {
+    auto* ctx = GetUdpClientCtxFromTable(L, 1);
+    if (!ctx || ctx->disposed) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    ctx->disposed = true;
+
+    lua_pushnil(L);
+    lua_setfield(L, 1, "_ctx");
+
+    if (ctx->instance_ref != LUA_NOREF) {
+        luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->instance_ref);
+        ctx->instance_ref = LUA_NOREF;
+    }
+
+    ctx->client->Close();
+    delete ctx;
+
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// ── instance:is_connected() → bool ─────────────────────────────────────
+int l_udp_client_is_connected(lua_State* L) {
+    auto* ctx = GetUdpClientCtxFromTable(L, 1);
+    if (!ctx || ctx->disposed) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    // SyncUDPClient doesn't expose an is_connected() method; we infer from context
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// ── __gc metamethod ────────────────────────────────────────────────────
+int l_udp_client_gc(lua_State* L) {
+    auto* ctx = GetUdpClientCtxFromTable(L, 1);
+    if (!ctx || ctx->disposed) return 0;
+
+    ctx->disposed = true;
+
+    lua_pushnil(L);
+    lua_setfield(L, 1, "_ctx");
+
+    if (ctx->instance_ref != LUA_NOREF) {
+        luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->instance_ref);
+        ctx->instance_ref = LUA_NOREF;
+    }
+
+    ctx->client->Close();
+    delete ctx;
+
+    return 0;
+}
+
+// ── Static: net.udp_client.do_request(host, port, data, timeout_ms) → string ──
+int l_udp_client_do_request_static(lua_State* L) {
+    const char* host = luaL_checkstring(L, 1);
+    int port = static_cast<int>(luaL_checkinteger(L, 2));
+    size_t len = 0;
+    const char* data = luaL_checklstring(L, 3, &len);
+    uint32_t timeout_ms = static_cast<uint32_t>(luaL_optinteger(L, 4, 3000));
+
+    std::string resp = evpp::udp::sync::Client::DoRequest(host, port,
+        std::string(data, len), timeout_ms);
+    lua_pushlstring(L, resp.data(), resp.size());
+    return 1;
+}
+
+// ── Static: net.udp_client.send_to(host, port, data) → bool ────────────
+int l_udp_client_send_to(lua_State* L) {
+    const char* host = luaL_checkstring(L, 1);
+    int port = static_cast<int>(luaL_checkinteger(L, 2));
+    size_t len = 0;
+    const char* data = luaL_checklstring(L, 3, &len);
+
+    evpp::udp::sync::Client tmp;
+    if (!tmp.Connect(host, port)) {
+        auto* logger = GetLogger();
+        ENGINE_LOG_ERROR(logger, "[net.udp_client] send_to: failed to resolve {}", host);
+        lua_pushboolean(L, 0);
+        lua_pushstring(L, "failed to resolve host");
+        return 2;
+    }
+    bool ok = tmp.Send(data, len);
+    tmp.Close();
+    lua_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+// ── Instance method table ──────────────────────────────────────────────
+const luaL_Reg kUdpClientMethods[] = {
+    {"send",            l_udp_client_send},
+    {"do_request",      l_udp_client_do_request},
+    {"close",           l_udp_client_close},
+    {"is_connected",    l_udp_client_is_connected},
+    {nullptr, nullptr},
+};
+
+// ── net.udp_client static functions ────────────────────────────────────
+const luaL_Reg kUdpClientFunctions[] = {
+    {"connect",     l_udp_client_connect},
+    {"do_request",  l_udp_client_do_request_static},
+    {"send_to",     l_udp_client_send_to},
+    {nullptr, nullptr},
+};
+
+} // namespace
+
+// ======================================================================
+// Public API
+// ======================================================================
+
+void RegisterUdpClientMetaTable(lua_State* L) {
+    if (!L) return;
+
+    // Register metatable for instance methods and __gc
+    luaL_newmetatable(L, kUdpClientMetaName);
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -2, "__index");              // mt.__index = mt
+    luaL_setfuncs(L, kUdpClientMethods, 0);
+    lua_pushcfunction(L, l_udp_client_gc);
+    lua_setfield(L, -2, "__gc");
+    lua_pop(L, 1);
+}
+
+void PushUdpClientLibrary(lua_State* L) {
+    if (!L) return;
+
+    // net.udp_client table (static functions: connect, do_request, send_to)
+    luaL_newlib(L, kUdpClientFunctions);
+}
+
+} // namespace script
+} // namespace engine

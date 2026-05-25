@@ -2,6 +2,8 @@
 #include "runtime/script/net_client_bind.h"
 #include "runtime/script/net_server_bind.h"
 #include "runtime/script/net_http_bind.h"
+#include "runtime/script/net_udp_client_bind.h"
+#include "runtime/script/net_udp_server_bind.h"
 
 #include "runtime/core/log/log.h"
 #include "runtime/vm/vm.h"
@@ -18,10 +20,12 @@ void ExportNet(ScriptVM& vm) {
     if (!L) return;
 
     RegisterClientMetaTable(L);
+    RegisterUdpClientMetaTable(L);
 
     // Build nested "net" table:
-    //   net = { client = { ... }, server = { ... }, http = { ... } }
-    lua_createtable(L, 0, 3);           // net table
+    //   net = { client = { ... }, server = { ... }, http = { ... },
+    //           udp_client = { ... }, udp_server = { ... } }
+    lua_createtable(L, 0, 5);           // net table
 
     // net.client  (only static functions: connect)
     PushClientLibrary(L);                     // net, client
@@ -35,11 +39,19 @@ void ExportNet(ScriptVM& vm) {
     PushHttpLibrary(L);                       // net, http
     lua_setfield(L, -2, "http");
 
+    // net.udp_client
+    PushUdpClientLibrary(L);                  // net, udp_client
+    lua_setfield(L, -2, "udp_client");
+
+    // net.udp_server
+    PushUdpServerLibrary(L);                  // net, udp_server
+    lua_setfield(L, -2, "udp_server");
+
     lua_setglobal(L, "net");
 
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "ScriptBind: net module exported "
-                    "(net.client/net.server/net.http)");
+                    "(net.client/net.server/net.http/net.udp_client/net.udp_server)");
 }
 
 void ShutdownNetBindings() {
@@ -51,6 +63,7 @@ void ShutdownNetBindings() {
     // We do not maintain a global client map.
 
     ShutdownServerBindings();
+    ShutdownUdpServerBindings();
 }
 
 } // namespace script

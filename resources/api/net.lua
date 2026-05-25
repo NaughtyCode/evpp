@@ -2,9 +2,11 @@
 --- Global module: net
 ---
 --- Sub-modules:
----   net.client  -- TCP client (light userdata + Lua class instance)
----   net.server  -- TCP server (integer handles: server_id, conn_id)
----   net.http    -- HTTP client (async callback-based)
+---   net.client      -- TCP client (light userdata + Lua class instance)
+---   net.server      -- TCP server (integer handles: server_id, conn_id)
+---   net.http        -- HTTP client (async callback-based)
+---   net.udp_client  -- UDP client (synchronous, blocking)
+---   net.udp_server  -- UDP server (async callback-based)
 ---
 --- All callbacks are invoked asynchronously on the event loop thread.
 --- Never block or sleep inside a callback.
@@ -137,3 +139,118 @@ function net.http.get(url, on_response) end
 ---@param body        string   request body
 ---@param on_response fun(http_code: integer, body: string)  response callback
 function net.http.post(url, body, on_response) end
+
+-- ============================================================================
+-- net.udp_client -- UDP client (synchronous)
+-- ============================================================================
+-- Wraps evpp::udp::sync::Client.  All operations are synchronous and will
+-- block the Lua VM until completion.  Suitable for testing and one-shot
+-- requests, not for production async workloads.
+--
+-- Each client returned by net.udp_client.connect() is a Lua class instance
+-- (table with metatable).  The C++ context is stored as light userdata in
+-- the _ctx field and cleaned up by Lua GC (__gc metamethod) or explicitly
+-- via :close().
+--
+-- Instance methods:
+--   udp_client:send(data) -> bool
+--   udp_client:do_request(data [, timeout_ms]) -> string
+--   udp_client:close() -> bool
+--   udp_client:is_connected() -> bool
+--
+-- Static helpers (no instance needed):
+--   net.udp_client.do_request(host, port, data [, timeout_ms]) -> string
+--   net.udp_client.send_to(host, port, data) -> bool
+
+--- Create a UDP client and connect to host:port.
+---@param host string
+---@param port integer
+---@return table client   instance with methods
+---@return nil, string    error message on failure
+function net.udp_client.connect(host, port) end
+
+--- Send raw data through the UDP socket.
+---@param data string
+---@return boolean ok
+function udp_client:send(data) end
+
+--- Send data and wait for a response (blocking).
+---@param data        string
+---@param timeout_ms? integer  default 3000
+---@return string response  empty string on failure
+function udp_client:do_request(data, timeout_ms) end
+
+--- Close the UDP socket and release the client.
+---@return boolean existed  true if still active, false if already closed
+function udp_client:close() end
+
+--- Check whether the client is active.
+---@return boolean connected
+function udp_client:is_connected() end
+
+--- One-shot: connect, send, wait for response, disconnect.
+--- Creates a temporary UDP client internally.
+---@param host        string
+---@param port        integer
+---@param data        string
+---@param timeout_ms? integer  default 3000
+---@return string response  empty string on failure
+function net.udp_client.do_request(host, port, data, timeout_ms) end
+
+--- One-shot: resolve host, send data, close.
+--- Creates a temporary UDP client internally.
+---@param host string
+---@param port integer
+---@param data string
+---@return boolean ok
+function net.udp_client.send_to(host, port, data) end
+
+-- ============================================================================
+-- net.udp_server -- UDP server (async)
+-- ============================================================================
+-- Wraps evpp::udp::Server.  Messages are received on internal recv threads
+-- and dispatched to the main EventLoop thread for Lua callback invocation.
+--
+-- Servers are identified by an integer server_id returned from listen().
+-- Unlike TCP, UDP is connectionless — there are no per-connection state or
+-- callbacks.  Each message delivers (data, remote_ip) to the on_message
+-- callback.
+--
+-- Static functions:
+--   net.udp_server.listen(port_or_ports, on_message) -> server_id
+--   net.udp_server.stop(server_id) -> bool
+--   net.udp_server.pause(server_id)
+--   net.udp_server.continue(server_id)
+--   net.udp_server.is_running(server_id) -> bool
+--   net.udp_server.set_on_message(server_id, callback)
+
+--- Create and start a UDP server listening on port(s).
+--- Accepts a single port integer, or a port string like "53,5353".
+---@param port_or_ports integer|string  single port or comma-separated list
+---@param on_message    fun(data: string, remote_ip: string)  message callback
+---@return integer server_id   success: server identifier
+---@return nil, string errmsg  failure: error message
+function net.udp_server.listen(port_or_ports, on_message) end
+
+--- Stop the UDP server and release its callback.
+---@param server_id integer
+---@return boolean stopped  true if found and stopped, false if not found
+function net.udp_server.stop(server_id) end
+
+--- Pause message receiving (no callbacks will fire).
+---@param server_id integer
+function net.udp_server.pause(server_id) end
+
+--- Resume message receiving after a pause.
+---@param server_id integer
+function net.udp_server.continue(server_id) end
+
+--- Check whether the server is currently running.
+---@param server_id integer
+---@return boolean running
+function net.udp_server.is_running(server_id) end
+
+--- Replace the on_message callback for a running server.
+---@param server_id integer
+---@param callback  fun(data: string, remote_ip: string)?
+function net.udp_server.set_on_message(server_id, callback) end

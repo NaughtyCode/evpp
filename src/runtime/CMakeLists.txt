@@ -106,6 +106,8 @@ set(SCRIPT_SOURCES
     script/net_client_bind.cc script/net_client_bind.h
     script/net_server_bind.cc script/net_server_bind.h
     script/net_http_bind.cc script/net_http_bind.h
+    script/net_udp_client_bind.cc script/net_udp_client_bind.h
+    script/net_udp_server_bind.cc script/net_udp_server_bind.h
     script/msgpack_bind.cc script/msgpack_bind.h
     script/import_bind.cc script/import_bind.h
 )
