@@ -60,6 +60,10 @@ void call_lua_callback(lua_State* L, int ref) {
     if (!L) return;
     if (ref == LUA_NOREF) return;  // timer was already cancelled
     lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return;
+    }
     if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
         auto* logger = GetLogger();
         ENGINE_LOG_ERROR(logger, "[lua timer] callback error: {}",

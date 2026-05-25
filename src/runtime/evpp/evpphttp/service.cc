@@ -66,12 +66,16 @@ void Service::Stop() {
     if (listen_thr_ && listen_thr_->joinable()) {
         listen_thr_->join();
     }
-    callbacks_.clear();
+    {
+        std::lock_guard<std::mutex> lock(callbacks_mutex_);
+        callbacks_.clear();
+    }
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http service stopped", (void*)this);
     is_stopped_ = true;
 }
 
 void Service::RegisterHandler(const std::string& uri, const HTTPRequestCallback& callback) {
+    std::lock_guard<std::mutex> lock(callbacks_mutex_);
     callbacks_[uri] = callback;
 }
 
@@ -84,6 +88,7 @@ int Service::RequestHandler(const evpp::TCPConnPtr& conn, evpp::Buffer* buf, Htt
     }
     if (hr.completed()) {
         auto path = std::move(hr.url_path());
+        std::lock_guard<std::mutex> lock(callbacks_mutex_);
         auto cb = callbacks_.find(path);
         HttpResponse resp(hr);
         auto f = [conn, resp](const int response_code, const std::map<std::string, std::string>& response_field_value, const std::string& response_data) mutable {

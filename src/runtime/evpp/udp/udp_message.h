@@ -46,7 +46,9 @@ inline bool SendMessage(evpp_socket_t fd, const struct sockaddr* addr, const cha
         return true;
     }
 
-    int sentn = ::sendto(fd, d, dlen, 0, addr, sizeof(*addr));
+    socklen_t addrlen = (addr->sa_family == AF_INET6)
+        ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
+    int sentn = ::sendto(fd, d, dlen, 0, addr, addrlen);
     if (sentn < 0 || static_cast<size_t>(sentn) != dlen) {
         return false;
     }

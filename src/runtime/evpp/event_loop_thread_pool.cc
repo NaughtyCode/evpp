@@ -58,7 +58,7 @@ bool EventLoopThreadPool::Start(bool wait_thread_started) {
 
     if (wait_thread_started) {
         while (!IsRunning()) {
-            usleep(1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         assert(status_.load() == kRunning);
     }
@@ -112,7 +112,7 @@ void EventLoopThreadPool::Stop(bool wait_thread_exit, DoneCallback fn) {
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={} before promise wait", (void*)this);
     if (thread_num_ > 0 && wait_thread_exit) {
         while (!is_stopped_fn()) {
-            usleep(1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={} after promise wait", (void*)this);

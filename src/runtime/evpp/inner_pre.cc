@@ -17,10 +17,8 @@ struct OnStartup {
     OnStartup() {
 #ifndef H_OS_WINDOWS
         if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
-            ENGINE_LOG_ERROR(engine::GetLogger(), "SIGPIPE set failed.");
-            exit(-1);
+            std::fprintf(stderr, "[evpp] SIGPIPE set failed, errno=%d\n", EVPP_ERRNO);
         }
-        ENGINE_LOG_INFO(engine::GetLogger(), "ignore SIGPIPE");
 #endif
     }
     ~OnStartup() {

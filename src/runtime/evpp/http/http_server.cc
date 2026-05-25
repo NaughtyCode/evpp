@@ -189,7 +189,7 @@ bool Server::Start() {
 	};
 
 	while (!is_running()) {
-		usleep(1);
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http server is running", (void*)this);
 	status_.store(kRunning);

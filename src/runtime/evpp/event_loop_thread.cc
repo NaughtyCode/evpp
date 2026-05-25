@@ -25,7 +25,7 @@ bool EventLoopThread::Start(bool wait_thread_started, Functor pre, Functor post)
 
     if (wait_thread_started) {
         while (status_ < kRunning) {
-            usleep(1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
     return true;
@@ -71,7 +71,7 @@ void EventLoopThread::Stop(bool wait_thread_exit) {
 
     if (wait_thread_exit) {
         while (!IsStopped()) {
-            usleep(1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
         ENGINE_LOG_TRACE(engine::GetLogger(), "this={} loop={} thread stopped.", (void*)this, (void*)event_loop_.get());

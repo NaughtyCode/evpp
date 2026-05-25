@@ -42,6 +42,7 @@ private:
     std::thread * listen_thr_{nullptr};
     HTTPRequestCallback default_callback_;
     HTTPRequestCallbackMap callbacks_;
+    mutable std::mutex callbacks_mutex_;
     bool is_stopped_{false};
 };
 }

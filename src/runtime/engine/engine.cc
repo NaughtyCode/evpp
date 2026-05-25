@@ -275,7 +275,9 @@ void Engine::Cleanup() {
         frame_timer_.reset();
     }
 
-    script::ShutdownNetBindings();
+    if (script_vm_) {
+        script::ShutdownNetBindings();
+    }
     if (script_vm_) {
         script::ShutdownTimerBindings(*script_vm_);
     }
