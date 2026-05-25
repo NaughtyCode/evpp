@@ -15,11 +15,8 @@
 --
 --   local Dog = Class("Dog", Animal)
 --   function Dog:__ctor(name, breed)
---       self:super():__ctor(name)
+--       Animal.__ctor(self, name)
 --       self.breed = breed
---   end
---   function Dog:speak()
---       return "Woof! I'm " .. self.name
 --   end
 --
 --   local d = Dog("Rex", "Shepherd")
@@ -41,10 +38,9 @@ local function Class(classname, super)
     -- Metatable applied to the class table itself.
     -- __call makes cls(...) create instances.
     -- __index (when super is set) provides class-level method inheritance.
+    -- __name lets Lua 5.5 tostring() print the class name.
     local mt = {
         __call = function(self, ...)
-            -- Each instance gets its own metatable with __index = class
-            -- and __name for Lua 5.5 tostring() integration.
             local instance = setmetatable({}, {
                 __index = self,
                 __name  = self.__name,
@@ -55,15 +51,19 @@ local function Class(classname, super)
             end
             return instance
         end,
+        __name = classname or "anonymous",
     }
     if super then
         mt.__index = super
     end
     setmetatable(cls, mt)
 
-    -- is-instance-of check (works on both instances and classes).
-    -- Walks the __index chain to see if target appears as a class ancestor.
+    -- Returns true if self is an instance (or subclass instance) of target.
+    -- Walks the __index chain to find target among class ancestors.
     function cls:isinstanceof(target)
+        if target == nil then
+            return false
+        end
         local mt = getmetatable(self)
         while mt do
             if mt.__index == target then
@@ -74,12 +74,22 @@ local function Class(classname, super)
         return false
     end
 
-    -- Return the superclass, if any.
-    -- Callable on both instances and classes.
+    -- Returns the direct superclass, or nil.
+    -- Works on both instances (looks up the instance's class, then its super)
+    -- and classes (uses the __super field stored directly on the class).
     function cls:super()
+        -- self might be a class: check for the direct __super field first.
+        local sup = rawget(self, "__super")
+        if sup then
+            return sup
+        end
+        -- self is an instance: look up its class, then that class's __super.
         local mt = getmetatable(self)
         if mt then
-            return rawget(mt.__index, "__super")
+            local idx = mt.__index
+            if idx then
+                return rawget(idx, "__super")
+            end
         end
         return nil
     end
