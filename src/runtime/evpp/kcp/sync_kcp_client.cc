@@ -201,6 +201,13 @@ std::string Client::DoRequest(const std::string& data, uint32_t timeout_ms) {
         if (hr > 0) {
             return std::string(kcp_buf, static_cast<size_t>(hr));
         }
+        // ikcp_recv returns -2 (internal error) or -3 (buffer too small)
+        // without consuming the message — these are unrecoverable.
+        if (hr < -1) {
+            ENGINE_LOG_ERROR(engine::GetLogger(),
+                "KCP client DoRequest recv fatal hr={}", hr);
+            return "";
+        }
 
         // Connection declared dead (dead_link exceeded).
         if (kcp_->state == static_cast<IUINT32>(-1)) {

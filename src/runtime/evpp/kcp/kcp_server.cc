@@ -85,12 +85,16 @@ public:
 
     // Try to read a reassembled application‑level message.
     // Returns the number of bytes written to buffer, or a negative value
-    // (EAGAIN / EMSGSIZE) when nothing is available.
+    // (-1: no data, -2: internal error, -3: buffer too small).
+    // Fatal errors (-2, -3) mark the session dead to prevent the recv
+    // queue from growing unboundedly with unconsumed messages.
     int Recv(char* buffer, int len) {
         if (!kcp_) return -1;
         int n = ikcp_recv(kcp_, buffer, len);
         if (n > 0) {
             last_active_ = kcp_clock();
+        } else if (n < -1) {
+            alive_ = false;
         }
         return n;
     }
