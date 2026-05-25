@@ -41,7 +41,6 @@ struct MongoClient::Impl {
 
 MongoClient* MongoClient::New(const char* uri_string) {
     auto* c = new MongoClient();
-    c->impl_ = std::make_unique<Impl>();
     c->impl_->client = mongoc_client_new(uri_string);
     if (!c->impl_->client) {
         delete c;
@@ -52,7 +51,6 @@ MongoClient* MongoClient::New(const char* uri_string) {
 
 MongoClient* MongoClient::New(const MongoUri& uri) {
     auto* c = new MongoClient();
-    c->impl_ = std::make_unique<Impl>();
     c->impl_->client = mongoc_client_new_from_uri(
         static_cast<const mongoc_uri_t*>(uri.RawUri()));
     if (!c->impl_->client) {
@@ -64,7 +62,6 @@ MongoClient* MongoClient::New(const MongoUri& uri) {
 
 MongoClient* MongoClient::New(const MongoUri& uri, MongoError* error) {
     auto* c = new MongoClient();
-    c->impl_ = std::make_unique<Impl>();
     c->impl_->client = mongoc_client_new_from_uri_with_error(
         static_cast<const mongoc_uri_t*>(uri.RawUri()),
         error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);

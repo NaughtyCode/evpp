@@ -69,7 +69,7 @@ public:
     bool Save();
     bool Seek(int64_t pos, int whence);
 
-    void Remove(MongoError* error);
+    bool Remove(MongoError* error);
 
     void* Raw(); // returns mongoc_gridfs_file_t*
 

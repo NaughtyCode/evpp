@@ -65,7 +65,7 @@ bool BsonDocument::CopyTo(BsonDocument& dst) const {
     return true;
 }
 
-bool BsonDocument::CopyToExcludingNoinit(BsonDocument& dst, const char* first_exclude, ...) {
+bool BsonDocument::CopyToExcludingNoinit(BsonDocument& dst, const char* first_exclude, ...) const {
     va_list args;
     va_start(args, first_exclude);
     bson_copy_to_excluding_noinit_va(static_cast<const bson_t*>(RawBson()),
@@ -75,7 +75,7 @@ bool BsonDocument::CopyToExcludingNoinit(BsonDocument& dst, const char* first_ex
     return true;
 }
 
-bool BsonDocument::CopyToExcludingNoinitVa(BsonDocument& dst, const char* first_exclude, void* args) {
+bool BsonDocument::CopyToExcludingNoinitVa(BsonDocument& dst, const char* first_exclude, void* args) const {
     bson_copy_to_excluding_noinit_va(static_cast<const bson_t*>(RawBson()),
                                       static_cast<bson_t*>(dst.RawBson()),
                                       first_exclude,

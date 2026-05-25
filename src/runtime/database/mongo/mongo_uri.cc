@@ -15,14 +15,12 @@ struct MongoUri::Impl {
 
 MongoUri MongoUri::New(const char* uri_string) {
     MongoUri result;
-    result.impl_ = std::make_unique<Impl>();
     result.impl_->uri = mongoc_uri_new(uri_string);
     return result;
 }
 
 MongoUri MongoUri::NewWithError(const char* uri_string, MongoError* error) {
     MongoUri result;
-    result.impl_ = std::make_unique<Impl>();
     result.impl_->uri = mongoc_uri_new_with_error(uri_string,
         error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
     return result;
@@ -30,7 +28,6 @@ MongoUri MongoUri::NewWithError(const char* uri_string, MongoError* error) {
 
 MongoUri MongoUri::NewForHostPort(const char* hostname, uint16_t port) {
     MongoUri result;
-    result.impl_ = std::make_unique<Impl>();
     result.impl_->uri = mongoc_uri_new_for_host_port(hostname, port);
     return result;
 }

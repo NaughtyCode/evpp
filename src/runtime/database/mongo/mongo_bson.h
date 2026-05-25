@@ -110,9 +110,9 @@ public:
     int Compare(const BsonDocument& other) const;
     bool Concat(const BsonDocument& src);
     bool CopyTo(BsonDocument& dst) const; // copy contents into an existing document
-    bool CopyToExcludingNoinit(BsonDocument& dst, const char* first_exclude, ...);
+    bool CopyToExcludingNoinit(BsonDocument& dst, const char* first_exclude, ...) const;
     // va_list variant; use CopyToExcludingNoinit for variadic convenience
-    bool CopyToExcludingNoinitVa(BsonDocument& dst, const char* first_exclude, void* args);
+    bool CopyToExcludingNoinitVa(BsonDocument& dst, const char* first_exclude, void* args) const;
     bool ReserveBuffer(uint32_t size);    // pre-allocate buffer space
 
     // ── Serialization ───────────────────────────────────────────────

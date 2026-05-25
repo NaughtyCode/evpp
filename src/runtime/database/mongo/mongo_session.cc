@@ -301,7 +301,7 @@ bool with_transaction_trampoline(mongoc_client_session_t* session,
     MongoSession::Destroy(tmp_session);
 
     if (reply && ok) {
-        bson_destroy(*reply);
+        if (*reply) bson_destroy(*reply);
         *reply = bson_copy(static_cast<const bson_t*>(reply_doc.RawBson()));
     }
     if (!ok && error) {

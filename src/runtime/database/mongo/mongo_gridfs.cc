@@ -189,10 +189,9 @@ bool MongoGridFsFile::Seek(int64_t pos, int whence) {
     return impl_ && impl_->file && mongoc_gridfs_file_seek(impl_->file, pos, whence);
 }
 
-void MongoGridFsFile::Remove(MongoError* error) {
-    if (impl_ && impl_->file)
-        mongoc_gridfs_file_remove(impl_->file,
-            error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+bool MongoGridFsFile::Remove(MongoError* error) {
+    return impl_ && impl_->file && mongoc_gridfs_file_remove(impl_->file,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 }
 
 void* MongoGridFsFile::Raw() { return impl_ ? impl_->file : nullptr; }
