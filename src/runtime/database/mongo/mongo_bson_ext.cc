@@ -489,8 +489,24 @@ BsonValue& BsonValue::operator=(const BsonValue& other) {
     return *this;
 }
 
-BsonValue::BsonValue(BsonValue&&) noexcept = default;
-BsonValue& BsonValue::operator=(BsonValue&&) noexcept = default;
+BsonValue::BsonValue(BsonValue&& other) noexcept {
+    memset(storage_, 0, sizeof(storage_));
+    bson_value_copy(reinterpret_cast<const bson_value_t*>(other.storage_),
+                    reinterpret_cast<bson_value_t*>(storage_));
+    bson_value_destroy(reinterpret_cast<bson_value_t*>(other.storage_));
+    memset(other.storage_, 0, sizeof(other.storage_));
+}
+
+BsonValue& BsonValue::operator=(BsonValue&& other) noexcept {
+    if (this != &other) {
+        Destroy();
+        bson_value_copy(reinterpret_cast<const bson_value_t*>(other.storage_),
+                        reinterpret_cast<bson_value_t*>(storage_));
+        bson_value_destroy(reinterpret_cast<bson_value_t*>(other.storage_));
+        memset(other.storage_, 0, sizeof(other.storage_));
+    }
+    return *this;
+}
 
 void BsonValue::Copy(const BsonValue& src) {
     Destroy();

@@ -80,9 +80,9 @@ bool MongoReadPrefs::AddTag(const BsonDocument& tag) {
     return true;
 }
 
-int MongoReadPrefs::GetMaxStalenessSeconds() const {
+int64_t MongoReadPrefs::GetMaxStalenessSeconds() const {
     return impl_ && impl_->prefs
-        ? static_cast<int>(mongoc_read_prefs_get_max_staleness_seconds(impl_->prefs)) : 0;
+        ? mongoc_read_prefs_get_max_staleness_seconds(impl_->prefs) : 0;
 }
 
 void MongoReadPrefs::SetMaxStalenessSeconds(int max_staleness_seconds) {

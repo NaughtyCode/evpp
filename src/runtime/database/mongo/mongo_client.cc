@@ -163,7 +163,7 @@ bool MongoClient::CommandSimple(const char* db_name, const BsonDocument& command
         impl_->client, db_name,
         static_cast<const bson_t*>(command.RawBson()),
         read_prefs ? static_cast<const mongoc_read_prefs_t*>(read_prefs->RawReadPrefs()) : nullptr,
-        static_cast<bson_t*>(reply->RawBson()),
+        reply ? static_cast<bson_t*>(reply->RawBson()) : nullptr,
         error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 }
 
@@ -315,7 +315,7 @@ bool MongoClient::CommandSimpleWithServerId(const char* db_name, const BsonDocum
         static_cast<const bson_t*>(command.RawBson()),
         read_prefs ? static_cast<const mongoc_read_prefs_t*>(read_prefs->RawReadPrefs()) : nullptr,
         server_id,
-        static_cast<bson_t*>(reply->RawBson()),
+        reply ? static_cast<bson_t*>(reply->RawBson()) : nullptr,
         error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 }
 
@@ -485,7 +485,7 @@ bool MongoDatabase::CommandSimple(const BsonDocument& command,
         impl_->db,
         static_cast<const bson_t*>(command.RawBson()),
         read_prefs ? static_cast<const mongoc_read_prefs_t*>(read_prefs->RawReadPrefs()) : nullptr,
-        static_cast<bson_t*>(reply->RawBson()),
+        reply ? static_cast<bson_t*>(reply->RawBson()) : nullptr,
         error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 }
 
@@ -1007,11 +1007,15 @@ int64_t MongoCollection::EstimatedDocumentCount(const BsonDocument* opts,
 
 MongoBulkOperation* MongoCollection::CreateBulkOperation(bool ordered, const void* session_raw) {
     if (!impl_ || !impl_->coll) return nullptr;
+    BsonDocument opts;
+    if (!ordered) opts.AppendBool("ordered", false);
     mongoc_bulk_operation_t* bulk = mongoc_collection_create_bulk_operation_with_opts(
-        impl_->coll, nullptr);
+        impl_->coll, static_cast<const bson_t*>(opts.RawBson()));
     if (!bulk) return nullptr;
     auto* result = new MongoBulkOperation();
     result->SetRawBulkOperation(bulk);
+    if (session_raw)
+        result->SetClientSession(const_cast<void*>(session_raw));
     return result;
 }
 

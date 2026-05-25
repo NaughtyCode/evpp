@@ -38,7 +38,7 @@ void MongoGridFsFileOpts::SetContentType(const char* ct) {
     impl_->opts.content_type = impl_->content_type.c_str();
 }
 
-void MongoGridFsFileOpts::SetChunkSize(int32_t cs) {
+void MongoGridFsFileOpts::SetChunkSize(uint32_t cs) {
     impl_->opts.chunk_size = cs;
 }
 
@@ -157,7 +157,7 @@ bool MongoGridFsFile::SetId(const void* id, MongoError* error) {
         error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 }
 
-uint64_t MongoGridFsFile::Tell() {
+uint64_t MongoGridFsFile::Tell() const {
     return impl_ && impl_->file ? mongoc_gridfs_file_tell(impl_->file) : 0;
 }
 

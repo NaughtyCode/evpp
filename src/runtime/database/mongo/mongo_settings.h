@@ -37,7 +37,7 @@ public:
     const void* GetTags() const;
     void SetTags(const BsonDocument& tags);
     bool AddTag(const BsonDocument& tag);
-    int GetMaxStalenessSeconds() const;
+    int64_t GetMaxStalenessSeconds() const;
     void SetMaxStalenessSeconds(int max_staleness_seconds);
     const void* GetHedge() const;
     void SetHedge(const BsonDocument& hedge);

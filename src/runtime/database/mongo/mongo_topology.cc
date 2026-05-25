@@ -14,6 +14,8 @@ namespace mongo {
 
 MongoServerDescription::MongoServerDescription(void* raw) : sd_(raw) {}
 
+MongoServerDescription::~MongoServerDescription() = default;
+
 uint32_t MongoServerDescription::Id() const {
     return sd_ ? mongoc_server_description_id(static_cast<mongoc_server_description_t*>(sd_)) : 0;
 }

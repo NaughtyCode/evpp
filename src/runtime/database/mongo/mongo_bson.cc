@@ -338,6 +338,8 @@ BsonDocument BsonDocument::NewFromJson(const char* json, size_t len) {
     if (b) {
         bson_destroy(static_cast<bson_t*>(result.RawBson()));
         bson_steal(static_cast<bson_t*>(result.RawBson()), b);
+        bson_destroy(b);
+        bson_free(b);
     }
     return result;
 }
@@ -349,6 +351,8 @@ BsonDocument BsonDocument::NewFromJson(const uint8_t* data, size_t len) {
     if (b) {
         bson_destroy(static_cast<bson_t*>(result.RawBson()));
         bson_steal(static_cast<bson_t*>(result.RawBson()), b);
+        bson_destroy(b);
+        bson_free(b);
     }
     return result;
 }
@@ -359,6 +363,8 @@ BsonDocument BsonDocument::NewFromData(const uint8_t* data, size_t length) {
     if (b) {
         bson_destroy(static_cast<bson_t*>(result.RawBson()));
         bson_steal(static_cast<bson_t*>(result.RawBson()), b);
+        bson_destroy(b);
+        bson_free(b);
     }
     return result;
 }
@@ -371,6 +377,8 @@ BsonDocument BsonDocument::NewFromBuffer(uint8_t** buf, size_t* buf_len,
     if (b) {
         bson_destroy(static_cast<bson_t*>(result.RawBson()));
         bson_steal(static_cast<bson_t*>(result.RawBson()), b);
+        bson_destroy(b);
+        bson_free(b);
     }
     return result;
 }
@@ -381,6 +389,8 @@ BsonDocument BsonDocument::SizedNew(size_t size) {
     if (b) {
         bson_destroy(static_cast<bson_t*>(result.RawBson()));
         bson_steal(static_cast<bson_t*>(result.RawBson()), b);
+        bson_destroy(b);
+        bson_free(b);
     }
     return result;
 }

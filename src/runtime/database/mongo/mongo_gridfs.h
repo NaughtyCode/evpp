@@ -21,7 +21,7 @@ public:
 
     void SetFilename(const char* filename);
     void SetContentType(const char* content_type);
-    void SetChunkSize(int32_t chunk_size);
+    void SetChunkSize(uint32_t chunk_size);
     void SetAliases(const BsonDocument& aliases);
     void SetMetadata(const BsonDocument& metadata);
 
@@ -60,7 +60,7 @@ public:
     bool SetId(const void* id, MongoError* error);
 
     // Position and error
-    uint64_t Tell();
+    uint64_t Tell() const;
     bool Error(MongoError* error) const;
 
     // Read/write operations

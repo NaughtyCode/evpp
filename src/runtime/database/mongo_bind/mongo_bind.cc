@@ -184,6 +184,7 @@ const char* kBsonIterMetaName = "bson.iter";
 int l_bson_iter_gc(lua_State* L) {
     auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kBsonIterMetaName);
     delete iter;
+    *CheckUserdata<mongo::BsonIter>(L, 1, kBsonIterMetaName) = nullptr;
     return 0;
 }
 

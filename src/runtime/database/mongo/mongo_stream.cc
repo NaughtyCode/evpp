@@ -51,6 +51,7 @@ MongoStream* MongoStream::NewBuffered(MongoStream* base_stream, size_t buffer_si
     result->impl_->stream = mongoc_stream_buffered_new(
         base_stream->impl_->stream, buffer_size);
     if (!result->impl_->stream) { delete result; return nullptr; }
+    base_stream->ReleaseStream(); // ownership transferred to buffered stream
     return result;
 }
 
@@ -92,6 +93,7 @@ MongoStream* MongoStream::NewTls(MongoStream* base_stream, const char* host,
         base_stream->impl_->stream, host,
         static_cast<mongoc_ssl_opt_t*>(ssl_opts), client);
     if (!result->impl_->stream) { delete result; return nullptr; }
+    base_stream->ReleaseStream(); // ownership transferred to TLS stream
     return result;
 }
 
@@ -104,6 +106,7 @@ MongoStream* MongoStream::NewTlsOpenssl(MongoStream* base_stream, const char* ho
         base_stream->impl_->stream, host,
         static_cast<mongoc_ssl_opt_t*>(ssl_opts), client);
     if (!result->impl_->stream) { delete result; return nullptr; }
+    base_stream->ReleaseStream(); // ownership transferred to TLS stream
     return result;
 #else
     (void)base_stream; (void)host; (void)ssl_opts; (void)client;
@@ -121,6 +124,7 @@ MongoStream* MongoStream::NewTlsSecureChannel(MongoStream* base_stream,
         base_stream->impl_->stream, host,
         static_cast<mongoc_ssl_opt_t*>(ssl_opts), client);
     if (!result->impl_->stream) { delete result; return nullptr; }
+    base_stream->ReleaseStream(); // ownership transferred to TLS stream
     return result;
 #else
     (void)base_stream; (void)host; (void)ssl_opts; (void)client;
@@ -138,6 +142,7 @@ MongoStream* MongoStream::NewTlsSecureTransport(MongoStream* base_stream,
         base_stream->impl_->stream, host,
         static_cast<mongoc_ssl_opt_t*>(ssl_opts), client);
     if (!result->impl_->stream) { delete result; return nullptr; }
+    base_stream->ReleaseStream(); // ownership transferred to TLS stream
     return result;
 #else
     (void)base_stream; (void)host; (void)ssl_opts; (void)client;

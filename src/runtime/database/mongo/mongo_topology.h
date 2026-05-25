@@ -16,7 +16,7 @@ class MongoReadPrefs;
 class ENGINE_API MongoServerDescription {
 public:
     explicit MongoServerDescription(void* raw); // takes mongoc_server_description_t* (non-owning)
-    ~MongoServerDescription() = default;
+    ~MongoServerDescription();
 
     MongoServerDescription(const MongoServerDescription&) = delete;
     MongoServerDescription& operator=(const MongoServerDescription&) = delete;
