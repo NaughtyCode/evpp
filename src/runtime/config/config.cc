@@ -1,4 +1,5 @@
 #include "runtime/config/config.h"
+#include "runtime/config/config_constants.h"
 
 #include <cstdio>
 #include <filesystem>
@@ -86,19 +87,21 @@ bool ConfigManager::LoadServerFromFile(const std::string& path) {
 }
 
 bool ConfigManager::Load(const std::string& config_dir) {
+    using namespace config;
+
     // Runtime config is required — both client and server need it.
-    std::string runtime_path = config_dir + "/runtime/runtime.json";
+    std::string runtime_path = config_dir + kRuntimeConfigFile;
     if (!LoadRuntimeFromFile(runtime_path)) return false;
 
     // Client and server configs are optional — one may not exist
     // depending on the build target.  Check existence first to avoid
     // spurious "failed to load" messages on stderr.
     std::error_code ec;
-    std::string client_path = config_dir + "/client/client.json";
+    std::string client_path = config_dir + kClientConfigFile;
     if (std::filesystem::exists(client_path, ec)) {
         LoadClientFromFile(client_path);
     }
-    std::string server_path = config_dir + "/server/server.json";
+    std::string server_path = config_dir + kServerConfigFile;
     if (std::filesystem::exists(server_path, ec)) {
         LoadServerFromFile(server_path);
     }
@@ -110,6 +113,7 @@ bool ConfigManager::Load(const std::string& config_dir) {
 //============================================================================
 
 bool ConfigManager::Reload(const std::string& config_dir) {
+    using namespace config;
     auto* logger = GetLogger();
 
     RuntimeConfig new_runtime;
@@ -117,7 +121,7 @@ bool ConfigManager::Reload(const std::string& config_dir) {
     ServerConfig new_server;
 
     std::string buf;
-    auto ec = glz::read_file_json(new_runtime, config_dir + "/runtime/runtime.json", buf);
+    auto ec = glz::read_file_json(new_runtime, config_dir + kRuntimeConfigFile, buf);
     if (ec) {
         ENGINE_LOG_ERROR(logger, "ConfigManager: reload failed for runtime.json: {}",
                          glz::format_error(ec, buf));
@@ -127,7 +131,7 @@ bool ConfigManager::Reload(const std::string& config_dir) {
     runtime_config_ = std::move(new_runtime);
 
     std::error_code ec2;
-    std::string client_path = config_dir + "/client/client.json";
+    std::string client_path = config_dir + kClientConfigFile;
     if (std::filesystem::exists(client_path, ec2)) {
         buf.clear();
         auto ec3 = glz::read_file_json(new_client, client_path, buf);
@@ -136,7 +140,7 @@ bool ConfigManager::Reload(const std::string& config_dir) {
         }
     }
 
-    std::string server_path = config_dir + "/server/server.json";
+    std::string server_path = config_dir + kServerConfigFile;
     if (std::filesystem::exists(server_path, ec2)) {
         buf.clear();
         auto ec3 = glz::read_file_json(new_server, server_path, buf);

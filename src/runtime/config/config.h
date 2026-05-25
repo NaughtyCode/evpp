@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "runtime/config/config_constants.h"
 #include "runtime/core/engine_api.h"
 
 namespace engine {
@@ -12,10 +13,10 @@ namespace engine {
 //============================================================================
 
 struct LogConfig {
-    std::string dir = "logs";
-    std::string level = "info";
-    int rotation_size_mb = 100;
-    int max_backup_files = 10;
+    std::string dir = config::kDefaultLogDir;
+    std::string level = config::kDefaultLogLevel;
+    int rotation_size_mb = config::kDefaultRotationSizeMb;
+    int max_backup_files = config::kDefaultMaxBackupFiles;
     std::string format_pattern =
         "%(time) [%(thread_id)] [%(log_level_short_code)] [%(logger)] %(message)";
 
@@ -26,43 +27,43 @@ struct LogConfig {
     std::string rotation_naming_scheme = "date_and_time";  // "index", "date", "date_and_time"
 
     // Multi-instance
-    std::string logger_name = "root";   // logger instance name (used as log file prefix when log_filename is empty)
-    std::string log_filename = "";      // override log file prefix (empty = use logger_name)
+    std::string logger_name = config::kDefaultLoggerName;
+    std::string log_filename = "";
 };
 
 struct FrameConfig {
-    int target_fps = 30;       // 0 = unlimited (use interval_ms instead)
-    int interval_ms = 33;      // fallback when target_fps is 0
-    int slow_threshold_multiplier = 2;
+    int target_fps = config::kDefaultTargetFps;
+    int interval_ms = config::kDefaultIntervalMs;
+    int slow_threshold_multiplier = config::kDefaultSlowThresholdMultiplier;
 };
 
 // Runtime (engine-level) config — shared by both client and server.
 // Loaded from resources/config/runtime/runtime.json.
 struct RuntimeConfig {
-    std::string resource_dir = "resources";
+    std::string resource_dir = config::kDefaultResourceDir;
     LogConfig log;
     FrameConfig frame;
-    std::string scripts_dir = "resources/script/runtime";
+    std::string scripts_dir = config::kDefaultRuntimeScriptsDir;
 };
 
 // Client config — loaded from resources/config/client/client.json.
 struct ClientConfig {
-    std::string scripts_dir = "resources/script/client";
+    std::string scripts_dir = config::kDefaultClientScriptsDir;
 };
 
 struct HttpConfig {
-    double timeout_sec = 10.0;
+    double timeout_sec = config::kDefaultHttpTimeoutSec;
 };
 
 struct MsgpackConfig {
-    int max_nesting_depth = 16;
+    int max_nesting_depth = config::kDefaultMsgpackMaxNestingDepth;
 };
 
 // Server config — loaded from resources/config/server/server.json.
 struct ServerConfig {
     HttpConfig http;
     MsgpackConfig msgpack;
-    std::string scripts_dir = "resources/script/server";
+    std::string scripts_dir = config::kDefaultServerScriptsDir;
 };
 
 //============================================================================

@@ -13,6 +13,7 @@
 #endif
 
 #include "runtime/config/config.h"
+#include "runtime/config/config_constants.h"
 #include "runtime/core/log/log.h"
 #include "runtime/core/log/log_macros.h"
 #include "runtime/engine/engine.h"
@@ -45,7 +46,7 @@ int main(int argc, char* argv[]) {
     // Load config from JSON files (config path is fixed; resource_dir
     // in the config controls where scripts/physics/etc. live).
     // CLI override: --config_dir= can change the config location.
-    std::string config_dir = "resources/config";
+    std::string config_dir(engine::config::kConfigDir);
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg.rfind("--config_dir=", 0) == 0) {
