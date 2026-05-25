@@ -37,6 +37,15 @@ public:
     bool SetServerApi(const MongoServerApi& api, MongoError* error);
     bool AppendMetadata(const char* name, const char* version, const char* platform);
 
+    // ── Auto-encryption ──────────────────────────────────────────────
+    bool EnableAutoEncryption(void* opts, MongoError* error);
+
+    // ── Structured logging ───────────────────────────────────────────
+    bool SetStructuredLogOpts(const void* opts);
+
+    // ── OIDC callback ────────────────────────────────────────────────
+    bool SetOidcCallback(const void* callback);
+
     // Internal
     void* RawPool(); // returns mongoc_client_pool_t*
 

@@ -39,9 +39,14 @@ public:
     // ── Server / metadata ──────────────────────────────────────────────
     int64_t GetId() const;
     uint32_t GetServerId() const;
+    void SetServerId(uint32_t server_id);
     void GetHost(void* host_out) const;
     void SetMaxAwaitTimeMs(uint32_t max_await_ms);
     uint32_t GetMaxAwaitTimeMs() const;
+
+    // Factory: create a cursor from a command reply.
+    static MongoCursor* NewFromCommandReplyWithOpts(void* client,
+        const BsonDocument& reply, const BsonDocument* opts);
 
     // Internal: set from collection find. Not for public use.
     void SetCursor(void* cursor); // mongoc_cursor_t*

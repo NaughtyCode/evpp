@@ -158,6 +158,29 @@ void MongoBulkOperation::SetCollection(const char* collection) {
         mongoc_bulk_operation_set_collection(impl_->bulk, collection);
 }
 
+void MongoBulkOperation::SetComment(const void* comment) {
+    if (impl_ && impl_->bulk)
+        mongoc_bulk_operation_set_comment(impl_->bulk,
+            static_cast<const bson_value_t*>(comment));
+}
+
+void MongoBulkOperation::SetClient(void* client) {
+    if (impl_ && impl_->bulk)
+        mongoc_bulk_operation_set_client(impl_->bulk,
+            static_cast<mongoc_client_t*>(client));
+}
+
+void MongoBulkOperation::SetClientSession(void* session) {
+    if (impl_ && impl_->bulk)
+        mongoc_bulk_operation_set_client_session(impl_->bulk,
+            static_cast<mongoc_client_session_t*>(session));
+}
+
+const void* MongoBulkOperation::GetWriteConcern() const {
+    return impl_ && impl_->bulk
+        ? mongoc_bulk_operation_get_write_concern(impl_->bulk) : nullptr;
+}
+
 void* MongoBulkOperation::RawBulkOperation() {
     return impl_ ? impl_->bulk : nullptr;
 }

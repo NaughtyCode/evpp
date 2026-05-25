@@ -101,8 +101,9 @@ private:
 //   reader.Destroy();
 class ENGINE_API BsonJsonReader {
 public:
-    // Create from a file descriptor or memory buffer.
+    // Create from a file descriptor, file, or memory buffer.
     static BsonJsonReader NewFromFd(int fd, bool close_on_destroy);
+    static BsonJsonReader NewFromFile(const char* filename, MongoError* error);
     static BsonJsonReader NewFromData(const uint8_t* data, size_t length);
 
     BsonJsonReader();
@@ -129,6 +130,9 @@ private:
 class ENGINE_API BsonReader {
 public:
     static BsonReader NewFromData(const uint8_t* data, size_t length);
+    static BsonReader NewFromFile(const char* path, MongoError* error);
+    static BsonReader NewFromFd(int fd, bool close_on_destroy);
+    static BsonReader NewFromHandle(void* handle, void* read_func, void* destroy_func);
 
     BsonReader();
     ~BsonReader();
@@ -143,6 +147,9 @@ public:
     const void* Read(bool* reached_eof) const; // returns const bson_t*
     bool Read(BsonDocument* out, MongoError* error = nullptr);
     void SetData(const uint8_t* data, size_t length);
+    void SetReadFunc(void* func);
+    int64_t Tell() const;
+    void Reset();
 
     void* Raw(); // returns bson_reader_t*
 
@@ -176,6 +183,7 @@ public:
 
     // Get the current buffer (not yet finalized).
     const uint8_t* GetBuffer(size_t* length) const;
+    size_t GetLength() const;
 
     void* Raw(); // returns bson_writer_t*
 
@@ -189,6 +197,7 @@ class ENGINE_API BsonClock {
 public:
     static int64_t GetTimeNs();
     static int64_t GetDateTime();
+    static void GetTimeOfDay(void* tv); // struct timeval*
 };
 
 // UTF-8 validation utilities (wraps bson-utf8.h).
@@ -196,6 +205,9 @@ class ENGINE_API BsonUtf8 {
 public:
     static bool Validate(const char* str, size_t length, bool allow_null = false);
     static char* EscapeForJson(const char* str, size_t length);
+    static uint32_t GetChar(const char* utf8);
+    static const char* NextChar(const char* utf8);
+    static void FromUnichar(uint32_t unichar, char utf8[6], uint32_t* len);
 };
 
 // JSON serialization options (wraps bson_json_opts_t).

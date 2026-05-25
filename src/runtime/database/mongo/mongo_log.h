@@ -56,6 +56,8 @@ public:
 
     static void TraceEnable();
     static void TraceDisable();
+
+    static void DefaultHandler(MongoLogLevel level, const char* domain, const char* message);
 };
 
 // Structured log entry accessor (read-only wrapper around mongoc_structured_log_entry_t).

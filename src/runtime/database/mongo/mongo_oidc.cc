@@ -244,6 +244,10 @@ void MongoOidcCallback::SetUserData(void* user_data) {
     }
 }
 
+const void* MongoOidcCallback::GetFn() const {
+    return impl_ && impl_->cb ? mongoc_oidc_callback_get_fn(impl_->cb) : nullptr;
+}
+
 void* MongoOidcCallback::Raw() { return impl_ ? impl_->cb : nullptr; }
 
 } // namespace mongo

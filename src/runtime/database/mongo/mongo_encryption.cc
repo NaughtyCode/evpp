@@ -238,7 +238,219 @@ void MongoClientEncryptionEncryptOpts::SetQueryType(const char* query_type) {
         mongoc_client_encryption_encrypt_opts_set_query_type(impl_->opts, query_type);
 }
 
+void MongoClientEncryptionEncryptOpts::SetRangeOpts(const void* range_opts) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_opts_set_range_opts(impl_->opts,
+            static_cast<const mongoc_client_encryption_encrypt_range_opts_t*>(range_opts));
+}
+
+void MongoClientEncryptionEncryptOpts::SetTextOpts(const void* text_opts) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_opts_set_text_opts(impl_->opts,
+            static_cast<const mongoc_client_encryption_encrypt_text_opts_t*>(text_opts));
+}
+
 void* MongoClientEncryptionEncryptOpts::Raw() { return impl_ ? impl_->opts : nullptr; }
+
+// ═══════════════════════════════════════════════════════════════════════
+// MongoClientEncryptionEncryptRangeOpts
+// ═══════════════════════════════════════════════════════════════════════
+
+struct MongoClientEncryptionEncryptRangeOpts::Impl {
+    mongoc_client_encryption_encrypt_range_opts_t* opts = nullptr;
+};
+
+MongoClientEncryptionEncryptRangeOpts::MongoClientEncryptionEncryptRangeOpts()
+    : impl_(std::make_unique<Impl>()) {
+    impl_->opts = mongoc_client_encryption_encrypt_range_opts_new();
+}
+
+MongoClientEncryptionEncryptRangeOpts::~MongoClientEncryptionEncryptRangeOpts() {
+    if (impl_ && impl_->opts) mongoc_client_encryption_encrypt_range_opts_destroy(impl_->opts);
+}
+
+MongoClientEncryptionEncryptRangeOpts::MongoClientEncryptionEncryptRangeOpts(MongoClientEncryptionEncryptRangeOpts&&) noexcept = default;
+MongoClientEncryptionEncryptRangeOpts& MongoClientEncryptionEncryptRangeOpts::operator=(MongoClientEncryptionEncryptRangeOpts&&) noexcept = default;
+
+void MongoClientEncryptionEncryptRangeOpts::SetTrimFactor(int32_t trim_factor) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_range_opts_set_trim_factor(impl_->opts, trim_factor);
+}
+
+void MongoClientEncryptionEncryptRangeOpts::SetSparsity(int64_t sparsity) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_range_opts_set_sparsity(impl_->opts, sparsity);
+}
+
+void MongoClientEncryptionEncryptRangeOpts::SetMin(const void* min) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_range_opts_set_min(impl_->opts,
+            static_cast<const bson_value_t*>(min));
+}
+
+void MongoClientEncryptionEncryptRangeOpts::SetMax(const void* max) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_range_opts_set_max(impl_->opts,
+            static_cast<const bson_value_t*>(max));
+}
+
+void MongoClientEncryptionEncryptRangeOpts::SetPrecision(int32_t precision) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_range_opts_set_precision(impl_->opts, precision);
+}
+
+void* MongoClientEncryptionEncryptRangeOpts::Raw() { return impl_ ? impl_->opts : nullptr; }
+
+// ═══════════════════════════════════════════════════════════════════════
+// MongoClientEncryptionEncryptTextPrefixOpts
+// ═══════════════════════════════════════════════════════════════════════
+
+struct MongoClientEncryptionEncryptTextPrefixOpts::Impl {
+    mongoc_client_encryption_encrypt_text_prefix_opts_t* opts = nullptr;
+};
+
+MongoClientEncryptionEncryptTextPrefixOpts::MongoClientEncryptionEncryptTextPrefixOpts()
+    : impl_(std::make_unique<Impl>()) {
+    impl_->opts = mongoc_client_encryption_encrypt_text_prefix_opts_new();
+}
+
+MongoClientEncryptionEncryptTextPrefixOpts::~MongoClientEncryptionEncryptTextPrefixOpts() {
+    if (impl_ && impl_->opts) mongoc_client_encryption_encrypt_text_prefix_opts_destroy(impl_->opts);
+}
+
+MongoClientEncryptionEncryptTextPrefixOpts::MongoClientEncryptionEncryptTextPrefixOpts(MongoClientEncryptionEncryptTextPrefixOpts&&) noexcept = default;
+MongoClientEncryptionEncryptTextPrefixOpts& MongoClientEncryptionEncryptTextPrefixOpts::operator=(MongoClientEncryptionEncryptTextPrefixOpts&&) noexcept = default;
+
+void MongoClientEncryptionEncryptTextPrefixOpts::SetStrMaxQueryLength(int32_t len) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_text_prefix_opts_set_str_max_query_length(impl_->opts, len);
+}
+
+void MongoClientEncryptionEncryptTextPrefixOpts::SetStrMinQueryLength(int32_t len) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_text_prefix_opts_set_str_min_query_length(impl_->opts, len);
+}
+
+void* MongoClientEncryptionEncryptTextPrefixOpts::Raw() { return impl_ ? impl_->opts : nullptr; }
+
+// ═══════════════════════════════════════════════════════════════════════
+// MongoClientEncryptionEncryptTextSuffixOpts
+// ═══════════════════════════════════════════════════════════════════════
+
+struct MongoClientEncryptionEncryptTextSuffixOpts::Impl {
+    mongoc_client_encryption_encrypt_text_suffix_opts_t* opts = nullptr;
+};
+
+MongoClientEncryptionEncryptTextSuffixOpts::MongoClientEncryptionEncryptTextSuffixOpts()
+    : impl_(std::make_unique<Impl>()) {
+    impl_->opts = mongoc_client_encryption_encrypt_text_suffix_opts_new();
+}
+
+MongoClientEncryptionEncryptTextSuffixOpts::~MongoClientEncryptionEncryptTextSuffixOpts() {
+    if (impl_ && impl_->opts) mongoc_client_encryption_encrypt_text_suffix_opts_destroy(impl_->opts);
+}
+
+MongoClientEncryptionEncryptTextSuffixOpts::MongoClientEncryptionEncryptTextSuffixOpts(MongoClientEncryptionEncryptTextSuffixOpts&&) noexcept = default;
+MongoClientEncryptionEncryptTextSuffixOpts& MongoClientEncryptionEncryptTextSuffixOpts::operator=(MongoClientEncryptionEncryptTextSuffixOpts&&) noexcept = default;
+
+void MongoClientEncryptionEncryptTextSuffixOpts::SetStrMaxQueryLength(int32_t len) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_text_suffix_opts_set_str_max_query_length(impl_->opts, len);
+}
+
+void MongoClientEncryptionEncryptTextSuffixOpts::SetStrMinQueryLength(int32_t len) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_text_suffix_opts_set_str_min_query_length(impl_->opts, len);
+}
+
+void* MongoClientEncryptionEncryptTextSuffixOpts::Raw() { return impl_ ? impl_->opts : nullptr; }
+
+// ═══════════════════════════════════════════════════════════════════════
+// MongoClientEncryptionEncryptTextSubstringOpts
+// ═══════════════════════════════════════════════════════════════════════
+
+struct MongoClientEncryptionEncryptTextSubstringOpts::Impl {
+    mongoc_client_encryption_encrypt_text_substring_opts_t* opts = nullptr;
+};
+
+MongoClientEncryptionEncryptTextSubstringOpts::MongoClientEncryptionEncryptTextSubstringOpts()
+    : impl_(std::make_unique<Impl>()) {
+    impl_->opts = mongoc_client_encryption_encrypt_text_substring_opts_new();
+}
+
+MongoClientEncryptionEncryptTextSubstringOpts::~MongoClientEncryptionEncryptTextSubstringOpts() {
+    if (impl_ && impl_->opts) mongoc_client_encryption_encrypt_text_substring_opts_destroy(impl_->opts);
+}
+
+MongoClientEncryptionEncryptTextSubstringOpts::MongoClientEncryptionEncryptTextSubstringOpts(MongoClientEncryptionEncryptTextSubstringOpts&&) noexcept = default;
+MongoClientEncryptionEncryptTextSubstringOpts& MongoClientEncryptionEncryptTextSubstringOpts::operator=(MongoClientEncryptionEncryptTextSubstringOpts&&) noexcept = default;
+
+void MongoClientEncryptionEncryptTextSubstringOpts::SetStrMaxLength(int32_t len) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_text_substring_opts_set_str_max_length(impl_->opts, len);
+}
+
+void MongoClientEncryptionEncryptTextSubstringOpts::SetStrMaxQueryLength(int32_t len) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_text_substring_opts_set_str_max_query_length(impl_->opts, len);
+}
+
+void MongoClientEncryptionEncryptTextSubstringOpts::SetStrMinQueryLength(int32_t len) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_text_substring_opts_set_str_min_query_length(impl_->opts, len);
+}
+
+void* MongoClientEncryptionEncryptTextSubstringOpts::Raw() { return impl_ ? impl_->opts : nullptr; }
+
+// ═══════════════════════════════════════════════════════════════════════
+// MongoClientEncryptionEncryptTextOpts
+// ═══════════════════════════════════════════════════════════════════════
+
+struct MongoClientEncryptionEncryptTextOpts::Impl {
+    mongoc_client_encryption_encrypt_text_opts_t* opts = nullptr;
+};
+
+MongoClientEncryptionEncryptTextOpts::MongoClientEncryptionEncryptTextOpts()
+    : impl_(std::make_unique<Impl>()) {
+    impl_->opts = mongoc_client_encryption_encrypt_text_opts_new();
+}
+
+MongoClientEncryptionEncryptTextOpts::~MongoClientEncryptionEncryptTextOpts() {
+    if (impl_ && impl_->opts) mongoc_client_encryption_encrypt_text_opts_destroy(impl_->opts);
+}
+
+MongoClientEncryptionEncryptTextOpts::MongoClientEncryptionEncryptTextOpts(MongoClientEncryptionEncryptTextOpts&&) noexcept = default;
+MongoClientEncryptionEncryptTextOpts& MongoClientEncryptionEncryptTextOpts::operator=(MongoClientEncryptionEncryptTextOpts&&) noexcept = default;
+
+void MongoClientEncryptionEncryptTextOpts::SetPrefix(const void* popts) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_text_opts_set_prefix(impl_->opts,
+            static_cast<const mongoc_client_encryption_encrypt_text_prefix_opts_t*>(popts));
+}
+
+void MongoClientEncryptionEncryptTextOpts::SetSuffix(const void* sopts) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_text_opts_set_suffix(impl_->opts,
+            static_cast<const mongoc_client_encryption_encrypt_text_suffix_opts_t*>(sopts));
+}
+
+void MongoClientEncryptionEncryptTextOpts::SetSubstring(const void* ssopts) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_text_opts_set_substring(impl_->opts,
+            static_cast<const mongoc_client_encryption_encrypt_text_substring_opts_t*>(ssopts));
+}
+
+void MongoClientEncryptionEncryptTextOpts::SetCaseSensitive(bool val) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_text_opts_set_case_sensitive(impl_->opts, val);
+}
+
+void MongoClientEncryptionEncryptTextOpts::SetDiacriticSensitive(bool val) {
+    if (impl_ && impl_->opts)
+        mongoc_client_encryption_encrypt_text_opts_set_diacritic_sensitive(impl_->opts, val);
+}
+
+void* MongoClientEncryptionEncryptTextOpts::Raw() { return impl_ ? impl_->opts : nullptr; }
 
 // ═══════════════════════════════════════════════════════════════════════
 // MongoClientEncryptionDatakeyOpts

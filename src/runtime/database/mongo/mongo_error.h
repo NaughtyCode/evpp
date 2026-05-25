@@ -4,6 +4,7 @@
 #include <string>
 
 #include "runtime/core/engine_api.h"
+#include "runtime/database/mongo/mongo_forward.h"
 
 namespace engine {
 namespace mongo {
@@ -26,6 +27,8 @@ public:
     uint32_t Domain() const;
     uint32_t Code() const;
     const char* Message() const;
+
+    bool HasLabel(const BsonDocument& reply, const char* label) const;
 
     // Access the raw bson_error_t pointer for internal use only.
     // Never expose this outside database/mongo/.

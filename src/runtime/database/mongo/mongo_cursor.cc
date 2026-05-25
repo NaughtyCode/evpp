@@ -110,6 +110,23 @@ uint32_t MongoCursor::GetServerId() const {
     return impl_ && impl_->cursor ? mongoc_cursor_get_server_id(impl_->cursor) : 0;
 }
 
+void MongoCursor::SetServerId(uint32_t server_id) {
+    if (impl_ && impl_->cursor)
+        mongoc_cursor_set_server_id(impl_->cursor, server_id);
+}
+
+MongoCursor* MongoCursor::NewFromCommandReplyWithOpts(void* client,
+    const BsonDocument& reply, const BsonDocument* opts) {
+    mongoc_cursor_t* cursor = mongoc_cursor_new_from_command_reply_with_opts(
+        static_cast<mongoc_client_t*>(client),
+        static_cast<const bson_t*>(reply.RawBson()),
+        opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr);
+    if (!cursor) return nullptr;
+    auto* result = new MongoCursor();
+    result->SetCursor(cursor);
+    return result;
+}
+
 void MongoCursor::GetHost(void* host_out) const {
     if (impl_ && impl_->cursor && host_out)
         mongoc_cursor_get_host(impl_->cursor, static_cast<mongoc_host_list_t*>(host_out));

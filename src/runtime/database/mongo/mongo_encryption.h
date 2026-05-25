@@ -99,6 +99,137 @@ public:
     void SetContentionFactor(int64_t factor);
     void SetQueryType(const char* query_type);
 
+    // FLE2 — Range and Text encryption
+    void SetRangeOpts(const void* range_opts); // MongoClientEncryptionEncryptRangeOpts*
+    void SetTextOpts(const void* text_opts);   // MongoClientEncryptionEncryptTextOpts*
+
+    void* Raw();
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// FLE2 Range Encryption Options
+// ═══════════════════════════════════════════════════════════════════════
+
+class ENGINE_API MongoClientEncryptionEncryptRangeOpts {
+public:
+    MongoClientEncryptionEncryptRangeOpts();
+    ~MongoClientEncryptionEncryptRangeOpts();
+
+    MongoClientEncryptionEncryptRangeOpts(const MongoClientEncryptionEncryptRangeOpts&) = delete;
+    MongoClientEncryptionEncryptRangeOpts& operator=(const MongoClientEncryptionEncryptRangeOpts&) = delete;
+    MongoClientEncryptionEncryptRangeOpts(MongoClientEncryptionEncryptRangeOpts&&) noexcept;
+    MongoClientEncryptionEncryptRangeOpts& operator=(MongoClientEncryptionEncryptRangeOpts&&) noexcept;
+
+    void SetTrimFactor(int32_t trim_factor);
+    void SetSparsity(int64_t sparsity);
+    void SetMin(const void* min);           // bson_value_t*
+    void SetMax(const void* max);           // bson_value_t*
+    void SetPrecision(int32_t precision);
+
+    void* Raw();
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// FLE2 Text Encryption Options — Prefix
+// ═══════════════════════════════════════════════════════════════════════
+
+class ENGINE_API MongoClientEncryptionEncryptTextPrefixOpts {
+public:
+    MongoClientEncryptionEncryptTextPrefixOpts();
+    ~MongoClientEncryptionEncryptTextPrefixOpts();
+
+    MongoClientEncryptionEncryptTextPrefixOpts(const MongoClientEncryptionEncryptTextPrefixOpts&) = delete;
+    MongoClientEncryptionEncryptTextPrefixOpts& operator=(const MongoClientEncryptionEncryptTextPrefixOpts&) = delete;
+    MongoClientEncryptionEncryptTextPrefixOpts(MongoClientEncryptionEncryptTextPrefixOpts&&) noexcept;
+    MongoClientEncryptionEncryptTextPrefixOpts& operator=(MongoClientEncryptionEncryptTextPrefixOpts&&) noexcept;
+
+    void SetStrMaxQueryLength(int32_t len);
+    void SetStrMinQueryLength(int32_t len);
+
+    void* Raw();
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// FLE2 Text Encryption Options — Suffix
+// ═══════════════════════════════════════════════════════════════════════
+
+class ENGINE_API MongoClientEncryptionEncryptTextSuffixOpts {
+public:
+    MongoClientEncryptionEncryptTextSuffixOpts();
+    ~MongoClientEncryptionEncryptTextSuffixOpts();
+
+    MongoClientEncryptionEncryptTextSuffixOpts(const MongoClientEncryptionEncryptTextSuffixOpts&) = delete;
+    MongoClientEncryptionEncryptTextSuffixOpts& operator=(const MongoClientEncryptionEncryptTextSuffixOpts&) = delete;
+    MongoClientEncryptionEncryptTextSuffixOpts(MongoClientEncryptionEncryptTextSuffixOpts&&) noexcept;
+    MongoClientEncryptionEncryptTextSuffixOpts& operator=(MongoClientEncryptionEncryptTextSuffixOpts&&) noexcept;
+
+    void SetStrMaxQueryLength(int32_t len);
+    void SetStrMinQueryLength(int32_t len);
+
+    void* Raw();
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// FLE2 Text Encryption Options — Substring
+// ═══════════════════════════════════════════════════════════════════════
+
+class ENGINE_API MongoClientEncryptionEncryptTextSubstringOpts {
+public:
+    MongoClientEncryptionEncryptTextSubstringOpts();
+    ~MongoClientEncryptionEncryptTextSubstringOpts();
+
+    MongoClientEncryptionEncryptTextSubstringOpts(const MongoClientEncryptionEncryptTextSubstringOpts&) = delete;
+    MongoClientEncryptionEncryptTextSubstringOpts& operator=(const MongoClientEncryptionEncryptTextSubstringOpts&) = delete;
+    MongoClientEncryptionEncryptTextSubstringOpts(MongoClientEncryptionEncryptTextSubstringOpts&&) noexcept;
+    MongoClientEncryptionEncryptTextSubstringOpts& operator=(MongoClientEncryptionEncryptTextSubstringOpts&&) noexcept;
+
+    void SetStrMaxLength(int32_t len);
+    void SetStrMaxQueryLength(int32_t len);
+    void SetStrMinQueryLength(int32_t len);
+
+    void* Raw();
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// FLE2 Text Encryption Options (aggregates prefix/suffix/substring)
+// ═══════════════════════════════════════════════════════════════════════
+
+class ENGINE_API MongoClientEncryptionEncryptTextOpts {
+public:
+    MongoClientEncryptionEncryptTextOpts();
+    ~MongoClientEncryptionEncryptTextOpts();
+
+    MongoClientEncryptionEncryptTextOpts(const MongoClientEncryptionEncryptTextOpts&) = delete;
+    MongoClientEncryptionEncryptTextOpts& operator=(const MongoClientEncryptionEncryptTextOpts&) = delete;
+    MongoClientEncryptionEncryptTextOpts(MongoClientEncryptionEncryptTextOpts&&) noexcept;
+    MongoClientEncryptionEncryptTextOpts& operator=(MongoClientEncryptionEncryptTextOpts&&) noexcept;
+
+    void SetPrefix(const void* popts);     // MongoClientEncryptionEncryptTextPrefixOpts*
+    void SetSuffix(const void* sopts);     // MongoClientEncryptionEncryptTextSuffixOpts*
+    void SetSubstring(const void* ssopts); // MongoClientEncryptionEncryptTextSubstringOpts*
+    void SetCaseSensitive(bool val);
+    void SetDiacriticSensitive(bool val);
+
     void* Raw();
 
 private:

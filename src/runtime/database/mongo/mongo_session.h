@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 
 #include "runtime/core/engine_api.h"
@@ -57,6 +58,7 @@ public:
     void SetSnapshot(bool snapshot);
     bool GetSnapshot() const;
     void SetDefaultTransactionOpts(const MongoTransactionOpts& txn_opts);
+    const void* GetDefaultTransactionOptsRaw() const; // returns mongoc_transaction_opt_t*
 
     void* RawSessionOpts();
     const void* RawSessionOpts() const; // returns mongoc_session_opt_t*
@@ -104,6 +106,16 @@ public:
     uint32_t GetServerId() const;
     bool GetDirty() const;
 
+    // ── With-transaction callback ─────────────────────────────────────
+    // Callback receives (session, reply, error) — returns true on success.
+    // reply is pre-allocated by the driver; user fills it with commit result.
+    using WithTransactionCb = std::function<bool(MongoSession* session, BsonDocument* reply, MongoError* error)>;
+    bool WithTransaction(const MongoTransactionOpts* opts,
+                         WithTransactionCb cb, BsonDocument* reply, MongoError* error);
+
+    // ── Transaction opts from current session ────────────────────────
+    const void* GetTransactionOptsRaw() const; // returns mongoc_transaction_opt_t*
+
     // Append this session to an opts BSON document (for passing to CRUD ops).
     bool AppendToOpts(BsonDocument* opts, MongoError* error);
 
@@ -112,6 +124,7 @@ public:
 
     void* RawSession(); // returns mongoc_client_session_t*
     void SetRawSession(void* session); // takes ownership, internal use
+    void* ReleaseSession(); // releases ownership, returns raw session
 
 private:
     friend class MongoClient;

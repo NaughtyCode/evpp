@@ -71,6 +71,8 @@ public:
     void* GetUserData() const;
     void SetUserData(void* user_data);
 
+    const void* GetFn() const; // returns the C callback function pointer
+
     void* Raw(); // returns mongoc_oidc_callback_t*
 
 private:

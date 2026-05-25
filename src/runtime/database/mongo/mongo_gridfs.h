@@ -49,6 +49,18 @@ public:
     void GetId(BsonDocument* out) const;
     void GetMetadata(BsonDocument* out) const;
 
+    // Setters
+    void SetMd5(const char* md5);
+    void SetFilename(const char* filename);
+    void SetContentType(const char* content_type);
+    void SetAliases(const BsonDocument& aliases);
+    void SetMetadata(const BsonDocument& metadata);
+    bool SetId(const void* id, MongoError* error);
+
+    // Position and error
+    uint64_t Tell();
+    bool Error(MongoError* error) const;
+
     // Read/write operations
     ssize_t Readv(void* iov, size_t iovcnt, size_t min_bytes, int32_t timeout_msec);
     ssize_t Writev(const void* iov, size_t iovcnt, int32_t timeout_msec);
@@ -100,6 +112,7 @@ public:
     void Destroy();
 
     MongoGridFsFile* CreateFile(MongoGridFsFileOpts* opts);
+    MongoGridFsFile* CreateFileFromStream(void* stream, MongoGridFsFileOpts* opts);
     MongoGridFsFile* FindOneByFilename(const char* filename, MongoError* error);
     MongoGridFsFile* FindOneWithOpts(const BsonDocument& filter, const BsonDocument* opts,
                                       MongoError* error);
@@ -137,6 +150,9 @@ public:
                                   const BsonDocument* opts, MongoError* error);
     bool UploadFromStream(const char* filename, void* source_stream,
                           const BsonDocument* opts, void* file_id_out, MongoError* error);
+    bool UploadFromStreamWithId(const void* file_id, const char* filename,
+                                 void* source_stream, const BsonDocument* opts,
+                                 MongoError* error);
 
     // Download
     void* OpenDownloadStream(const void* file_id, MongoError* error);

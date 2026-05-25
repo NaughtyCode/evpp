@@ -19,7 +19,10 @@ namespace mongo {
 class ENGINE_API MongoUri {
 public:
     static MongoUri New(const char* uri_string);
+    static MongoUri NewWithError(const char* uri_string, MongoError* error);
     static MongoUri NewForHostPort(const char* hostname, uint16_t port);
+
+    static char* Unescape(const char* escaped_string);
 
     MongoUri();
     ~MongoUri();

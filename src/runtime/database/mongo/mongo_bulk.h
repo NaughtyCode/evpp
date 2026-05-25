@@ -55,6 +55,10 @@ public:
     uint32_t GetServerId() const;
     void SetDatabase(const char* database);
     void SetCollection(const char* collection);
+    void SetComment(const void* comment);  // bson_value_t*
+    void SetClient(void* client);         // mongoc_client_t*
+    void SetClientSession(void* session); // mongoc_client_session_t*
+    const void* GetWriteConcern() const;  // returns mongoc_write_concern_t*
 
     void* RawBulkOperation(); // returns mongoc_bulk_operation_t*
     void SetRawBulkOperation(void* bulk); // takes ownership

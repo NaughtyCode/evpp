@@ -2,6 +2,9 @@
 
 #include <bson/bson.h>
 #include <cstring>
+#include <mongoc/mongoc.h>
+
+#include "runtime/database/mongo/mongo_bson.h"
 
 namespace engine {
 namespace mongo {
@@ -45,6 +48,10 @@ uint32_t MongoError::Code() const {
 
 const char* MongoError::Message() const {
     return static_cast<const bson_error_t*>(RawError())->message;
+}
+
+bool MongoError::HasLabel(const BsonDocument& reply, const char* label) const {
+    return mongoc_error_has_label(static_cast<const bson_t*>(reply.RawBson()), label);
 }
 
 void* MongoError::RawError() {

@@ -141,6 +141,11 @@ void MongoSessionOpts::SetDefaultTransactionOpts(const MongoTransactionOpts& txn
             static_cast<const mongoc_transaction_opt_t*>(txn_opts.RawTransactionOpts()));
 }
 
+const void* MongoSessionOpts::GetDefaultTransactionOptsRaw() const {
+    return impl_ && impl_->opts
+        ? mongoc_session_opts_get_default_transaction_opts(impl_->opts) : nullptr;
+}
+
 void* MongoSessionOpts::RawSessionOpts() {
     return impl_ ? impl_->opts : nullptr;
 }
@@ -245,6 +250,73 @@ const void* MongoSession::GetOpts() const {
 
 void* MongoSession::RawSession() {
     return impl_ ? impl_->session : nullptr;
+}
+
+bool MongoSession::GetDirty() const {
+    return impl_ && impl_->session && mongoc_client_session_get_dirty(impl_->session);
+}
+
+const void* MongoSession::GetTransactionOptsRaw() const {
+    return impl_ && impl_->session
+        ? mongoc_client_session_get_transaction_opts(impl_->session) : nullptr;
+}
+
+namespace {
+
+struct WithTxnCtx {
+    MongoSession::WithTransactionCb cb;
+};
+
+bool with_transaction_trampoline(mongoc_client_session_t* session,
+                                   void* ctx, bson_t** reply, bson_error_t* error) {
+    auto* txn_ctx = static_cast<WithTxnCtx*>(ctx);
+    if (!txn_ctx || !txn_ctx->cb) return false;
+
+    // Create a temporary non-owning MongoSession wrapper
+    MongoSession tmp_session;
+    tmp_session.SetRawSession(session);
+
+    BsonDocument reply_doc;
+    MongoError mongo_err;
+
+    bool ok = txn_ctx->cb(&tmp_session, &reply_doc, &mongo_err);
+
+    // Release ownership so ~MongoSession doesn't destroy the session
+    tmp_session.ReleaseSession();
+
+    if (reply && ok) {
+        bson_destroy(*reply);
+        *reply = bson_copy(static_cast<const bson_t*>(reply_doc.RawBson()));
+    }
+    if (!ok && error) {
+        memcpy(error, static_cast<bson_error_t*>(mongo_err.RawError()), sizeof(bson_error_t));
+    }
+    return ok;
+}
+
+} // namespace
+
+bool MongoSession::WithTransaction(const MongoTransactionOpts* opts,
+                                     WithTransactionCb cb, BsonDocument* reply,
+                                     MongoError* error) {
+    if (!impl_ || !impl_->session || !cb) return false;
+
+    WithTxnCtx txn_ctx{std::move(cb)};
+
+    return mongoc_client_session_with_transaction(
+        impl_->session,
+        with_transaction_trampoline,
+        opts ? static_cast<const mongoc_transaction_opt_t*>(opts->RawTransactionOpts()) : nullptr,
+        &txn_ctx,
+        reply ? static_cast<bson_t*>(reply->RawBson()) : nullptr,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+}
+
+void* MongoSession::ReleaseSession() {
+    if (!impl_) return nullptr;
+    void* s = impl_->session;
+    impl_->session = nullptr;
+    return s;
 }
 
 void MongoSession::SetRawSession(void* session) {

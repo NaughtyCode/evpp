@@ -52,6 +52,10 @@ const char* MongoLog::LevelToString(MongoLogLevel level) {
 void MongoLog::TraceEnable() { mongoc_log_trace_enable(); }
 void MongoLog::TraceDisable() { mongoc_log_trace_disable(); }
 
+void MongoLog::DefaultHandler(MongoLogLevel level, const char* domain, const char* message) {
+    mongoc_log_default_handler(static_cast<mongoc_log_level_t>(level), domain, message, nullptr);
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // MongoStructuredLogEntry
 // ═══════════════════════════════════════════════════════════════════════

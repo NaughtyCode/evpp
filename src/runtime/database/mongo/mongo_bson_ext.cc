@@ -112,6 +112,13 @@ BsonJsonReader BsonJsonReader::NewFromFd(int fd, bool close_on_destroy) {
     return r;
 }
 
+BsonJsonReader BsonJsonReader::NewFromFile(const char* filename, MongoError* error) {
+    BsonJsonReader r;
+    r.impl_->reader = bson_json_reader_new_from_file(filename,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+    return r;
+}
+
 BsonJsonReader BsonJsonReader::NewFromData(const uint8_t* data, size_t length) {
     BsonJsonReader r;
     r.impl_->reader = bson_json_reader_new_from_data(const_cast<uint8_t*>(data), length);
@@ -164,6 +171,27 @@ BsonReader BsonReader::NewFromData(const uint8_t* data, size_t length) {
     return r;
 }
 
+BsonReader BsonReader::NewFromFile(const char* path, MongoError* error) {
+    BsonReader r;
+    r.impl_->reader = bson_reader_new_from_file(path,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+    return r;
+}
+
+BsonReader BsonReader::NewFromFd(int fd, bool close_on_destroy) {
+    BsonReader r;
+    r.impl_->reader = bson_reader_new_from_fd(fd, close_on_destroy);
+    return r;
+}
+
+BsonReader BsonReader::NewFromHandle(void* handle, void* read_func, void* destroy_func) {
+    BsonReader r;
+    r.impl_->reader = bson_reader_new_from_handle(handle,
+        reinterpret_cast<bson_reader_read_func_t>(read_func),
+        reinterpret_cast<bson_reader_destroy_func_t>(destroy_func));
+    return r;
+}
+
 BsonReader::BsonReader() : impl_(std::make_unique<Impl>()) {}
 
 BsonReader::~BsonReader() {
@@ -195,13 +223,25 @@ bool BsonReader::Read(BsonDocument* out, MongoError* error) {
 }
 
 void BsonReader::SetData(const uint8_t* data, size_t length) {
-    if (impl_ && impl_->reader)
-        bson_reader_set_read_func(impl_->reader, nullptr);
-    // Reset reader inline buffer — create a new reader from data
     if (impl_) {
         bson_reader_destroy(impl_->reader);
         impl_->reader = bson_reader_new_from_data(data, length);
     }
+}
+
+void BsonReader::SetReadFunc(void* func) {
+    if (impl_ && impl_->reader)
+        bson_reader_set_read_func(impl_->reader,
+            reinterpret_cast<bson_reader_read_func_t>(func));
+}
+
+int64_t BsonReader::Tell() const {
+    return impl_ && impl_->reader ? static_cast<int64_t>(bson_reader_tell(impl_->reader)) : 0;
+}
+
+void BsonReader::Reset() {
+    if (impl_ && impl_->reader)
+        bson_reader_reset(impl_->reader);
 }
 
 void* BsonReader::Raw() { return impl_ ? impl_->reader : nullptr; }
@@ -268,6 +308,10 @@ const uint8_t* BsonWriter::GetBuffer(size_t* length) const {
     return buf;
 }
 
+size_t BsonWriter::GetLength() const {
+    return impl_ && impl_->writer ? bson_writer_get_length(impl_->writer) : 0;
+}
+
 void* BsonWriter::Raw() { return impl_ ? impl_->writer : nullptr; }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -282,6 +326,10 @@ int64_t BsonClock::GetDateTime() {
     return bson_get_now_ms();
 }
 
+void BsonClock::GetTimeOfDay(void* tv) {
+    bson_gettimeofday(static_cast<struct timeval*>(tv));
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // BsonUtf8
 // ═══════════════════════════════════════════════════════════════════════
@@ -292,6 +340,18 @@ bool BsonUtf8::Validate(const char* str, size_t length, bool allow_null) {
 
 char* BsonUtf8::EscapeForJson(const char* str, size_t length) {
     return bson_utf8_escape_for_json(str, static_cast<ssize_t>(length));
+}
+
+uint32_t BsonUtf8::GetChar(const char* utf8) {
+    return bson_utf8_get_char(utf8);
+}
+
+const char* BsonUtf8::NextChar(const char* utf8) {
+    return bson_utf8_next_char(utf8);
+}
+
+void BsonUtf8::FromUnichar(uint32_t unichar, char utf8[6], uint32_t* len) {
+    bson_utf8_from_unichar(unichar, utf8, len);
 }
 
 // ═══════════════════════════════════════════════════════════════════════

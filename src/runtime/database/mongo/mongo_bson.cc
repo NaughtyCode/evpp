@@ -178,6 +178,17 @@ bool BsonDocument::AppendIter(const char* key, const BsonIter& iter) {
                              static_cast<const bson_iter_t*>(iter.RawIter()));
 }
 
+bool BsonDocument::AppendBinaryUninit(const char* key, int subtype, uint32_t len,
+                                        uint8_t** data_out) {
+    return bson_append_binary_uninit(static_cast<bson_t*>(RawBson()), key, -1,
+        static_cast<bson_subtype_t>(subtype), len, data_out);
+}
+
+bool BsonDocument::AppendArrayFromVector(const char* key, const BsonIter& iter) {
+    return bson_append_array_from_vector(static_cast<bson_t*>(RawBson()), key, -1,
+        static_cast<const bson_iter_t*>(iter.RawIter()));
+}
+
 bool BsonDocument::AppendDocumentBegin(const char* key, BsonDocument* subdoc) {
     return bson_append_document_begin(static_cast<bson_t*>(RawBson()), key, -1,
                                       static_cast<bson_t*>(subdoc->RawBson()));
@@ -245,6 +256,21 @@ char* BsonDocument::AsJson(size_t* length) const {
     return bson_as_relaxed_extended_json(static_cast<const bson_t*>(RawBson()), length);
 }
 
+char* BsonDocument::AsJsonWithOpts(size_t* length, const void* opts) const {
+    return bson_as_json_with_opts(static_cast<const bson_t*>(RawBson()), length,
+        static_cast<const bson_json_opts_t*>(opts));
+}
+
+char* BsonDocument::ArrayAsCanonicalExtendedJson(const BsonDocument& array, size_t* length) {
+    return bson_array_as_canonical_extended_json(
+        static_cast<const bson_t*>(array.RawBson()), length);
+}
+
+char* BsonDocument::ArrayAsRelaxedExtendedJson(const BsonDocument& array, size_t* length) {
+    return bson_array_as_relaxed_extended_json(
+        static_cast<const bson_t*>(array.RawBson()), length);
+}
+
 std::string BsonDocument::ToJson() const {
     size_t len;
     char* json = bson_as_relaxed_extended_json(static_cast<const bson_t*>(RawBson()), &len);
@@ -284,6 +310,34 @@ BsonDocument BsonDocument::NewFromData(const uint8_t* data, size_t length) {
         bson_steal(static_cast<bson_t*>(result.RawBson()), b);
     }
     return result;
+}
+
+BsonDocument BsonDocument::NewFromBuffer(uint8_t** buf, size_t* buf_len,
+                                           void* realloc_func, void* realloc_func_ctx) {
+    BsonDocument result;
+    bson_t* b = bson_new_from_buffer(buf, buf_len,
+        reinterpret_cast<bson_realloc_func>(realloc_func), realloc_func_ctx);
+    if (b) {
+        bson_destroy(static_cast<bson_t*>(result.RawBson()));
+        bson_steal(static_cast<bson_t*>(result.RawBson()), b);
+    }
+    return result;
+}
+
+BsonDocument BsonDocument::SizedNew(size_t size) {
+    BsonDocument result;
+    bson_t* b = bson_sized_new(size);
+    if (b) {
+        bson_destroy(static_cast<bson_t*>(result.RawBson()));
+        bson_steal(static_cast<bson_t*>(result.RawBson()), b);
+    }
+    return result;
+}
+
+void BsonDocument::Steal(BsonDocument& dst, BsonDocument& src) {
+    bson_destroy(static_cast<bson_t*>(dst.RawBson()));
+    bson_steal(static_cast<bson_t*>(dst.RawBson()),
+               static_cast<bson_t*>(src.RawBson()));
 }
 
 bool BsonDocument::Validate(MongoError* error) const {
@@ -449,6 +503,84 @@ BsonIter BsonIter::Recurse() const {
     bson_iter_recurse(static_cast<const bson_iter_t*>(RawIter()),
                       static_cast<bson_iter_t*>(child.RawIter()));
     return child;
+}
+
+bool BsonIter::InitFromData(const uint8_t* data, size_t length) {
+    return bson_iter_init_from_data(static_cast<bson_iter_t*>(RawIter()), data, length);
+}
+
+uint32_t BsonIter::KeyLen() const {
+    return bson_iter_key_len(static_cast<const bson_iter_t*>(RawIter()));
+}
+
+int BsonIter::BinarySubtype() const {
+    return static_cast<int>(bson_iter_binary_subtype(
+        static_cast<const bson_iter_t*>(RawIter())));
+}
+
+bool BsonIter::BinaryEqual(const BsonIter& a, const BsonIter& b) {
+    return bson_iter_binary_equal(
+        static_cast<const bson_iter_t*>(a.RawIter()),
+        static_cast<const bson_iter_t*>(b.RawIter()));
+}
+
+void BsonIter::AsTimeval(void* tv) const {
+    bson_iter_timeval(static_cast<const bson_iter_t*>(RawIter()),
+                      static_cast<struct timeval*>(tv));
+}
+
+bool BsonIter::VisitAll(const void* visitor, void* data) {
+    return bson_iter_visit_all(static_cast<bson_iter_t*>(RawIter()),
+                                static_cast<const bson_visitor_t*>(visitor), data);
+}
+
+uint32_t BsonIter::Offset() const {
+    return bson_iter_offset(static_cast<bson_iter_t*>(const_cast<BsonIter*>(this)->RawIter()));
+}
+
+const void* BsonIter::Value() const {
+    return bson_iter_value(static_cast<bson_iter_t*>(
+        const_cast<BsonIter*>(this)->RawIter()));
+}
+
+bool BsonIter::OverwriteInt32(int32_t value) {
+    return bson_iter_overwrite_int32(static_cast<bson_iter_t*>(RawIter()), value);
+}
+
+bool BsonIter::OverwriteInt64(int64_t value) {
+    return bson_iter_overwrite_int64(static_cast<bson_iter_t*>(RawIter()), value);
+}
+
+bool BsonIter::OverwriteDouble(double value) {
+    return bson_iter_overwrite_double(static_cast<bson_iter_t*>(RawIter()), value);
+}
+
+bool BsonIter::OverwriteDecimal128(const MongoDecimal128& value) {
+    return bson_iter_overwrite_decimal128(static_cast<bson_iter_t*>(RawIter()),
+        reinterpret_cast<const bson_decimal128_t*>(&value));
+}
+
+bool BsonIter::OverwriteBool(bool value) {
+    return bson_iter_overwrite_bool(static_cast<bson_iter_t*>(RawIter()), value);
+}
+
+bool BsonIter::OverwriteOid(const MongoOid& value) {
+    return bson_iter_overwrite_oid(static_cast<bson_iter_t*>(RawIter()),
+        reinterpret_cast<const bson_oid_t*>(value.data()));
+}
+
+bool BsonIter::OverwriteTimestamp(uint32_t timestamp, uint32_t increment) {
+    return bson_iter_overwrite_timestamp(static_cast<bson_iter_t*>(RawIter()),
+                                          timestamp, increment);
+}
+
+bool BsonIter::OverwriteDateTime(int64_t value) {
+    return bson_iter_overwrite_date_time(static_cast<bson_iter_t*>(RawIter()), value);
+}
+
+bool BsonIter::OverwriteBinary(int subtype, uint32_t* binary_len, uint8_t** binary) {
+    return bson_iter_overwrite_binary(static_cast<bson_iter_t*>(RawIter()),
+        static_cast<bson_subtype_t>(subtype), binary_len, binary);
 }
 
 void* BsonIter::RawIter() { return static_cast<void*>(storage_); }

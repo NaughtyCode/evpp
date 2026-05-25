@@ -65,5 +65,16 @@ const uint8_t* MongoOid::GetBytes() const {
     return bytes_;
 }
 
+void MongoOid::Copy(const MongoOid& src) {
+    const auto* s = reinterpret_cast<const bson_oid_t*>(&src);
+    auto* d = reinterpret_cast<bson_oid_t*>(this);
+    bson_oid_copy(s, d);
+}
+
+time_t MongoOid::GetTimeT() const {
+    const auto* oid = reinterpret_cast<const bson_oid_t*>(this);
+    return bson_oid_get_time_t(oid);
+}
+
 } // namespace mongo
 } // namespace engine

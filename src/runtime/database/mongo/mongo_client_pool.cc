@@ -111,6 +111,22 @@ bool MongoClientPool::AppendMetadata(const char* name, const char* version, cons
         impl_->pool, name, version, platform);
 }
 
+bool MongoClientPool::EnableAutoEncryption(void* opts, MongoError* error) {
+    return impl_ && impl_->pool && mongoc_client_pool_enable_auto_encryption(
+        impl_->pool, static_cast<mongoc_auto_encryption_opts_t*>(opts),
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+}
+
+bool MongoClientPool::SetStructuredLogOpts(const void* opts) {
+    return impl_ && impl_->pool && mongoc_client_pool_set_structured_log_opts(
+        impl_->pool, static_cast<const mongoc_structured_log_opts_t*>(opts));
+}
+
+bool MongoClientPool::SetOidcCallback(const void* callback) {
+    return impl_ && impl_->pool && mongoc_client_pool_set_oidc_callback(
+        impl_->pool, static_cast<const mongoc_oidc_callback_t*>(callback));
+}
+
 void* MongoClientPool::RawPool() {
     return impl_ ? impl_->pool : nullptr;
 }

@@ -28,6 +28,9 @@ public:
     void SetBytes(const uint8_t bytes[12]);
     const uint8_t* GetBytes() const;
 
+    void Copy(const MongoOid& src);
+    time_t GetTimeT() const;
+
     // Internal: direct access to the 12-byte buffer, reinterpret_cast to bson_oid_t.
     const uint8_t* data() const { return bytes_; }
     uint8_t* data() { return bytes_; }

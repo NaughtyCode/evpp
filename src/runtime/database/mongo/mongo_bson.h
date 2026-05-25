@@ -85,6 +85,8 @@ public:
     bool AppendDecimal128(const char* key, const MongoDecimal128& value);
     bool AppendValue(const char* key, const void* bson_value);
     bool AppendIter(const char* key, const BsonIter& iter);
+    bool AppendBinaryUninit(const char* key, int subtype, uint32_t len, uint8_t** data_out);
+    bool AppendArrayFromVector(const char* key, const BsonIter& iter);
 
     // ── Sub-document building ───────────────────────────────────────
     bool AppendDocumentBegin(const char* key, BsonDocument* subdoc);
@@ -107,16 +109,26 @@ public:
     char* AsCanonicalExtendedJson(size_t* length) const;
     char* AsRelaxedExtendedJson(size_t* length) const;
     char* AsJson(size_t* length) const;
+    char* AsJsonWithOpts(size_t* length, const void* opts) const; // bson_json_opts_t*
     std::string ToJson() const;  // returns AsJson() as std::string, caller owns
+
+    static char* ArrayAsCanonicalExtendedJson(const BsonDocument& array, size_t* length);
+    static char* ArrayAsRelaxedExtendedJson(const BsonDocument& array, size_t* length);
 
     // ── Static initializers ─────────────────────────────────────────
     static BsonDocument NewFromJson(const char* json, size_t len);
     static BsonDocument NewFromJson(const uint8_t* data, size_t len);
     static BsonDocument NewFromData(const uint8_t* data, size_t length);
+    static BsonDocument NewFromBuffer(uint8_t** buf, size_t* buf_len,
+                                       void* realloc_func, void* realloc_func_ctx);
+    static BsonDocument SizedNew(size_t size);
 
     // ── Validation ──────────────────────────────────────────────────
     bool Validate(MongoError* error = nullptr) const;
     void Reinit(); // reinitialize as an empty document
+
+    // ── Steal (move bson_t buffer; src is left empty) ───────────────
+    static void Steal(BsonDocument& dst, BsonDocument& src);
 
     // ── Internal access (database/mongo/ layer only) ────────────────
     void* RawBson();         // returns bson_t*
@@ -167,8 +179,37 @@ public:
     // Init-and-find (initialize iterator and find key in one call)
     bool InitFind(const BsonDocument& doc, const char* key);
     bool InitFindCase(const BsonDocument& doc, const char* key);
+    bool InitFromData(const uint8_t* data, size_t length);
     const char* KeyUnsafe() const;
+    uint32_t KeyLen() const;
     char* DupUtf8(uint32_t* length) const;
+
+    // Type-specific helpers
+    int BinarySubtype() const;
+    static bool BinaryEqual(const BsonIter& a, const BsonIter& b);
+
+    // Timeval
+    void AsTimeval(void* tv) const; // struct timeval*
+
+    // Visit all fields with a visitor callback
+    bool VisitAll(const void* visitor, void* data);
+
+    // Offset (byte position in the document)
+    uint32_t Offset() const;
+
+    // Get the raw bson_value_t for the current element
+    const void* Value() const;
+
+    // Overwrite current element's value (must be at correct position)
+    bool OverwriteInt32(int32_t value);
+    bool OverwriteInt64(int64_t value);
+    bool OverwriteDouble(double value);
+    bool OverwriteDecimal128(const MongoDecimal128& value);
+    bool OverwriteBool(bool value);
+    bool OverwriteOid(const MongoOid& value);
+    bool OverwriteTimestamp(uint32_t timestamp, uint32_t increment);
+    bool OverwriteDateTime(int64_t value);
+    bool OverwriteBinary(int subtype, uint32_t* binary_len, uint8_t** binary);
 
     // Recursion into sub-documents
     BsonIter Recurse() const;
