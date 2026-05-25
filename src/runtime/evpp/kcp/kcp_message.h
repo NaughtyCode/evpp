@@ -34,7 +34,7 @@ private:
 typedef std::shared_ptr<Message> MessagePtr;
 
 inline void Message::set_remote_addr(const struct sockaddr& raddr) {
-    memcpy(&remote_addr_, &raddr, sizeof raddr);
+    memcpy(&remote_addr_, &raddr, sizeof(remote_addr_));
 }
 
 inline const struct sockaddr* Message::remote_addr() const {

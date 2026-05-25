@@ -432,8 +432,14 @@ void Server::RecvingLoop(RecvThread* th) {
                     if (IsRoundRobin()) {
                         loop = tpool_->GetNextLoop();
                     } else {
-                        loop = tpool_->GetNextLoopWithHash(
-                            sock::sockaddr_in_cast(&from_addr)->sin_addr.s_addr);
+                        uint64_t hash = conv;
+                        if (from_addr.ss_family == AF_INET) {
+                            hash = sock::sockaddr_in_cast(&from_addr)->sin_addr.s_addr;
+                        } else if (from_addr.ss_family == AF_INET6) {
+                            const auto* sin6 = sock::sockaddr_in6_cast(&from_addr);
+                            memcpy(&hash, &sin6->sin6_addr, sizeof(hash));
+                        }
+                        loop = tpool_->GetNextLoopWithHash(hash);
                     }
                     loop->RunInLoop(std::bind(message_handler_, loop, msg));
                 } else {

@@ -81,16 +81,22 @@ bool Client::Connect(const struct sockaddr_storage& addr, uint32_t conv) {
 
 bool Client::Connect(const char* addr, uint32_t conv) {
     conv_ = conv;
-    remote_addr_ = sock::ParseFromIPPort(addr);
+    if (!sock::ParseFromIPPort(addr, remote_addr_)) {
+        ENGINE_LOG_ERROR(engine::GetLogger(),
+            "KCP client failed to parse address: {}", addr);
+        return false;
+    }
     return Connect();
 }
 
 bool Client::Connect() {
-    sockfd_ = ::socket(AF_INET, SOCK_DGRAM, 0);
+    int domain = (remote_addr_.ss_family == AF_INET6) ? AF_INET6 : AF_INET;
+    sockfd_ = ::socket(domain, SOCK_DGRAM, 0);
     sock::SetReuseAddr(sockfd_);
 
     struct sockaddr* addr = reinterpret_cast<struct sockaddr*>(&remote_addr_);
-    socklen_t addrlen = sizeof(remote_addr_);
+    socklen_t addrlen = (remote_addr_.ss_family == AF_INET6)
+        ? sizeof(sockaddr_in6) : sizeof(sockaddr_in);
     int ret = ::connect(sockfd_, addr, addrlen);
 
     if (ret != 0) {

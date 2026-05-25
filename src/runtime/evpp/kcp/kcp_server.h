@@ -74,8 +74,7 @@ private:
     MessageHandler   message_handler_;
 
     // The worker thread pool, used to process KCP application messages.
-    // This data field is not owned by KcpServer,
-    // it is set by outer application layer.
+    // This field is not owned by the server — it is set by the outer application.
     std::shared_ptr<EventLoopThreadPool> tpool_;
 
     // KCP parameters shared across all sessions
