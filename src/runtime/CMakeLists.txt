@@ -58,6 +58,12 @@ else()
     set(PERFETTO_SOURCES "")
 endif()
 
+# ── KCP ──────────────────────────────────────────────────────────
+set(KCP_SOURCES
+    ${PROJECT_SOURCE_DIR}/thirdparty/kcp/ikcp.c
+)
+source_group("thirdparty\\kcp" FILES ${KCP_SOURCES})
+
 # ═══════════════════════════════════════════════════════════════════════
 # Engine modules
 # ═══════════════════════════════════════════════════════════════════════
@@ -147,6 +153,7 @@ file(GLOB EVPP_SOURCES
     evpp/http/*.cc evpp/http/*.h
     evpp/httpc/*.cc evpp/httpc/*.h
     evpp/udp/*.cc evpp/udp/*.h
+    evpp/kcp/*.cc evpp/kcp/*.h
 )
 source_group("evpp" FILES ${EVPP_SOURCES})
 
@@ -160,6 +167,7 @@ source_group("evpp" FILES ${EVPP_SOURCES})
 set(SERVERENGINE_SOURCES
     ${LUA_SOURCES}
     ${PERFETTO_SOURCES}
+    ${KCP_SOURCES}
     ${EXPORT_HEADER}
     ${LOG_SOURCES}
     ${TIMER_SOURCES}
