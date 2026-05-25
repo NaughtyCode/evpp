@@ -4,6 +4,7 @@
 
 #include "runtime/evpp/inner_pre.h"
 #include "runtime/evpp/duration.h"
+#include "runtime/evpp/invoke_timer.h"
 
 namespace evpp {
 class EventLoop;
@@ -63,6 +64,7 @@ private:
     std::unique_ptr<FdChannel> chan_;
     std::unique_ptr<TimerEventWatcher> timer_;
     std::shared_ptr<DNSResolver> dns_resolver_;
+    InvokeTimerPtr reconnect_timer_;
     NewConnectionCallback conn_fn_;
 };
 }

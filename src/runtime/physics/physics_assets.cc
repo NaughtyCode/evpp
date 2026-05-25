@@ -637,14 +637,18 @@ AssetLoadResult AssetLoader::LoadScene(
     // ── Load constraints ───────────────────────────────────────────────
     if (asset.constraints.has_value()) {
         for (const auto& con : *asset.constraints) {
-            // Resolve bodyA and bodyB by asset name
+            // Resolve bodyA and bodyB by asset name.
+            // Use boolean flags instead of sentinel 0 — Jolt body ID 0 is
+            // a valid index (first body created).
             uint32_t body_a_id = 0;
             uint32_t body_b_id = 0;
+            bool found_a = false;
+            bool found_b = false;
             for (const auto& [id, name] : static_body_ids_) {
-                if (name == con.body_a) body_a_id = id;
-                if (name == con.body_b) body_b_id = id;
+                if (name == con.body_a) { body_a_id = id; found_a = true; }
+                if (name == con.body_b) { body_b_id = id; found_b = true; }
             }
-            if (body_a_id == 0 || body_b_id == 0) {
+            if (!found_a || !found_b) {
                 std::fprintf(stderr, "AssetLoader: constraint '%s' -> '%s': "
                             "referenced body not found\n",
                             con.body_a.c_str(), con.body_b.c_str());

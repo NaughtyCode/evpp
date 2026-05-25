@@ -195,6 +195,11 @@ void Connector::HandleError() {
         timer_.reset();
     }
 
+    if (reconnect_timer_) {
+        reconnect_timer_->Cancel();
+        reconnect_timer_.reset();
+    }
+
     // If the connection is refused or it will not try again,
     // We need to notify the user layer that the connection established failed.
     // Otherwise we will try to do reconnection silently.
@@ -219,7 +224,7 @@ void Connector::HandleError() {
         }
 
         ENGINE_LOG_TRACE(engine::GetLogger(), "this={} loop={} auto reconnect in {}s thread={}", (void*)this, (void*)loop_, owner_tcp_client_->reconnect_interval().Seconds(), std::hash<std::thread::id>{}(std::this_thread::get_id()));
-        loop_->RunAfter(owner_tcp_client_->reconnect_interval(), std::bind(&Connector::Start, shared_from_this()));
+        reconnect_timer_ = loop_->RunAfter(owner_tcp_client_->reconnect_interval(), std::bind(&Connector::Start, shared_from_this()));
     }
 }
 

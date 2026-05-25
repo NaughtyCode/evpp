@@ -23,6 +23,13 @@ Request::Request(EventLoop* loop, const std::string& http_url, const std::string
     struct evhttp_uri* evuri = evhttp_uri_parse(http_url.c_str());
     if (!evuri) {
         port_ = 80;
+        uri_ = "/";
+        host_ = http_url;
+#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL)
+        conn_.reset(new Conn(loop, host_, port_, false, timeout));
+#else
+        conn_.reset(new Conn(loop, host_, port_, timeout));
+#endif
         return;
     }
     uri_ = evhttp_uri_get_path(evuri);

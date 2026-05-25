@@ -13,6 +13,11 @@ HttpRequest::HttpRequest() {
     settings.on_chunk_header = &HttpRequest::EmptyCB;
     settings.on_chunk_complete = &HttpRequest::EmptyCB;
     http_parser_init(&parser, HTTP_REQUEST);
+    // http_parser_init does not initialize http_major/http_minor.
+    // If parsing fails before the HTTP version line is reached, the
+    // HttpResponse constructor reads these fields. Default to HTTP/1.1.
+    parser.http_major = 1;
+    parser.http_minor = 1;
 }
 
 int HttpRequest::Parse(evpp::Buffer * buf) {

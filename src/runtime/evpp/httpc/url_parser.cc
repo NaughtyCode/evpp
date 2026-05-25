@@ -7,7 +7,7 @@
 
 namespace evpp {
 namespace httpc {
-using namespace std;
+
 static const std::string default_http_port = "80";
 static bool equal_key(char v) {
     return v == ':' || v == '/' || v == '?' || v == '#';
@@ -21,23 +21,23 @@ URLParser::URLParser(const std::string& url) : port(80) {
     parse(url);
 }
 
-int URLParser::parse(const string& url_s) {
-    string::const_iterator it;
-    string::const_iterator last_it = url_s.begin();
+int URLParser::parse(const std::string& url_s) {
+    std::string::const_iterator it;
+    std::string::const_iterator last_it = url_s.begin();
 
-    static const string prot_end("://");
-    it = search(url_s.begin(), url_s.end(), prot_end.begin(), prot_end.end());
+    static const std::string prot_end("://");
+    it = std::search(url_s.begin(), url_s.end(), prot_end.begin(), prot_end.end());
     if (it != url_s.end()) {
-        schema.reserve(distance(url_s.begin(), it));
-        transform(url_s.begin(), it, back_inserter(schema), [](unsigned char c) { return std::tolower(c); }); // protocol is icase
-        advance(it, prot_end.length());
+        schema.reserve(std::distance(url_s.begin(), it));
+        std::transform(url_s.begin(), it, std::back_inserter(schema), [](unsigned char c) { return std::tolower(c); }); // protocol is icase
+        std::advance(it, prot_end.length());
         last_it = it;
     }
 
-    it = find_if(last_it, url_s.end(), equal_key);
+    it = std::find_if(last_it, url_s.end(), equal_key);
 
-    host.reserve(distance(last_it, it));
-    transform(last_it, it, back_inserter(host), [](unsigned char c) { return std::tolower(c); }); // host is icase
+    host.reserve(std::distance(last_it, it));
+    std::transform(last_it, it, std::back_inserter(host), [](unsigned char c) { return std::tolower(c); }); // host is icase
 
     if (it == url_s.end()) {
         return 0;
@@ -48,14 +48,14 @@ int URLParser::parse(const string& url_s) {
 
         if (it != url_s.end()) {
             last_it = it;
-            it = find_if(last_it, url_s.end(), equal_key);
+            it = std::find_if(last_it, url_s.end(), equal_key);
             port = ::atoi(&(*last_it));
         }
     }
 
     if (it != url_s.end() && *it == '/') {
         last_it = it;
-        it = find_if(last_it, url_s.end(), is_question_or_sharp);
+        it = std::find_if(last_it, url_s.end(), is_question_or_sharp);
         path.assign(last_it, it);
     }
 

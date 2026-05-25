@@ -117,8 +117,10 @@ void Conn::Close() {
         evhttp_conn_ = nullptr;
     }
 #if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL)
-    // ssl_ gets freed by be_openssl_destruct because of BEV_OPT_CLOSE_ON_FREE
+    // ssl_ and bufferevent_ get freed by be_openssl_destruct (BEV_OPT_CLOSE_ON_FREE)
+    // or by evhttp_connection_free -> bufferevent_free chain
     ssl_ = nullptr;
+    bufferevent_ = nullptr;
 #endif
 }
 } // httpc

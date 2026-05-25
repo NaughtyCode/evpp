@@ -66,20 +66,6 @@ public:
     std::string remote_ip;
 
 private:
-    void swap(HttpRequest & hr) {
-        body.Swap(hr.body);
-        field_value.swap(hr.field_value);
-        std::swap(parser, hr.parser);
-        remote_ip.swap(hr.remote_ip);
-        field.swap(hr.field);
-        value.swap(hr.value);
-        url.swap(hr.url);
-        pre_state = hr.pre_state;
-        is_completed = hr.is_completed;
-        settings = hr.settings;
-        send_continue_ = hr.send_continue_;
-        u = hr.u;
-    }
     static int OnMessageBegin(http_parser *p) {
         return 0;
     }

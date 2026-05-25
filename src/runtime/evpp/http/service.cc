@@ -158,7 +158,9 @@ namespace evpp {
 
 #if defined(EVPP_HTTP_SERVER_SUPPORTS_SSL)
 			if(enable_ssl_) {
-				initSSL();
+				if (!initSSL()) {
+					return false;
+				}
 			}
 #endif
 

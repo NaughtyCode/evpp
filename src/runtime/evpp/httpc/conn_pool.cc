@@ -46,7 +46,9 @@ void ConnPool::Put(const ConnPtr& c) {
     assert(loop->IsInLoopThread());
     std::lock_guard<std::mutex> guard(mutex_);
     auto it = pool_.find(loop);
-    assert(it != pool_.end());
+    if (it == pool_.end()) {
+        return;
+    }
     if (it->second.size() >= max_pool_size_) {
         return;
     }

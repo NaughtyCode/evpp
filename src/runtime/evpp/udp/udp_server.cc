@@ -23,8 +23,7 @@ public:
     }
 
     ~RecvThread() {
-        EVUTIL_CLOSESOCKET(fd_);
-        fd_ = INVALID_SOCKET;
+        status_.store(kStopping);
         if (this->thread_ && this->thread_->joinable()) {
             try {
                 thread_->join();
@@ -32,6 +31,8 @@ public:
                 ENGINE_LOG_ERROR(engine::GetLogger(), "Caught a system_error:{}", e.what());
             }
         }
+        EVUTIL_CLOSESOCKET(fd_);
+        fd_ = INVALID_SOCKET;
     }
 
     bool Listen(int p) {
