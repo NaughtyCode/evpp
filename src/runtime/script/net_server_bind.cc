@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <unordered_set>
 
 #include <runtime/evpp/tcp_server.h>
 #include <runtime/evpp/tcp_conn.h>
@@ -29,57 +29,290 @@ namespace script {
 namespace {
 
 // ======================================================================
-// TCP Server bindings
+// TCP Server bindings (light userdata + Lua class instances)
 // ======================================================================
+
+struct ConnCtx {
+    evpp::TCPConnPtr conn;
+    lua_State* L = nullptr;
+    int instance_ref = LUA_NOREF;        // Lua conn instance table
+    int server_inst_ref = LUA_NOREF;     // Lua server instance (for fallback callbacks)
+    bool disposed = false;
+};
 
 struct ServerCtx {
     std::unique_ptr<evpp::TCPServer> server;
     lua_State* L = nullptr;
-    int on_connect_ref = LUA_NOREF;
-    int on_message_ref = LUA_NOREF;
-    int on_close_ref   = LUA_NOREF;
-    // conn_id → TCPConnPtr for per-connection operations
-    std::unordered_map<uint64_t, evpp::TCPConnPtr> conns;
-    // Per-connection Lua callback refs (set via net.server.set_on_message / set_on_close)
-    std::unordered_map<uint64_t, int> conn_on_message_refs;
-    std::unordered_map<uint64_t, int> conn_on_close_refs;
+    int instance_ref = LUA_NOREF;        // Lua server instance table
+    bool disposed = false;
 };
 
-std::unordered_map<int64_t, std::shared_ptr<ServerCtx>> g_servers;
-std::atomic<int64_t> g_next_server_id{1};
+const char* kServerMetaName = "net.server.instance";
+const char* kConnMetaName   = "net.server.conn.instance";
 
-// ─── Lua callback helpers ──────────────────────────────────────────────
+// Lightweight set of active ServerCtx pointers, used ONLY by
+// ShutdownServerBindings to find and stop all servers during engine shutdown.
+// Normal operations (send, close, stop, set_on_*) never touch this set.
+std::unordered_set<ServerCtx*> g_server_ctxs;
 
-// Call a Lua function with one string argument.
-void call_lua_callback_str(lua_State* L, int ref, const std::string& s) {
-    if (!L) return;
-    if (ref == LUA_NOREF) return;
-    lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
-    lua_pushlstring(L, s.data(), s.size());
-    if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
-        auto* logger = GetLogger();
-        ENGINE_LOG_ERROR(logger, "[net.server] callback error: {}",
-                         lua_tostring(L, -1));
-        lua_pop(L, 1);
-    }
+// ── Internal helpers ─────────────────────────────────────────────────
+
+ServerCtx* GetServerCtxFromTable(lua_State* L, int idx) {
+    lua_getfield(L, idx, "_ctx");
+    auto* ctx = static_cast<ServerCtx*>(lua_touserdata(L, -1));
+    lua_pop(L, 1);
+    return ctx;
 }
 
-// Call a Lua function with (int, string) args.
-void call_lua_callback_int_str(lua_State* L, int ref, int64_t n, const std::string& s) {
-    if (!L) return;
-    if (ref == LUA_NOREF) return;
-    lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
-    lua_pushinteger(L, static_cast<lua_Integer>(n));
-    lua_pushlstring(L, s.data(), s.size());
+ConnCtx* GetConnCtxFromTable(lua_State* L, int idx) {
+    lua_getfield(L, idx, "_ctx");
+    auto* ctx = static_cast<ConnCtx*>(lua_touserdata(L, -1));
+    lua_pop(L, 1);
+    return ctx;
+}
+
+// ── Callback dispatchers ─────────────────────────────────────────────
+
+// Call inst:method(str) — for conn.on_message(self, data), conn.on_close(self, addr)
+void CallInstMethodStr(lua_State* L, int inst_ref, const char* method,
+                       const std::string& arg) {
+    if (!L || inst_ref == LUA_NOREF) return;
+    lua_rawgeti(L, LUA_REGISTRYINDEX, inst_ref);
+    if (lua_isnil(L, -1)) { lua_pop(L, 1); return; }
+    lua_getfield(L, -1, method);
+    if (!lua_isfunction(L, -1)) { lua_pop(L, 2); return; }
+    lua_insert(L, -2);                                  // func, inst
+    lua_pushlstring(L, arg.data(), arg.size());         // func, inst, str
     if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
         auto* logger = GetLogger();
-        ENGINE_LOG_ERROR(logger, "[net.server] callback error: {}",
+        ENGINE_LOG_ERROR(logger, "[net.server] {} error: {}", method,
                          lua_tostring(L, -1));
         lua_pop(L, 1);
     }
 }
 
-// ── l_net_server_listen(host_port, on_connect, on_message, on_close) → id ──
+// Call inst:method(table, str) — for server.on_connect(self, conn, addr),
+// server.on_message(self, conn, data), server.on_close(self, conn, addr)
+void CallInstMethodTableStr(lua_State* L, int inst_ref, const char* method,
+                            int table_ref, const std::string& arg) {
+    if (!L || inst_ref == LUA_NOREF) return;
+    lua_rawgeti(L, LUA_REGISTRYINDEX, inst_ref);
+    if (lua_isnil(L, -1)) { lua_pop(L, 1); return; }
+    lua_getfield(L, -1, method);
+    if (!lua_isfunction(L, -1)) { lua_pop(L, 2); return; }
+    lua_insert(L, -2);                                   // func, inst
+    lua_rawgeti(L, LUA_REGISTRYINDEX, table_ref);        // func, inst, table
+    lua_pushlstring(L, arg.data(), arg.size());          // func, inst, table, str
+    if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
+        auto* logger = GetLogger();
+        ENGINE_LOG_ERROR(logger, "[net.server] {} error: {}", method,
+                         lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+}
+
+// Check whether a method on an instance table is a function.
+bool HasMethod(lua_State* L, int inst_ref, const char* method) {
+    if (!L || inst_ref == LUA_NOREF) return false;
+    lua_rawgeti(L, LUA_REGISTRYINDEX, inst_ref);
+    if (lua_isnil(L, -1)) { lua_pop(L, 1); return false; }
+    bool ok = (lua_getfield(L, -1, method) == LUA_TFUNCTION);
+    lua_pop(L, 2);
+    return ok;
+}
+
+// ── Connection methods ───────────────────────────────────────────────
+
+int l_conn_send(lua_State* L) {
+    auto* ctx = GetConnCtxFromTable(L, 1);
+    if (!ctx) return luaL_error(L, "conn: invalid context");
+    if (ctx->disposed) return luaL_error(L, "conn: closed");
+
+    size_t len = 0;
+    const char* data = luaL_checklstring(L, 2, &len);
+
+    if (!ctx->conn->IsConnected()) {
+        return luaL_error(L, "conn: not connected");
+    }
+
+    ctx->conn->Send(data, len);
+    return 0;
+}
+
+int l_conn_close(lua_State* L) {
+    auto* ctx = GetConnCtxFromTable(L, 1);
+    if (!ctx || ctx->disposed) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    ctx->disposed = true;
+
+    // Null _ctx to prevent use-after-free from subsequent method calls.
+    lua_pushnil(L);
+    lua_setfield(L, 1, "_ctx");
+
+    if (ctx->instance_ref != LUA_NOREF) {
+        luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
+        ctx->instance_ref = LUA_NOREF;
+    }
+
+    // Clear the TCPConn context so future callbacks see nullptr.
+    ctx->conn->set_context(evpp::Any());
+
+    ctx->conn->Close();
+    // Close() may fire the disconnect callback synchronously, but it
+    // checks ctx->disposed and returns early — on_close is NOT called
+    // for a manual close.
+
+    auto* loop = Engine::Instance().GetEventLoop();
+    if (loop) {
+        ConnCtx* del_ctx = ctx;
+        loop->RunInLoop([del_ctx] { delete del_ctx; });
+    } else {
+        delete ctx;
+    }
+
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+int l_conn_set_on_message(lua_State* L) {
+    auto* ctx = GetConnCtxFromTable(L, 1);
+    if (!ctx) return luaL_error(L, "conn: invalid context");
+    if (ctx->disposed) return luaL_error(L, "conn: closed");
+    lua_settop(L, 2);
+    lua_setfield(L, 1, "on_message");
+    return 0;
+}
+
+int l_conn_set_on_close(lua_State* L) {
+    auto* ctx = GetConnCtxFromTable(L, 1);
+    if (!ctx) return luaL_error(L, "conn: invalid context");
+    if (ctx->disposed) return luaL_error(L, "conn: closed");
+    lua_settop(L, 2);
+    lua_setfield(L, 1, "on_close");
+    return 0;
+}
+
+int l_conn_gc(lua_State* L) {
+    auto* ctx = GetConnCtxFromTable(L, 1);
+    if (!ctx || ctx->disposed) return 0;
+
+    ctx->disposed = true;
+
+    lua_pushnil(L);
+    lua_setfield(L, 1, "_ctx");
+
+    if (ctx->instance_ref != LUA_NOREF) {
+        luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
+        ctx->instance_ref = LUA_NOREF;
+    }
+
+    ctx->conn->set_context(evpp::Any());
+    ctx->conn->Close();
+
+    auto* loop = Engine::Instance().GetEventLoop();
+    if (loop) {
+        ConnCtx* del_ctx = ctx;
+        loop->RunInLoop([del_ctx] { delete del_ctx; });
+    } else {
+        delete ctx;
+    }
+
+    return 0;
+}
+
+// ── Server methods ───────────────────────────────────────────────────
+
+int l_server_stop(lua_State* L) {
+    auto* ctx = GetServerCtxFromTable(L, 1);
+    if (!ctx || ctx->disposed) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    ctx->disposed = true;
+
+    // Remove from shutdown tracking BEFORE Stop() — Stop() fires Lua
+    // callbacks that may call server:stop() re-entrantly; the inner
+    // stop would otherwise try to erase from g_server_ctxs a second time.
+    g_server_ctxs.erase(ctx);
+
+    ctx->server->Stop();
+
+    // Null _ctx to prevent use-after-free from subsequent method calls.
+    lua_pushnil(L);
+    lua_setfield(L, 1, "_ctx");
+
+    if (ctx->instance_ref != LUA_NOREF) {
+        luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
+        ctx->instance_ref = LUA_NOREF;
+    }
+
+    auto* logger = GetLogger();
+    ENGINE_LOG_INFO(logger, "[net.server] server stopped");
+
+    auto* loop = Engine::Instance().GetEventLoop();
+    if (loop) {
+        ServerCtx* del_ctx = ctx;
+        loop->RunInLoop([del_ctx] { delete del_ctx; });
+    } else {
+        delete ctx;
+    }
+
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+int l_server_set_on_connect(lua_State* L) {
+    auto* ctx = GetServerCtxFromTable(L, 1);
+    if (!ctx) return luaL_error(L, "server: invalid context");
+    if (ctx->disposed) return luaL_error(L, "server: closed");
+    lua_settop(L, 2);
+    lua_setfield(L, 1, "on_connect");
+    return 0;
+}
+
+int l_server_set_on_close(lua_State* L) {
+    auto* ctx = GetServerCtxFromTable(L, 1);
+    if (!ctx) return luaL_error(L, "server: invalid context");
+    if (ctx->disposed) return luaL_error(L, "server: closed");
+    lua_settop(L, 2);
+    lua_setfield(L, 1, "on_close");
+    return 0;
+}
+
+int l_server_gc(lua_State* L) {
+    auto* ctx = GetServerCtxFromTable(L, 1);
+    if (!ctx || ctx->disposed) return 0;
+
+    ctx->disposed = true;
+    g_server_ctxs.erase(ctx);
+
+    ctx->server->Stop();
+
+    lua_pushnil(L);
+    lua_setfield(L, 1, "_ctx");
+
+    if (ctx->instance_ref != LUA_NOREF) {
+        luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
+        ctx->instance_ref = LUA_NOREF;
+    }
+
+    auto* loop = Engine::Instance().GetEventLoop();
+    if (loop) {
+        ServerCtx* del_ctx = ctx;
+        loop->RunInLoop([del_ctx] { delete del_ctx; });
+    } else {
+        delete ctx;
+    }
+
+    return 0;
+}
+
+// ── net.server.listen(addr) → server_instance ────────────────────────
+
 int l_net_server_listen(lua_State* L) {
     const char* addr = luaL_checkstring(L, 1);
     if (!*addr) {
@@ -91,359 +324,212 @@ int l_net_server_listen(lua_State* L) {
         return luaL_error(L, "EventLoop not available");
     }
 
-    auto ctx = std::make_shared<ServerCtx>();
+    auto* ctx = new ServerCtx();
     ctx->L = L;
 
-    if (lua_gettop(L) >= 2 && lua_isfunction(L, 2)) {
-        lua_pushvalue(L, 2);
-        ctx->on_connect_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-    }
-    if (lua_gettop(L) >= 3 && lua_isfunction(L, 3)) {
-        lua_pushvalue(L, 3);
-        ctx->on_message_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-    }
-    if (lua_gettop(L) >= 4 && lua_isfunction(L, 4)) {
-        lua_pushvalue(L, 4);
-        ctx->on_close_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-    }
+    // Build Lua class instance table
+    lua_newtable(L);                                       // t
 
-    int64_t sid = g_next_server_id.fetch_add(1);
-    g_servers[sid] = ctx;
+    lua_pushlightuserdata(L, ctx);                         // t, lud
+    lua_setfield(L, -2, "_ctx");                           // t
 
-    auto name = std::string("lua_server_") + std::to_string(sid);
+    luaL_getmetatable(L, kServerMetaName);                 // t, mt
+    lua_setmetatable(L, -2);                               // t
+
+    lua_pushvalue(L, -1);                                  // t, t
+    ctx->instance_ref = luaL_ref(L, LUA_REGISTRYINDEX);    // t
+
+    // Create TCPServer
+    auto name = std::string("lua_server_") +
+                std::to_string(reinterpret_cast<uintptr_t>(ctx));
     ctx->server = std::make_unique<evpp::TCPServer>(loop, addr, name, 0);
-    // ^ thread_num=0: handle connections on the main EventLoop thread.
-    //   Lua is not thread-safe, so we must not dispatch to worker threads.
+    // thread_num=0: handle connections on the main EventLoop thread.
 
-    auto weak_ctx = std::weak_ptr<ServerCtx>(ctx);
+    auto* L_ptr = L;
+    int server_inst_ref = ctx->instance_ref;
+    ServerCtx* ctx_ptr = ctx;
 
+    // ── Connection callback (connect / disconnect) ─────────────────
     ctx->server->SetConnectionCallback(
-        [sid, L, weak_ctx](const evpp::TCPConnPtr& conn) {
-            auto ctx = weak_ctx.lock();
-            if (!ctx) return;
+        [L_ptr, server_inst_ref, ctx_ptr](const evpp::TCPConnPtr& conn) {
+            if (ctx_ptr->disposed) return;
 
             if (conn->IsConnected()) {
-                uint64_t conn_id = conn->id();
-                ctx->conns[conn_id] = conn;
+                // ── New connection ─────────────────────────────
+                auto* conn_ctx = new ConnCtx();
+                conn_ctx->L = L_ptr;
+                conn_ctx->conn = conn;
+                conn_ctx->server_inst_ref = server_inst_ref;
+
+                // Build Lua conn instance table
+                lua_newtable(L_ptr);                                    // ct
+
+                lua_pushlightuserdata(L_ptr, conn_ctx);                 // ct, lud
+                lua_setfield(L_ptr, -2, "_ctx");                        // ct
+
+                luaL_getmetatable(L_ptr, kConnMetaName);                // ct, mt
+                lua_setmetatable(L_ptr, -2);                            // ct
+
+                lua_pushvalue(L_ptr, -1);                               // ct, ct
+                conn_ctx->instance_ref = luaL_ref(L_ptr,
+                    LUA_REGISTRYINDEX);                                 // ct
+
+                // Store ConnCtx* in TCPConn context for O(1) dispatch.
+                conn->set_context(evpp::Any(conn_ctx));
+
+                int conn_inst_ref = conn_ctx->instance_ref;
+                auto remote = conn->remote_addr();
+
                 auto* logger = GetLogger();
                 ENGINE_LOG_INFO(logger,
-                    "[net.server] new conn: server=[{}] conn=[{}] from=[{}]",
-                    sid, conn_id, conn->remote_addr());
-                call_lua_callback_int_str(L, ctx->on_connect_ref,
-                    static_cast<int64_t>(conn_id), conn->remote_addr());
+                    "[net.server] new conn: conn=[{}] from=[{}]",
+                    conn->id(), remote);
+
+                CallInstMethodTableStr(L_ptr, server_inst_ref,
+                    "on_connect", conn_inst_ref, remote);
+
+                // If user didn't set on_connect, the conn table we created
+                // is still on the Lua stack. Return it to the caller... no,
+                // the callback doesn't return values. The conn table is
+                // anchored in the registry (conn_ctx->instance_ref).
+                // Pop the conn table from the stack (luaL_ref already popped
+                // the copy; we still have the original at top from
+                // lua_pushvalue).
+
             } else {
-                uint64_t conn_id = conn->id();
+                // ── Disconnect ─────────────────────────────────
+                auto* conn_ctx = conn->context().Get<ConnCtx*>();
+                if (!conn_ctx || conn_ctx->disposed) return;
+
+                uint64_t raw_id = conn->id();
+                auto remote = conn->remote_addr();
+
                 auto* logger = GetLogger();
                 ENGINE_LOG_INFO(logger,
-                    "[net.server] conn closed: server=[{}] conn=[{}]", sid, conn_id);
+                    "[net.server] conn closed: conn=[{}]", raw_id);
 
-                // Per-connection close callback takes priority
-                auto close_it = ctx->conn_on_close_refs.find(conn_id);
-                if (close_it != ctx->conn_on_close_refs.end() && close_it->second != LUA_NOREF) {
-                    int close_ref = close_it->second;  // extract before callback (may modify map)
-                    call_lua_callback_int_str(L, close_ref,
-                        static_cast<int64_t>(conn_id), conn->remote_addr());
-                    luaL_unref(L, LUA_REGISTRYINDEX, close_ref);
-                    ctx->conn_on_close_refs.erase(conn_id);
+                int conn_ref = conn_ctx->instance_ref;
+                int sv_ref   = conn_ctx->server_inst_ref;
+
+                // Per-connection on_close overrides server-wide.
+                if (HasMethod(L_ptr, conn_ref, "on_close")) {
+                    CallInstMethodStr(L_ptr, conn_ref, "on_close", remote);
                 } else {
-                    call_lua_callback_int_str(L, ctx->on_close_ref,
-                        static_cast<int64_t>(conn_id), conn->remote_addr());
+                    CallInstMethodTableStr(L_ptr, sv_ref, "on_close",
+                                           conn_ref, remote);
                 }
 
-                // Clean up per-connection message ref
-                auto msg_it = ctx->conn_on_message_refs.find(conn_id);
-                if (msg_it != ctx->conn_on_message_refs.end()) {
-                    if (msg_it->second != LUA_NOREF) {
-                        luaL_unref(L, LUA_REGISTRYINDEX, msg_it->second);
-                    }
-                    ctx->conn_on_message_refs.erase(msg_it);
-                }
+                // Clean up ConnCtx
+                conn_ctx->disposed = true;
+                lua_rawgeti(L_ptr, LUA_REGISTRYINDEX, conn_ref);
+                lua_pushnil(L_ptr);
+                lua_setfield(L_ptr, -2, "_ctx");
+                lua_pop(L_ptr, 1);
 
-                ctx->conns.erase(conn_id);
+                if (conn_ref != LUA_NOREF) {
+                    luaL_unref(L_ptr, LUA_REGISTRYINDEX, conn_ref);
+                }
+                conn->set_context(evpp::Any());
+
+                auto* loop = Engine::Instance().GetEventLoop();
+                if (loop) {
+                    ConnCtx* del_ctx = conn_ctx;
+                    loop->RunInLoop([del_ctx] { delete del_ctx; });
+                }
             }
         });
 
+    // ── Message callback ──────────────────────────────────────────
     ctx->server->SetMessageCallback(
-        [L, weak_ctx](const evpp::TCPConnPtr& conn, evpp::Buffer* buf) {
-            auto ctx = weak_ctx.lock();
-            if (!ctx) return;
-            uint64_t conn_id = conn->id();
+        [L_ptr](const evpp::TCPConnPtr& conn, evpp::Buffer* buf) {
+            auto* conn_ctx = conn->context().Get<ConnCtx*>();
+            if (!conn_ctx || conn_ctx->disposed) return;
+
+            int conn_ref = conn_ctx->instance_ref;
+            int sv_ref   = conn_ctx->server_inst_ref;
             std::string data = buf->NextAllString();
 
-            // Per-connection callback takes priority
-            auto it = ctx->conn_on_message_refs.find(conn_id);
-            if (it != ctx->conn_on_message_refs.end() && it->second != LUA_NOREF) {
-                call_lua_callback_str(L, it->second, data);
-                return;
+            // Per-connection on_message overrides server-wide.
+            if (HasMethod(L_ptr, conn_ref, "on_message")) {
+                CallInstMethodStr(L_ptr, conn_ref, "on_message", data);
+            } else {
+                CallInstMethodTableStr(L_ptr, sv_ref, "on_message",
+                                       conn_ref, data);
             }
-
-            // Fall back to server-wide callback
-            if (ctx->on_message_ref == LUA_NOREF) return;
-            call_lua_callback_int_str(L, ctx->on_message_ref,
-                static_cast<int64_t>(conn_id), data);
         });
 
     auto* logger = GetLogger();
-    ENGINE_LOG_INFO(logger, "[net.server] init & start, addr=[{}] server=[{}]", addr, sid);
+    ENGINE_LOG_INFO(logger, "[net.server] init & start, addr=[{}]", addr);
 
     if (!ctx->server->Init()) {
-        luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_connect_ref);
-        luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
-        luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_close_ref);
-        g_servers.erase(sid);
-        lua_pushnil(L);
-        lua_pushstring(L, "server init failed");
-        return 2;
+        luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
+        g_server_ctxs.erase(ctx);
+        delete ctx;
+        return luaL_error(L, "server init failed");
     }
 
     if (!ctx->server->Start()) {
-        luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_connect_ref);
-        luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
-        luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_close_ref);
-        g_servers.erase(sid);
-        lua_pushnil(L);
-        lua_pushstring(L, "server start failed");
-        return 2;
+        luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
+        g_server_ctxs.erase(ctx);
+        delete ctx;
+        return luaL_error(L, "server start failed");
     }
 
-    lua_pushinteger(L, static_cast<lua_Integer>(sid));
-    return 1;
+    // Track for shutdown
+    g_server_ctxs.insert(ctx);
+
+    return 1;  // return the server instance table
 }
 
-// ── l_net_server_send(conn_id, data) ──────────────────────────────────────
-int l_net_server_send(lua_State* L) {
-    int64_t raw_conn_id = luaL_checkinteger(L, 1);
-    auto conn_id = static_cast<uint64_t>(raw_conn_id);
-    size_t len = 0;
-    const char* data = luaL_checklstring(L, 2, &len);
+// ── Metatable registrations ──────────────────────────────────────────
 
-    // Search all servers for this conn_id
-    for (auto& [sid, ctx] : g_servers) {
-        (void)sid;
-        auto ci = ctx->conns.find(conn_id);
-        if (ci != ctx->conns.end()) {
-            if (ci->second->IsConnected()) {
-                ci->second->Send(data, len);
-                return 0;
-            }
-            return luaL_error(L, "connection closed: %lld", (long long)raw_conn_id);
-        }
-    }
+const luaL_Reg kConnMethods[] = {
+    {"send",            l_conn_send},
+    {"close",           l_conn_close},
+    {"set_on_message",  l_conn_set_on_message},
+    {"set_on_close",    l_conn_set_on_close},
+    {nullptr, nullptr},
+};
 
-    return luaL_error(L, "connection not found: %lld", (long long)raw_conn_id);
-}
-
-// ── l_net_server_close_conn(conn_id) ──────────────────────────────────────
-int l_net_server_close_conn(lua_State* L) {
-    int64_t raw_conn_id = luaL_checkinteger(L, 1);
-    auto conn_id = static_cast<uint64_t>(raw_conn_id);
-
-    for (auto& [sid, ctx] : g_servers) {
-        (void)sid;
-        auto ci = ctx->conns.find(conn_id);
-        if (ci != ctx->conns.end()) {
-            auto* logger = GetLogger();
-            ENGINE_LOG_INFO(logger, "[net.server] closing conn=[{}]", raw_conn_id);
-            ci->second->Close();
-            // Use key-based erase — Close() may fire the disconnect callback
-            // synchronously, which calls ctx->conns.erase(conn_id), invalidating ci.
-            ctx->conns.erase(conn_id);
-
-            // Clean up per-connection callback refs — the close callback
-            // won't fire for a manual close, so we must release here.
-            auto msg_it = ctx->conn_on_message_refs.find(conn_id);
-            if (msg_it != ctx->conn_on_message_refs.end()) {
-                if (msg_it->second != LUA_NOREF) {
-                    luaL_unref(L, LUA_REGISTRYINDEX, msg_it->second);
-                }
-                ctx->conn_on_message_refs.erase(msg_it);
-            }
-            auto close_it = ctx->conn_on_close_refs.find(conn_id);
-            if (close_it != ctx->conn_on_close_refs.end()) {
-                if (close_it->second != LUA_NOREF) {
-                    luaL_unref(L, LUA_REGISTRYINDEX, close_it->second);
-                }
-                ctx->conn_on_close_refs.erase(close_it);
-            }
-
-            lua_pushboolean(L, 1);
-            return 1;
-        }
-    }
-
-    lua_pushboolean(L, 0);
-    return 1;
-}
-
-// ── l_net_server_stop(server_id) ─────────────────────────────────────────
-int l_net_server_stop(lua_State* L) {
-    int64_t sid = luaL_checkinteger(L, 1);
-
-    auto it = g_servers.find(sid);
-    if (it == g_servers.end()) {
-        lua_pushboolean(L, 0);
-        return 1;
-    }
-
-    auto* logger = GetLogger();
-    ENGINE_LOG_INFO(logger, "[net.server] stopping server=[{}]", sid);
-
-    auto ctx = it->second;
-    // Erase from g_servers BEFORE Stop() — Stop() fires Lua callbacks that
-    // may call net.server.stop() re-entrantly. If we erased after Stop(),
-    // the re-entrant erase invalidates `it` and causes UB at g_servers.erase(it).
-    g_servers.erase(it);
-
-    ctx->server->Stop();
-
-    // Release server-wide Lua callbacks
-    if (ctx->on_connect_ref != LUA_NOREF) luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_connect_ref);
-    if (ctx->on_message_ref != LUA_NOREF) luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
-    if (ctx->on_close_ref != LUA_NOREF)   luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_close_ref);
-    // Release per-connection callback refs (may have been partially cleaned
-    // by disconnect callbacks fired during Stop() above).
-    for (auto& [conn_id, ref] : ctx->conn_on_message_refs) {
-        (void)conn_id;
-        if (ref != LUA_NOREF) luaL_unref(L, LUA_REGISTRYINDEX, ref);
-    }
-    ctx->conn_on_message_refs.clear();
-    for (auto& [conn_id, ref] : ctx->conn_on_close_refs) {
-        (void)conn_id;
-        if (ref != LUA_NOREF) luaL_unref(L, LUA_REGISTRYINDEX, ref);
-    }
-    ctx->conn_on_close_refs.clear();
-    ctx->conns.clear();
-
-    lua_pushboolean(L, 1);
-    return 1;
-}
-
-// ── l_net_server_set_on_message(conn_id, callback) ──────────────────────────
-int l_net_server_set_on_message(lua_State* L) {
-    int64_t raw_conn_id = luaL_checkinteger(L, 1);
-    auto conn_id = static_cast<uint64_t>(raw_conn_id);
-
-    for (auto& [sid, ctx] : g_servers) {
-        (void)sid;
-        auto ci = ctx->conns.find(conn_id);
-        if (ci == ctx->conns.end()) continue;
-
-        // Unref old per-connection callback
-        auto old_it = ctx->conn_on_message_refs.find(conn_id);
-        if (old_it != ctx->conn_on_message_refs.end()) {
-            if (old_it->second != LUA_NOREF) {
-                luaL_unref(L, LUA_REGISTRYINDEX, old_it->second);
-            }
-            ctx->conn_on_message_refs.erase(old_it);
-        }
-
-        // Store new callback (or nil/absent → remove, falls back to server-wide)
-        if (lua_gettop(L) >= 2 && lua_isfunction(L, 2)) {
-            lua_pushvalue(L, 2);
-            ctx->conn_on_message_refs[conn_id] = luaL_ref(L, LUA_REGISTRYINDEX);
-        }
-
-        return 0;
-    }
-
-    return luaL_error(L, "connection not found: %lld", (long long)raw_conn_id);
-}
-
-// ── l_net_server_set_on_close(conn_id, callback) ────────────────────────────
-int l_net_server_set_on_close(lua_State* L) {
-    int64_t raw_conn_id = luaL_checkinteger(L, 1);
-    auto conn_id = static_cast<uint64_t>(raw_conn_id);
-
-    for (auto& [sid, ctx] : g_servers) {
-        (void)sid;
-        auto ci = ctx->conns.find(conn_id);
-        if (ci == ctx->conns.end()) continue;
-
-        auto old_it = ctx->conn_on_close_refs.find(conn_id);
-        if (old_it != ctx->conn_on_close_refs.end()) {
-            if (old_it->second != LUA_NOREF) {
-                luaL_unref(L, LUA_REGISTRYINDEX, old_it->second);
-            }
-            ctx->conn_on_close_refs.erase(old_it);
-        }
-
-        if (lua_gettop(L) >= 2 && lua_isfunction(L, 2)) {
-            lua_pushvalue(L, 2);
-            ctx->conn_on_close_refs[conn_id] = luaL_ref(L, LUA_REGISTRYINDEX);
-        }
-
-        return 0;
-    }
-
-    return luaL_error(L, "connection not found: %lld", (long long)raw_conn_id);
-}
-
-// ── l_net_server_set_on_connect(server_id, callback) ────────────────────────
-int l_net_server_set_on_connect(lua_State* L) {
-    int64_t sid = luaL_checkinteger(L, 1);
-
-    auto it = g_servers.find(sid);
-    if (it == g_servers.end()) {
-        return luaL_error(L, "server not found: %lld", (long long)sid);
-    }
-
-    auto& ctx = it->second;
-
-    if (ctx->on_connect_ref != LUA_NOREF) {
-        luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_connect_ref);
-        ctx->on_connect_ref = LUA_NOREF;
-    }
-
-    if (lua_gettop(L) >= 2 && lua_isfunction(L, 2)) {
-        lua_pushvalue(L, 2);
-        ctx->on_connect_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-    }
-    // The ConnectionCallback lambda reads ctx->on_connect_ref via weak_ptr.
-
-    return 0;
-}
-
-// ── l_net_server_set_on_disconnect(server_id, callback) ─────────────────────
-// Updates the server-wide on_close fallback. Per-connection set_on_close
-// takes priority for individual connections.
-int l_net_server_set_on_disconnect(lua_State* L) {
-    int64_t sid = luaL_checkinteger(L, 1);
-
-    auto it = g_servers.find(sid);
-    if (it == g_servers.end()) {
-        return luaL_error(L, "server not found: %lld", (long long)sid);
-    }
-
-    auto& ctx = it->second;
-
-    if (ctx->on_close_ref != LUA_NOREF) {
-        luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_close_ref);
-        ctx->on_close_ref = LUA_NOREF;
-    }
-
-    if (lua_gettop(L) >= 2 && lua_isfunction(L, 2)) {
-        lua_pushvalue(L, 2);
-        ctx->on_close_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-    }
-    // The ConnectionCallback lambda reads ctx->on_close_ref via weak_ptr
-    // and dispatches per-connection close ref first, then falls back to this.
-
-    return 0;
-}
+const luaL_Reg kServerMethods[] = {
+    {"stop",             l_server_stop},
+    {"set_on_connect",   l_server_set_on_connect},
+    {"set_on_close",     l_server_set_on_close},
+    {nullptr, nullptr},
+};
 
 const luaL_Reg kServerFunctions[] = {
-    {"listen",            l_net_server_listen},
-    {"send",              l_net_server_send},
-    {"close_conn",        l_net_server_close_conn},
-    {"stop",              l_net_server_stop},
-    {"set_on_message",    l_net_server_set_on_message},
-    {"set_on_close",      l_net_server_set_on_close},
-    {"set_on_connect",    l_net_server_set_on_connect},
-    {"set_on_disconnect", l_net_server_set_on_disconnect},
+    {"listen", l_net_server_listen},
     {nullptr, nullptr},
 };
 
 } // namespace
+
+// ======================================================================
+// Metatable registration
+// ======================================================================
+
+void RegisterConnMetaTable(lua_State* L) {
+    if (!L) return;
+    luaL_newmetatable(L, kConnMetaName);           // mt
+    lua_pushvalue(L, -1);                          // mt, mt
+    lua_setfield(L, -2, "__index");                // mt.__index = mt
+    luaL_setfuncs(L, kConnMethods, 0);             // mt
+    lua_pushcfunction(L, l_conn_gc);               // mt, gc
+    lua_setfield(L, -2, "__gc");                   // mt
+    lua_pop(L, 1);
+}
+
+void RegisterServerMetaTable(lua_State* L) {
+    if (!L) return;
+    luaL_newmetatable(L, kServerMetaName);         // mt
+    lua_pushvalue(L, -1);                          // mt, mt
+    lua_setfield(L, -2, "__index");                // mt.__index = mt
+    luaL_setfuncs(L, kServerMethods, 0);           // mt
+    lua_pushcfunction(L, l_server_gc);             // mt, gc
+    lua_setfield(L, -2, "__gc");                   // mt
+    lua_pop(L, 1);
+}
 
 // ======================================================================
 // Public API
@@ -457,49 +543,22 @@ void PushServerLibrary(lua_State* L) {
 void ShutdownServerBindings() {
     auto* logger = GetLogger();
 
-    // Move g_servers to a local before iterating — Stop() fires Lua
-    // callbacks that may call net.server.stop(), which erases from
-    // g_servers and would invalidate the range-for iterator.
-    auto servers = std::move(g_servers);
-    for (auto& [sid, ctx] : servers) {
-        (void)sid;
+    // Move to local before iterating — Stop() fires Lua callbacks that
+    // may call server:stop() re-entrantly, which erases from g_server_ctxs.
+    auto ctxs = std::move(g_server_ctxs);
+    for (auto* ctx : ctxs) {
+        if (ctx->disposed) continue;
+        ctx->disposed = true;
         ctx->server->Stop();
-        if (ctx->L) {
-            if (ctx->on_connect_ref != LUA_NOREF) {
-                luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_connect_ref);
-                ctx->on_connect_ref = LUA_NOREF;
-            }
-            if (ctx->on_message_ref != LUA_NOREF) {
-                luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_message_ref);
-                ctx->on_message_ref = LUA_NOREF;
-            }
-            if (ctx->on_close_ref != LUA_NOREF) {
-                luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_close_ref);
-                ctx->on_close_ref = LUA_NOREF;
-            }
-            // Clean up per-connection refs
-            for (auto& [conn_id, ref] : ctx->conn_on_message_refs) {
-                (void)conn_id;
-                if (ref != LUA_NOREF) {
-                    luaL_unref(ctx->L, LUA_REGISTRYINDEX, ref);
-                }
-            }
-            ctx->conn_on_message_refs.clear();
-            for (auto& [conn_id, ref] : ctx->conn_on_close_refs) {
-                (void)conn_id;
-                if (ref != LUA_NOREF) {
-                    luaL_unref(ctx->L, LUA_REGISTRYINDEX, ref);
-                }
-            }
-            ctx->conn_on_close_refs.clear();
+        if (ctx->L && ctx->instance_ref != LUA_NOREF) {
+            luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->instance_ref);
+            ctx->instance_ref = LUA_NOREF;
         }
-        ctx->conns.clear();
+        delete ctx;
     }
-    size_t server_count = servers.size();
-    servers.clear();
 
-    if (server_count > 0) {
-        ENGINE_LOG_INFO(logger, "ScriptBind: shut down [{}] server(s)", server_count);
+    if (!ctxs.empty()) {
+        ENGINE_LOG_INFO(logger, "ScriptBind: shut down [{}] server(s)", ctxs.size());
     } else {
         ENGINE_LOG_DEBUG(logger, "ScriptBind: no active net bindings to shut down");
     }

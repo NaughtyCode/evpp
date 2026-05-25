@@ -18,6 +18,7 @@
 #include "runtime/config/config.h"
 #include "runtime/core/log/log.h"
 #include "runtime/engine/engine.h"
+#include "runtime/vm/vm.h"
 
 extern "C" {
 #include "lauxlib.h"

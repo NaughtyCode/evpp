@@ -3,7 +3,7 @@
 ---
 --- Sub-modules:
 ---   net.client      -- TCP client (light userdata + Lua class instance)
----   net.server      -- TCP server (integer handles: server_id, conn_id)
+---   net.server      -- TCP server (light userdata + Lua class instances)
 ---   net.http        -- HTTP client (async callback-based)
 ---   net.udp_client  -- UDP client (synchronous, blocking)
 ---   net.udp_server  -- UDP server (async callback-based)
@@ -62,62 +62,80 @@ function client:set_on_close(callback) end
 -- ============================================================================
 -- net.server -- TCP server
 -- ============================================================================
--- Servers are identified by an integer server_id returned from listen().
--- Connections are identified by an integer conn_id passed to callbacks.
--- Servers must be explicitly stopped via net.server.stop(); connections
--- are cleaned up automatically when they disconnect.
+-- net.server.listen() returns a Lua class instance (table with metatable).
+-- The C++ context is stored as light userdata in _ctx; cleanup via __gc or
+-- explicit :stop().
+--
+-- Each new connection is itself a Lua class instance passed to the on_connect
+-- callback.  The connection's C++ context is stored in TCPConn internals (not
+-- a hash table), so dispatch is O(1).
 --
 -- Callback dispatch order (per-connection overrides server-wide):
---   on_message → per-connection set_on_message  >  server-wide on_message
---   on_close   → per-connection set_on_close    >  server-wide on_close
+--   on_message → conn.on_message  >  server.on_message
+--   on_close   → conn.on_close    >  server.on_close
+--
+-- Server methods:
+--   server:stop() -> bool            stop server, release all connections
+--   server:set_on_connect(fn)        set or clear on_connect callback
+--   server:set_on_close(fn)          set or clear server-wide on_close
+--
+-- Server callback slots (set directly on the server instance):
+--   server.on_connect = function(self, conn, remote_addr) ... end
+--   server.on_message = function(self, conn, data) ... end    -- server-wide fallback
+--   server.on_close   = function(self, conn, remote_addr) ... end
+--
+-- Connection methods:
+--   conn:send(data)                  send raw data   (raises if closed)
+--   conn:close() -> bool             disconnect      (idempotent)
+--   conn:set_on_message(fn)          set or clear on_message
+--   conn:set_on_close(fn)            set or clear on_close
+--
+-- Connection callback slots (set directly on the conn instance):
+--   conn.on_message = function(self, data) ... end
+--   conn.on_close   = function(self, remote_addr) ... end
 
 --- Create and start a TCP server listening on host:port.
---- The optional callbacks are server-wide defaults.
----@param addr        string    address in "host:port" format
----@param on_connect? fun(conn_id: integer, remote_addr: string)  new connection
----@param on_message? fun(conn_id: integer, data: string)         server-wide message
----@param on_close?   fun(conn_id: integer, remote_addr: string)  server-wide close
----@return integer server_id   success: server identifier
----@return nil, string errmsg  failure: error message
-function net.server.listen(addr, on_connect, on_message, on_close) end
+--- Set callbacks on the returned server instance before any connections
+--- arrive (the event loop delivers callbacks asynchronously).
+---@param addr string   address in "host:port" format
+---@return table server  instance with methods and callback slots
+function net.server.listen(addr) end
 
---- Send raw data to a connection.
----@param conn_id integer
----@param data    string
-function net.server.send(conn_id, data) end
+--- Stop the server, closing all connections and releasing resources.
+---@return boolean existed  true if still active, false if already stopped
+function server:stop() end
 
---- Close a connection and release its per-connection callbacks.
----@param conn_id integer
----@return boolean closed  true if found and closed, false if not found
-function net.server.close_conn(conn_id) end
+--- Set or clear the server-wide on_connect callback.
+--- Pass nil or no argument to clear.
+---@param callback fun(self: table, conn: table, remote_addr: string)?
+function server:set_on_connect(callback) end
 
---- Stop the server, releasing all connections and callbacks.
----@param server_id integer
----@return boolean stopped  true if found and stopped, false if not found
-function net.server.stop(server_id) end
-
---- Set a per-connection on_message callback, overriding the server default.
---- Pass nil or no argument to remove and revert to the server default.
----@param conn_id  integer
----@param callback fun(data: string)?
-function net.server.set_on_message(conn_id, callback) end
-
---- Set a per-connection on_close callback, overriding the server default.
---- Pass nil or no argument to remove and revert to the server default.
----@param conn_id  integer
----@param callback fun(conn_id: integer, remote_addr: string)?
-function net.server.set_on_close(conn_id, callback) end
-
---- Replace the server-wide on_connect callback.
----@param server_id integer
----@param callback  fun(conn_id: integer, remote_addr: string)?
-function net.server.set_on_connect(server_id, callback) end
-
---- Replace the server-wide on_close callback (fallback for connections
+--- Set or clear the server-wide on_close callback (fallback for connections
 --- without a per-connection on_close).
----@param server_id integer
----@param callback  fun(conn_id: integer, remote_addr: string)?
-function net.server.set_on_disconnect(server_id, callback) end
+--- Pass nil or no argument to clear.
+---@param callback fun(self: table, conn: table, remote_addr: string)?
+function server:set_on_close(callback) end
+
+--- Send raw data through the connection.
+--- Must be connected; raises an error if closed or disconnected.
+---@param data string
+function conn:send(data) end
+
+--- Close the connection.  Does NOT fire on_close for manual close.
+---@return boolean existed  true if still active, false if already closed
+function conn:close() end
+
+--- Set or clear the per-connection on_message callback, overriding the
+--- server-wide on_message for this connection.
+--- Pass nil or no argument to remove and revert to server-wide.
+---@param callback fun(self: table, data: string)?
+function conn:set_on_message(callback) end
+
+--- Set or clear the per-connection on_close callback, overriding the
+--- server-wide on_close for this connection.
+--- Pass nil or no argument to remove and revert to server-wide.
+---@param callback fun(self: table, remote_addr: string)?
+function conn:set_on_close(callback) end
 
 -- ============================================================================
 -- net.http -- HTTP client
