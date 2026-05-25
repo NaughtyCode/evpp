@@ -195,6 +195,16 @@ int l_conn_set_on_close(lua_State* L) {
     return 0;
 }
 
+int l_conn_is_connected(lua_State* L) {
+    auto* ctx = GetConnCtxFromTable(L, 1);
+    if (!ctx || ctx->disposed) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushboolean(L, ctx->conn->IsConnected() ? 1 : 0);
+    return 1;
+}
+
 int l_conn_gc(lua_State* L) {
     auto* ctx = GetConnCtxFromTable(L, 1);
     if (!ctx || ctx->disposed) return 0;
@@ -476,17 +486,21 @@ int l_net_server_listen(lua_State* L) {
     ENGINE_LOG_INFO(logger, "[net.server] init & start, addr=[{}]", addr);
 
     if (!ctx->server->Init()) {
+        ctx->disposed = true;
         luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
+        ctx->instance_ref = LUA_NOREF;
         lua_pushnil(L);
-        lua_setfield(L, -2, "_ctx");  // null _ctx before delete (table at -2 after push)
+        lua_setfield(L, -2, "_ctx");
         delete ctx;
         return luaL_error(L, "server init failed");
     }
 
     if (!ctx->server->Start()) {
+        ctx->disposed = true;
         luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
+        ctx->instance_ref = LUA_NOREF;
         lua_pushnil(L);
-        lua_setfield(L, -2, "_ctx");  // null _ctx before delete (table at -2 after push)
+        lua_setfield(L, -2, "_ctx");
         delete ctx;
         return luaL_error(L, "server start failed");
     }
@@ -502,6 +516,7 @@ int l_net_server_listen(lua_State* L) {
 const luaL_Reg kConnMethods[] = {
     {"send",            l_conn_send},
     {"close",           l_conn_close},
+    {"is_connected",    l_conn_is_connected},
     {"set_on_message",  l_conn_set_on_message},
     {"set_on_close",    l_conn_set_on_close},
     {nullptr, nullptr},

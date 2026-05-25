@@ -271,6 +271,16 @@ int l_client_gc(lua_State* L) {
     return 0;
 }
 
+// ── client:set_on_connect(callback) ────────────────────────────────────────
+int l_client_set_on_connect(lua_State* L) {
+    auto* ctx = GetClientCtxFromTable(L, 1);
+    if (!ctx) return luaL_error(L, "client: invalid context");
+    if (ctx->disposed) return luaL_error(L, "client: closed");
+    lua_settop(L, 2);
+    lua_setfield(L, 1, "on_connect");
+    return 0;
+}
+
 // ── client:set_on_message(callback) ───────────────────────────────────────
 int l_client_set_on_message(lua_State* L) {
     auto* ctx = GetClientCtxFromTable(L, 1);
@@ -296,6 +306,7 @@ const luaL_Reg kClientMethods[] = {
     {"send",            l_client_send},
     {"disconnect",      l_client_disconnect},
     {"is_connected",    l_client_is_connected},
+    {"set_on_connect",  l_client_set_on_connect},
     {"set_on_message",  l_client_set_on_message},
     {"set_on_close",    l_client_set_on_close},
     {nullptr, nullptr},
