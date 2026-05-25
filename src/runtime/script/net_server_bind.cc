@@ -388,13 +388,7 @@ int l_net_server_listen(lua_State* L) {
                 CallInstMethodTableStr(L_ptr, server_inst_ref,
                     "on_connect", conn_inst_ref, remote);
 
-                // If user didn't set on_connect, the conn table we created
-                // is still on the Lua stack. Return it to the caller... no,
-                // the callback doesn't return values. The conn table is
-                // anchored in the registry (conn_ctx->instance_ref).
-                // Pop the conn table from the stack (luaL_ref already popped
-                // the copy; we still have the original at top from
-                // lua_pushvalue).
+                lua_pop(L_ptr, 1);  // pop conn table (anchored in registry)
 
             } else {
                 // ── Disconnect ─────────────────────────────────
@@ -418,6 +412,10 @@ int l_net_server_listen(lua_State* L) {
                     CallInstMethodTableStr(L_ptr, sv_ref, "on_close",
                                            conn_ref, remote);
                 }
+
+                // If on_close called conn:close() re-entrantly, ConnCtx was
+                // already cleaned up — avoid double-unref / double-delete.
+                if (conn_ctx->disposed) return;
 
                 // Clean up ConnCtx
                 conn_ctx->disposed = true;
@@ -463,14 +461,16 @@ int l_net_server_listen(lua_State* L) {
 
     if (!ctx->server->Init()) {
         luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
-        g_server_ctxs.erase(ctx);
+        lua_pushnil(L);
+        lua_setfield(L, -2, "_ctx");  // null _ctx before delete (table at -2 after push)
         delete ctx;
         return luaL_error(L, "server init failed");
     }
 
     if (!ctx->server->Start()) {
         luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
-        g_server_ctxs.erase(ctx);
+        lua_pushnil(L);
+        lua_setfield(L, -2, "_ctx");  // null _ctx before delete (table at -2 after push)
         delete ctx;
         return luaL_error(L, "server start failed");
     }
