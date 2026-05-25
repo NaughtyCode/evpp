@@ -101,16 +101,18 @@ int l_timer_timeout(lua_State* L) {
             // timer:cancel() which destroys the HrTimerNode (and this
             // lambda's capture storage).  The local keep prevents the
             // shared_ptr<Ctx> refcount from hitting zero until we return.
+            // Read keep->ref *after* the callback — the callback may call
+            // timer:cancel() which sets ref to LUA_NOREF and calls
+            // luaL_unref.  A stale snapshot would double-unref.
             auto keep = ctx;
             lua_State* L = keep->L;
-            int ref = keep->ref;
             TimerBindState* owner = keep->owner;
             TimerId id = keep->id;
 
-            call_lua_callback(L, ref);
+            call_lua_callback(L, keep->ref);
 
-            if (ref != LUA_NOREF && L) {
-                luaL_unref(L, LUA_REGISTRYINDEX, ref);
+            if (keep->ref != LUA_NOREF && L) {
+                luaL_unref(L, LUA_REGISTRYINDEX, keep->ref);
             }
             if (owner) {
                 owner->ctxs.erase(id);

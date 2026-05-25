@@ -72,14 +72,6 @@ std::mutex g_http_mutex;
 //     without touching the ref (shutdown already released it).
 void HandleHttpResponse(lua_State* L, int ref,
                         const std::shared_ptr<evpp::httpc::Response>& resp) {
-    if (ref == LUA_NOREF) {
-        std::lock_guard<std::mutex> lock(g_http_mutex);
-        auto it = std::find(g_http_pending_refs.begin(),
-                            g_http_pending_refs.end(), ref);
-        if (it != g_http_pending_refs.end()) g_http_pending_refs.erase(it);
-        return;
-    }
-
     if (!g_net_alive.load()) return;
 
     if (resp) {
