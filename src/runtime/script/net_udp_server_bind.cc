@@ -119,7 +119,7 @@ void ReleaseUdpServer(lua_State* L, UdpServerCtx* ctx) {
     ctx->instance_ref = LUA_NOREF;
 
     auto* loop = Engine::Instance().GetEventLoop();
-    if (loop) {
+    if (loop && loop->IsRunning()) {
         // Defer unref + delete so pending RunInLoop message callbacks
         // (queued before Stop returned) execute before we free the refs.
         loop->RunInLoop([L, old_msg_ref, old_inst_ref, ctx] {

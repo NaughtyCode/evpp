@@ -109,7 +109,7 @@ void ReleaseKcpServer(lua_State* L, KcpServerCtx* ctx) {
     ctx->instance_ref = LUA_NOREF;
 
     auto* loop = Engine::Instance().GetEventLoop();
-    if (loop) {
+    if (loop && loop->IsRunning()) {
         loop->RunInLoop([L, old_msg_ref, old_inst_ref, ctx] {
             if (old_msg_ref != LUA_NOREF) {
                 luaL_unref(L, LUA_REGISTRYINDEX, old_msg_ref);
