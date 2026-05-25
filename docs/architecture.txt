@@ -1,0 +1,330 @@
+ServerEngine - 全景架构图
+==========================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                            EXTERNAL CLIENTS                                   │
+│   Unity (C#)          Unreal Engine (C++)          Custom C/C++ Engine       │
+│        │                      │                          │                   │
+│        ▼                      ▼                          ▼                   │
+│  [DllImport]           dlopen/dlsym              direct link                  │
+└────────┬─────────────────────┬──────────────────────────┬────────────────────┘
+         │                     │                          │
+         ▼                     ▼                          ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        GameClient C API  (src/client/)                        │
+│                                                                              │
+│  client.h  ── Pure C, ABI-safe, 900+ line API surface                        │
+│  ┌───────────────┬───────────────┬───────────────┬──────────────┐            │
+│  │ client.cpp    │ client_net.cpp│ client_udp.cpp│client_kcp.cpp │            │
+│  │ lifecycle     │ TCP client    │ UDP client    │ KCP client    │            │
+│  │ tick/run/stop │ + server      │ + server      │ + server      │            │
+│  └───────┬───────┴───────┬───────┴───────┬───────┴──────┬───────┘            │
+│          │ client_timer  │ client_log    │              │                    │
+│          └───────────────┴───────────────┴──────────────┘                    │
+│                          │  C++ → C opaques                                  │
+└──────────────────────────┼───────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                     RUNTIME ENGINE  (src/runtime/)                            │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐     │
+│  │                        SERVER  (src/server/)                         │     │
+│  │  main.cc ── WinSock → ConfigManager → Engine::Init() → Engine::Run() │     │
+│  └───────────────────────────────┬─────────────────────────────────────┘     │
+│                                  │                                           │
+│  ┌───────────────────────────────▼─────────────────────────────────────┐     │
+│  │                      ENGINE CORE                                     │     │
+│  │                                                                      │     │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐       │     │
+│  │  │ Engine       │  │ ConfigManager│  │ TimerManager         │       │     │
+│  │  │ singleton    │  │ singleton    │  │ singleton             │       │     │
+│  │  │              │  │              │  │                      │       │     │
+│  │  │ Init()       │  │ Load(json)   │  │ HrTimer (ns-precise) │       │     │
+│  │  │ Start()      │  │ Reload()     │  │ TimerWheel (ms-bulk) │       │     │
+│  │  │ Run()        │  │ engine.json  │  │ AlarmTimer           │       │     │
+│  │  │ Tick()       │  │ server.json  │  │ ClockManager         │       │     │
+│  │  │ Shutdown()   │  │              │  │                      │       │     │
+│  │  │ Cleanup()    │  │              │  │ update() per tick    │       │     │
+│  │  └──────┬───────┘  └──────────────┘  └──────────┬───────────┘       │     │
+│  └─────────┼───────────────────────────────────────┼───────────────────┘     │
+│            │                                       │                          │
+│  ┌─────────▼───────────────────────────────────────▼───────────────────┐     │
+│  │                     LUA VM LAYER                                     │     │
+│  │                                                                      │     │
+│  │  ┌────────────────────┐  ┌──────────────────────────────┐           │     │
+│  │  │ ScriptVM           │  │ Script Bindings (Lua ↔ C++)  │           │     │
+│  │  │                    │  │                              │           │     │
+│  │  │ lua_State* wrapper │  │ script_bind.cc: ExportAll()  │           │     │
+│  │  │ InitScript()       │  │                              │           │     │
+│  │  │ UpdateScript()     │  │ ┌──────────┬────────────────┐│           │     │
+│  │  │ DestroyScript()    │  │ │ Module   │ File           ││           │     │
+│  │  │ DoString/DoFile    │  │ ├──────────┼────────────────┤│           │     │
+│  │  │ DoDirectory()      │  │ │ net      │ net_bind.cc    ││           │     │
+│  │  │ RegisterModule()   │  │ │ net.http │ net_http_bind  ││           │     │
+│  │  │ RegisterCallback() │  │ │ net.tcp  │ net_client+    ││           │     │
+│  │  │ CustomPtrStore     │  │ │          │ server_bind    ││           │     │
+│  │  │ ScriptImporter     │  │ │ net.udp  │ net_udp_*     ││           │     │
+│  │  └────────────────────┘  │ │ net.kcp  │ net_kcp_*     ││           │     │
+│  │                          │ │ timer    │ timer_bind.cc ││           │     │
+│  │                          │ │ log      │ log_bind.cc   ││           │     │
+│  │                          │ │ msgpack  │ msgpack_bind  ││           │     │
+│  │                          │ │ import   │ import_bind   ││           │     │
+│  │                          │ └──────────┴────────────────┘│           │     │
+│  │                          └──────────────────────────────┘           │     │
+│  └────────────────────────────────────────────────────────────────────┘     │
+│                                  │                                           │
+│  ┌───────────────────────────────▼─────────────────────────────────────┐     │
+│  │                     NETWORK LAYER (evpp)                             │     │
+│  │                                                                      │     │
+│  │  ┌──────────────────────────────────────────────────────────┐       │     │
+│  │  │              Event Loop Infrastructure                    │       │     │
+│  │  │  EventLoop ── EventLoopThread ── EventLoopThreadPool     │       │     │
+│  │  │  (libevent event_base wrapper, per-thread event loops)   │       │     │
+│  │  └──────────────────────────────────────────────────────────┘       │     │
+│  │                                                                      │     │
+│  │  ┌──────────────┬──────────────┬──────────────┬──────────────┐      │     │
+│  │  │ TCP          │ HTTP         │ UDP          │ KCP          │      │     │
+│  │  │              │              │              │              │      │     │
+│  │  │ TcpServer    │ http::Server │ UdpServer    │ kcp::Server  │      │     │
+│  │  │  ├─TcpConn   │  ├─Service   │  ├─message   │  ├─KcpSession│      │     │
+│  │  │  ├─Listener  │  └─Context   │  └─callback  │  └─ikcpcb    │      │     │
+│  │  │  └─Callbacks │              │              │              │      │     │
+│  │  │              │              │              │              │      │     │
+│  │  │ TcpClient    │ httpc::Conn  │ UdpClient    │kcp::SyncClient│    │     │
+│  │  │  ├─Connector │ httpc::Pool  │  (sync)      │  (sync)      │      │     │
+│  │  │  └─Callbacks │ httpc::Req   │              │              │      │     │
+│  │  │              │ httpc::Resp  │              │              │      │     │
+│  │  └──────────────┴──────────────┴──────────────┴──────────────┘      │     │
+│  │                                                                      │     │
+│  │  Support: Buffer, DNS-Resolver, Sockets, FD-Channel, Duration        │     │
+│  └────────────────────────────────────────────────────────────────────┘     │
+│                                  │                                           │
+│  ┌───────────────────────────────▼─────────────────────────────────────┐     │
+│  │                   OPTIONAL SUBSYSTEMS                                │     │
+│  │                                                                      │     │
+│  │  ┌────────────────────┐  ┌──────────────────────────────────┐       │     │
+│  │  │ PHYSICS            │  │ PROFILER                         │       │     │
+│  │  │ (ENGINE_PHYSICS_*  │  │                                  │       │     │
+│  │  │  ENABLED guard)    │  │ Perfetto tracing backend         │       │     │
+│  │  │                    │  │ profiler_core.cc                 │       │     │
+│  │  │ PhysicsEngineBridge│  │ Macro-based instrumentation     │       │     │
+│  │  │  ├─PhysicsSystem   │  │                                  │       │     │
+│  │  │  ├─PhysicsWorld    │  │                                  │       │     │
+│  │  │  ├─PhysicsThread   │  │                                  │       │     │
+│  │  │  ├─MaterialTable   │  │                                  │       │     │
+│  │  │  ├─LayerConfig     │  │                                  │       │     │
+│  │  │  └─AssetLoader     │  │                                  │       │     │
+│  │  │                    │  │                                  │       │     │
+│  │  │ JoltPhysics v5.5.1 │  │                                  │       │     │
+│  │  └────────────────────┘  └──────────────────────────────────┘       │     │
+│  └────────────────────────────────────────────────────────────────────┘     │
+│                                  │                                           │
+│  ┌───────────────────────────────▼─────────────────────────────────────┐     │
+│  │                   THIRD-PARTY DEPENDENCIES                           │     │
+│  │                                                                      │     │
+│  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌──────┐ ┌───────────────┐       │     │
+│  │  │libevent│ │ Lua    │ │ Quill  │ │ glaze│ │concurrentqueue│       │     │
+│  │  │event   │ │onelua.c│ │async   │ │JSON  │ │lock-free MPMC │       │     │
+│  │  │loop    │ │VM 5.4+ │ │logging │ │refl. │ │queue          │       │     │
+│  │  └────────┘ └────────┘ └────────┘ └──────┘ └───────────────┘       │     │
+│  │  ┌────────┐ ┌────────────────┐                                      │     │
+│  │  │ KCP    │ │ Perfetto       │                                      │     │
+│  │  │ikcp.c  │ │ tracing SDK    │                                      │     │
+│  │  └────────┘ └────────────────┘                                      │     │
+│  └────────────────────────────────────────────────────────────────────┘     │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+
+════════════════════════════════════════════════════════════════════════════════
+                           启动流程 (Startup Flow)
+════════════════════════════════════════════════════════════════════════════════
+
+  main()
+    │
+    ├─[1] WinSockGuard (WSAStartup)
+    │
+    ├─[2] ConfigManager::Instance().Load("resources/config")
+    │     ├─ engine.json  → EngineConfig { log, frame, scripts_dir }
+    │     └─ server.json  → ServerConfig { http, msgpack }
+    │
+    ├─[3] Engine::Instance().Init(engine_config)
+    │     ├─ InitLogger()             → Quill async logger
+    │     ├─ ProfilerManager::Init()  → Perfetto tracing
+    │     ├─ TimerManager::create_instance() + initialize()
+    │     ├─ EventLoop creation       → libevent event_base
+    │     ├─ ScriptVM creation        → luaL_newstate() + luaL_openlibs()
+    │     ├─ PhysicsEngineBridge::Initialize() → (no-op when disabled)
+    │     ├─ ScriptVM::DoDirectory("resources/script")
+    │     │     └─ each .lua file → ScriptVM::DoFile()
+    │     │           └─ may call require("net"), require("timer"), ...
+    │     │                 → luaopen_* functions registered via
+    │     │                   script::ExportAll() during VM init
+    │     └─ ScriptVM::InitScript()   → calls global Lua OnInit()
+    │
+    ├─[4] Engine::Run()
+    │     ├─ Engine::Start()
+    │     │     ├─ frame_timer_ = loop_->setInterval(frame_interval)
+    │     │     │     └─ each tick: Engine::FrameLoop()
+    │     │     ├─ sigint_watcher_ (Ctrl+C handler)
+    │     │     └─ sigterm_watcher_ (Linux only)
+    │     │
+    │     └─ loop_->Run()  →  blocks until Shutdown()
+    │
+    └─[5] ShutdownLogger()
+
+
+════════════════════════════════════════════════════════════════════════════════
+                        每帧循环 (Per-Frame Loop)
+════════════════════════════════════════════════════════════════════════════════
+
+  frame_timer fires
+    │
+    └─ Engine::FrameLoop()
+         │
+         ├─ TimerManager::update()
+         │     ├─ HrTimerManager::process_expired()
+         │     ├─ TimerWheel::advance()
+         │     └─ AlarmTimerManager::process_expired()
+         │
+         ├─ PhysicsEngineBridge::Tick(frame_count, delta_time)  (if enabled)
+         │
+         └─ ScriptVM::UpdateScript()  →  calls global Lua OnTick()
+               │
+               └─ Lua scripts may:
+                     ├─ send/receive network data (net module)
+                     ├─ create/cancel timers (timer module)
+                     ├─ log messages (log module)
+                     ├─ pack/unpack msgpack (msgpack module)
+                     └─ import other modules (import module)
+
+
+════════════════════════════════════════════════════════════════════════════════
+                      关键依赖关系 (Key Dependencies)
+════════════════════════════════════════════════════════════════════════════════
+
+  Engine
+   ├─ owns → ScriptVM
+   ├─ owns → EventLoop (or uses external)
+   ├─ depends on → ConfigManager (singleton)
+   ├─ depends on → TimerManager (singleton)
+   ├─ depends on → PhysicsEngineBridge (singleton)
+   └─ depends on → ProfilerManager (singleton)
+
+  ScriptVM
+   ├─ owns → lua_State* (Lua VM)
+   ├─ owns → ScriptImporter (module loader)
+   ├─ owns → CustomPtrStore (void* array)
+   └─ registers → script::ExportAll() → 9 Lua modules
+
+  EventLoop (libevent wrapper)
+   ├─ used by → TcpServer, TcpClient, HttpServer, HttpcClient
+   ├─ used by → UdpServer, UdpClient
+   ├─ used by → KcpServer, KcpSyncClient
+   ├─ used by → InvokeTimer (frame timer)
+   └─ used by → SignalEventWatcher
+
+  GameClient (optional C API)
+   ├─ wraps → Engine (singleton)
+   ├─ exposes → TCP, UDP, KCP, HTTP via opaque handles
+   ├─ exposes → Timer (timeout, interval)
+   ├─ exposes → Logging (6 levels)
+   └─ exposes → Script (DoString, DoFile, RegisterFunction)
+
+
+════════════════════════════════════════════════════════════════════════════════
+                      文件目录树 (Directory Layout)
+════════════════════════════════════════════════════════════════════════════════
+
+  src/
+  ├─ CMakeLists.txt              ← 主构建入口
+  ├─ server/
+  │   ├─ CMakeLists.txt
+  │   └─ main.cc                 ← 独立服务器入口
+  │
+  ├─ runtime/
+  │   ├─ CMakeLists.txt          ← ServerEngine.dll 构建
+  │   ├─ engine/
+  │   │   ├─ engine.h / .cc      ← 引擎核心（单例）
+  │   │   └─ CMakeLists.txt
+  │   ├─ config/
+  │   │   ├─ config.h / .cc      ← 配置管理器
+  │   ├─ core/
+  │   │   ├─ log/                ← 日志系统 (Quill)
+  │   │   └─ timer/              ← 高精度定时器
+  │   │       ├─ timer_manager.h/.cc
+  │   │       ├─ hr_timer.h/.cc
+  │   │       ├─ timer_wheel.h/.cc
+  │   │       └─ alarm_timer.h/.cc
+  │   ├─ vm/
+  │   │   ├─ vm.h / .cc          ← Lua VM 封装
+  │   │   ├─ script_importer.h/.cc
+  │   │   └─ custom_ptr_store.h/.cc
+  │   ├─ script/
+  │   │   ├─ script_bind.cc      ← 统一注册入口
+  │   │   ├─ net_bind.cc         ← net 基础模块
+  │   │   ├─ net_http_bind.cc    ← HTTP 客户端
+  │   │   ├─ net_client_bind.cc  ← TCP 客户端
+  │   │   ├─ net_server_bind.cc  ← TCP 服务器
+  │   │   ├─ net_udp_client_bind.cc
+  │   │   ├─ net_udp_server_bind.cc
+  │   │   ├─ net_kcp_client_bind.cc
+  │   │   ├─ net_kcp_server_bind.cc
+  │   │   ├─ timer_bind.cc
+  │   │   ├─ log_bind.cc
+  │   │   ├─ msgpack_bind.cc
+  │   │   └─ import_bind.cc
+  │   ├─ evpp/                   ← 网络库（内联）
+  │   │   ├─ event_loop.h/.cc
+  │   │   ├─ tcp_server/client/conn.h/.cc
+  │   │   ├─ http/
+  │   │   │   ├─ http_server.h/.cc
+  │   │   │   ├─ service.h/.cc
+  │   │   │   └─ context.h/.cc
+  │   │   ├─ httpc/
+  │   │   │   ├─ conn.h/.cc
+  │   │   │   ├─ conn_pool.h/.cc
+  │   │   │   ├─ request.h/.cc
+  │   │   │   ├─ response.h/.cc
+  │   │   │   └─ ssl.h/.cc
+  │   │   ├─ udp/
+  │   │   │   ├─ udp_server.h/.cc
+  │   │   │   └─ sync_udp_client.h/.cc
+  │   │   └─ kcp/
+  │   │       ├─ kcp_server.h/.cc
+  │   │       ├─ sync_kcp_client.h/.cc
+  │   │       └─ kcp_message.h
+  │   ├─ physics/
+  │   │   ├─ physics_engine_bridge.h/.cc
+  │   │   ├─ physics_world/thread/system.h/.cc
+  │   │   └─ ...
+  │   ├─ profiler/
+  │   │   └─ profiler_core.h/.cc
+  │   └─ thirdparty/
+  │       ├─ libevent/
+  │       ├─ lua/lua/
+  │       ├─ quill/quill/
+  │       ├─ glaze/glaze/
+  │       ├─ kcp/
+  │       ├─ concurrentqueue/
+  │       └─ perfetto/
+  │
+  ├─ client/
+  │   ├─ CMakeLists.txt          ← GameClient.dll 构建
+  │   ├─ include/
+  │   │   └─ client.h            ← C API 头文件
+  │   └─ src/
+  │       ├─ client.cpp          ← 引擎生命周期
+  │       ├─ client_internal.h   ← C++ 内部实现
+  │       ├─ client_log.cpp      ← 日志桥接
+  │       ├─ client_timer.cpp    ← 定时器桥接
+  │       ├─ client_net.cpp      ← TCP 客户端/服务器桥接
+  │       ├─ client_udp.cpp      ← UDP 桥接
+  │       └─ client_kcp.cpp      ← KCP 桥接
+  │
+  └─ tests/
+      ├─ unit/                   ← 单元测试
+      ├─ smoke/                  ← 冒烟测试
+      ├─ apps/evmc/              ← memcache 客户端
+      ├─ apps/evnsq/             ← NSQ 客户端
+      └─ ...

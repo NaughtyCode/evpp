@@ -1,0 +1,429 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1600" font-family="Segoe UI, Microsoft YaHei, sans-serif">
+  <defs>
+    <linearGradient id="g0" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="g1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f093fb;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#f5576c;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4facfe;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#00f2fe;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="g3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#43e97b;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#38f9d7;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="g4" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#fa709a;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#fee140;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="g5" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#a18cd1;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#fbc2eb;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="g6" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffecd2;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#fcb69f;stop-opacity:1"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="2" dy="3" stdDeviation="3" flood-opacity="0.15"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#666"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <rect width="1200" height="60" fill="#1a1a2e"/>
+  <text x="600" y="40" text-anchor="middle" fill="white" font-size="24" font-weight="bold">ServerEngine — 全景架构图</text>
+
+  <!-- ============================================================ -->
+  <!-- Layer 0: External Clients -->
+  <!-- ============================================================ -->
+  <rect x="40" y="80" width="1120" height="80" rx="8" fill="#f8f9fa" stroke="#ccc" stroke-width="1"/>
+  <text x="60" y="105" fill="#495057" font-size="13" font-weight="bold">EXTERNAL CLIENTS</text>
+
+  <rect x="100" y="115" width="160" height="30" rx="6" fill="url(#g4)" filter="url(#shadow)"/>
+  <text x="180" y="135" text-anchor="middle" fill="white" font-size="12" font-weight="bold">Unity (C# / DllImport)</text>
+
+  <rect x="330" y="115" width="180" height="30" rx="6" fill="url(#g4)" filter="url(#shadow)"/>
+  <text x="420" y="135" text-anchor="middle" fill="white" font-size="12" font-weight="bold">Unreal Engine (dlopen)</text>
+
+  <rect x="580" y="115" width="180" height="30" rx="6" fill="url(#g4)" filter="url(#shadow)"/>
+  <text x="670" y="135" text-anchor="middle" fill="white" font-size="12" font-weight="bold">Custom C/C++ Engine</text>
+
+  <rect x="830" y="115" width="160" height="30" rx="6" fill="url(#g4)" filter="url(#shadow)"/>
+  <text x="910" y="135" text-anchor="middle" fill="white" font-size="12" font-weight="bold">Lua Scripts (直接)</text>
+
+  <!-- Arrows down -->
+  <line x1="200" y1="160" x2="200" y2="185" stroke="#666" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="600" y1="160" x2="600" y2="185" stroke="#666" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="900" y1="160" x2="900" y2="185" stroke="#666" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ============================================================ -->
+  <!-- Layer 1: GameClient C API -->
+  <!-- ============================================================ -->
+  <rect x="40" y="190" width="1120" height="90" rx="8" fill="#fff5f5" stroke="#f5576c" stroke-width="1.5"/>
+  <text x="60" y="215" fill="#c92a2a" font-size="13" font-weight="bold">GameClient C API  (src/client/) — Pure C, ABI-safe, extern "C"</text>
+
+  <rect x="60" y="228" width="140" height="36" rx="5" fill="url(#g1)" filter="url(#shadow)"/>
+  <text x="130" y="244" text-anchor="middle" fill="white" font-size="11" font-weight="bold">client.cpp</text>
+  <text x="130" y="257" text-anchor="middle" fill="white" font-size="9">生命周期 / Tick / DoString</text>
+
+  <rect x="220" y="228" width="140" height="36" rx="5" fill="url(#g1)" filter="url(#shadow)"/>
+  <text x="290" y="244" text-anchor="middle" fill="white" font-size="11" font-weight="bold">client_net.cpp</text>
+  <text x="290" y="257" text-anchor="middle" fill="white" font-size="9">TCP Client / Server</text>
+
+  <rect x="380" y="228" width="140" height="36" rx="5" fill="url(#g1)" filter="url(#shadow)"/>
+  <text x="450" y="244" text-anchor="middle" fill="white" font-size="11" font-weight="bold">client_udp.cpp</text>
+  <text x="450" y="257" text-anchor="middle" fill="white" font-size="9">UDP Client / Server</text>
+
+  <rect x="540" y="228" width="140" height="36" rx="5" fill="url(#g1)" filter="url(#shadow)"/>
+  <text x="610" y="244" text-anchor="middle" fill="white" font-size="11" font-weight="bold">client_kcp.cpp</text>
+  <text x="610" y="257" text-anchor="middle" fill="white" font-size="9">KCP Client / Server</text>
+
+  <rect x="700" y="228" width="140" height="36" rx="5" fill="url(#g1)" filter="url(#shadow)"/>
+  <text x="770" y="244" text-anchor="middle" fill="white" font-size="11" font-weight="bold">client_timer.cpp</text>
+  <text x="770" y="257" text-anchor="middle" fill="white" font-size="9">定时器 / 取消</text>
+
+  <rect x="860" y="228" width="140" height="36" rx="5" fill="url(#g1)" filter="url(#shadow)"/>
+  <text x="930" y="244" text-anchor="middle" fill="white" font-size="11" font-weight="bold">client_log.cpp</text>
+  <text x="930" y="257" text-anchor="middle" fill="white" font-size="9">6 级日志</text>
+
+  <rect x="1020" y="228" width="120" height="36" rx="5" fill="#fff" stroke="#f5576c" stroke-width="1"/>
+  <text x="1080" y="243" text-anchor="middle" fill="#c92a2a" font-size="10" font-weight="bold">client.h</text>
+  <text x="1080" y="257" text-anchor="middle" fill="#c92a2a" font-size="9">900+ line API</text>
+
+  <!-- Arrows -->
+  <line x1="600" y1="280" x2="600" y2="310" stroke="#666" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ============================================================ -->
+  <!-- Layer 2: Server Entry -->
+  <!-- ============================================================ -->
+  <rect x="40" y="315" width="1120" height="50" rx="8" fill="#e7f5ff" stroke="#1c7ed6" stroke-width="1.5"/>
+  <text x="60" y="335" fill="#1864ab" font-size="13" font-weight="bold">SERVER ENTRY  (src/server/)</text>
+  <text x="300" y="350" fill="#495057" font-size="12">main.cc — WinSock → ConfigManager::Load() → Engine::Init() → Engine::Run()</text>
+
+  <line x1="600" y1="365" x2="600" y2="395" stroke="#666" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ============================================================ -->
+  <!-- Layer 3: Engine Core -->
+  <!-- ============================================================ -->
+  <rect x="40" y="400" width="1120" height="130" rx="8" fill="#f3f0ff" stroke="#7950f2" stroke-width="1.5"/>
+  <text x="60" y="422" fill="#5f3dc4" font-size="13" font-weight="bold">ENGINE CORE  (src/runtime/) — ServerEngine.dll</text>
+
+  <!-- Engine -->
+  <rect x="60" y="435" width="200" height="80" rx="6" fill="url(#g0)" filter="url(#shadow)"/>
+  <text x="160" y="455" text-anchor="middle" fill="white" font-size="13" font-weight="bold">Engine (单例)</text>
+  <line x1="80" y1="462" x2="240" y2="462" stroke="rgba(255,255,255,0.3)" stroke-width="0.5"/>
+  <text x="160" y="478" text-anchor="middle" fill="white" font-size="10">· Init(config, external_loop?)</text>
+  <text x="160" y="492" text-anchor="middle" fill="white" font-size="10">· Start() / Run() / Tick()</text>
+  <text x="160" y="506" text-anchor="middle" fill="white" font-size="10">· Shutdown() / Cleanup()</text>
+
+  <!-- Config -->
+  <rect x="280" y="435" width="180" height="80" rx="6" fill="url(#g0)" filter="url(#shadow)"/>
+  <text x="370" y="455" text-anchor="middle" fill="white" font-size="13" font-weight="bold">ConfigManager (单例)</text>
+  <line x1="295" y1="462" x2="445" y2="462" stroke="rgba(255,255,255,0.3)" stroke-width="0.5"/>
+  <text x="370" y="478" text-anchor="middle" fill="white" font-size="10">· Load(dir) / Reload()</text>
+  <text x="370" y="492" text-anchor="middle" fill="white" font-size="10">· engine.json / server.json</text>
+  <text x="370" y="506" text-anchor="middle" fill="white" font-size="10">· glaze JSON → C++ structs</text>
+
+  <!-- TimerManager -->
+  <rect x="480" y="435" width="220" height="80" rx="6" fill="url(#g0)" filter="url(#shadow)"/>
+  <text x="590" y="455" text-anchor="middle" fill="white" font-size="13" font-weight="bold">TimerManager (单例)</text>
+  <line x1="495" y1="462" x2="685" y2="462" stroke="rgba(255,255,255,0.3)" stroke-width="0.5"/>
+  <text x="590" y="478" text-anchor="middle" fill="white" font-size="10">· HrTimer (纳秒级)</text>
+  <text x="590" y="492" text-anchor="middle" fill="white" font-size="10">· TimerWheel (毫秒级批量)</text>
+  <text x="590" y="506" text-anchor="middle" fill="white" font-size="10">· AlarmTimer / ClockManager</text>
+
+  <!-- Log -->
+  <rect x="720" y="435" width="160" height="80" rx="6" fill="url(#g0)" filter="url(#shadow)"/>
+  <text x="800" y="455" text-anchor="middle" fill="white" font-size="13" font-weight="bold">Logging (Quill)</text>
+  <line x1="735" y1="462" x2="865" y2="462" stroke="rgba(255,255,255,0.3)" stroke-width="0.5"/>
+  <text x="800" y="478" text-anchor="middle" fill="white" font-size="10">· 异步日志后端</text>
+  <text x="800" y="492" text-anchor="middle" fill="white" font-size="10">· 控制台 + 文件输出</text>
+  <text x="800" y="506" text-anchor="middle" fill="white" font-size="10">· 大小/时间轮转</text>
+
+  <!-- Profiler -->
+  <rect x="900" y="435" width="100" height="80" rx="6" fill="#e9ecef" stroke="#7950f2" stroke-width="1"/>
+  <text x="950" y="455" text-anchor="middle" fill="#495057" font-size="12" font-weight="bold">Profiler</text>
+  <text x="950" y="475" text-anchor="middle" fill="#495057" font-size="10">Perfetto</text>
+  <text x="950" y="490" text-anchor="middle" fill="#495057" font-size="10">Trace</text>
+  <text x="950" y="505" text-anchor="middle" fill="#495057" font-size="10">(可选)</text>
+
+  <!-- Physics Bridge -->
+  <rect x="1020" y="435" width="120" height="80" rx="6" fill="#e9ecef" stroke="#7950f2" stroke-width="1"/>
+  <text x="1080" y="455" text-anchor="middle" fill="#495057" font-size="12" font-weight="bold">Physics</text>
+  <text x="1080" y="475" text-anchor="middle" fill="#495057" font-size="10">Bridge</text>
+  <text x="1080" y="490" text-anchor="middle" fill="#495057" font-size="10">Jolt</text>
+  <text x="1080" y="505" text-anchor="middle" fill="#495057" font-size="10">(可选)</text>
+
+  <line x1="600" y1="530" x2="600" y2="560" stroke="#666" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ============================================================ -->
+  <!-- Layer 4: Lua VM Layer -->
+  <!-- ============================================================ -->
+  <rect x="40" y="565" width="1120" height="170" rx="8" fill="#fff9db" stroke="#f59f00" stroke-width="1.5"/>
+  <text x="60" y="587" fill="#e67700" font-size="13" font-weight="bold">LUA VM &amp; SCRIPT BINDINGS  (src/runtime/vm/ + src/runtime/script/)</text>
+
+  <!-- ScriptVM -->
+  <rect x="60" y="600" width="200" height="120" rx="6" fill="url(#g3)" filter="url(#shadow)"/>
+  <text x="160" y="620" text-anchor="middle" fill="white" font-size="13" font-weight="bold">ScriptVM</text>
+  <line x1="75" y1="627" x2="245" y2="627" stroke="rgba(255,255,255,0.3)" stroke-width="0.5"/>
+  <text x="160" y="643" text-anchor="middle" fill="white" font-size="10">· lua_State* 封装</text>
+  <text x="160" y="658" text-anchor="middle" fill="white" font-size="10">· InitScript / UpdateScript</text>
+  <text x="160" y="673" text-anchor="middle" fill="white" font-size="10">· DestroyScript</text>
+  <text x="160" y="688" text-anchor="middle" fill="white" font-size="10">· DoString / DoFile</text>
+  <text x="160" y="703" text-anchor="middle" fill="white" font-size="10">· DoDirectory (脚本加载)</text>
+
+  <rect x="160" y="725" width="6" height="6" rx="3" fill="rgba(255,255,255,0.5)"/>
+
+  <!-- Script Bindings block -->
+  <rect x="280" y="600" width="860" height="120" rx="6" fill="#fff" stroke="#f59f00" stroke-width="1"/>
+  <text x="300" y="620" fill="#e67700" font-size="12" font-weight="bold">script::ExportAll() — Lua API 注册</text>
+
+  <!-- 9 Binding boxes -->
+  <rect x="290" y="632" width="130" height="40" rx="4" fill="#fff3bf" stroke="#fab005" stroke-width="0.5"/>
+  <text x="355" y="650" text-anchor="middle" fill="#495057" font-size="10" font-weight="bold">log_bind</text>
+  <text x="355" y="664" text-anchor="middle" fill="#495057" font-size="9">log_trace..fatal</text>
+
+  <rect x="430" y="632" width="130" height="40" rx="4" fill="#fff3bf" stroke="#fab005" stroke-width="0.5"/>
+  <text x="495" y="650" text-anchor="middle" fill="#495057" font-size="10" font-weight="bold">timer_bind</text>
+  <text x="495" y="664" text-anchor="middle" fill="#495057" font-size="9">timeout/interval/cancel</text>
+
+  <rect x="570" y="632" width="130" height="40" rx="4" fill="#d3f9d8" stroke="#40c057" stroke-width="0.5"/>
+  <text x="635" y="650" text-anchor="middle" fill="#495057" font-size="10" font-weight="bold">net_bind (复合)</text>
+  <text x="635" y="664" text-anchor="middle" fill="#495057" font-size="9">Lua net 模块入口</text>
+
+  <rect x="710" y="632" width="140" height="40" rx="4" fill="#d3f9d8" stroke="#40c057" stroke-width="0.5"/>
+  <text x="780" y="650" text-anchor="middle" fill="#495057" font-size="10" font-weight="bold">net_client_bind</text>
+  <text x="780" y="664" text-anchor="middle" fill="#495057" font-size="9">TCP client (connect/send)</text>
+
+  <rect x="860" y="632" width="140" height="40" rx="4" fill="#d3f9d8" stroke="#40c057" stroke-width="0.5"/>
+  <text x="930" y="650" text-anchor="middle" fill="#495057" font-size="10" font-weight="bold">net_server_bind</text>
+  <text x="930" y="664" text-anchor="middle" fill="#495057" font-size="9">TCP server (listen/stop)</text>
+
+  <rect x="1010" y="632" width="120" height="40" rx="4" fill="#d3f9d8" stroke="#40c057" stroke-width="0.5"/>
+  <text x="1070" y="650" text-anchor="middle" fill="#495057" font-size="10" font-weight="bold">net_http_bind</text>
+  <text x="1070" y="664" text-anchor="middle" fill="#495057" font-size="9">HTTP GET/POST</text>
+
+  <rect x="290" y="678" width="130" height="36" rx="4" fill="#d3f9d8" stroke="#40c057" stroke-width="0.5"/>
+  <text x="355" y="694" text-anchor="middle" fill="#495057" font-size="10" font-weight="bold">net_udp_client_bind</text>
+  <text x="355" y="707" text-anchor="middle" fill="#495057" font-size="9">UDP client</text>
+
+  <rect x="430" y="678" width="130" height="36" rx="4" fill="#d3f9d8" stroke="#40c057" stroke-width="0.5"/>
+  <text x="495" y="694" text-anchor="middle" fill="#495057" font-size="10" font-weight="bold">net_udp_server_bind</text>
+  <text x="495" y="707" text-anchor="middle" fill="#495057" font-size="9">UDP server</text>
+
+  <rect x="570" y="678" width="130" height="36" rx="4" fill="#d3f9d8" stroke="#40c057" stroke-width="0.5"/>
+  <text x="635" y="694" text-anchor="middle" fill="#495057" font-size="10" font-weight="bold">net_kcp_client_bind</text>
+  <text x="635" y="707" text-anchor="middle" fill="#495057" font-size="9">KCP client (可靠UDP)</text>
+
+  <rect x="710" y="678" width="140" height="36" rx="4" fill="#d3f9d8" stroke="#40c057" stroke-width="0.5"/>
+  <text x="780" y="694" text-anchor="middle" fill="#495057" font-size="10" font-weight="bold">net_kcp_server_bind</text>
+  <text x="780" y="707" text-anchor="middle" fill="#495057" font-size="9">KCP server</text>
+
+  <rect x="860" y="678" width="120" height="36" rx="4" fill="#e7f5ff" stroke="#1c7ed6" stroke-width="0.5"/>
+  <text x="920" y="694" text-anchor="middle" fill="#495057" font-size="10" font-weight="bold">msgpack_bind</text>
+  <text x="920" y="707" text-anchor="middle" fill="#495057" font-size="9">pack/unpack</text>
+
+  <rect x="990" y="678" width="100" height="36" rx="4" fill="#e7f5ff" stroke="#1c7ed6" stroke-width="0.5"/>
+  <text x="1040" y="694" text-anchor="middle" fill="#495057" font-size="10" font-weight="bold">import_bind</text>
+  <text x="1040" y="707" text-anchor="middle" fill="#495057" font-size="9">模块加载</text>
+
+  <line x1="600" y1="735" x2="600" y2="765" stroke="#666" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ============================================================ -->
+  <!-- Layer 5: Network Layer (evpp) -->
+  <!-- ============================================================ -->
+  <rect x="40" y="770" width="1120" height="200" rx="8" fill="#e6fcf5" stroke="#20c997" stroke-width="1.5"/>
+  <text x="60" y="792" fill="#0b7285" font-size="13" font-weight="bold">NETWORK LAYER — evpp (src/runtime/evpp/) — libevent-based Reactor Pattern</text>
+
+  <!-- EventLoop -->
+  <rect x="60" y="805" width="220" height="65" rx="6" fill="url(#g2)" filter="url(#shadow)"/>
+  <text x="170" y="825" text-anchor="middle" fill="white" font-size="12" font-weight="bold">EventLoop</text>
+  <line x1="75" y1="832" x2="265" y2="832" stroke="rgba(255,255,255,0.3)" stroke-width="0.5"/>
+  <text x="170" y="847" text-anchor="middle" fill="white" font-size="10">libevent event_base 封装</text>
+  <text x="170" y="862" text-anchor="middle" fill="white" font-size="10">one-thread-per-loop 模型</text>
+
+  <rect x="300" y="805" width="190" height="65" rx="6" fill="url(#g2)" filter="url(#shadow)"/>
+  <text x="395" y="825" text-anchor="middle" fill="white" font-size="12" font-weight="bold">EventLoopThread</text>
+  <line x1="315" y1="832" x2="475" y2="832" stroke="rgba(255,255,255,0.3)" stroke-width="0.5"/>
+  <text x="395" y="847" text-anchor="middle" fill="white" font-size="10">独立线程 + EventLoop</text>
+  <text x="395" y="862" text-anchor="middle" fill="white" font-size="10">concurrentqueue 跨线程调度</text>
+
+  <rect x="510" y="805" width="200" height="65" rx="6" fill="url(#g2)" filter="url(#shadow)"/>
+  <text x="610" y="825" text-anchor="middle" fill="white" font-size="12" font-weight="bold">EventLoopThreadPool</text>
+  <line x1="525" y1="832" x2="695" y2="832" stroke="rgba(255,255,255,0.3)" stroke-width="0.5"/>
+  <text x="610" y="847" text-anchor="middle" fill="white" font-size="10">线程池 + 负载均衡</text>
+  <text x="610" y="862" text-anchor="middle" fill="white" font-size="10">worker loops 分发</text>
+
+  <rect x="730" y="805" width="130" height="65" rx="6" fill="#c5f6fa" stroke="#0b7285" stroke-width="1"/>
+  <text x="795" y="825" text-anchor="middle" fill="#0b7285" font-size="12" font-weight="bold">InvokeTimer</text>
+  <text x="795" y="845" text-anchor="middle" fill="#0b7285" font-size="10">帧定时器 / 信号</text>
+  <text x="795" y="860" text-anchor="middle" fill="#0b7285" font-size="10">Pending Functor</text>
+
+  <rect x="880" y="805" width="130" height="65" rx="6" fill="#c5f6fa" stroke="#0b7285" stroke-width="1"/>
+  <text x="945" y="825" text-anchor="middle" fill="#0b7285" font-size="12" font-weight="bold">FdChannel</text>
+  <text x="945" y="845" text-anchor="middle" fill="#0b7285" font-size="10">Pipe / Event</text>
+  <text x="945" y="860" text-anchor="middle" fill="#0b7285" font-size="10">Socket helpers</text>
+
+  <!-- Protocol boxes -->
+  <rect x="60" y="882" width="220" height="80" rx="6" fill="#fff" stroke="#20c997" stroke-width="1"/>
+  <text x="170" y="902" text-anchor="middle" fill="#0b7285" font-size="12" font-weight="bold">TCP</text>
+  <line x1="72" y1="910" x2="268" y2="910" stroke="#e9ecef" stroke-width="0.5"/>
+  <text x="170" y="926" text-anchor="middle" fill="#495057" font-size="10">TcpServer — TcpConn — Listener</text>
+  <text x="170" y="941" text-anchor="middle" fill="#495057" font-size="10">TcpClient — Connector — Callbacks</text>
+  <text x="170" y="956" text-anchor="middle" fill="#495057" font-size="10">Buffer — Keep-Alive — Reconnect</text>
+
+  <rect x="295" y="882" width="220" height="80" rx="6" fill="#fff" stroke="#20c997" stroke-width="1"/>
+  <text x="405" y="902" text-anchor="middle" fill="#0b7285" font-size="12" font-weight="bold">HTTP</text>
+  <line x1="307" y1="910" x2="503" y2="910" stroke="#e9ecef" stroke-width="0.5"/>
+  <text x="405" y="926" text-anchor="middle" fill="#495057" font-size="10">http::Server — Service — Context</text>
+  <text x="405" y="941" text-anchor="middle" fill="#495057" font-size="10">httpc::ConnPool — Conn — Request</text>
+  <text x="405" y="956" text-anchor="middle" fill="#495057" font-size="10">URL Parser — SSL — Redirect</text>
+
+  <rect x="530" y="882" width="200" height="80" rx="6" fill="#fff" stroke="#20c997" stroke-width="1"/>
+  <text x="630" y="902" text-anchor="middle" fill="#0b7285" font-size="12" font-weight="bold">UDP</text>
+  <line x1="542" y1="910" x2="718" y2="910" stroke="#e9ecef" stroke-width="0.5"/>
+  <text x="630" y="926" text-anchor="middle" fill="#495057" font-size="10">UdpServer — SyncUdpClient</text>
+  <text x="630" y="941" text-anchor="middle" fill="#495057" font-size="10">Multicast — Pause/Resume</text>
+  <text x="630" y="956" text-anchor="middle" fill="#495057" font-size="10">Request-Response (同步)</text>
+
+  <rect x="745" y="882" width="200" height="80" rx="6" fill="#fff" stroke="#20c997" stroke-width="1"/>
+  <text x="845" y="902" text-anchor="middle" fill="#0b7285" font-size="12" font-weight="bold">KCP (可靠 UDP)</text>
+  <line x1="757" y1="910" x2="933" y2="910" stroke="#e9ecef" stroke-width="0.5"/>
+  <text x="845" y="926" text-anchor="middle" fill="#495057" font-size="10">KcpServer — KcpSession</text>
+  <text x="845" y="941" text-anchor="middle" fill="#495057" font-size="10">SyncKcpClient — ikcpcb</text>
+  <text x="845" y="956" text-anchor="middle" fill="#495057" font-size="10">nodelay/wnd/mtu 参数调优</text>
+
+  <rect x="960" y="882" width="180" height="80" rx="6" fill="#fff" stroke="#20c997" stroke-width="1"/>
+  <text x="1050" y="902" text-anchor="middle" fill="#0b7285" font-size="12" font-weight="bold">HTTP Service (备)</text>
+  <line x1="972" y1="910" x2="1128" y2="910" stroke="#e9ecef" stroke-width="0.5"/>
+  <text x="1050" y="926" text-anchor="middle" fill="#495057" font-size="10">evpphttp::Service</text>
+  <text x="1050" y="941" text-anchor="middle" fill="#495057" font-size="10">evpphttp::Request/Response</text>
+  <text x="1050" y="956" text-anchor="middle" fill="#495057" font-size="10">HTTP Parser (内联)</text>
+
+  <line x1="600" y1="970" x2="600" y2="1000" stroke="#666" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ============================================================ -->
+  <!-- Layer 6: Third-party -->
+  <!-- ============================================================ -->
+  <rect x="40" y="1005" width="1120" height="95" rx="8" fill="#f8f9fa" stroke="#adb5bd" stroke-width="1"/>
+  <text x="60" y="1027" fill="#495057" font-size="13" font-weight="bold">THIRD-PARTY DEPENDENCIES  (src/thirdparty/)</text>
+
+  <rect x="60" y="1040" width="150" height="48" rx="5" fill="#dee2e6" stroke="#adb5bd" stroke-width="0.5"/>
+  <text x="135" y="1060" text-anchor="middle" fill="#212529" font-size="11" font-weight="bold">libevent</text>
+  <text x="135" y="1078" text-anchor="middle" fill="#495057" font-size="9">async I/O · 事件驱动</text>
+
+  <rect x="225" y="1040" width="150" height="48" rx="5" fill="#dee2e6" stroke="#adb5bd" stroke-width="0.5"/>
+  <text x="300" y="1060" text-anchor="middle" fill="#212529" font-size="11" font-weight="bold">Lua 5.4+</text>
+  <text x="300" y="1078" text-anchor="middle" fill="#495057" font-size="9">onelua.c 合并 · 嵌入式 VM</text>
+
+  <rect x="390" y="1040" width="150" height="48" rx="5" fill="#dee2e6" stroke="#adb5bd" stroke-width="0.5"/>
+  <text x="465" y="1060" text-anchor="middle" fill="#212529" font-size="11" font-weight="bold">Quill</text>
+  <text x="465" y="1078" text-anchor="middle" fill="#495057" font-size="9">异步日志 · Header-only</text>
+
+  <rect x="555" y="1040" width="150" height="48" rx="5" fill="#dee2e6" stroke="#adb5bd" stroke-width="0.5"/>
+  <text x="630" y="1060" text-anchor="middle" fill="#212529" font-size="11" font-weight="bold">Glaze</text>
+  <text x="630" y="1078" text-anchor="middle" fill="#495057" font-size="9">JSON 反射 · C++23</text>
+
+  <rect x="720" y="1040" width="150" height="48" rx="5" fill="#dee2e6" stroke="#adb5bd" stroke-width="0.5"/>
+  <text x="795" y="1060" text-anchor="middle" fill="#212529" font-size="11" font-weight="bold">KCP</text>
+  <text x="795" y="1078" text-anchor="middle" fill="#495057" font-size="9">可靠 UDP · ikcp.c</text>
+
+  <rect x="885" y="1040" width="150" height="48" rx="5" fill="#dee2e6" stroke="#adb5bd" stroke-width="0.5"/>
+  <text x="960" y="1060" text-anchor="middle" fill="#212529" font-size="11" font-weight="bold">Perfetto</text>
+  <text x="960" y="1078" text-anchor="middle" fill="#495057" font-size="9">Tracing · 合并.cc</text>
+
+  <rect x="1050" y="1040" width="95" height="48" rx="5" fill="#dee2e6" stroke="#adb5bd" stroke-width="0.5"/>
+  <text x="1098" y="1060" text-anchor="middle" fill="#212529" font-size="10" font-weight="bold">concurrent</text>
+  <text x="1098" y="1075" text-anchor="middle" fill="#495057" font-size="9">lock-free queue</text>
+
+  <!-- ============================================================ -->
+  <!-- Right Sidebar: Startup Flow -->
+  <!-- ============================================================ -->
+  <rect x="40" y="1120" width="540" height="260" rx="8" fill="#1a1a2e" filter="url(#shadow)"/>
+  <text x="60" y="1148" fill="#74c0fc" font-size="14" font-weight="bold">启动流程 (Startup Flow)</text>
+
+  <rect x="55" y="1160" width="510" height="26" rx="4" fill="#2d2d4e"/>
+  <text x="65" y="1178" fill="#adb5bd" font-size="10">1. WinSockGuard (WSAStartup/WSACleanup RAII)</text>
+
+  <rect x="55" y="1192" width="510" height="26" rx="4" fill="#2d2d4e"/>
+  <text x="65" y="1210" fill="#adb5bd" font-size="10">2. ConfigManager::Load("resources/config")  ──  engine.json + server.json</text>
+
+  <rect x="55" y="1224" width="510" height="26" rx="4" fill="#2d2d4e"/>
+  <text x="65" y="1242" fill="#adb5bd" font-size="10">3. Engine::Init() → Logger → Profiler → TimerManager → EventLoop → ScriptVM → PhysicsBridge</text>
+
+  <rect x="55" y="1256" width="510" height="26" rx="4" fill="#2d2d4e"/>
+  <text x="65" y="1274" fill="#adb5bd" font-size="10">4. ScriptVM::DoDirectory("resources/script") → 所有 .lua 文件 → 触发 require("net") 等</text>
+
+  <rect x="55" y="1288" width="510" height="26" rx="4" fill="#2d2d4e"/>
+  <text x="65" y="1306" fill="#adb5bd" font-size="10">5. Engine::InitScript() → 调用全局 Lua OnStart()</text>
+
+  <rect x="55" y="1320" width="510" height="26" rx="4" fill="#2d2d4e"/>
+  <text x="65" y="1338" fill="#adb5bd" font-size="10">6. Engine::Run() → Start() (帧定时器+信号) → EventLoop::Run() (阻塞)</text>
+
+  <rect x="55" y="1352" width="510" height="22" rx="4" fill="#3b3b6e"/>
+  <text x="65" y="1368" fill="#74c0fc" font-size="10">7. Shutdown → Cleanup() → 逆序释放 (Physics → Lua → Timer → Profiler → Logger)</text>
+
+  <!-- ============================================================ -->
+  <!-- Right Sidebar: Per-Frame Loop -->
+  <!-- ============================================================ -->
+  <rect x="600" y="1120" width="560" height="260" rx="8" fill="#1a1a2e" filter="url(#shadow)"/>
+  <text x="620" y="1148" fill="#69db7c" font-size="14" font-weight="bold">每帧循环 (Per-Frame Loop)</text>
+
+  <rect x="615" y="1160" width="530" height="26" rx="4" fill="#2d2d4e"/>
+  <text x="625" y="1178" fill="#adb5bd" font-size="10">帧定时器触发 → Engine::FrameLoop()</text>
+
+  <rect x="615" y="1192" width="530" height="36" rx="4" fill="#2d2d4e"/>
+  <text x="625" y="1208" fill="#69db7c" font-size="11" font-weight="bold">TimerManager::update()</text>
+  <text x="840" y="1208" fill="#adb5bd" font-size="10">→ HrTimer + TimerWheel + AlarmTimer 到期回调</text>
+  <text x="625" y="1222" fill="#adb5bd" font-size="10">(Lua timer.timeout / timer.interval 在此触发)</text>
+
+  <rect x="615" y="1234" width="530" height="26" rx="4" fill="#2d2d4e"/>
+  <text x="625" y="1252" fill="#69db7c" font-size="11" font-weight="bold">PhysicsEngineBridge::Tick()</text>
+  <text x="840" y="1252" fill="#adb5bd" font-size="10">→ 物理命令入队 (no-op when disabled)</text>
+
+  <rect x="615" y="1266" width="530" height="36" rx="4" fill="#2d2d4e"/>
+  <text x="625" y="1282" fill="#69db7c" font-size="11" font-weight="bold">ScriptVM::UpdateScript()</text>
+  <text x="840" y="1282" fill="#adb5bd" font-size="10">→ 调用全局 Lua OnTick()</text>
+  <text x="625" y="1296" fill="#adb5bd" font-size="10">Lua 脚本执行: 网络 I/O · 定时器 · 日志 · 业务逻辑</text>
+
+  <rect x="615" y="1308" width="530" height="26" rx="4" fill="#2d2d4e"/>
+  <text x="625" y="1326" fill="#69db7c" font-size="11" font-weight="bold">PhysicsEngineBridge::FetchResult()</text>
+  <text x="840" y="1326" fill="#adb5bd" font-size="10">→ 获取物理变换结果</text>
+
+  <rect x="615" y="1340" width="530" height="34" rx="4" fill="#2d2d4e"/>
+  <text x="625" y="1356" fill="#69db7c" font-size="11" font-weight="bold">PhysicsEngineBridge::UpdateScript()</text>
+  <text x="840" y="1356" fill="#adb5bd" font-size="10">→ 触发碰撞回调 (physics VM)</text>
+  <text x="625" y="1370" fill="#adb5bd" font-size="10">libevent 异步事件: TCP/HTTP/UDP/KCP 网络回调在此间分发</text>
+
+  <!-- ============================================================ -->
+  <!-- Legend -->
+  <!-- ============================================================ -->
+  <rect x="40" y="1395" width="1120" height="45" rx="6" fill="#f8f9fa" stroke="#dee2e6" stroke-width="0.5"/>
+  <rect x="60" y="1407" width="16" height="16" rx="3" fill="url(#g0)"/>
+  <text x="82" y="1420" fill="#495057" font-size="10">Core Engine</text>
+  <rect x="170" y="1407" width="16" height="16" rx="3" fill="url(#g1)"/>
+  <text x="192" y="1420" fill="#495057" font-size="10">Client C API</text>
+  <rect x="290" y="1407" width="16" height="16" rx="3" fill="url(#g3)"/>
+  <text x="312" y="1420" fill="#495057" font-size="10">Lua VM / Script</text>
+  <rect x="430" y="1407" width="16" height="16" rx="3" fill="url(#g2)"/>
+  <text x="452" y="1420" fill="#495057" font-size="10">Network (evpp)</text>
+  <rect x="560" y="1407" width="16" height="16" rx="3" fill="#dee2e6" stroke="#adb5bd" stroke-width="0.5"/>
+  <text x="582" y="1420" fill="#495057" font-size="10">Third-party</text>
+  <line x1="680" y1="1415" x2="720" y2="1415" stroke="#666" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="728" y="1420" fill="#495057" font-size="10">依赖方向 (上层 → 下层)</text>
+  <rect x="870" y="1408" width="12" height="12" rx="2" fill="#1a1a2e"/>
+  <text x="890" y="1420" fill="#495057" font-size="10">启动 / 每帧流程</text>
+
+  <!-- Footnote -->
+  <text x="600" y="1535" text-anchor="middle" fill="#868e96" font-size="11">ServerEngine Architecture · server_engine branch · commit 6614a13f</text>
+
+  <!-- Builder notation -->
+  <text x="600" y="1555" text-anchor="middle" fill="#adb5bd" font-size="10">Built with ♥ for the evpp3 ServerEngine Project</text>
+</svg>
