@@ -140,10 +140,11 @@ int l_net_server_listen(lua_State* L) {
                 // Per-connection close callback takes priority
                 auto close_it = ctx->conn_on_close_refs.find(conn_id);
                 if (close_it != ctx->conn_on_close_refs.end() && close_it->second != LUA_NOREF) {
-                    call_lua_callback_int_str(L, close_it->second,
+                    int close_ref = close_it->second;  // extract before callback (may modify map)
+                    call_lua_callback_int_str(L, close_ref,
                         static_cast<int64_t>(conn_id), conn->remote_addr());
-                    luaL_unref(L, LUA_REGISTRYINDEX, close_it->second);
-                    ctx->conn_on_close_refs.erase(close_it);
+                    luaL_unref(L, LUA_REGISTRYINDEX, close_ref);
+                    ctx->conn_on_close_refs.erase(conn_id);
                 } else {
                     call_lua_callback_int_str(L, ctx->on_close_ref,
                         static_cast<int64_t>(conn_id), conn->remote_addr());

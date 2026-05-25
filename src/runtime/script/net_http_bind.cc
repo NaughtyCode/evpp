@@ -169,19 +169,20 @@ void ShutdownHttpBindings() {
     // Prevent any in-flight HTTP callbacks from touching a freed Lua state.
     g_net_alive.store(false);
 
-    // Release pending HTTP callback refs before any Lua state is closed.
+    // Move pending refs to a local before iterating — any callback that
+    // already passed the g_net_alive check may still call erase_ref(),
+    // and g_http_pending_refs is not locked.
     lua_State* L = Engine::Instance().GetScriptVM().GetState();
-    if (!g_http_pending_refs.empty()) {
+    auto pending = std::move(g_http_pending_refs);
+    if (!pending.empty()) {
         if (L) {
-            for (int ref : g_http_pending_refs) {
+            for (int ref : pending) {
                 if (ref != LUA_NOREF) {
                     luaL_unref(L, LUA_REGISTRYINDEX, ref);
                 }
             }
         }
-        size_t http_count = g_http_pending_refs.size();
-        ENGINE_LOG_INFO(logger, "ScriptBind: released [{}] pending HTTP callback(s)", http_count);
-        g_http_pending_refs.clear();
+        ENGINE_LOG_INFO(logger, "ScriptBind: released [{}] pending HTTP callback(s)", pending.size());
     }
 }
 

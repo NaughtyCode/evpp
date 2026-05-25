@@ -205,7 +205,7 @@ int l_client_disconnect(lua_State* L) {
     lua_setfield(L, 1, "_ctx");
 
     if (ctx->instance_ref != LUA_NOREF) {
-        luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->instance_ref);
+        luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
         ctx->instance_ref = LUA_NOREF;
     }
 
@@ -253,7 +253,7 @@ int l_client_gc(lua_State* L) {
     lua_setfield(L, 1, "_ctx");
 
     if (ctx->instance_ref != LUA_NOREF) {
-        luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->instance_ref);
+        luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
         ctx->instance_ref = LUA_NOREF;
     }
 
