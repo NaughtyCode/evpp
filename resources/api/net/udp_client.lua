@@ -55,8 +55,8 @@ function net.udp_client.do_request(host, port, data, timeout_ms) end
 ---@param host string   目标主机 IP 地址，例如 "127.0.0.1"
 ---@param port integer  目标端口 (1-65535)
 ---@param data string   要发送的数据
----@return boolean ok         发送是否成功
----@return nil, string errmsg  连接失败时的错误信息
+---@return boolean ok              发送是否成功
+---@return string? errmsg          连接失败时的错误信息（仅在 Connect 失败时返回）
 function net.udp_client.send_to(host, port, data) end
 
 -- ============================================================================

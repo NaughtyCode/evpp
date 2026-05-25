@@ -78,7 +78,7 @@ function client:set_on_message(callback) end
 
 --- 设置连接关闭回调。
 ---
---- 回调在连接断开时触发（无论主动断开还是对端关闭）。
+--- 回调在对端关闭连接或网络异常断开时触发。
 --- 注意：手动调用 disconnect() 不会触发此回调。
 ---
 ---@param callback function  回调函数: fun()
