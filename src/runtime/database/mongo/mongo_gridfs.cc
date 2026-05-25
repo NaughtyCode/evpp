@@ -98,10 +98,23 @@ const char* MongoGridFsFile::GetContentType() const {
     return impl_ && impl_->file ? mongoc_gridfs_file_get_content_type(impl_->file) : nullptr;
 }
 
+void MongoGridFsFile::GetAliases(BsonDocument* out) const {
+    if (impl_ && impl_->file && out) {
+        const bson_t* aliases = mongoc_gridfs_file_get_aliases(impl_->file);
+        if (aliases)
+            bson_copy_to(aliases, static_cast<bson_t*>(out->RawBson()));
+    }
+}
+
 void MongoGridFsFile::GetId(BsonDocument* out) const {
-    if (impl_ && impl_->file && out)
-        bson_copy_to(mongoc_gridfs_file_get_id(impl_->file),
-                     static_cast<bson_t*>(out->RawBson()));
+    if (impl_ && impl_->file && out) {
+        const bson_value_t* val = mongoc_gridfs_file_get_id(impl_->file);
+        if (val) {
+            bson_t* b = static_cast<bson_t*>(out->RawBson());
+            bson_reinit(b);
+            bson_append_value(b, "_id", 3, val);
+        }
+    }
 }
 
 void MongoGridFsFile::GetMetadata(BsonDocument* out) const {
@@ -153,14 +166,14 @@ bool MongoGridFsFile::Error(MongoError* error) const {
         error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 }
 
-ssize_t MongoGridFsFile::Readv(void* iov, size_t iovcnt, size_t min_bytes, int32_t timeout_msec) {
+ssize_t MongoGridFsFile::Readv(void* iov, size_t iovcnt, size_t min_bytes, uint32_t timeout_msec) {
     return impl_ && impl_->file
         ? mongoc_gridfs_file_readv(impl_->file, static_cast<mongoc_iovec_t*>(iov),
                                    iovcnt, min_bytes, timeout_msec)
         : -1;
 }
 
-ssize_t MongoGridFsFile::Writev(const void* iov, size_t iovcnt, int32_t timeout_msec) {
+ssize_t MongoGridFsFile::Writev(const void* iov, size_t iovcnt, uint32_t timeout_msec) {
     return impl_ && impl_->file
         ? mongoc_gridfs_file_writev(impl_->file,
                                     static_cast<const mongoc_iovec_t*>(iov),
@@ -204,9 +217,15 @@ void MongoGridFsFileList::Destroy() {
 
 MongoGridFsFile* MongoGridFsFileList::Next(MongoError* error) {
     if (!impl_ || !impl_->list) return nullptr;
-    mongoc_gridfs_file_t* file = mongoc_gridfs_file_list_next(impl_->list,
-        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
-    if (!file) return nullptr;
+    mongoc_gridfs_file_t* file = mongoc_gridfs_file_list_next(impl_->list);
+    if (!file) {
+        if (error) {
+            // Error state is retrieved via mongoc_gridfs_file_list_error
+            mongoc_gridfs_file_list_error(impl_->list,
+                static_cast<bson_error_t*>(error->RawError()));
+        }
+        return nullptr;
+    }
     auto* result = new MongoGridFsFile();
     result->impl_->file = file;
     return result;
@@ -236,7 +255,7 @@ void MongoGridFs::Destroy() {
     }
 }
 
-MongoGridFsFile* MongoGridFs::CreateFile(MongoGridFsFileOpts* opts) {
+MongoGridFsFile* MongoGridFs::NewFile(MongoGridFsFileOpts* opts) {
     if (!impl_ || !impl_->gridfs) return nullptr;
     mongoc_gridfs_file_t* file = mongoc_gridfs_create_file(
         impl_->gridfs, opts ? static_cast<mongoc_gridfs_file_opt_t*>(opts->Raw()) : nullptr);
@@ -246,7 +265,7 @@ MongoGridFsFile* MongoGridFs::CreateFile(MongoGridFsFileOpts* opts) {
     return result;
 }
 
-MongoGridFsFile* MongoGridFs::CreateFileFromStream(void* stream,
+MongoGridFsFile* MongoGridFs::NewFileFromStream(void* stream,
                                                      MongoGridFsFileOpts* opts) {
     if (!impl_ || !impl_->gridfs) return nullptr;
     mongoc_gridfs_file_t* file = mongoc_gridfs_create_file_from_stream(

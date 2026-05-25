@@ -60,7 +60,9 @@ void MongoError::SetError(uint32_t domain, uint32_t code, const char* format, ..
 }
 
 const char* MongoError::StrErrorR(int errno_val) {
-    return bson_strerror_r(errno_val);
+    static thread_local char buf[256];
+    bson_strerror_r(errno_val, buf, sizeof(buf));
+    return buf;
 }
 
 bool MongoError::HasLabel(const BsonDocument& reply, const char* label) const {

@@ -256,6 +256,7 @@ public:
     void SetKeyMaterial(const uint8_t* data, uint32_t len);
 
     void* Raw();
+    const void* Raw() const;
 
 private:
     struct Impl;

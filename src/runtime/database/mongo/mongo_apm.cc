@@ -405,27 +405,34 @@ bool MongoApmServerHeartbeatFailedEvent::GetAwaited() const {
 // holds ALL the std::function callbacks, and pass a pointer to that struct
 // as the context.
 
+// ═══════════════════════════════════════════════════════════════════════
+// APM callback context -- shared between Impl and the C trampolines.
+// Defined at file scope so trampolines (not members of MongoApmCallbacks)
+// can access it even though Impl is private.
+// ═══════════════════════════════════════════════════════════════════════
+
+struct ApmCallbackContext {
+    MongoApmCommandStartedCb command_started;
+    MongoApmCommandSucceededCb command_succeeded;
+    MongoApmCommandFailedCb command_failed;
+    MongoApmServerChangedCb server_changed;
+    MongoApmServerOpeningCb server_opening;
+    MongoApmServerClosedCb server_closed;
+    MongoApmTopologyChangedCb topology_changed;
+    MongoApmTopologyOpeningCb topology_opening;
+    MongoApmTopologyClosedCb topology_closed;
+    MongoApmServerHeartbeatStartedCb server_heartbeat_started;
+    MongoApmServerHeartbeatSucceededCb server_heartbeat_succeeded;
+    MongoApmServerHeartbeatFailedCb server_heartbeat_failed;
+};
+
 struct MongoApmCallbacks::Impl {
     mongoc_apm_callbacks_t* callbacks = nullptr;
 
     // Store all callbacks in a context struct (heap-allocated, deleted via destroy)
-    struct Context {
-        MongoApmCommandStartedCb command_started;
-        MongoApmCommandSucceededCb command_succeeded;
-        MongoApmCommandFailedCb command_failed;
-        MongoApmServerChangedCb server_changed;
-        MongoApmServerOpeningCb server_opening;
-        MongoApmServerClosedCb server_closed;
-        MongoApmTopologyChangedCb topology_changed;
-        MongoApmTopologyOpeningCb topology_opening;
-        MongoApmTopologyClosedCb topology_closed;
-        MongoApmServerHeartbeatStartedCb heartbeat_started;
-        MongoApmServerHeartbeatSucceededCb heartbeat_succeeded;
-        MongoApmServerHeartbeatFailedCb heartbeat_failed;
-    };
-    std::shared_ptr<Context> ctx;
+    std::shared_ptr<ApmCallbackContext> ctx;
 
-    Impl() : ctx(std::make_shared<Context>()) {
+    Impl() : ctx(std::make_shared<ApmCallbackContext>()) {
         callbacks = mongoc_apm_callbacks_new();
     }
     ~Impl() {
@@ -437,7 +444,7 @@ struct MongoApmCallbacks::Impl {
 
 #define APM_TRAMPOLINE(name, typename)                                              \
     static void apm_##name##_trampoline(const mongoc_apm_##name##_t* event) {      \
-        auto* ctx = static_cast<MongoApmCallbacks::Impl::Context*>(                 \
+        auto* ctx = static_cast<ApmCallbackContext*>(                              \
             mongoc_apm_##name##_get_context(event));                                \
         if (ctx && ctx->name) {                                                     \
             MongoApm##typename##Event wrapper(event);                               \

@@ -88,7 +88,7 @@ public:
     bool AppendDecimal128(const char* key, const MongoDecimal128& value);
     bool AppendValue(const char* key, const void* bson_value);
     bool AppendIter(const char* key, const BsonIter& iter);
-    bool AppendBinaryUninit(const char* key, int subtype, uint32_t len, uint8_t** data_out);
+    bool AppendBinaryUninit(const char* key, int subtype, uint8_t** data_out, uint32_t len);
     bool AppendArrayFromVector(const char* key, const BsonIter& iter);
 
     // ── Sub-document building ───────────────────────────────────────
@@ -230,15 +230,15 @@ public:
     const void* Value() const;
 
     // Overwrite current element's value (must be at correct position)
-    bool OverwriteInt32(int32_t value);
-    bool OverwriteInt64(int64_t value);
-    bool OverwriteDouble(double value);
-    bool OverwriteDecimal128(const MongoDecimal128& value);
-    bool OverwriteBool(bool value);
-    bool OverwriteOid(const MongoOid& value);
-    bool OverwriteTimestamp(uint32_t timestamp, uint32_t increment);
-    bool OverwriteDateTime(int64_t value);
-    bool OverwriteBinary(int subtype, uint32_t* binary_len, uint8_t** binary);
+    void OverwriteInt32(int32_t value);
+    void OverwriteInt64(int64_t value);
+    void OverwriteDouble(double value);
+    void OverwriteDecimal128(const MongoDecimal128& value);
+    void OverwriteBool(bool value);
+    void OverwriteOid(const MongoOid& value);
+    void OverwriteTimestamp(uint32_t timestamp, uint32_t increment);
+    void OverwriteDateTime(int64_t value);
+    void OverwriteBinary(int subtype, uint32_t* binary_len, uint8_t** binary);
 
     // Recursion into sub-documents
     BsonIter Recurse() const;
@@ -287,7 +287,7 @@ public:
     bool AppendNowUtc();
     bool AppendDecimal128(const MongoDecimal128& value);
     bool AppendArrayFromVector(const BsonIter& iter);
-    bool AppendBinaryUninit(int subtype, uint32_t len, uint8_t** data_out);
+    bool AppendBinaryUninit(int subtype, uint8_t** data_out, uint32_t len);
 
     // Sub-document building within the builder
     bool AppendDocumentBegin(BsonDocument* subdoc);

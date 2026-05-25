@@ -3,6 +3,7 @@
 
 #include <mongoc/mongoc.h>
 
+#include "runtime/database/mongo/mongo_error.h"
 #include "runtime/database/mongo/mongo_settings.h"
 
 namespace engine {

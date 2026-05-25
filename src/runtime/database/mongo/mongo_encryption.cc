@@ -488,6 +488,7 @@ void MongoClientEncryptionDatakeyOpts::SetKeyMaterial(const uint8_t* data, uint3
 }
 
 void* MongoClientEncryptionDatakeyOpts::Raw() { return impl_ ? impl_->opts : nullptr; }
+const void* MongoClientEncryptionDatakeyOpts::Raw() const { return impl_ ? impl_->opts : nullptr; }
 
 // ═══════════════════════════════════════════════════════════════════════
 // MongoClientEncryptionRewrapManyDatakeyResult

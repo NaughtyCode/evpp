@@ -126,6 +126,10 @@ public:
     void SetRawSession(void* session); // takes ownership, internal use
     void* ReleaseSession(); // releases ownership, returns raw session
 
+    // Create an empty session wrapper (for internal trampoline use).
+    static MongoSession* CreateEmpty();
+    static void Destroy(MongoSession* session);
+
 private:
     friend class MongoClient;
     struct Impl;

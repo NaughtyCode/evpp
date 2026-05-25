@@ -64,8 +64,8 @@ public:
     bool Error(MongoError* error) const;
 
     // Read/write operations
-    ssize_t Readv(void* iov, size_t iovcnt, size_t min_bytes, int32_t timeout_msec);
-    ssize_t Writev(const void* iov, size_t iovcnt, int32_t timeout_msec);
+    ssize_t Readv(void* iov, size_t iovcnt, size_t min_bytes, uint32_t timeout_msec);
+    ssize_t Writev(const void* iov, size_t iovcnt, uint32_t timeout_msec);
     bool Save();
     bool Seek(int64_t pos, int whence);
 
@@ -113,8 +113,8 @@ class ENGINE_API MongoGridFs {
 public:
     void Destroy();
 
-    MongoGridFsFile* CreateFile(MongoGridFsFileOpts* opts);
-    MongoGridFsFile* CreateFileFromStream(void* stream, MongoGridFsFileOpts* opts);
+    MongoGridFsFile* NewFile(MongoGridFsFileOpts* opts);
+    MongoGridFsFile* NewFileFromStream(void* stream, MongoGridFsFileOpts* opts);
     MongoGridFsFile* FindOneByFilename(const char* filename, MongoError* error);
     MongoGridFsFile* FindOneWithOpts(const BsonDocument& filter, const BsonDocument* opts,
                                       MongoError* error);

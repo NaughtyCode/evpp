@@ -117,9 +117,10 @@ void MongoCursor::SetServerId(uint32_t server_id) {
 
 MongoCursor* MongoCursor::NewFromCommandReplyWithOpts(void* client,
     const BsonDocument& reply, const BsonDocument* opts) {
+    // Pass a copy of reply; the C API takes ownership and destroys it.
     mongoc_cursor_t* cursor = mongoc_cursor_new_from_command_reply_with_opts(
         static_cast<mongoc_client_t*>(client),
-        static_cast<const bson_t*>(reply.RawBson()),
+        bson_copy(static_cast<const bson_t*>(reply.RawBson())),
         opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr);
     if (!cursor) return nullptr;
     auto* result = new MongoCursor();

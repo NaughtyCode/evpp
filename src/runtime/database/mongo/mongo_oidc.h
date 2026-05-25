@@ -49,12 +49,15 @@ public:
     const int64_t* GetExpiresIn() const;
 
     void* Raw(); // returns mongoc_oidc_credential_t*
+    void* ReleaseRaw(); // transfers ownership, sets owned=false
+
+    ~MongoOidcCredential();
 
 private:
+    friend class MongoOidcCallbackParams;
     struct Impl;
     std::unique_ptr<Impl> impl_;
     MongoOidcCredential();
-    ~MongoOidcCredential();
 };
 
 // Wraps mongoc_oidc_callback_t — bundles the callback function + user data.

@@ -229,10 +229,6 @@ uint32_t MongoSession::GetServerId() const {
     return impl_ && impl_->session ? mongoc_client_session_get_server_id(impl_->session) : 0;
 }
 
-bool MongoSession::GetDirty() const {
-    return impl_ && impl_->session && mongoc_client_session_get_dirty(impl_->session);
-}
-
 bool MongoSession::AppendToOpts(BsonDocument* opts, MongoError* error) {
     if (!impl_ || !impl_->session) return false;
     return mongoc_client_session_append(impl_->session,
@@ -258,7 +254,15 @@ bool MongoSession::GetDirty() const {
 
 const void* MongoSession::GetTransactionOptsRaw() const {
     return impl_ && impl_->session
-        ? mongoc_client_session_get_transaction_opts(impl_->session) : nullptr;
+        ? mongoc_session_opts_get_transaction_opts(impl_->session) : nullptr;
+}
+
+MongoSession* MongoSession::CreateEmpty() {
+    return new MongoSession();
+}
+
+void MongoSession::Destroy(MongoSession* session) {
+    delete session;
 }
 
 namespace {
@@ -273,16 +277,17 @@ bool with_transaction_trampoline(mongoc_client_session_t* session,
     if (!txn_ctx || !txn_ctx->cb) return false;
 
     // Create a temporary non-owning MongoSession wrapper
-    MongoSession tmp_session;
-    tmp_session.SetRawSession(session);
+    MongoSession* tmp_session = MongoSession::CreateEmpty();
+    tmp_session->SetRawSession(session);
 
     BsonDocument reply_doc;
     MongoError mongo_err;
 
-    bool ok = txn_ctx->cb(&tmp_session, &reply_doc, &mongo_err);
+    bool ok = txn_ctx->cb(tmp_session, &reply_doc, &mongo_err);
 
-    // Release ownership so ~MongoSession doesn't destroy the session
-    tmp_session.ReleaseSession();
+    // Release ownership so the session is not destroyed
+    tmp_session->ReleaseSession();
+    MongoSession::Destroy(tmp_session);
 
     if (reply && ok) {
         bson_destroy(*reply);

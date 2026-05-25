@@ -60,8 +60,9 @@ BsonDocument BsonDocument::Copy() const {
 }
 
 bool BsonDocument::CopyTo(BsonDocument& dst) const {
-    return bson_copy_to(static_cast<const bson_t*>(RawBson()),
-                        static_cast<bson_t*>(dst.RawBson()));
+    bson_copy_to(static_cast<const bson_t*>(RawBson()),
+                 static_cast<bson_t*>(dst.RawBson()));
+    return true;
 }
 
 bool BsonDocument::CopyToExcludingNoinit(BsonDocument& dst, const char* first_exclude, ...) {
@@ -77,7 +78,8 @@ bool BsonDocument::CopyToExcludingNoinit(BsonDocument& dst, const char* first_ex
 bool BsonDocument::CopyToExcludingNoinitVa(BsonDocument& dst, const char* first_exclude, void* args) {
     bson_copy_to_excluding_noinit_va(static_cast<const bson_t*>(RawBson()),
                                       static_cast<bson_t*>(dst.RawBson()),
-                                      first_exclude, static_cast<va_list*>(args));
+                                      first_exclude,
+                                      *static_cast<va_list*>(args));
     return true;
 }
 
@@ -161,7 +163,7 @@ bool BsonDocument::AppendRegex(const char* key, const char* regex, const char* o
 }
 
 bool BsonDocument::AppendRegexWLen(const char* key, int keylen, const char* regex, const char* options) {
-    return bson_append_regex_w_len(static_cast<bson_t*>(RawBson()), key, keylen, regex, options);
+    return bson_append_regex_w_len(static_cast<bson_t*>(RawBson()), key, keylen, regex, -1, options);
 }
 
 bool BsonDocument::AppendSymbol(const char* key, const char* symbol) {
@@ -191,7 +193,7 @@ bool BsonDocument::AppendTimeT(const char* key, time_t value) {
 
 bool BsonDocument::AppendTimeval(const char* key, const void* tv) {
     return bson_append_timeval(static_cast<bson_t*>(RawBson()), key, -1,
-                               static_cast<const struct timeval*>(tv));
+                               const_cast<struct timeval*>(static_cast<const struct timeval*>(tv)));
 }
 
 bool BsonDocument::AppendNowUtc(const char* key) {
@@ -213,10 +215,10 @@ bool BsonDocument::AppendIter(const char* key, const BsonIter& iter) {
                              static_cast<const bson_iter_t*>(iter.RawIter()));
 }
 
-bool BsonDocument::AppendBinaryUninit(const char* key, int subtype, uint32_t len,
-                                        uint8_t** data_out) {
+bool BsonDocument::AppendBinaryUninit(const char* key, int subtype, uint8_t** data_out,
+                                        uint32_t len) {
     return bson_append_binary_uninit(static_cast<bson_t*>(RawBson()), key, -1,
-        static_cast<bson_subtype_t>(subtype), len, data_out);
+        static_cast<bson_subtype_t>(subtype), data_out, len);
 }
 
 bool BsonDocument::AppendArrayFromVector(const char* key, const BsonIter& iter) {
@@ -390,7 +392,10 @@ void BsonDocument::Steal(BsonDocument& dst, BsonDocument& src) {
 }
 
 void BsonDocument::DestroyWithSteal(uint8_t** data, uint32_t* length, bool* reached_eof, void* raw_bson) {
-    bson_destroy_with_steal(static_cast<bson_t*>(raw_bson), data, length, reached_eof);
+    *data = bson_destroy_with_steal(static_cast<bson_t*>(raw_bson), true, length);
+    if (reached_eof) {
+        *reached_eof = false;
+    }
 }
 
 bool BsonDocument::AppendArrayBuilderBegin(const char* key, void** builder_out) {
@@ -415,7 +420,7 @@ bool BsonDocument::Validate(MongoError* error) const {
 bool BsonDocument::ValidateWithErrorAndOffset(MongoError* error, size_t* offset) const {
     bson_error_t err;
     bool ok = bson_validate_with_error_and_offset(
-        static_cast<const bson_t*>(RawBson()), BSON_VALIDATE_NONE, &err, offset);
+        static_cast<const bson_t*>(RawBson()), BSON_VALIDATE_NONE, offset, &err);
     if (!ok && error) {
         std::memcpy(error->RawError(), &err, sizeof(err));
     }
@@ -633,7 +638,8 @@ void BsonIter::AsTimeval(void* tv) const {
 void BsonIter::AsDBPointer(uint32_t* collection_len, const char** collection,
                             const void** oid) const {
     bson_iter_dbpointer(static_cast<const bson_iter_t*>(RawIter()),
-                         collection_len, collection, oid);
+                         collection_len, collection,
+                         reinterpret_cast<const bson_oid_t**>(oid));
 }
 
 bool BsonIter::VisitAll(const void* visitor, void* data) {
@@ -650,43 +656,43 @@ const void* BsonIter::Value() const {
         const_cast<BsonIter*>(this)->RawIter()));
 }
 
-bool BsonIter::OverwriteInt32(int32_t value) {
-    return bson_iter_overwrite_int32(static_cast<bson_iter_t*>(RawIter()), value);
+void BsonIter::OverwriteInt32(int32_t value) {
+    bson_iter_overwrite_int32(static_cast<bson_iter_t*>(RawIter()), value);
 }
 
-bool BsonIter::OverwriteInt64(int64_t value) {
-    return bson_iter_overwrite_int64(static_cast<bson_iter_t*>(RawIter()), value);
+void BsonIter::OverwriteInt64(int64_t value) {
+    bson_iter_overwrite_int64(static_cast<bson_iter_t*>(RawIter()), value);
 }
 
-bool BsonIter::OverwriteDouble(double value) {
-    return bson_iter_overwrite_double(static_cast<bson_iter_t*>(RawIter()), value);
+void BsonIter::OverwriteDouble(double value) {
+    bson_iter_overwrite_double(static_cast<bson_iter_t*>(RawIter()), value);
 }
 
-bool BsonIter::OverwriteDecimal128(const MongoDecimal128& value) {
-    return bson_iter_overwrite_decimal128(static_cast<bson_iter_t*>(RawIter()),
+void BsonIter::OverwriteDecimal128(const MongoDecimal128& value) {
+    bson_iter_overwrite_decimal128(static_cast<bson_iter_t*>(RawIter()),
         reinterpret_cast<const bson_decimal128_t*>(&value));
 }
 
-bool BsonIter::OverwriteBool(bool value) {
-    return bson_iter_overwrite_bool(static_cast<bson_iter_t*>(RawIter()), value);
+void BsonIter::OverwriteBool(bool value) {
+    bson_iter_overwrite_bool(static_cast<bson_iter_t*>(RawIter()), value);
 }
 
-bool BsonIter::OverwriteOid(const MongoOid& value) {
-    return bson_iter_overwrite_oid(static_cast<bson_iter_t*>(RawIter()),
+void BsonIter::OverwriteOid(const MongoOid& value) {
+    bson_iter_overwrite_oid(static_cast<bson_iter_t*>(RawIter()),
         reinterpret_cast<const bson_oid_t*>(value.data()));
 }
 
-bool BsonIter::OverwriteTimestamp(uint32_t timestamp, uint32_t increment) {
-    return bson_iter_overwrite_timestamp(static_cast<bson_iter_t*>(RawIter()),
-                                          timestamp, increment);
+void BsonIter::OverwriteTimestamp(uint32_t timestamp, uint32_t increment) {
+    bson_iter_overwrite_timestamp(static_cast<bson_iter_t*>(RawIter()),
+                                   timestamp, increment);
 }
 
-bool BsonIter::OverwriteDateTime(int64_t value) {
-    return bson_iter_overwrite_date_time(static_cast<bson_iter_t*>(RawIter()), value);
+void BsonIter::OverwriteDateTime(int64_t value) {
+    bson_iter_overwrite_date_time(static_cast<bson_iter_t*>(RawIter()), value);
 }
 
-bool BsonIter::OverwriteBinary(int subtype, uint32_t* binary_len, uint8_t** binary) {
-    return bson_iter_overwrite_binary(static_cast<bson_iter_t*>(RawIter()),
+void BsonIter::OverwriteBinary(int subtype, uint32_t* binary_len, uint8_t** binary) {
+    bson_iter_overwrite_binary(static_cast<bson_iter_t*>(RawIter()),
         static_cast<bson_subtype_t>(subtype), binary_len, binary);
 }
 
@@ -847,7 +853,7 @@ bool BsonArrayBuilder::AppendTimeT(time_t value) {
 
 bool BsonArrayBuilder::AppendTimeval(const void* tv) {
     return bson_array_builder_append_timeval(static_cast<bson_array_builder_t*>(ptr_),
-                                              static_cast<const struct timeval*>(tv));
+                                              const_cast<struct timeval*>(static_cast<const struct timeval*>(tv)));
 }
 
 bool BsonArrayBuilder::AppendNowUtc() {
@@ -866,10 +872,10 @@ bool BsonArrayBuilder::AppendArrayFromVector(const BsonIter& iter) {
         static_cast<const bson_iter_t*>(iter.RawIter()));
 }
 
-bool BsonArrayBuilder::AppendBinaryUninit(int subtype, uint32_t len, uint8_t** data_out) {
+bool BsonArrayBuilder::AppendBinaryUninit(int subtype, uint8_t** data_out, uint32_t len) {
     return bson_array_builder_append_binary_uninit(
         static_cast<bson_array_builder_t*>(ptr_),
-        static_cast<bson_subtype_t>(subtype), len, data_out);
+        static_cast<bson_subtype_t>(subtype), data_out, len);
 }
 
 bool BsonArrayBuilder::AppendDocumentBegin(BsonDocument* subdoc) {

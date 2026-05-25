@@ -30,6 +30,7 @@ MongoBulkWriteInsertOneOpts::MongoBulkWriteInsertOneOpts(MongoBulkWriteInsertOne
 MongoBulkWriteInsertOneOpts& MongoBulkWriteInsertOneOpts::operator=(MongoBulkWriteInsertOneOpts&&) noexcept = default;
 
 void* MongoBulkWriteInsertOneOpts::Raw() { return impl_ ? impl_->opts : nullptr; }
+const void* MongoBulkWriteInsertOneOpts::Raw() const { return impl_ ? impl_->opts : nullptr; }
 
 // ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWriteUpdateOneOpts
@@ -81,6 +82,7 @@ void MongoBulkWriteUpdateOneOpts::SetSort(const BsonDocument& sort) {
 }
 
 void* MongoBulkWriteUpdateOneOpts::Raw() { return impl_ ? impl_->opts : nullptr; }
+const void* MongoBulkWriteUpdateOneOpts::Raw() const { return impl_ ? impl_->opts : nullptr; }
 
 // ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWriteUpdateManyOpts
@@ -126,6 +128,7 @@ void MongoBulkWriteUpdateManyOpts::SetUpsert(bool upsert) {
 }
 
 void* MongoBulkWriteUpdateManyOpts::Raw() { return impl_ ? impl_->opts : nullptr; }
+const void* MongoBulkWriteUpdateManyOpts::Raw() const { return impl_ ? impl_->opts : nullptr; }
 
 // ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWriteReplaceOneOpts
@@ -171,6 +174,7 @@ void MongoBulkWriteReplaceOneOpts::SetSort(const BsonDocument& sort) {
 }
 
 void* MongoBulkWriteReplaceOneOpts::Raw() { return impl_ ? impl_->opts : nullptr; }
+const void* MongoBulkWriteReplaceOneOpts::Raw() const { return impl_ ? impl_->opts : nullptr; }
 
 // ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWriteDeleteOneOpts
@@ -205,6 +209,7 @@ void MongoBulkWriteDeleteOneOpts::SetHint(const void* hint) {
 }
 
 void* MongoBulkWriteDeleteOneOpts::Raw() { return impl_ ? impl_->opts : nullptr; }
+const void* MongoBulkWriteDeleteOneOpts::Raw() const { return impl_ ? impl_->opts : nullptr; }
 
 // ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWriteDeleteManyOpts
@@ -239,6 +244,7 @@ void MongoBulkWriteDeleteManyOpts::SetHint(const void* hint) {
 }
 
 void* MongoBulkWriteDeleteManyOpts::Raw() { return impl_ ? impl_->opts : nullptr; }
+const void* MongoBulkWriteDeleteManyOpts::Raw() const { return impl_ ? impl_->opts : nullptr; }
 
 // ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWriteOpts
@@ -305,6 +311,7 @@ void MongoBulkWriteOpts::SetServerId(uint32_t server_id) {
 }
 
 void* MongoBulkWriteOpts::Raw() { return impl_ ? impl_->opts : nullptr; }
+const void* MongoBulkWriteOpts::Raw() const { return impl_ ? impl_->opts : nullptr; }
 
 // ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWriteResult
@@ -554,8 +561,9 @@ void MongoBulkWrite::SetSession(void* session) {
 
 bool MongoBulkWrite::SetClient(void* client) {
     if (!impl_ || !impl_->bw) return false;
-    return mongoc_bulkwrite_set_client(impl_->bw,
+    mongoc_bulkwrite_set_client(impl_->bw,
         static_cast<mongoc_client_t*>(client));
+    return true;
 }
 
 void* MongoBulkWrite::Raw() { return impl_ ? impl_->bw : nullptr; }

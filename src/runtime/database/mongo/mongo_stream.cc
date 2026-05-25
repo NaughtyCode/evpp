@@ -1,6 +1,11 @@
 #include "runtime/database/mongo/mongo_stream.h"
 
 #include <mongoc/mongoc.h>
+#ifdef MONGOC_ENABLE_SSL_SECURE_CHANNEL
+#define MONGOC_INSIDE
+#include <mongoc/mongoc-stream-tls-secure-channel.h>
+#undef MONGOC_INSIDE
+#endif
 
 #include "runtime/database/mongo/mongo_error.h"
 #include "runtime/database/mongo/mongo_gridfs.h"

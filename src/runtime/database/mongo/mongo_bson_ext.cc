@@ -1,5 +1,8 @@
 #include "runtime/database/mongo/mongo_bson_ext.h"
 
+#include <cstdarg>
+#include <string>
+
 #include <bson/bson.h>
 
 #include "runtime/database/mongo/mongo_bson.h"
@@ -49,43 +52,48 @@ void* BsonContext::Raw() { return impl_ ? impl_->ctx : nullptr; }
 // ═══════════════════════════════════════════════════════════════════════
 
 struct BsonString::Impl {
-    bson_string_t* str = nullptr;
+    std::string str;
 };
 
-BsonString::BsonString() : impl_(std::make_unique<Impl>()) {
-    impl_->str = bson_string_new(nullptr);
-}
+BsonString::BsonString() : impl_(std::make_unique<Impl>()) {}
 
 BsonString::BsonString(const char* str) : impl_(std::make_unique<Impl>()) {
-    impl_->str = bson_string_new(str);
+    if (str) impl_->str = str;
 }
 
-BsonString::~BsonString() {
-    if (impl_ && impl_->str) bson_string_free(impl_->str, true);
-}
+BsonString::~BsonString() = default;
 
 BsonString::BsonString(BsonString&&) noexcept = default;
 BsonString& BsonString::operator=(BsonString&&) noexcept = default;
 
 void BsonString::Append(const char* str) {
-    if (impl_ && impl_->str) bson_string_append(impl_->str, str);
+    if (impl_ && str) impl_->str += str;
 }
 
 void BsonString::AppendPrintf(const char* format, ...) {
-    if (impl_ && impl_->str) {
+    if (impl_ && format) {
         va_list args;
         va_start(args, format);
-        bson_string_append_printf(impl_->str, format, args);
+        // Use vsnprintf to determine needed buffer size
+        va_list args_copy;
+        va_copy(args_copy, args);
+        int needed = vsnprintf(nullptr, 0, format, args_copy);
+        va_end(args_copy);
+        if (needed > 0) {
+            std::string buf(static_cast<size_t>(needed), '\0');
+            vsnprintf(&buf[0], static_cast<size_t>(needed) + 1, format, args);
+            impl_->str += buf;
+        }
         va_end(args);
     }
 }
 
 const char* BsonString::GetString() const {
-    return impl_ && impl_->str ? impl_->str->str : nullptr;
+    return impl_ ? impl_->str.c_str() : nullptr;
 }
 
 size_t BsonString::GetLength() const {
-    return impl_ && impl_->str ? impl_->str->len : 0;
+    return impl_ ? impl_->str.size() : 0;
 }
 
 bool BsonString::Empty() const {
@@ -93,10 +101,10 @@ bool BsonString::Empty() const {
 }
 
 void BsonString::Truncate(size_t len) {
-    if (impl_ && impl_->str) bson_string_truncate(impl_->str, len);
+    if (impl_) impl_->str.resize(len);
 }
 
-void* BsonString::Raw() { return impl_ ? impl_->str : nullptr; }
+void* BsonString::Raw() { return impl_ ? &impl_->str : nullptr; }
 
 // ═══════════════════════════════════════════════════════════════════════
 // BsonJsonReader
@@ -121,7 +129,8 @@ BsonJsonReader BsonJsonReader::NewFromFile(const char* filename, MongoError* err
 
 BsonJsonReader BsonJsonReader::NewFromData(const uint8_t* data, size_t length) {
     BsonJsonReader r;
-    r.impl_->reader = bson_json_reader_new_from_data(const_cast<uint8_t*>(data), length);
+    r.impl_->reader = bson_json_data_reader_new(false, 0);
+    bson_json_data_reader_ingest(r.impl_->reader, data, length);
     return r;
 }
 
@@ -161,7 +170,10 @@ bool BsonJsonReader::Read(BsonDocument* out, MongoError* error) {
 }
 
 const char* BsonJsonReader::ErrorDescription() const {
-    return impl_ && impl_->reader ? impl_->reader->read_ctx.error_description : nullptr;
+    // bson_json_reader_t is opaque in libbson 2.x; the error description is
+    // embedded in the bson_error_t returned by Read(), so return nullptr here.
+    (void)impl_;
+    return nullptr;
 }
 
 void* BsonJsonReader::Raw() { return impl_ ? impl_->reader : nullptr; }
@@ -301,10 +313,12 @@ void* BsonReader::Raw() { return impl_ ? impl_->reader : nullptr; }
 
 struct BsonWriter::Impl {
     bson_writer_t* writer = nullptr;
+    uint8_t* buf = nullptr;
+    size_t buflen = 0;
 };
 
 BsonWriter::BsonWriter() : impl_(std::make_unique<Impl>()) {
-    impl_->writer = bson_writer_new(nullptr);
+    impl_->writer = bson_writer_new(&impl_->buf, &impl_->buflen, 0, bson_realloc_ctx, nullptr);
 }
 
 BsonWriter::~BsonWriter() {
@@ -318,13 +332,17 @@ void BsonWriter::Destroy() {
     if (impl_ && impl_->writer) {
         bson_writer_destroy(impl_->writer);
         impl_->writer = nullptr;
+        bson_free(impl_->buf);
+        impl_->buf = nullptr;
+        impl_->buflen = 0;
     }
 }
 
 bool BsonWriter::Begin(const void* raw_bson) {
     if (!impl_ || !impl_->writer) return false;
-    bson_writer_begin(impl_->writer, static_cast<const bson_t*>(raw_bson));
-    return true;
+    (void)raw_bson; // new API: writer always provides the bson_t*
+    bson_t* doc = nullptr;
+    return bson_writer_begin(impl_->writer, &doc);
 }
 
 bool BsonWriter::BeginDocument(BsonDocument* doc) {
@@ -337,7 +355,8 @@ bool BsonWriter::BeginArray(BsonDocument* array) {
 
 void BsonWriter::End(BsonDocument* out) {
     if (impl_ && impl_->writer) {
-        bson_writer_end(impl_->writer, static_cast<bson_t*>(out->RawBson()));
+        (void)out;
+        bson_writer_end(impl_->writer);
     }
 }
 
@@ -351,10 +370,9 @@ bool BsonWriter::Rollback() {
 
 const uint8_t* BsonWriter::GetBuffer(size_t* length) const {
     if (!impl_ || !impl_->writer) return nullptr;
-    uint32_t len = 0;
-    const uint8_t* buf = bson_writer_get_buffer(impl_->writer, &len);
+    size_t len = bson_writer_get_length(impl_->writer);
     if (length) *length = len;
-    return buf;
+    return impl_->buf;
 }
 
 size_t BsonWriter::GetLength() const {
@@ -372,7 +390,9 @@ int64_t BsonClock::GetTimeNs() {
 }
 
 int64_t BsonClock::GetDateTime() {
-    return bson_get_now_ms();
+    struct timeval tv;
+    bson_gettimeofday(&tv);
+    return static_cast<int64_t>(tv.tv_sec) * 1000 + tv.tv_usec / 1000;
 }
 
 void BsonClock::GetTimeOfDay(void* tv) {

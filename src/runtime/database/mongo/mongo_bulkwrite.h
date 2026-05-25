@@ -20,6 +20,7 @@ public:
     MongoBulkWriteInsertOneOpts& operator=(MongoBulkWriteInsertOneOpts&&) noexcept;
 
     void* Raw(); // returns mongoc_bulkwrite_insertoneopts_t*
+    const void* Raw() const;
 
 private:
     struct Impl;
@@ -44,6 +45,7 @@ public:
     void SetSort(const BsonDocument& sort);
 
     void* Raw();
+    const void* Raw() const;
 
 private:
     struct Impl;
@@ -66,6 +68,7 @@ public:
     void SetUpsert(bool upsert);
 
     void* Raw();
+    const void* Raw() const;
 
 private:
     struct Impl;
@@ -88,6 +91,7 @@ public:
     void SetSort(const BsonDocument& sort);
 
     void* Raw();
+    const void* Raw() const;
 
 private:
     struct Impl;
@@ -108,6 +112,7 @@ public:
     void SetHint(const void* hint);
 
     void* Raw();
+    const void* Raw() const;
 
 private:
     struct Impl;
@@ -128,6 +133,7 @@ public:
     void SetHint(const void* hint);
 
     void* Raw();
+    const void* Raw() const;
 
 private:
     struct Impl;
@@ -155,6 +161,7 @@ public:
     void SetServerId(uint32_t server_id);
 
     void* Raw();
+    const void* Raw() const;
 
 private:
     struct Impl;

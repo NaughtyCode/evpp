@@ -65,7 +65,7 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-// Thin wrapper around bson_string_t for building strings incrementally.
+// String builder backed by std::string (bson_string_t was removed in libbson 2.x).
 class ENGINE_API BsonString {
 public:
     BsonString();
@@ -84,7 +84,7 @@ public:
     bool Empty() const;
     void Truncate(size_t len);
 
-    void* Raw(); // returns bson_string_t*
+    void* Raw();
 
 private:
     struct Impl;

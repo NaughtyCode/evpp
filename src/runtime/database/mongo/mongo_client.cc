@@ -368,7 +368,7 @@ void* MongoClient::GetHandshakeDescription(uint32_t server_id, const BsonDocumen
                                              MongoError* error) {
     if (!impl_ || !impl_->client) return nullptr;
     return mongoc_client_get_handshake_description(impl_->client, server_id,
-        opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr,
+        opts ? const_cast<bson_t*>(static_cast<const bson_t*>(opts->RawBson())) : nullptr,
         error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 }
 
@@ -1031,7 +1031,7 @@ bool MongoCollection::CreateIndexesWithOpts(const void* const* models, size_t n_
                                               BsonDocument* reply, MongoError* error) {
     if (!impl_ || !impl_->coll) return false;
     return mongoc_collection_create_indexes_with_opts(impl_->coll,
-        reinterpret_cast<mongoc_index_model_t* const*>(models), n_models,
+        (mongoc_index_model_t* const*)(models), n_models,
         opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr,
         reply ? static_cast<bson_t*>(reply->RawBson()) : nullptr,
         error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);

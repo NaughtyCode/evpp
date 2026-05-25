@@ -70,17 +70,17 @@ int MongoSocket::Listen(unsigned int backlog) {
     return impl_ && impl_->sock ? mongoc_socket_listen(impl_->sock, backlog) : -1;
 }
 
-ssize_t MongoSocket::Recv(void* buf, size_t buflen, int flags, int64_t expire_at) {
+ssize_t MongoSocket::Receive(void* buf, size_t buflen, int flags, int64_t expire_at) {
     return impl_ && impl_->sock
         ? mongoc_socket_recv(impl_->sock, buf, buflen, flags, expire_at) : -1;
 }
 
-ssize_t MongoSocket::Send(const void* buf, size_t buflen, int64_t expire_at) {
+ssize_t MongoSocket::SendData(const void* buf, size_t buflen, int64_t expire_at) {
     return impl_ && impl_->sock
         ? mongoc_socket_send(impl_->sock, buf, buflen, expire_at) : -1;
 }
 
-ssize_t MongoSocket::Sendv(MongoIovec* iov, size_t iovcnt, int64_t expire_at) {
+ssize_t MongoSocket::SendvData(MongoIovec* iov, size_t iovcnt, int64_t expire_at) {
     return impl_ && impl_->sock
         ? mongoc_socket_sendv(impl_->sock,
             reinterpret_cast<mongoc_iovec_t*>(iov), iovcnt, expire_at)
@@ -100,7 +100,7 @@ void MongoSocket::InetNtop(struct addrinfo* rp, char* buf, size_t buflen) {
     mongoc_socket_inet_ntop(rp, buf, buflen);
 }
 
-ssize_t MongoSocket::Poll(MongoSocketPollFd* sds, size_t nsds, int32_t timeout) {
+ssize_t MongoSocket::PollFds(MongoSocketPollFd* sds, size_t nsds, int32_t timeout) {
     return mongoc_socket_poll(reinterpret_cast<mongoc_socket_poll_t*>(sds), nsds, timeout);
 }
 

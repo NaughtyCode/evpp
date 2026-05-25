@@ -4,6 +4,19 @@
 // No mongo-c-driver headers included here — this header is safe to
 // include anywhere in the project.
 
+#ifdef _MSC_VER
+#include <BaseTsd.h>
+#if !defined(_SSIZE_T_DEFINED) && !defined(_SSIZE_T_) && !defined(_SSIZE_T)
+#define _SSIZE_T_DEFINED
+typedef SSIZE_T ssize_t;
+#endif
+#else
+#ifndef _SSIZE_T_DEFINED
+#define _SSIZE_T_DEFINED
+#include <sys/types.h>
+#endif
+#endif
+
 namespace engine {
 namespace mongo {
 
