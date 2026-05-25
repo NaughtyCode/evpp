@@ -49,7 +49,7 @@ public:
     uint32_t conv() const { return conv_; }
     evpp_socket_t sockfd() const { return sockfd_; }
 
-    // KCP tuning (must be called before Connect).
+    // KCP tuning (must be called before Connect; see ikcp.h for details).
     void SetKcpNodelay(int nodelay, int interval, int resend, int nc);
     void SetKcpWndSize(int sndwnd, int rcvwnd);
     void SetKcpMtu(int mtu);

@@ -69,7 +69,11 @@ bool Client::Connect(const struct sockaddr_in& addr, uint32_t conv) {
 
 bool Client::Connect(const char* host, int port, uint32_t conv) {
     char buf[64];
-    snprintf(buf, sizeof buf, "%s:%d", host, port);
+    if (strchr(host, ':')) {
+        snprintf(buf, sizeof buf, "[%s]:%d", host, port);
+    } else {
+        snprintf(buf, sizeof buf, "%s:%d", host, port);
+    }
     return Connect(buf, conv);
 }
 

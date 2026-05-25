@@ -46,10 +46,10 @@ public:
         tpool_ = pool;
     }
 
-    // KCP tuning parameters
+    // KCP tuning parameters (applied to new sessions; see ikcp.h for details)
     // @param nodelay 0:disable(default), 1:enable
-    // @param interval internal update timer interval in ms, default 10
-    // @param resend 0:disable fast resend(default), 1:enable fast resend
+    // @param interval internal update timer interval in ms (KCP default 100, server default 10)
+    // @param resend fast retransmit ACK count (0:disable, server default 2)
     // @param nc 0:normal congestion control(default), 1:disable congestion control
     void SetKcpNodelay(int nodelay, int interval, int resend, int nc);
 
