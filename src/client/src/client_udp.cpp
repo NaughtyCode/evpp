@@ -330,6 +330,11 @@ game_error_t game_udp_listen(game_client_t* client, int port,
     if (lua_pcall(L, 2, 2, 0) != LUA_OK) {
         set_error(client, lua_tostring(L, -1));
         lua_pop(L, 1);
+        {
+            std::lock_guard<std::mutex> lock(g_udp_srv_mutex);
+            g_udp_srv_cb.erase(srv);
+            g_udp_srv_ud.erase(srv);
+        }
         delete srv;
         return GAME_ERR_NETWORK;
     }

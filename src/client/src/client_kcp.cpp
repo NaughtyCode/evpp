@@ -170,7 +170,7 @@ game_error_t game_kcp_client_connect(game_kcp_client_t* kcp,
     bool ok = lua_toboolean(L, -2);
     if (!ok) {
         const char* err = lua_tostring(L, -1);
-        if (err) set_error(kcp->engine, err);
+        if (err && kcp->engine) set_error(kcp->engine, err);
         lua_pop(L, 2);
         return GAME_ERR_NETWORK;
     }

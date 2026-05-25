@@ -28,7 +28,7 @@ struct game_client_s {
 
 struct game_net_client_s {
     game_client_t*   engine;
-    void*            ctx;          /* ClientCtx* from net_client_bind      */
+    void*            ctx;          /* Lua registry ref (int via intptr_t)  */
     int              lua_ref;      /* Lua registry ref for instance table  */
 
     game_tcp_connect_cb_t  on_connect_cb  = nullptr;
@@ -41,7 +41,7 @@ struct game_net_client_s {
 
 struct game_net_server_s {
     game_client_t*   engine;
-    void*            ctx;          /* ServerCtx* from net_server_bind      */
+    void*            ctx;          /* Lua registry ref (int via intptr_t)  */
 
     game_tcp_server_connect_cb_t  on_connect_cb = nullptr;
     void*                         on_connect_ud = nullptr;
@@ -53,7 +53,7 @@ struct game_net_server_s {
 
 struct game_tcp_conn_s {
     game_net_server_t* server;
-    void*              ctx;        /* ConnCtx* from net_server_bind        */
+    void*              ctx;        /* Lua registry ref (int via intptr_t)  */
     int                lua_ref;    /* Lua registry ref for conn instance   */
     std::string        remote_addr;
 
@@ -65,22 +65,22 @@ struct game_tcp_conn_s {
 
 struct game_udp_client_s {
     game_client_t* engine;
-    void*          ctx;         /* UdpClientCtx* from net_udp_client_bind */
+    void*          ctx;         /* Lua registry ref (int via intptr_t)    */
 };
 
 struct game_udp_server_s {
     game_client_t* engine;
-    void*          ctx;         /* UdpServerCtx* from net_udp_server_bind */
+    void*          ctx;         /* Lua registry ref (int via intptr_t)    */
 };
 
 struct game_kcp_client_s {
     game_client_t* engine;
-    void*          ctx;         /* KcpClientCtx* from net_kcp_client_bind */
+    void*          ctx;         /* Lua registry ref (int via intptr_t)    */
 };
 
 struct game_kcp_server_s {
     game_client_t* engine;
-    void*          ctx;         /* KcpServerCtx* from net_kcp_server_bind */
+    void*          ctx;         /* Lua registry ref (int via intptr_t)    */
 };
 
 /* =========================================================================

@@ -28,6 +28,7 @@ namespace {
 struct TimerEntry {
     game_timer_cb_t cb;
     void*           userdata;
+    bool            repeating;  /* false = one-shot (timeout), true = interval */
 };
 
 /* Simple registry: timer_id → callback. Protected by mutex because the
@@ -40,21 +41,22 @@ int g_next_timer_id = 1;
 
 /* Lua trampoline: called by the Lua timer system, dispatches to C callback. */
 int timer_trampoline(lua_State* L) {
-    /* The Lua timer callback receives no arguments. We look up the timer
-     * by the timer_id stored in the upvalue. */
     int timer_id = static_cast<int>(lua_tointeger(L, lua_upvalueindex(1)));
 
-    std::lock_guard<std::mutex> lock(g_timer_mutex);
-    auto it = g_timers.find(timer_id);
-    if (it != g_timers.end() && it->second.cb) {
-        /* Release lock before calling user callback to avoid deadlock
-         * if the callback calls timer_cancel. */
-        auto cb  = it->second.cb;
-        auto ud  = it->second.userdata;
-        /* For one-shot timers (timeout), the Lua side auto-destroys the
-         * timer after the callback returns. We remove our entry. */
-        /* Note: we can't distinguish timeout vs interval here without
-         * extra bookkeeping. The entry is cleaned up by cancel(). */
+    game_timer_cb_t cb = nullptr;
+    void*            ud = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(g_timer_mutex);
+        auto it = g_timers.find(timer_id);
+        if (it == g_timers.end()) return 0;
+        cb = it->second.cb;
+        ud = it->second.userdata;
+        if (!it->second.repeating) {
+            g_timers.erase(it);
+        }
+    }
+    /* Callback invoked outside the lock — safe for cancel() from within. */
+    if (cb) {
         cb(timer_id, ud);
     }
     return 0;
@@ -78,7 +80,7 @@ game_error_t game_timer_timeout(game_client_t* client, int64_t delay_ms,
     {
         std::lock_guard<std::mutex> lock(g_timer_mutex);
         timer_id = g_next_timer_id++;
-        g_timers[timer_id] = {cb, userdata};
+        g_timers[timer_id] = {cb, userdata, false};
     }
 
     /* Push the timer id as an upvalue for the trampoline. */
@@ -92,10 +94,10 @@ game_error_t game_timer_timeout(game_client_t* client, int64_t delay_ms,
     lua_pushcclosure(L, timer_trampoline, 1);     /* timeout, ms, fn */
 
     if (lua_pcall(L, 2, 1, 0) != LUA_OK) {
+        set_error(client, lua_tostring(L, -1));
         lua_pop(L, 1);
         std::lock_guard<std::mutex> lock(g_timer_mutex);
         g_timers.erase(timer_id);
-        set_error(client, lua_tostring(L, -1));
         return GAME_ERR_GENERIC;
     }
 
@@ -119,7 +121,7 @@ game_error_t game_timer_interval(game_client_t* client, int64_t interval_ms,
     {
         std::lock_guard<std::mutex> lock(g_timer_mutex);
         timer_id = g_next_timer_id++;
-        g_timers[timer_id] = {cb, userdata};
+        g_timers[timer_id] = {cb, userdata, true};
     }
 
     lua_getglobal(L, "timer");                    /* timer             */
@@ -131,10 +133,10 @@ game_error_t game_timer_interval(game_client_t* client, int64_t interval_ms,
     lua_pushcclosure(L, timer_trampoline, 1);     /* interval, ms, fn  */
 
     if (lua_pcall(L, 2, 1, 0) != LUA_OK) {
+        set_error(client, lua_tostring(L, -1));
         lua_pop(L, 1);
         std::lock_guard<std::mutex> lock(g_timer_mutex);
         g_timers.erase(timer_id);
-        set_error(client, lua_tostring(L, -1));
         return GAME_ERR_GENERIC;
     }
 
