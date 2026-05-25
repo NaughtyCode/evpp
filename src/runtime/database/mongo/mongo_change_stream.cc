@@ -44,13 +44,12 @@ bool MongoChangeStream::Next(BsonDocument* out) {
     return ok;
 }
 
-const BsonDocument* MongoChangeStream::GetResumeToken() const {
+const void* MongoChangeStream::GetResumeToken() const {
     if (!impl_ || !impl_->stream) return nullptr;
-    const bson_t* token = mongoc_change_stream_get_resume_token(impl_->stream);
-    return reinterpret_cast<const BsonDocument*>(token);
+    return mongoc_change_stream_get_resume_token(impl_->stream);
 }
 
-bool MongoChangeStream::ErrorDocument(MongoError* error, const BsonDocument** doc) const {
+bool MongoChangeStream::ErrorDocument(MongoError* error, const void** doc) const {
     if (!impl_ || !impl_->stream) return false;
     return mongoc_change_stream_error_document(impl_->stream,
         error ? static_cast<bson_error_t*>(error->RawError()) : nullptr,

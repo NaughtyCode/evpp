@@ -38,7 +38,7 @@
 
   <!-- Title -->
   <rect width="1200" height="60" fill="#1a1a2e"/>
-  <text x="600" y="40" text-anchor="middle" fill="white" font-size="24" font-weight="bold">ServerEngine — 全景架构图</text>
+  <text x="600" y="40" text-anchor="middle" fill="white" font-size="24" font-weight="bold">CloudEngine — 全景架构图</text>
 
   <!-- ============================================================ -->
   <!-- Layer 0: External Clients -->
@@ -113,7 +113,7 @@
   <!-- Layer 3: Engine Core -->
   <!-- ============================================================ -->
   <rect x="40" y="400" width="1120" height="130" rx="8" fill="#f3f0ff" stroke="#7950f2" stroke-width="1.5"/>
-  <text x="60" y="422" fill="#5f3dc4" font-size="13" font-weight="bold">ENGINE CORE  (src/runtime/) — ServerEngine.dll</text>
+  <text x="60" y="422" fill="#5f3dc4" font-size="13" font-weight="bold">ENGINE CORE  (src/runtime/) — CloudEngine.dll</text>
 
   <!-- Engine -->
   <rect x="60" y="435" width="200" height="80" rx="6" fill="url(#g0)" filter="url(#shadow)"/>
@@ -422,8 +422,8 @@
   <text x="890" y="1420" fill="#495057" font-size="10">启动 / 每帧流程</text>
 
   <!-- Footnote -->
-  <text x="600" y="1535" text-anchor="middle" fill="#868e96" font-size="11">ServerEngine Architecture · server_engine branch · commit 6614a13f</text>
+  <text x="600" y="1535" text-anchor="middle" fill="#868e96" font-size="11">CloudEngine Architecture · server_engine branch · commit 6614a13f</text>
 
   <!-- Builder notation -->
-  <text x="600" y="1555" text-anchor="middle" fill="#adb5bd" font-size="10">Built with ♥ for the evpp3 ServerEngine Project</text>
+  <text x="600" y="1555" text-anchor="middle" fill="#adb5bd" font-size="10">Built with ♥ for the evpp3 CloudEngine Project</text>
 </svg>

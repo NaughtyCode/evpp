@@ -21,7 +21,13 @@ MongoIndexModel::MongoIndexModel(const BsonDocument& keys, const BsonDocument* o
 MongoIndexModel::~MongoIndexModel() { Destroy(); }
 
 MongoIndexModel::MongoIndexModel(MongoIndexModel&&) noexcept = default;
-MongoIndexModel& MongoIndexModel::operator=(MongoIndexModel&&) noexcept = default;
+MongoIndexModel& MongoIndexModel::operator=(MongoIndexModel&& other) noexcept {
+    if (this != &other) {
+        Destroy();
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoIndexModel::Destroy() {
     if (impl_ && impl_->model) {

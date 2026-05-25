@@ -22,7 +22,7 @@ public:
     static MongoUri NewWithError(const char* uri_string, MongoError* error);
     static MongoUri NewForHostPort(const char* hostname, uint16_t port);
 
-    static char* Unescape(const char* escaped_string);
+    static char* Unescape(const char* escaped_string); // Caller must bson_free() the returned string
 
     MongoUri();
     ~MongoUri();

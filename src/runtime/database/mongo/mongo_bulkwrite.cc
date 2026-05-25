@@ -27,7 +27,13 @@ MongoBulkWriteInsertOneOpts::~MongoBulkWriteInsertOneOpts() {
 }
 
 MongoBulkWriteInsertOneOpts::MongoBulkWriteInsertOneOpts(MongoBulkWriteInsertOneOpts&&) noexcept = default;
-MongoBulkWriteInsertOneOpts& MongoBulkWriteInsertOneOpts::operator=(MongoBulkWriteInsertOneOpts&&) noexcept = default;
+MongoBulkWriteInsertOneOpts& MongoBulkWriteInsertOneOpts::operator=(MongoBulkWriteInsertOneOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_bulkwrite_insertoneopts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void* MongoBulkWriteInsertOneOpts::Raw() { return impl_ ? impl_->opts : nullptr; }
 const void* MongoBulkWriteInsertOneOpts::Raw() const { return impl_ ? impl_->opts : nullptr; }
@@ -50,7 +56,13 @@ MongoBulkWriteUpdateOneOpts::~MongoBulkWriteUpdateOneOpts() {
 }
 
 MongoBulkWriteUpdateOneOpts::MongoBulkWriteUpdateOneOpts(MongoBulkWriteUpdateOneOpts&&) noexcept = default;
-MongoBulkWriteUpdateOneOpts& MongoBulkWriteUpdateOneOpts::operator=(MongoBulkWriteUpdateOneOpts&&) noexcept = default;
+MongoBulkWriteUpdateOneOpts& MongoBulkWriteUpdateOneOpts::operator=(MongoBulkWriteUpdateOneOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_bulkwrite_updateoneopts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoBulkWriteUpdateOneOpts::SetArrayFilters(const BsonDocument& array_filters) {
     if (impl_ && impl_->opts)
@@ -102,7 +114,13 @@ MongoBulkWriteUpdateManyOpts::~MongoBulkWriteUpdateManyOpts() {
 }
 
 MongoBulkWriteUpdateManyOpts::MongoBulkWriteUpdateManyOpts(MongoBulkWriteUpdateManyOpts&&) noexcept = default;
-MongoBulkWriteUpdateManyOpts& MongoBulkWriteUpdateManyOpts::operator=(MongoBulkWriteUpdateManyOpts&&) noexcept = default;
+MongoBulkWriteUpdateManyOpts& MongoBulkWriteUpdateManyOpts::operator=(MongoBulkWriteUpdateManyOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_bulkwrite_updatemanyopts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoBulkWriteUpdateManyOpts::SetArrayFilters(const BsonDocument& array_filters) {
     if (impl_ && impl_->opts)
@@ -148,7 +166,13 @@ MongoBulkWriteReplaceOneOpts::~MongoBulkWriteReplaceOneOpts() {
 }
 
 MongoBulkWriteReplaceOneOpts::MongoBulkWriteReplaceOneOpts(MongoBulkWriteReplaceOneOpts&&) noexcept = default;
-MongoBulkWriteReplaceOneOpts& MongoBulkWriteReplaceOneOpts::operator=(MongoBulkWriteReplaceOneOpts&&) noexcept = default;
+MongoBulkWriteReplaceOneOpts& MongoBulkWriteReplaceOneOpts::operator=(MongoBulkWriteReplaceOneOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_bulkwrite_replaceoneopts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoBulkWriteReplaceOneOpts::SetCollation(const BsonDocument& collation) {
     if (impl_ && impl_->opts)
@@ -194,7 +218,13 @@ MongoBulkWriteDeleteOneOpts::~MongoBulkWriteDeleteOneOpts() {
 }
 
 MongoBulkWriteDeleteOneOpts::MongoBulkWriteDeleteOneOpts(MongoBulkWriteDeleteOneOpts&&) noexcept = default;
-MongoBulkWriteDeleteOneOpts& MongoBulkWriteDeleteOneOpts::operator=(MongoBulkWriteDeleteOneOpts&&) noexcept = default;
+MongoBulkWriteDeleteOneOpts& MongoBulkWriteDeleteOneOpts::operator=(MongoBulkWriteDeleteOneOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_bulkwrite_deleteoneopts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoBulkWriteDeleteOneOpts::SetCollation(const BsonDocument& collation) {
     if (impl_ && impl_->opts)
@@ -229,7 +259,13 @@ MongoBulkWriteDeleteManyOpts::~MongoBulkWriteDeleteManyOpts() {
 }
 
 MongoBulkWriteDeleteManyOpts::MongoBulkWriteDeleteManyOpts(MongoBulkWriteDeleteManyOpts&&) noexcept = default;
-MongoBulkWriteDeleteManyOpts& MongoBulkWriteDeleteManyOpts::operator=(MongoBulkWriteDeleteManyOpts&&) noexcept = default;
+MongoBulkWriteDeleteManyOpts& MongoBulkWriteDeleteManyOpts::operator=(MongoBulkWriteDeleteManyOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_bulkwrite_deletemanyopts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoBulkWriteDeleteManyOpts::SetCollation(const BsonDocument& collation) {
     if (impl_ && impl_->opts)
@@ -264,7 +300,13 @@ MongoBulkWriteOpts::~MongoBulkWriteOpts() {
 }
 
 MongoBulkWriteOpts::MongoBulkWriteOpts(MongoBulkWriteOpts&&) noexcept = default;
-MongoBulkWriteOpts& MongoBulkWriteOpts::operator=(MongoBulkWriteOpts&&) noexcept = default;
+MongoBulkWriteOpts& MongoBulkWriteOpts::operator=(MongoBulkWriteOpts&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_bulkwriteopts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoBulkWriteOpts::SetOrdered(bool ordered) {
     if (impl_ && impl_->opts)
@@ -327,7 +369,13 @@ MongoBulkWriteResult::~MongoBulkWriteResult() {
 }
 
 MongoBulkWriteResult::MongoBulkWriteResult(MongoBulkWriteResult&&) noexcept = default;
-MongoBulkWriteResult& MongoBulkWriteResult::operator=(MongoBulkWriteResult&&) noexcept = default;
+MongoBulkWriteResult& MongoBulkWriteResult::operator=(MongoBulkWriteResult&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->result) mongoc_bulkwriteresult_destroy(impl_->result);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 int64_t MongoBulkWriteResult::InsertedCount() const {
     return impl_ && impl_->result ? mongoc_bulkwriteresult_insertedcount(impl_->result) : 0;
@@ -368,7 +416,10 @@ uint32_t MongoBulkWriteResult::ServerId() const {
 void* MongoBulkWriteResult::Raw() { return impl_ ? impl_->result : nullptr; }
 
 void MongoBulkWriteResult::SetRaw(void* raw) {
-    if (impl_) impl_->result = static_cast<mongoc_bulkwriteresult_t*>(raw);
+    if (impl_) {
+        if (impl_->result) mongoc_bulkwriteresult_destroy(impl_->result);
+        impl_->result = static_cast<mongoc_bulkwriteresult_t*>(raw);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -385,7 +436,13 @@ MongoBulkWriteException::~MongoBulkWriteException() {
 }
 
 MongoBulkWriteException::MongoBulkWriteException(MongoBulkWriteException&&) noexcept = default;
-MongoBulkWriteException& MongoBulkWriteException::operator=(MongoBulkWriteException&&) noexcept = default;
+MongoBulkWriteException& MongoBulkWriteException::operator=(MongoBulkWriteException&& other) noexcept {
+    if (this != &other) {
+        if (impl_ && impl_->exc) mongoc_bulkwriteexception_destroy(impl_->exc);
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 bool MongoBulkWriteException::Error(MongoError* error) const {
     return impl_ && impl_->exc && mongoc_bulkwriteexception_error(impl_->exc,
@@ -407,7 +464,10 @@ const void* MongoBulkWriteException::ErrorReply() const {
 void* MongoBulkWriteException::Raw() { return impl_ ? impl_->exc : nullptr; }
 
 void MongoBulkWriteException::SetRaw(void* raw) {
-    if (impl_) impl_->exc = static_cast<mongoc_bulkwriteexception_t*>(raw);
+    if (impl_) {
+        if (impl_->exc) mongoc_bulkwriteexception_destroy(impl_->exc);
+        impl_->exc = static_cast<mongoc_bulkwriteexception_t*>(raw);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════

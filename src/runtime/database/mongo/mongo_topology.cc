@@ -111,11 +111,11 @@ MongoServerDescription** MongoTopologyDescription::GetServers(size_t* n) const {
         if (n) *n = 0;
         return nullptr;
     }
-    auto** result = new MongoServerDescription*[count];
+    auto** result = static_cast<MongoServerDescription**>(
+        bson_malloc(count * sizeof(MongoServerDescription*)));
     for (size_t i = 0; i < count; ++i) {
         result[i] = new MongoServerDescription(raw_servers[i]);
     }
-    // We must free the raw_servers array but NOT the individual descriptions (they're borrowed).
     bson_free(raw_servers);
     if (n) *n = count;
     return result;

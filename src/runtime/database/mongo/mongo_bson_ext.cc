@@ -1,6 +1,7 @@
 #include "runtime/database/mongo/mongo_bson_ext.h"
 
 #include <cstdarg>
+#include <mutex>
 #include <string>
 
 #include <bson/bson.h>
@@ -29,17 +30,21 @@ BsonContext BsonContext::New() {
 
 const BsonContext& BsonContext::Default() {
     static BsonContext default_ctx;
-    if (!default_ctx.impl_->ctx) {
+    static std::once_flag init_flag;
+    std::call_once(init_flag, [&] {
         default_ctx.impl_->ctx = bson_context_get_default();
         default_ctx.impl_->owned = false;
-    }
+    });
     return default_ctx;
 }
 
 BsonContext::BsonContext() : impl_(std::make_unique<Impl>()) {}
 
 BsonContext::~BsonContext() {
-    // Default context is shared; don't destroy
+    if (impl_ && impl_->ctx && impl_->owned) {
+        bson_context_destroy(impl_->ctx);
+        impl_->ctx = nullptr;
+    }
 }
 
 BsonContext::BsonContext(BsonContext&&) noexcept = default;
@@ -130,7 +135,8 @@ BsonJsonReader BsonJsonReader::NewFromFile(const char* filename, MongoError* err
 BsonJsonReader BsonJsonReader::NewFromData(const uint8_t* data, size_t length) {
     BsonJsonReader r;
     r.impl_->reader = bson_json_data_reader_new(false, 0);
-    bson_json_data_reader_ingest(r.impl_->reader, data, length);
+    if (r.impl_->reader)
+        bson_json_data_reader_ingest(r.impl_->reader, data, length);
     return r;
 }
 
@@ -188,6 +194,7 @@ struct BsonJsonDataReader::Impl {
 
 BsonJsonDataReader::BsonJsonDataReader() : impl_(std::make_unique<Impl>()) {
     impl_->reader = bson_json_data_reader_new(false, 0);
+    // reader may be null on allocation failure; Ingest/Destroy guard with null checks
 }
 
 BsonJsonDataReader::~BsonJsonDataReader() {
@@ -332,7 +339,6 @@ void BsonWriter::Destroy() {
     if (impl_ && impl_->writer) {
         bson_writer_destroy(impl_->writer);
         impl_->writer = nullptr;
-        bson_free(impl_->buf);
         impl_->buf = nullptr;
         impl_->buflen = 0;
     }
@@ -355,8 +361,14 @@ bool BsonWriter::BeginArray(BsonDocument* array) {
 
 void BsonWriter::End(BsonDocument* out) {
     if (impl_ && impl_->writer) {
-        (void)out;
         bson_writer_end(impl_->writer);
+        if (out && impl_->buf) {
+            bson_t tmp;
+            size_t len = bson_writer_get_length(impl_->writer);
+            bson_init_static(&tmp, impl_->buf, len);
+            bson_destroy(static_cast<bson_t*>(out->RawBson()));
+            bson_copy_to(&tmp, static_cast<bson_t*>(out->RawBson()));
+        }
     }
 }
 

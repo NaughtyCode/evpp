@@ -62,10 +62,9 @@ void MongoCursor::SetCursor(void* cursor) {
     impl_->cursor = static_cast<mongoc_cursor_t*>(cursor);
 }
 
-const BsonDocument* MongoCursor::Current() const {
+const void* MongoCursor::Current() const {
     if (!impl_ || !impl_->cursor) return nullptr;
-    const bson_t* doc = mongoc_cursor_current(impl_->cursor);
-    return reinterpret_cast<const BsonDocument*>(doc);
+    return mongoc_cursor_current(impl_->cursor);
 }
 
 bool MongoCursor::More() {
@@ -73,7 +72,7 @@ bool MongoCursor::More() {
     return mongoc_cursor_more(impl_->cursor);
 }
 
-bool MongoCursor::ErrorDocument(MongoError* error, const BsonDocument** doc) const {
+bool MongoCursor::ErrorDocument(MongoError* error, const void** doc) const {
     if (!impl_ || !impl_->cursor) return false;
     return mongoc_cursor_error_document(impl_->cursor,
         error ? static_cast<bson_error_t*>(error->RawError()) : nullptr,

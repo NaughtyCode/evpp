@@ -55,7 +55,7 @@
 
 // ENGINE_API — used by engine-layer classes (physics, vm, script, profiler, etc.)
 // EVPP_EXPORT — used by evpp network classes (EventLoop, Buffer, TCPClient, etc.)
-// Both are compiled into ServerEngine.dll. ENGINE_BUILD is defined by
+// Both are compiled into CloudEngine.dll. ENGINE_BUILD is defined by
 // runtime/CMakeLists.txt when building the library.
 
 #if defined(_WIN32) || defined(__CYGWIN__)

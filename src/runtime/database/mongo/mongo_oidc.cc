@@ -2,9 +2,6 @@
 
 #include <mongoc/mongoc.h>
 
-#include <mutex>
-#include <unordered_map>
-
 namespace engine {
 namespace mongo {
 

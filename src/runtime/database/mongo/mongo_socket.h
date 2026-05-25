@@ -37,7 +37,7 @@ public:
     int Bind(const struct sockaddr* addr, int addrlen);
     int Close();
     int Connect(const struct sockaddr* addr, int addrlen, int64_t expire_at);
-    char* GetNameInfo();
+    char* GetNameInfo(); // Caller must bson_free() the returned string
     int GetError() const;
     int GetSockName(struct sockaddr* addr, int* addrlen) const;
     int Listen(unsigned int backlog);

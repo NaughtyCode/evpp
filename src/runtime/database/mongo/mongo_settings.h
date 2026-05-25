@@ -80,7 +80,7 @@ public:
     int64_t GetWTimeoutInt64() const;
     void SetWTimeoutInt64(int64_t timeout_ms);
     bool GetWMajority() const;
-    void SetWMajority(bool wmajority);
+    void SetWMajority(int32_t wtimeout_msec);
     const char* GetWTag() const;
     int32_t SetWTag(const char* tag);
     bool IsAcknowledged() const;

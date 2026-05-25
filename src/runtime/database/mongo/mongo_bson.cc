@@ -652,8 +652,7 @@ uint32_t BsonIter::Offset() const {
 }
 
 const void* BsonIter::Value() const {
-    return bson_iter_value(static_cast<bson_iter_t*>(
-        const_cast<BsonIter*>(this)->RawIter()));
+    return bson_iter_value(static_cast<bson_iter_t*>(const_cast<BsonIter*>(this)->RawIter()));
 }
 
 void BsonIter::OverwriteInt32(int32_t value) {

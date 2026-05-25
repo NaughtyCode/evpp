@@ -1,6 +1,6 @@
 # GameClient — Pure C API for the game Runtime
 
-**GameClient** 是一个纯 C 接口的动态库，将 ServerEngine 的全部核心功能（Lua 虚拟机、网络、定时器、日志）封装为 ABI 稳定的 C 函数，供 Unity、Unreal Engine 等游戏引擎通过 `[DllImport]` / `dlsym` 直接调用。
+**GameClient** 是一个纯 C 接口的动态库，将 CloudEngine 的全部核心功能（Lua 虚拟机、网络、定时器、日志）封装为 ABI 稳定的 C 函数，供 Unity、Unreal Engine 等游戏引擎通过 `[DllImport]` / `dlsym` 直接调用。
 
 ## 设计目标
 
@@ -11,7 +11,7 @@
 │                  游戏业务逻辑                       │
 │            (Lua — 服务器 & 客户端共享)               │
 ├──────────────────────┬───────────────────────────┤
-│     ServerEngine     │      GameClient            │
+│     CloudEngine     │      GameClient            │
 │   (C++ 动态库)        │   (纯 C API 动态库)          │
 │   • 完整功能          │   • extern "C" 导出         │
 │   • Lua bindings    │   • 不透明句柄               │
@@ -22,7 +22,7 @@
 └──────────────────────┴───────────────────────────┘
 ```
 
-- **服务器侧**：直接使用 `ServerEngine.dll`，拥有全部功能（物理、Lua 热更、完整配置）。
+- **服务器侧**：直接使用 `CloudEngine.dll`，拥有全部功能（物理、Lua 热更、完整配置）。
 - **客户端侧**：使用 `GameClient.dll`，通过纯 C API 获取核心功能（Lua VM、网络、定时器、日志），可集成到任何引擎。
 
 客户端和服务器可以共享完全相同的 Lua 业务代码——网络协议处理、战斗逻辑校验、数据校验规则等。
@@ -821,12 +821,12 @@ void on_message(game_net_client_t* conn, const char* data, int len, void* ud)
 
 ---
 
-## 与 ServerEngine 的关系
+## 与 CloudEngine 的关系
 
-`client` 是 `ServerEngine` 的瘦封装层：
+`client` 是 `CloudEngine` 的瘦封装层：
 
 ```
-GameClient.dll ──(link)──► ServerEngine.dll
+GameClient.dll ──(link)──► CloudEngine.dll
                               │
                               ├─ engine::Engine (单例)
                               ├─ engine::ScriptVM (Lua VM)
@@ -854,9 +854,9 @@ GameClient.dll ──(link)──► ServerEngine.dll
 |------|------|------|
 | CMake | ≥ 3.20 | 构建系统 |
 | C++17 编译器 | MSVC 2019+, GCC 9+, Clang 10+ | 实现文件为 C++ |
-| ServerEngine | 当前版本 | 运行时依赖 |
-| Lua 5.4 | 随 ServerEngine 提供 | 头文件路径 |
+| CloudEngine | 当前版本 | 运行时依赖 |
+| Lua 5.4 | 随 CloudEngine 提供 | 头文件路径 |
 
 ## 许可证
 
-与 ServerEngine 项目相同。
+与 CloudEngine 项目相同。

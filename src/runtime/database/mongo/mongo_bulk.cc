@@ -16,6 +16,10 @@ struct MongoBulkOperation::Impl {
 MongoBulkOperation* MongoBulkOperation::New(bool ordered) {
     auto* op = new MongoBulkOperation();
     op->impl_->bulk = mongoc_bulk_operation_new(ordered);
+    if (!op->impl_->bulk) {
+        delete op;
+        return nullptr;
+    }
     return op;
 }
 

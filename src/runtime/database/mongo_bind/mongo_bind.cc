@@ -352,15 +352,15 @@ int l_client_command_simple(lua_State* L) {
     mongo::MongoError error;
     bool ok = client->CommandSimple(db_name, *cmd, nullptr, &reply, &error);
     lua_pushboolean(L, ok);
-    if (!ok) lua_pushstring(L, error.Message());
-    else {
-        // Return the reply as a new bson userdata
+    if (!ok) {
+        lua_pushstring(L, error.Message());
+        lua_pushnil(L); // no reply on error
+    } else {
+        lua_pushnil(L); // no error
         auto** ud = NewUserdata<mongo::BsonDocument>(L, kBsonMetaName);
         *ud = new mongo::BsonDocument(std::move(reply));
     }
-    // Push nil for the reply in failure case
-    if (!ok) lua_pushnil(L);
-    return 3; // ok, err_or_reply, nil_or_reply
+    return 3; // ok, err, reply
 }
 
 // ═══════════════════════════════════════════════════════════════════════

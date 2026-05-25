@@ -84,8 +84,8 @@ public:
 
     MongoStructuredLogOpts(const MongoStructuredLogOpts&) = delete;
     MongoStructuredLogOpts& operator=(const MongoStructuredLogOpts&) = delete;
-    MongoStructuredLogOpts(MongoStructuredLogOpts&&) noexcept;
-    MongoStructuredLogOpts& operator=(MongoStructuredLogOpts&&) noexcept;
+    MongoStructuredLogOpts(MongoStructuredLogOpts&&) = delete;
+    MongoStructuredLogOpts& operator=(MongoStructuredLogOpts&&) = delete;
 
     using LogFunc = std::function<void(const MongoStructuredLogEntry& entry)>;
     void SetHandler(LogFunc handler);

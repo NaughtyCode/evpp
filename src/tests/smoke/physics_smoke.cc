@@ -1,5 +1,5 @@
 // Minimal smoke test for the physics subsystem.
-// Links against ServerEngine (which includes physics when enabled).
+// Links against CloudEngine (which includes physics when enabled).
 // Tests: MaterialTable, LayerConfig, AssetLoader shape creation.
 
 #include <cstdio>

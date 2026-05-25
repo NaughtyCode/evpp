@@ -182,8 +182,8 @@ bool MongoWriteConcern::GetWMajority() const {
     return impl_ && impl_->wc && mongoc_write_concern_get_wmajority(impl_->wc);
 }
 
-void MongoWriteConcern::SetWMajority(bool wmajority) {
-    if (impl_ && impl_->wc) mongoc_write_concern_set_wmajority(impl_->wc, static_cast<int32_t>(wmajority));
+void MongoWriteConcern::SetWMajority(int32_t wtimeout_msec) {
+    if (impl_ && impl_->wc) mongoc_write_concern_set_wmajority(impl_->wc, wtimeout_msec);
 }
 
 const char* MongoWriteConcern::GetWTag() const {

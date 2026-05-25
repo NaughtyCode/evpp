@@ -1,5 +1,7 @@
 #include "runtime/database/mongo/mongo_socket.h"
 
+#include <new>
+
 #include <mongoc/mongoc.h>
 
 #include "runtime/database/mongo/mongo_iovec.h"
@@ -36,7 +38,11 @@ MongoSocket* MongoSocket::Accept(int64_t expire_at) {
     if (!impl_ || !impl_->sock) return nullptr;
     auto* raw = mongoc_socket_accept(impl_->sock, expire_at);
     if (!raw) return nullptr;
-    auto* result = new MongoSocket();
+    auto* result = new (std::nothrow) MongoSocket();
+    if (!result) {
+        mongoc_socket_destroy(raw);
+        return nullptr;
+    }
     result->impl_->sock = raw;
     return result;
 }

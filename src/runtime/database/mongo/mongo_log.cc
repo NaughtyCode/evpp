@@ -119,8 +119,8 @@ MongoStructuredLogOpts::~MongoStructuredLogOpts() {
     if (impl_ && impl_->opts) mongoc_structured_log_opts_destroy(impl_->opts);
 }
 
-MongoStructuredLogOpts::MongoStructuredLogOpts(MongoStructuredLogOpts&&) noexcept = default;
-MongoStructuredLogOpts& MongoStructuredLogOpts::operator=(MongoStructuredLogOpts&&) noexcept = default;
+// Move deleted — SetHandler stores &impl_->handler in the C library;
+// moving would leave a dangling pointer in the C callback user_data.
 
 void MongoStructuredLogOpts::SetHandler(LogFunc handler) {
     if (!impl_) return;

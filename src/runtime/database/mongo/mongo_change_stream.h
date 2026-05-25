@@ -26,10 +26,11 @@ public:
     bool Next(BsonDocument* out);
 
     // Retrieve the resume token after a successful Next().
-    const BsonDocument* GetResumeToken() const;
+    // Returns the raw const bson_t* (the caller may treat it as read-only).
+    const void* GetResumeToken() const;
 
-    // Check for error on the stream.
-    bool ErrorDocument(MongoError* error, const BsonDocument** doc) const;
+    // Check for error on the stream. doc receives a raw const bson_t*.
+    bool ErrorDocument(MongoError* error, const void** doc) const;
 
     // Internal: set from collection/database/client watch. Not for public use.
     void SetRawStream(void* stream); // mongoc_change_stream_t*

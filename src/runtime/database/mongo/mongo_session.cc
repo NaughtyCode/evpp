@@ -28,7 +28,10 @@ MongoTransactionOpts::~MongoTransactionOpts() {
 MongoTransactionOpts::MongoTransactionOpts(MongoTransactionOpts&& other) noexcept : impl_(std::move(other.impl_)) {}
 
 MongoTransactionOpts& MongoTransactionOpts::operator=(MongoTransactionOpts&& other) noexcept {
-    if (this != &other) impl_ = std::move(other.impl_);
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_transaction_opts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
     return *this;
 }
 
@@ -106,7 +109,10 @@ MongoSessionOpts::~MongoSessionOpts() {
 MongoSessionOpts::MongoSessionOpts(MongoSessionOpts&& other) noexcept : impl_(std::move(other.impl_)) {}
 
 MongoSessionOpts& MongoSessionOpts::operator=(MongoSessionOpts&& other) noexcept {
-    if (this != &other) impl_ = std::move(other.impl_);
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_session_opts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
     return *this;
 }
 
@@ -276,7 +282,6 @@ bool with_transaction_trampoline(mongoc_client_session_t* session,
     auto* txn_ctx = static_cast<WithTxnCtx*>(ctx);
     if (!txn_ctx || !txn_ctx->cb) return false;
 
-    // Create a temporary non-owning MongoSession wrapper
     MongoSession* tmp_session = MongoSession::CreateEmpty();
     tmp_session->SetRawSession(session);
 
@@ -285,7 +290,6 @@ bool with_transaction_trampoline(mongoc_client_session_t* session,
 
     bool ok = txn_ctx->cb(tmp_session, &reply_doc, &mongo_err);
 
-    // Release ownership so the session is not destroyed
     tmp_session->ReleaseSession();
     MongoSession::Destroy(tmp_session);
 
@@ -294,7 +298,8 @@ bool with_transaction_trampoline(mongoc_client_session_t* session,
         *reply = bson_copy(static_cast<const bson_t*>(reply_doc.RawBson()));
     }
     if (!ok && error) {
-        memcpy(error, static_cast<bson_error_t*>(mongo_err.RawError()), sizeof(bson_error_t));
+        auto* raw_err = static_cast<bson_error_t*>(mongo_err.RawError());
+        if (raw_err) memcpy(error, raw_err, sizeof(bson_error_t));
     }
     return ok;
 }

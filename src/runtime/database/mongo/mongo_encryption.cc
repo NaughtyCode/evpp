@@ -24,6 +24,10 @@ bool kms_cred_provider_trampoline(void* userdata, const bson_t* params, bson_t* 
     auto* ctx = static_cast<KmsCallbackCtx*>(userdata);
     if (!ctx || !ctx->cb) return false;
     BsonDocument params_doc;
+    if (params) {
+        bson_destroy(static_cast<bson_t*>(params_doc.RawBson()));
+        bson_copy_to(params, static_cast<bson_t*>(params_doc.RawBson()));
+    }
     BsonDocument out_doc;
     MongoError mongo_err;
     bool ok = ctx->cb(ctx->userdata, params_doc, &out_doc, &mongo_err);

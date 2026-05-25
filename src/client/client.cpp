@@ -1,7 +1,7 @@
 /*
  * client.cpp — Engine lifecycle, script execution, and utility functions.
  *
- * Links against ServerEngine.dll and wraps its C++ classes:
+ * Links against CloudEngine.dll and wraps its C++ classes:
  *   engine::Engine   — singleton lifecycle (Init/Tick/Cleanup)
  *   engine::ScriptVM — Lua VM (DoString/DoFile/RegisterFunction)
  */

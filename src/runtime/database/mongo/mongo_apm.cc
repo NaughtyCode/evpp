@@ -7,34 +7,6 @@
 namespace engine {
 namespace mongo {
 
-// ── Helper: store std::function as context, invoke from C callback ────────
-
-template <typename EventWrapper, typename RawEvent>
-static inline void InvokeCallback(void* ctx, RawEvent* raw_event) {
-    if (!ctx) return;
-    auto* fn = static_cast<std::function<void(const EventWrapper&)>*>(ctx);
-    EventWrapper wrapper(raw_event);
-    (*fn)(wrapper);
-}
-
-template <typename EventWrapper, typename RawEvent>
-static inline void DeleteContext(void* ctx) {
-    delete static_cast<std::function<void(const EventWrapper&)>*>(ctx);
-}
-
-// Macro to generate the C→C++ shim for each callback type
-#define MAKE_APM_CALLBACK(WrapperType, CbType)                                         \
-    static void WrapperType##_shim(const CbType* event) {                              \
-        auto* ctx_ptr = static_cast<std::function<void(const WrapperType&)>*>(         \
-            const_cast<void*>(                                                         \
-                mongoc_apm_##WrapperType##_get_context(                                \
-                    reinterpret_cast<const mongoc_apm_##WrapperType##_t*>(event))));   \
-        if (ctx_ptr) {                                                                 \
-            WrapperType wrapper(event);                                                \
-            (*ctx_ptr)(wrapper);                                                       \
-        }                                                                              \
-    }
-
 // ═══════════════════════════════════════════════════════════════════════
 // Event type implementations
 // ═══════════════════════════════════════════════════════════════════════

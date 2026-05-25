@@ -23,7 +23,10 @@ MongoFindAndModifyOpts::MongoFindAndModifyOpts(MongoFindAndModifyOpts&& other) n
     : impl_(std::move(other.impl_)) {}
 
 MongoFindAndModifyOpts& MongoFindAndModifyOpts::operator=(MongoFindAndModifyOpts&& other) noexcept {
-    if (this != &other) impl_ = std::move(other.impl_);
+    if (this != &other) {
+        if (impl_ && impl_->opts) mongoc_find_and_modify_opts_destroy(impl_->opts);
+        impl_ = std::move(other.impl_);
+    }
     return *this;
 }
 

@@ -1,7 +1,7 @@
 /*
  * client.h — Pure C API for the evpp Runtime
  *
- * A stable, ABI-safe C interface to the ServerEngine runtime. Designed for
+ * A stable, ABI-safe C interface to the CloudEngine runtime. Designed for
  * integration into game engines (Unity, Unreal Engine, custom C/C++ engines)
  * so that game client and server can share the same Lua business logic.
  *

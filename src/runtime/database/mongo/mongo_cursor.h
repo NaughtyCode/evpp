@@ -25,9 +25,9 @@ public:
     bool HasError(MongoError* error) const;
 
     // ── Cursor control ────────────────────────────────────────────────
-    const BsonDocument* Current() const;       // returns current doc without advancing
+    const void* Current() const;               // returns const bson_t* (current doc without advancing)
     bool More();                               // is there another doc?
-    bool ErrorDocument(MongoError* error, const BsonDocument** doc) const;
+    bool ErrorDocument(MongoError* error, const void** doc) const;
     MongoCursor* Clone() const;               // clone cursor (not fully supported in 2.x — prefer re-query)
 
     // ── Batch / limit ──────────────────────────────────────────────────
