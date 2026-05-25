@@ -15,6 +15,7 @@ public:
     // Create a client from a connection URI string (e.g. "mongodb://localhost:27017").
     static MongoClient* New(const char* uri_string);
     static MongoClient* New(const MongoUri& uri);
+    static MongoClient* New(const MongoUri& uri, MongoError* error);
 
     void Destroy(); // frees the underlying mongoc client
 
@@ -42,6 +43,12 @@ public:
     bool CommandSimple(const char* db_name, const BsonDocument& command,
                        const MongoReadPrefs* read_prefs,
                        BsonDocument* reply, MongoError* error);
+    bool CommandSimpleWithServerId(const char* db_name, const BsonDocument& command,
+                                    const MongoReadPrefs* read_prefs, uint32_t server_id,
+                                    BsonDocument* reply, MongoError* error);
+    bool CommandWithOpts(const char* db_name, const BsonDocument& command,
+                         const MongoReadPrefs* read_prefs, const BsonDocument* opts,
+                         BsonDocument* reply, MongoError* error);
     bool ReadCommandWithOpts(const char* db_name, const BsonDocument& command,
                              const MongoReadPrefs* read_prefs, const BsonDocument* opts,
                              BsonDocument* reply, MongoError* error);
@@ -63,6 +70,39 @@ public:
 
     // ── Change stream ────────────────────────────────────────────────
     MongoChangeStream* Watch(const BsonDocument& pipeline, const BsonDocument* opts);
+
+    // ── GridFS ───────────────────────────────────────────────────────
+    void* GetGridfs(const char* db, const char* prefix, MongoError* error);
+
+    // ── APM (Application Performance Monitoring) ──────────────────────
+    bool SetApmCallbacks(void* callbacks, void* context);
+
+    // ── Structured logging ───────────────────────────────────────────
+    bool SetStructuredLogOpts(const void* opts);
+
+    // ── Server selection / description ───────────────────────────────
+    void* SelectServer(bool for_writes, const MongoReadPrefs* prefs, MongoError* error);
+    void* GetServerDescription(uint32_t server_id);
+    void** GetServerDescriptions(size_t* n) const;
+    static void ServerDescriptionsDestroyAll(void** sds, size_t n);
+    void* GetHandshakeDescription(uint32_t server_id, const BsonDocument* opts, MongoError* error);
+
+    // ── Auto-encryption ──────────────────────────────────────────────
+    bool EnableAutoEncryption(void* opts, MongoError* error);
+    const char* GetCryptSharedVersion() const;
+
+    // ── Stream initiator (for custom transports) ──────────────────────
+    void SetStreamInitiator(void* initiator, void* user_data);
+
+    // ── OIDC callback ────────────────────────────────────────────────
+    bool SetOidcCallback(const void* callback);
+
+    // ── Microsecond sleep (for custom event loop integration) ─────────
+    using UsleepFunc = void (*)(int64_t usec, void* user_data);
+    void SetUsleepImpl(UsleepFunc func, void* user_data);
+
+    // ── Metadata ─────────────────────────────────────────────────────
+    bool AppendMetadata(const char* name, const char* version, const char* platform);
 
     // Internal access
     void* RawClient(); // returns mongoc_client_t*
@@ -93,6 +133,8 @@ public:
     void Destroy();
 
     const char* GetName() const;
+
+    MongoDatabase* Copy() const;
 
     MongoCollection* GetCollection(const char* name);
     MongoCollection* CreateCollection(const char* name, const BsonDocument* options, MongoError* error);
@@ -160,6 +202,20 @@ public:
 
     const char* GetName() const;
 
+    MongoCollection* Copy() const;
+
+    // ── Collection-level commands ─────────────────────────────────────
+    bool CommandSimple(const BsonDocument& command, const MongoReadPrefs* read_prefs,
+                       BsonDocument* reply, MongoError* error);
+    bool CommandWithOpts(const BsonDocument& command, const MongoReadPrefs* read_prefs,
+                         const BsonDocument* opts, BsonDocument* reply, MongoError* error);
+    bool ReadCommandWithOpts(const BsonDocument& command, const MongoReadPrefs* read_prefs,
+                             const BsonDocument* opts, BsonDocument* reply, MongoError* error);
+    bool WriteCommandWithOpts(const BsonDocument& command, const BsonDocument* opts,
+                              BsonDocument* reply, MongoError* error);
+    bool ReadWriteCommandWithOpts(const BsonDocument& command, const MongoReadPrefs* read_prefs,
+                                  const BsonDocument* opts, BsonDocument* reply, MongoError* error);
+
     // ── Read/Write settings ─────────────────────────────────────────
     const void* GetReadPrefs() const;
     void SetReadPrefs(const MongoReadPrefs& read_prefs);
@@ -217,6 +273,9 @@ public:
     bool DropIndexWithOpts(const char* index_name, const BsonDocument* opts, MongoError* error);
     bool CreateIndex(const BsonDocument& keys, const BsonDocument* opts,
                      BsonDocument* reply, MongoError* error);
+    // Create multiple indexes at once. models[] are raw mongoc_index_model_t* pointers.
+    bool CreateIndexesWithOpts(const void* const* models, size_t n_models,
+                               const BsonDocument* opts, BsonDocument* reply, MongoError* error);
     MongoCursor* FindIndexes(const BsonDocument* opts);
 
     // ── Utilities ───────────────────────────────────────────────────
@@ -225,6 +284,8 @@ public:
     // ── Rename ──────────────────────────────────────────────────────
     bool Rename(const char* new_db, const char* new_name, bool drop_target_before_rename,
                 MongoError* error);
+    bool RenameWithOpts(const char* new_db, const char* new_name, bool drop_target_before_rename,
+                        const BsonDocument* opts, MongoError* error);
 
     // ── Estimated count ─────────────────────────────────────────────
     int64_t EstimatedDocumentCount(const BsonDocument* opts, const MongoReadPrefs* read_prefs,
@@ -232,6 +293,7 @@ public:
 
     // ── Bulk operation ─────────────────────────────────────────────
     MongoBulkOperation* CreateBulkOperation(bool ordered, const void* session_raw);
+    MongoBulkOperation* CreateBulkOperationWithOpts(const BsonDocument* opts);
 
     void* RawCollection(); // returns mongoc_collection_t*
 
