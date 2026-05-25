@@ -14,7 +14,7 @@ option(ENGINE_PROFILER_ENABLED "Enable perfetto profiler" ON)
 # All project includes are src/-relative.
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include)
-include_directories(${PROJECT_SOURCE_DIR}/thirdparty/lua/lua)
+include_directories(${PROJECT_SOURCE_DIR}/thirdparty/lua/src)
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty/glaze/glaze/include)
 include_directories(${PROJECT_SOURCE_DIR}/thirdparty/concurrentqueue/concurrentqueue)
 if(TARGET bson_static)
@@ -46,14 +46,53 @@ else()
 endif()
 
 # ═══════════════════════════════════════════════════════════════════════
-# Third-party amalgamated sources
+# Third-party sources
 # ═══════════════════════════════════════════════════════════════════════
 
-# ── Lua ────────────────────────────────────────────────────────────
-set(LUA_SOURCES
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/lua/onelua.c
+# ── Lua 5.5.0 (source-form integration) ─────────────────────────────
+# Core VM (each #defines LUA_CORE)
+set(LUA_CORE_SOURCES
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lapi.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lcode.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lctype.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ldebug.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ldo.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ldump.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lfunc.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lgc.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/llex.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lmem.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lobject.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lopcodes.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lparser.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lstate.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lstring.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ltable.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ltm.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lundump.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lvm.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lzio.c
+    # evpp custom: dynamic void* array attached to global_State
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lstate_custom_ptr.c
 )
-set_source_files_properties(${LUA_SOURCES} PROPERTIES COMPILE_DEFINITIONS "MAKE_LIB")
+
+# Standard libraries (each #defines LUA_LIB)
+set(LUA_LIB_SOURCES
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lauxlib.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lbaselib.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lcorolib.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ldblib.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/liolib.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lmathlib.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/loadlib.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/loslib.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lstrlib.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ltablib.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lutf8lib.c
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/linit.c
+)
+
+set(LUA_SOURCES ${LUA_CORE_SOURCES} ${LUA_LIB_SOURCES})
 source_group("thirdparty\\lua" FILES ${LUA_SOURCES})
 
 # ── Perfetto ───────────────────────────────────────────────────────
@@ -229,7 +268,7 @@ add_library(ServerEngine SHARED ${SERVERENGINE_SOURCES})
 target_include_directories(ServerEngine PUBLIC
     ${PROJECT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/lua
+    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src
 )
 
 # ── Compile definitions ───────────────────────────────────────────────
