@@ -39,14 +39,14 @@ struct PhysicsFrameResult {
 
 class PhysicsEngineBridge {
 public:
-    static PhysicsEngineBridge& Instance();
-
     PhysicsEngineBridge(const PhysicsEngineBridge&) = delete;
     PhysicsEngineBridge& operator=(const PhysicsEngineBridge&) = delete;
 
 #ifdef ENGINE_PHYSICS_ENABLED
 
     // ── Full implementation (delegates to PhysicsSystem) ───────────────
+
+    static PhysicsEngineBridge& Instance();
 
     bool Initialize(const std::string& config_dir,
                     const std::string& assets_path,
@@ -69,6 +69,11 @@ public:
 #else
 
     // ── Empty stubs (macro off — zero-cost no-ops) ────────────────────
+
+    static PhysicsEngineBridge& Instance() {
+        static PhysicsEngineBridge instance;
+        return instance;
+    }
 
     bool Initialize(const std::string&, const std::string&, const std::string&) {
         return false;

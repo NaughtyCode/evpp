@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-#ifdef WIN32
+#if defined(WIN32) || defined(_WIN32)
 #define __attribute__(x)
 #endif
 

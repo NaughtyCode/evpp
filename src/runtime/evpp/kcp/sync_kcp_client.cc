@@ -3,6 +3,7 @@
 #include "runtime/evpp/kcp/sync_kcp_client.h"
 #include "runtime/evpp/libevent.h"
 #include "runtime/evpp/sockets.h"
+#include "runtime/evpp/gettimeofday.h"
 
 extern "C" {
 #include "thirdparty/kcp/ikcp.h"
