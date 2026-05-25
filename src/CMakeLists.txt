@@ -114,6 +114,7 @@ set_property(TARGET event_core event_extra event PROPERTY FOLDER "thirdparty")
 add_subdirectory (runtime)
 add_subdirectory (tests)
 add_subdirectory (server)
+add_subdirectory (client)
 
 set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT main)
 
