@@ -51,6 +51,10 @@ void ExportNet(ScriptVM& vm) {
     PushUdpClientLibrary(L);                  // net, udp_client
     lua_setfield(L, -2, "udp_client");
 
+    // net.udp_server
+    PushUdpServerLibrary(L);                  // net, udp_server
+    lua_setfield(L, -2, "udp_server");
+
     // net.kcp_client
     PushKcpClientLibrary(L);                  // net, kcp_client
     lua_setfield(L, -2, "kcp_client");
