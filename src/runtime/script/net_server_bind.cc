@@ -407,8 +407,6 @@ int l_net_server_listen(lua_State* L) {
                 CallInstMethodTableStr(L_ptr, server_inst_ref,
                     "on_connect", conn_inst_ref, remote);
 
-                lua_pop(L_ptr, 1);  // pop conn table (anchored in registry)
-
             } else {
                 // ── Disconnect ─────────────────────────────────
                 auto* conn_ctx = conn->context().Get<ConnCtx*>();
@@ -459,6 +457,8 @@ int l_net_server_listen(lua_State* L) {
                 if (loop) {
                     ConnCtx* del_ctx = conn_ctx;
                     loop->RunInLoop([del_ctx] { delete del_ctx; });
+                } else {
+                    delete conn_ctx;
                 }
             }
         });

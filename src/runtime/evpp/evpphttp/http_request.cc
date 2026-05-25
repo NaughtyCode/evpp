@@ -16,7 +16,7 @@ HttpRequest::HttpRequest() {
 }
 
 int HttpRequest::Parse(evpp::Buffer * buf) {
-    parser.data = const_cast<HttpRequest *>(this);
+    parser.data = this;
     size_t parsed = http_parser_execute(&parser, &settings, buf->data(), buf->size());
     auto err = HTTP_PARSER_ERRNO(&parser);
     if (err != HPE_OK && err != HPE_PAUSED) {

@@ -37,7 +37,7 @@ ProfilerManager::~ProfilerManager() = default;
 // ── Initialize / Shutdown ───────────────────────────────────────────────
 
 bool ProfilerManager::Initialize(const ProfilerConfig& cfg) {
-    if (initialized_) return true;
+    if (initialized_.exchange(true)) return true;
 
     config_ = cfg;
 
@@ -56,16 +56,14 @@ bool ProfilerManager::Initialize(const ProfilerConfig& cfg) {
 
     ENGINE_LOG_INFO(logger, "ProfilerManager: initialized, buffer=[{}KB]", cfg.buffer_size_kb);
 
-    initialized_ = true;
     return true;
 }
 
 void ProfilerManager::Shutdown() {
-    if (!initialized_) return;
+    if (!initialized_.exchange(false)) return;
 
     Flush();
     StopSession();
-    initialized_ = false;
 
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "ProfilerManager: shutdown complete");
@@ -114,6 +112,7 @@ void ProfilerManager::StopSession() {
     if (!session_) return;
 
     session_->StopBlocking();
+    session_.reset();
     session_active_ = false;
 
     auto* logger = GetLogger();

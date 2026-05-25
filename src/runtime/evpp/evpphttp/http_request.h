@@ -10,12 +10,20 @@ public:
         return is_completed;
     }
     HttpRequest();
-    HttpRequest(HttpRequest & hr) {
-        swap(hr);
-    }
-    HttpRequest(HttpRequest&& hr) {
-        swap(hr);
-    }
+    HttpRequest(HttpRequest & hr) = delete;
+    HttpRequest(HttpRequest&& hr) noexcept
+        : body(std::move(hr.body))
+        , field_value(std::move(hr.field_value))
+        , parser(hr.parser)
+        , remote_ip(std::move(hr.remote_ip))
+        , field(std::move(hr.field))
+        , value(std::move(hr.value))
+        , url(std::move(hr.url))
+        , pre_state(hr.pre_state)
+        , is_completed(hr.is_completed)
+        , send_continue_(hr.send_continue_)
+        , settings(hr.settings)
+        , u(hr.u) {}
     HttpRequest(const HttpRequest & hr) = delete;
     int Parse(evpp::Buffer * buf);
     std::string url_path() {

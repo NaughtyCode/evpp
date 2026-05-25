@@ -153,6 +153,8 @@ int l_net_client_connect(lua_State* L) {
                     auto* loop = Engine::Instance().GetEventLoop();
                     if (loop) {
                         loop->RunInLoop([ctx_ptr] { delete ctx_ptr; });
+                    } else {
+                        delete ctx_ptr;
                     }
                 }
             }

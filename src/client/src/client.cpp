@@ -59,11 +59,7 @@ extern "C" game_error_t game_client_init(game_client_t* client,
     client->owns_loop = true;
 
     engine::EngineConfig cfg;
-    if (!engine.Init(cfg, loop)) {
-        set_error(client, "Engine::Init failed");
-        delete loop;
-        return GAME_ERR_GENERIC;
-    }
+    engine.Init(cfg, loop);
 
     client->initialized = true;
     return GAME_OK;
