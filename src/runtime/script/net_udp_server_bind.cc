@@ -257,11 +257,12 @@ void PushUdpServerLibrary(lua_State* L) {
 void ShutdownUdpServerBindings() {
     auto* logger = GetLogger();
 
-    for (auto& [sid, ctx] : g_udp_servers) {
+    // Move to local before iterating — Stop(true) waits for threads;
+    // a Lua callback queued before stop could theoretically call
+    // net.udp_server.stop() which would mutate g_udp_servers.
+    auto servers = std::move(g_udp_servers);
+    for (auto& [sid, ctx] : servers) {
         (void)sid;
-        // Wait for recv threads to exit before releasing callbacks.
-        // After Stop(true) returns, no more MessageHandler invocations
-        // can fire, so the weak_ptr will never be locked again.
         ctx->server->Stop(true);
         if (ctx->L) {
             if (ctx->on_message_ref != LUA_NOREF) {
@@ -271,8 +272,8 @@ void ShutdownUdpServerBindings() {
         }
     }
 
-    size_t server_count = g_udp_servers.size();
-    g_udp_servers.clear();
+    size_t server_count = servers.size();
+    servers.clear();
 
     if (server_count > 0) {
         ENGINE_LOG_INFO(logger, "ScriptBind: shut down [{}] UDP server(s)", server_count);

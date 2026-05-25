@@ -6,6 +6,7 @@
 #endif
 #endif
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -32,6 +33,7 @@ struct UdpClientCtx {
     std::unique_ptr<evpp::udp::sync::Client> client;
     lua_State* L = nullptr;
     int instance_ref = LUA_NOREF;
+    bool connected = false;
     bool disposed = false;
 };
 
@@ -81,15 +83,19 @@ int l_udp_client_connect(lua_State* L) {
         auto* logger = GetLogger();
         ENGINE_LOG_ERROR(logger, "[net.udp_client] failed to connect to {}:{}", host, port);
         ctx->disposed = true;
+        // Null _ctx before delete so __gc won't read a dangling pointer
+        lua_pushnil(L);
+        lua_setfield(L, -2, "_ctx");
         luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
         ctx->instance_ref = LUA_NOREF;
-        ctx->client.reset();
         delete ctx;
         lua_pop(L, 1);
         lua_pushnil(L);
         lua_pushfstring(L, "udp connect failed: %s:%d", host, port);
         return 2;
     }
+
+    ctx->connected = true;
 
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "[net.udp_client] connected to [{}:{}]", host, port);
@@ -158,8 +164,7 @@ int l_udp_client_is_connected(lua_State* L) {
         lua_pushboolean(L, 0);
         return 1;
     }
-    // SyncUDPClient doesn't expose an is_connected() method; we infer from context
-    lua_pushboolean(L, 1);
+    lua_pushboolean(L, ctx->connected ? 1 : 0);
     return 1;
 }
 
@@ -188,6 +193,9 @@ int l_udp_client_gc(lua_State* L) {
 int l_udp_client_do_request_static(lua_State* L) {
     const char* host = luaL_checkstring(L, 1);
     int port = static_cast<int>(luaL_checkinteger(L, 2));
+    if (port <= 0 || port > 65535) {
+        return luaL_error(L, "port out of range");
+    }
     size_t len = 0;
     const char* data = luaL_checklstring(L, 3, &len);
     uint32_t timeout_ms = static_cast<uint32_t>(luaL_optinteger(L, 4, 3000));
@@ -202,6 +210,9 @@ int l_udp_client_do_request_static(lua_State* L) {
 int l_udp_client_send_to(lua_State* L) {
     const char* host = luaL_checkstring(L, 1);
     int port = static_cast<int>(luaL_checkinteger(L, 2));
+    if (port <= 0 || port > 65535) {
+        return luaL_error(L, "port out of range");
+    }
     size_t len = 0;
     const char* data = luaL_checklstring(L, 3, &len);
 
