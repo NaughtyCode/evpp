@@ -1,3 +1,4 @@
+#include <atomic>
 #include <iostream>
 #include <chrono>
 #include <thread>
@@ -22,7 +23,7 @@ std::string HttpFetch(const std::string& url) {
   t.Start(true);
   evpp::httpc::GetRequest* req =
       new evpp::httpc::GetRequest(t.loop(), url, evpp::Duration(1.0));
-  volatile bool responsed = false;
+  std::atomic<bool> responsed{false};
   std::string ret;
   req->Execute([req, &ret, &responsed](
                 const std::shared_ptr<evpp::httpc::Response>& response) mutable {

@@ -61,13 +61,16 @@ public:
         , bucket_it_(other.bucket_it_) {
         expires_.store(other.expires_.load());
         state_.store(other.state_.load());
+        // If the moved-from timer was inside a wheel bucket, the bucket
+        // list element still points to &other — fix it to point to this.
+        if (bucket_index_ >= 0) {
+            *bucket_it_ = this;
+        }
         other.bucket_index_ = -1;
         other.clear_bucket_iterator();
     }
     TimerWheelNode& operator=(TimerWheelNode&& other) noexcept {
-        // TimerNode must not be queued when moved — use del_timer first.
-        // If this assert fires, the caller moved a timer while it was
-        // still in a wheel bucket, which leaves a dangling pointer.
+        // Target must not be queued — use del_timer first.
         assert(bucket_index_ < 0);
         if (this != &other) {
             callback_ = std::move(other.callback_);
@@ -77,6 +80,11 @@ public:
             bucket_it_ = other.bucket_it_;
             expires_.store(other.expires_.load());
             state_.store(other.state_.load());
+            // If the moved-from timer was inside a wheel bucket, the bucket
+            // list element still points to &other — fix it to point to this.
+            if (bucket_index_ >= 0) {
+                *bucket_it_ = this;
+            }
             other.bucket_index_ = -1;
             other.clear_bucket_iterator();
         }

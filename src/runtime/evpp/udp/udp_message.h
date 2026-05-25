@@ -47,7 +47,7 @@ inline bool SendMessage(evpp_socket_t fd, const struct sockaddr* addr, const cha
     }
 
     int sentn = ::sendto(fd, d, dlen, 0, addr, sizeof(*addr));
-    if (sentn != (int)dlen) {
+    if (sentn < 0 || static_cast<size_t>(sentn) != dlen) {
         return false;
     }
 

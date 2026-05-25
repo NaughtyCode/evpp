@@ -55,7 +55,7 @@ static std::map<int, std::string> http_status_code = {
 		auto iter = field_value.find("Connection");\
 		if (iter != field_value.end()) { \
 			auto data = iter->second; \
-			std::transform(data.begin(), data.end(), data.begin(), ::tolower);\
+			std::transform(data.begin(), data.end(), data.begin(), [](unsigned char c) { return std::tolower(c); });\
 			if (data.compare(#key) == 0) { \
 				return true; \
 			} \
@@ -67,6 +67,8 @@ class HttpResponse {
 public:
     HttpResponse(const HttpRequest& hr);
     HttpResponse(const HttpResponse& other) : close_(other.close_), keep_alive_(other.keep_alive_), chunked_(other.chunked_), hp_(other.hp_) {}
+    HttpResponse(HttpResponse&&) noexcept = default;
+    HttpResponse& operator=(HttpResponse&&) noexcept = default;
     void SendReply(const evpp::TCPConnPtr& conn, const int response_code, const std::map<std::string, std::string>& header_field_value, const std::string & response_body);
     void MakeHttpResponse(const int response_code, const int64_t body_size, const std::map<std::string, std::string>& header_field_value, Buffer& buf);
 
@@ -80,8 +82,8 @@ private:
         return (response_code != 204 && response_code != 304 && (response_code < 100 || response_code >= 200));
     }
 private:
-    bool close_;
-    bool keep_alive_;
+    bool close_ = false;
+    bool keep_alive_ = false;
     bool chunked_{false};
     http_parser hp_;
 };

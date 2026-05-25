@@ -45,7 +45,7 @@ static void OnTestMultiGetDone(const MultiGetResult& res) {
 
 static void OnTestPrefixMultiGetDone(const PrefixMultiGetResult& res) {
     gettimeofday(&g_tv_end, nullptr);
-    ENGINE_LOG_INFO(engine::GetLogger(), "cost:{}", (g_tv_end.tv_sec - g_tv_begin.tv_sec) * 1e6 + (g_tv_end.tv_usec - g_tv_end.tv_usec));
+    ENGINE_LOG_INFO(engine::GetLogger(), "cost:{}", (g_tv_end.tv_sec - g_tv_begin.tv_sec) * 1e6 + (g_tv_end.tv_usec - g_tv_begin.tv_usec));
     ENGINE_LOG_INFO(engine::GetLogger(), ">>>>>>>>>>>>> OnTestPrefixMultiGetDone");
     auto it = res.begin();
     for (; it != res.end(); ++it) {

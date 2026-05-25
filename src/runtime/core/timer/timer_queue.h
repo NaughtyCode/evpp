@@ -69,9 +69,12 @@ public:
     }
 
     // Remove a node. Returns true if the queue is non-empty after removal.
+    // The node must have been added via add() — calling remove() on a node
+    // that was never added is undefined behaviour.
     bool remove(NodePtr node) {
         assert(node && "Cannot remove null node from TimerQueue");
         auto it = node->queue_iterator();
+        assert(it != tree_.end() && "remove() called on node not in queue");
         tree_.erase(it);
         node->clear_queue_iterator();
         return !empty();
@@ -182,6 +185,7 @@ public:
     bool remove(NodePtr node) {
         assert(node);
         auto it = node->linked_queue_iterator();
+        assert(it != tree_.end() && "remove() called on node not in queue");
         tree_.erase(it);
         node->clear_linked_queue_iterator();
         return !empty();

@@ -21,6 +21,12 @@ public:
     Client();
     ~Client();
 
+    // Non-copyable, non-movable (owns socket and KCP control block).
+    Client(const Client&) = delete;
+    Client& operator=(const Client&) = delete;
+    Client(Client&&) = delete;
+    Client& operator=(Client&&) = delete;
+
     // Connect to a remote KCP server.  The conversation id must match
     // what the server expects (or the server can auto‑create sessions
     // based on conv).

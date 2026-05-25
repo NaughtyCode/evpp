@@ -80,11 +80,11 @@ private:
     ReadEventCallback read_fn_;
     EventCallback write_fn_;
 
-    EventLoop* loop_;
-    bool attached_; // A flag indicate whether this FdChannel has been attached to loop_
+    EventLoop* loop_ = nullptr;
+    bool attached_ = false; // A flag indicate whether this FdChannel has been attached to loop_
 
-    struct event* event_;
-    int events_; // the bitwise OR of zero or more of the EventType flags
+    struct event* event_ = nullptr;
+    int events_ = kNone; // the bitwise OR of zero or more of the EventType flags
 
     evpp_socket_t fd_;
 };

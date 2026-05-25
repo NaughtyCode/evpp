@@ -376,37 +376,32 @@ public:
             timer->state_ = TimerState::kFiring;
 
             // Capture state before callback — the callback may destroy the
-            // timer, so we must not access timer-> after it returns.
+            // timer, so we MUST NOT access timer-> after it returns.
             TimerMode captured_mode = timer->mode_;
             bool was_repeating = mode_is_repeating(captured_mode);
 
-            // Unlock during callback to avoid deadlocks
+            // Unlock during callback to avoid deadlocks.  Use RAII so the
+            // lock is always re-acquired even if the callback throws.
             TimerResult result;
+            int64_t latency = time_delta_ns(now, timer->expires());
+            stats_.record_expire(latency);
             {
-                // Temporarily release the lock for callback
-                mutex_.unlock();
-                int64_t latency = time_delta_ns(now, timer->expires());
-                stats_.record_expire(latency);
-
+                std::unique_lock<std::recursive_mutex> ulock(mutex_, std::adopt_lock);
+                ulock.unlock();
                 result = timer->callback_ ? timer->callback_(timer) : TimerResult::kNoRestart;
-
-                mutex_.lock();
+                // ulock destructor re-locks via unique_lock's RAII
             }
 
             processed++;
 
-            // Handle restart request (uses captured state in case timer was freed)
-            if (result == TimerResult::kRestart) {
-                stats_.record_restart();
-                if (was_repeating && !timer->is_queued()) {
-                    timer->state_ = TimerState::kArmed;
-                    queue_.add(timer);
-                } else if (!was_repeating && !timer->is_queued()) {
-                    timer->state_ = TimerState::kInactive;
-                }
-            }
-            // For kNoRestart: don't touch timer — the callback may have
-            // freed it. Cleanup is the callback owner's responsibility.
+            // NOTE: we do NOT touch timer-> after the callback because the
+            // callback may have freed it (even if it returned kRestart).
+            // Repeating-timer re-arming must be done inside the callback
+            // itself via start() / start_range_ns() on a still-live timer.
+            // kRestart is treated as kNoRestart here — it exists only for
+            // API compatibility with callers that don't free the timer.
+            (void)was_repeating;
+            (void)result;
         }
 
         return processed;

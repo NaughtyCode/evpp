@@ -1,11 +1,12 @@
 #include "test_common.h"
 
+#include <atomic>
 #include <evpp/udp/sync_udp_client.h>
 #include <evpp/udp/udp_server.h>
 
 namespace {
 static int g_count = 0;
-static bool g_exit = false;
+static std::atomic<bool> g_exit{false};
 static uint64_t g_timeout_ms = 1000;
 static void OnMessage(evpp::udp::Server* udpsrv, evpp::EventLoop* loop, const evpp::udp::MessagePtr msg) {
     g_count++;

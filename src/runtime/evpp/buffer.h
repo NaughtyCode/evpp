@@ -32,6 +32,40 @@ public:
         capacity_ = 0;
     }
 
+    // Non-copyable (owns a raw buffer).  Use Swap() or move.
+    Buffer(const Buffer&) = delete;
+    Buffer& operator=(const Buffer&) = delete;
+
+    Buffer(Buffer&& rhs) noexcept
+        : buffer_(rhs.buffer_)
+        , capacity_(rhs.capacity_)
+        , read_index_(rhs.read_index_)
+        , write_index_(rhs.write_index_)
+        , reserved_prepend_size_(rhs.reserved_prepend_size_) {
+        rhs.buffer_ = nullptr;
+        rhs.capacity_ = 0;
+        rhs.read_index_ = 0;
+        rhs.write_index_ = 0;
+        rhs.reserved_prepend_size_ = 0;
+    }
+
+    Buffer& operator=(Buffer&& rhs) noexcept {
+        if (this != &rhs) {
+            delete[] buffer_;
+            buffer_ = rhs.buffer_;
+            capacity_ = rhs.capacity_;
+            read_index_ = rhs.read_index_;
+            write_index_ = rhs.write_index_;
+            reserved_prepend_size_ = rhs.reserved_prepend_size_;
+            rhs.buffer_ = nullptr;
+            rhs.capacity_ = 0;
+            rhs.read_index_ = 0;
+            rhs.write_index_ = 0;
+            rhs.reserved_prepend_size_ = 0;
+        }
+        return *this;
+    }
+
     void Swap(Buffer& rhs) {
         std::swap(buffer_, rhs.buffer_);
         std::swap(capacity_, rhs.capacity_);

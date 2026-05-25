@@ -26,7 +26,7 @@ public:
                 buf->Skip(kHeaderLen);
                 std::string message(buf->NextString(len));
                 messageCallback_(conn, message);
-                break;
+                continue;
             } else {
                 break;
             }

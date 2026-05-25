@@ -34,7 +34,7 @@ void MemcacheClient::PushWaitingCommand(CommandPtr& cmd) {
         cmd->set_id(next_id());
         waiting_command_.push(cmd);
     }
-    if (UNLIKELY(!timeout_.IsZero() && con_timer_canceled_)) {
+    if (UNLIKELY(cmd && !timeout_.IsZero() && con_timer_canceled_)) {
         con_cmd_timer_ = exec_loop_->RunAfter(timeout_, std::bind(&MemcacheClient::OnConnectTimeout, shared_from_this(), cmd->id()));
         con_timer_canceled_ = false;
     }
