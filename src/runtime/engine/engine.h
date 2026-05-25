@@ -31,7 +31,7 @@ public:
     Engine& operator=(const Engine&) = delete;
 
     // Initialize the engine.
-    // runtime_cfg provides log, frame, and runtime scripts_dir settings.
+    // runtime_cfg provides resource_dir, log, frame, and scripts_dir settings.
     // entry_scripts_dir is the role-specific scripts directory
     // (e.g. resources/script/server or resources/script/client).
     // In library mode, pass the host's EventLoop; the engine will use it

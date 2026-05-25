@@ -78,9 +78,11 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
     ENGINE_PROFILE_SCOPE("engine", "Init");
 
     ENGINE_LOG_INFO(logger,
-                    "engine initializing, log_dir=[{}], log_level=[{}], "
+                    "engine initializing, resource_dir=[{}], "
+                    "log_dir=[{}], log_level=[{}], "
                     "runtime_scripts_dir=[{}], entry_scripts_dir=[{}], "
                     "frame_interval=[{}ms], library_mode=[{}]",
+                    runtime_cfg.resource_dir,
                     runtime_cfg.log.dir, runtime_cfg.log.level,
                     runtime_cfg.scripts_dir, entry_scripts_dir,
                     runtime_cfg.frame.interval_ms,

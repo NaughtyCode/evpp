@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg.rfind("--config_dir=", 0) == 0) {
-            config_dir = arg.substr(14);
+            config_dir = arg.substr(13);
         }
     }
     if (!engine::ConfigManager::Instance().Load(config_dir)) {
@@ -66,7 +66,7 @@ int main(int argc, char* argv[]) {
                 .GetRuntimeConfigMutable().log.dir = arg.substr(10);
         } else if (arg.rfind("--scripts_dir=", 0) == 0) {
             engine::ConfigManager::Instance()
-                .GetServerConfigMutable().scripts_dir = arg.substr(15);
+                .GetServerConfigMutable().scripts_dir = arg.substr(14);
         }
     }
 
