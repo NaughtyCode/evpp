@@ -1,6 +1,7 @@
 #include "runtime/config/config.h"
 
 #include <cstdio>
+#include <filesystem>
 
 #include <glaze/glaze.hpp>
 
@@ -90,9 +91,17 @@ bool ConfigManager::Load(const std::string& config_dir) {
     if (!LoadRuntimeFromFile(runtime_path)) return false;
 
     // Client and server configs are optional — one may not exist
-    // depending on the build target.
-    LoadClientFromFile(config_dir + "/client/client.json");
-    LoadServerFromFile(config_dir + "/server/server.json");
+    // depending on the build target.  Check existence first to avoid
+    // spurious "failed to load" messages on stderr.
+    std::error_code ec;
+    std::string client_path = config_dir + "/client/client.json";
+    if (std::filesystem::exists(client_path, ec)) {
+        LoadClientFromFile(client_path);
+    }
+    std::string server_path = config_dir + "/server/server.json";
+    if (std::filesystem::exists(server_path, ec)) {
+        LoadServerFromFile(server_path);
+    }
     return true;
 }
 
@@ -117,16 +126,23 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 
     runtime_config_ = std::move(new_runtime);
 
-    buf.clear();
-    auto ec2 = glz::read_file_json(new_client, config_dir + "/client/client.json", buf);
-    if (!ec2) {
-        client_config_ = std::move(new_client);
+    std::error_code ec2;
+    std::string client_path = config_dir + "/client/client.json";
+    if (std::filesystem::exists(client_path, ec2)) {
+        buf.clear();
+        auto ec3 = glz::read_file_json(new_client, client_path, buf);
+        if (!ec3) {
+            client_config_ = std::move(new_client);
+        }
     }
 
-    buf.clear();
-    ec2 = glz::read_file_json(new_server, config_dir + "/server/server.json", buf);
-    if (!ec2) {
-        server_config_ = std::move(new_server);
+    std::string server_path = config_dir + "/server/server.json";
+    if (std::filesystem::exists(server_path, ec2)) {
+        buf.clear();
+        auto ec3 = glz::read_file_json(new_server, server_path, buf);
+        if (!ec3) {
+            server_config_ = std::move(new_server);
+        }
     }
 
     ENGINE_LOG_INFO(logger, "ConfigManager: config reloaded");
