@@ -37,7 +37,6 @@ struct UdpServerCtx {
     // Atomic: written from main thread (listen/set_on_message/stop),
     // read from RecvThread inside MessageHandler after weak_ptr lock.
     std::atomic<int> on_message_ref{LUA_NOREF};
-    int64_t server_id = 0;
 };
 
 std::unordered_map<int64_t, std::shared_ptr<UdpServerCtx>> g_udp_servers;
@@ -93,7 +92,6 @@ int l_udp_server_listen(lua_State* L) {
     }
 
     int64_t sid = g_next_udp_server_id.fetch_add(1);
-    ctx->server_id = sid;
     ctx->server = std::make_unique<evpp::udp::Server>();
 
     bool ok = false;
