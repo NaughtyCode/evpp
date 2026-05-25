@@ -76,12 +76,14 @@ public:
     bool AppendCode(const char* key, const char* javascript);
     bool AppendCodeWithScope(const char* key, const char* javascript, const BsonDocument& scope);
     bool AppendRegex(const char* key, const char* regex, const char* options);
+    bool AppendRegexWLen(const char* key, int keylen, const char* regex, const char* options);
     bool AppendSymbol(const char* key, const char* symbol);
     bool AppendUndefined(const char* key);
     bool AppendMinkey(const char* key);
     bool AppendMaxkey(const char* key);
     bool AppendDBPointer(const char* key, const char* collection, const MongoOid& oid);
     bool AppendTimeT(const char* key, time_t value);
+    bool AppendTimeval(const char* key, const void* tv);  // struct timeval*
     bool AppendNowUtc(const char* key);
     bool AppendDecimal128(const char* key, const MongoDecimal128& value);
     bool AppendValue(const char* key, const void* bson_value);
@@ -93,7 +95,12 @@ public:
     bool AppendDocumentBegin(const char* key, BsonDocument* subdoc);
     static bool AppendDocumentEnd(BsonDocument* parent, BsonDocument* subdoc);
     bool AppendArrayBegin(const char* key, BsonDocument* array);
+    bool AppendArrayUnsafeBegin(const char* key, BsonDocument* child);
     static bool AppendArrayEnd(BsonDocument* parent, BsonDocument* array);
+
+    // ── Array builder sub-builders ────────────────────────────────────
+    bool AppendArrayBuilderBegin(const char* key, void** builder_out); // bson_array_builder_t**
+    static bool AppendArrayBuilderEnd(BsonDocument* parent, void* builder);
 
     // ── Query / access ──────────────────────────────────────────────
     uint32_t CountKeys() const;
@@ -103,6 +110,9 @@ public:
     int Compare(const BsonDocument& other) const;
     bool Concat(const BsonDocument& src);
     bool CopyTo(BsonDocument& dst) const; // copy contents into an existing document
+    bool CopyToExcludingNoinit(BsonDocument& dst, const char* first_exclude, ...);
+    // va_list variant; use CopyToExcludingNoinit for variadic convenience
+    bool CopyToExcludingNoinitVa(BsonDocument& dst, const char* first_exclude, void* args);
     bool ReserveBuffer(uint32_t size);    // pre-allocate buffer space
 
     // ── Serialization ───────────────────────────────────────────────
@@ -130,11 +140,14 @@ public:
 
     // ── Validation / Reinit ─────────────────────────────────────────
     bool Validate(MongoError* error = nullptr) const;
+    bool ValidateWithErrorAndOffset(MongoError* error, size_t* offset) const;
     void Reinit(); // reinitialize as an empty document
-    bool InitFromJson(const char* json, ssize_t len, MongoError* error = nullptr);
+    bool InitFromJson(const char* json, int64_t len, MongoError* error = nullptr);
 
     // ── Steal (move bson_t buffer; src is left empty) ───────────────
     static void Steal(BsonDocument& dst, BsonDocument& src);
+    // Destroy a bson_t* and steal its buffer for inline storage.
+    static void DestroyWithSteal(uint8_t** data, uint32_t* length, bool* reached_eof, void* raw_bson);
 
     // ── Internal access (database/mongo/ layer only) ────────────────
     void* RawBson();         // returns bson_t*
@@ -168,6 +181,7 @@ public:
     int64_t      AsInt64Coerce() const; // converts int32/double to int64
     const char*  AsUtf8(uint32_t* length) const;
     bool         AsBool() const;
+    bool         AsBoolCoerce() const;  // coerces int32/double to bool
     MongoOid     AsOid() const;
     int64_t      AsDateTime() const;
     void         AsBinary(int* subtype, uint32_t* length, const uint8_t** data) const;
@@ -269,15 +283,25 @@ public:
     bool AppendSymbol(const char* value);
     bool AppendDBPointer(const char* collection, const MongoOid& oid);
     bool AppendTimeT(time_t value);
+    bool AppendTimeval(const void* tv);  // struct timeval*
     bool AppendNowUtc();
     bool AppendDecimal128(const MongoDecimal128& value);
+    bool AppendArrayFromVector(const BsonIter& iter);
+    bool AppendBinaryUninit(int subtype, uint32_t len, uint8_t** data_out);
 
     // Sub-document building within the builder
     bool AppendDocumentBegin(BsonDocument* subdoc);
     static bool AppendDocumentEnd(BsonArrayBuilder* builder, BsonDocument* subdoc);
 
+    // Array builder sub-builders
+    bool AppendArrayBuilderBegin(void** builder_out); // bson_array_builder_t**
+    static bool AppendArrayBuilderEnd(BsonArrayBuilder* builder, void* child);
+
     // Finalize into a document (writes array into the given BsonDocument).
     bool Build(BsonDocument* out);
+
+    // Internal access.
+    void* Raw(); // returns bson_array_builder_t*
 
 private:
     void* ptr_; // bson_array_builder_t*

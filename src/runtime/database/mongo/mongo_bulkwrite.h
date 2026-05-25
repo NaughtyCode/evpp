@@ -243,6 +243,7 @@ struct ENGINE_API MongoBulkWriteServerId {
 class ENGINE_API MongoBulkWrite {
 public:
     static MongoBulkWrite* New(void* raw_client); // raw_client is mongoc_client_t*
+    static MongoBulkWrite* New();                  // standalone, use SetClient before execute
 
     void Destroy();
 
@@ -278,6 +279,7 @@ public:
     MongoBulkWriteServerId ServerId(MongoError* error) const;
 
     void SetSession(void* session);   // mongoc_client_session_t*
+    bool SetClient(void* client);    // mongoc_client_t*
 
     void* Raw();
 

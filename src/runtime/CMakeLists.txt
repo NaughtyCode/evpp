@@ -208,23 +208,40 @@ source_group("evpp" FILES ${EVPP_SOURCES})
 
 # ── Mongo wrapper (database/mongo/) ───────────────────────────────────
 set(MONGO_SOURCES
+    database/mongo/mongo_apm.cc database/mongo/mongo_apm.h
     database/mongo/mongo_bson.cc database/mongo/mongo_bson.h
+    database/mongo/mongo_bson_ext.cc database/mongo/mongo_bson_ext.h
+    database/mongo/mongo_bson_vector.cc database/mongo/mongo_bson_vector.h
     database/mongo/mongo_bulk.cc database/mongo/mongo_bulk.h
+    database/mongo/mongo_bulkwrite.cc database/mongo/mongo_bulkwrite.h
     database/mongo/mongo_change_stream.cc database/mongo/mongo_change_stream.h
     database/mongo/mongo_client.cc database/mongo/mongo_client.h
     database/mongo/mongo_client_pool.cc database/mongo/mongo_client_pool.h
     database/mongo/mongo_cursor.cc database/mongo/mongo_cursor.h
+    database/mongo/mongo_encryption.cc database/mongo/mongo_encryption.h
     database/mongo/mongo_error.cc database/mongo/mongo_error.h
     database/mongo/mongo_find_and_modify_opts.cc database/mongo/mongo_find_and_modify_opts.h
     database/mongo/mongo_forward.h
     database/mongo/mongo_gridfs.cc database/mongo/mongo_gridfs.h
+    database/mongo/mongo_handshake.cc database/mongo/mongo_handshake.h
+    database/mongo/mongo_host_list.cc database/mongo/mongo_host_list.h
     database/mongo/mongo_index_model.cc database/mongo/mongo_index_model.h
+    database/mongo/mongo_init.cc database/mongo/mongo_init.h
+    database/mongo/mongo_log.cc database/mongo/mongo_log.h
     database/mongo/mongo_oid.cc database/mongo/mongo_oid.h
+    database/mongo/mongo_oidc.cc database/mongo/mongo_oidc.h
+    database/mongo/mongo_optional.cc database/mongo/mongo_optional.h
+    database/mongo/mongo_rand.cc database/mongo/mongo_rand.h
     database/mongo/mongo_server_api.cc database/mongo/mongo_server_api.h
     database/mongo/mongo_session.cc database/mongo/mongo_session.h
     database/mongo/mongo_settings.cc database/mongo/mongo_settings.h
+    database/mongo/mongo_socket.cc database/mongo/mongo_socket.h
+    database/mongo/mongo_ssl.cc database/mongo/mongo_ssl.h
+    database/mongo/mongo_stream.cc database/mongo/mongo_stream.h
     database/mongo/mongo_system.cc database/mongo/mongo_system.h
+    database/mongo/mongo_topology.cc database/mongo/mongo_topology.h
     database/mongo/mongo_uri.cc database/mongo/mongo_uri.h
+    database/mongo/mongo_version.cc database/mongo/mongo_version.h
 )
 source_group("database\\mongo" FILES ${MONGO_SOURCES})
 

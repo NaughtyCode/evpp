@@ -421,6 +421,16 @@ MongoBulkWrite* MongoBulkWrite::New(void* raw_client) {
     return b;
 }
 
+MongoBulkWrite* MongoBulkWrite::New() {
+    auto* b = new MongoBulkWrite();
+    b->impl_->bw = mongoc_bulkwrite_new();
+    if (!b->impl_->bw) {
+        delete b;
+        return nullptr;
+    }
+    return b;
+}
+
 MongoBulkWrite::MongoBulkWrite() : impl_(std::make_unique<Impl>()) {}
 
 MongoBulkWrite::~MongoBulkWrite() {
@@ -540,6 +550,12 @@ void MongoBulkWrite::SetSession(void* session) {
     if (impl_ && impl_->bw)
         mongoc_bulkwrite_set_session(impl_->bw,
             static_cast<mongoc_client_session_t*>(session));
+}
+
+bool MongoBulkWrite::SetClient(void* client) {
+    if (!impl_ || !impl_->bw) return false;
+    return mongoc_bulkwrite_set_client(impl_->bw,
+        static_cast<mongoc_client_t*>(client));
 }
 
 void* MongoBulkWrite::Raw() { return impl_ ? impl_->bw : nullptr; }

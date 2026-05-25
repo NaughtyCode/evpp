@@ -125,6 +125,15 @@ BsonJsonReader BsonJsonReader::NewFromData(const uint8_t* data, size_t length) {
     return r;
 }
 
+BsonJsonReader BsonJsonReader::New(void* data, void* cb, void* dcb, bool allow_multiple, size_t buf_size) {
+    BsonJsonReader r;
+    r.impl_->reader = bson_json_reader_new(data,
+        reinterpret_cast<bson_json_reader_cb>(cb),
+        reinterpret_cast<bson_json_destroy_cb>(dcb),
+        allow_multiple, buf_size);
+    return r;
+}
+
 BsonJsonReader::BsonJsonReader() : impl_(std::make_unique<Impl>()) {}
 
 BsonJsonReader::~BsonJsonReader() {
@@ -156,6 +165,40 @@ const char* BsonJsonReader::ErrorDescription() const {
 }
 
 void* BsonJsonReader::Raw() { return impl_ ? impl_->reader : nullptr; }
+
+// ═══════════════════════════════════════════════════════════════════════
+// BsonJsonDataReader
+// ═══════════════════════════════════════════════════════════════════════
+
+struct BsonJsonDataReader::Impl {
+    bson_json_reader_t* reader = nullptr;
+};
+
+BsonJsonDataReader::BsonJsonDataReader() : impl_(std::make_unique<Impl>()) {
+    impl_->reader = bson_json_data_reader_new(false, 0);
+}
+
+BsonJsonDataReader::~BsonJsonDataReader() {
+    Destroy();
+}
+
+BsonJsonDataReader::BsonJsonDataReader(BsonJsonDataReader&&) noexcept = default;
+BsonJsonDataReader& BsonJsonDataReader::operator=(BsonJsonDataReader&&) noexcept = default;
+
+void BsonJsonDataReader::Destroy() {
+    if (impl_ && impl_->reader) {
+        bson_json_reader_destroy(impl_->reader);
+        impl_->reader = nullptr;
+    }
+}
+
+bool BsonJsonDataReader::Ingest(const uint8_t* data, size_t len) {
+    if (!impl_ || !impl_->reader) return false;
+    bson_json_data_reader_ingest(impl_->reader, data, len);
+    return true;
+}
+
+void* BsonJsonDataReader::Raw() { return impl_ ? impl_->reader : nullptr; }
 
 // ═══════════════════════════════════════════════════════════════════════
 // BsonReader
@@ -233,6 +276,12 @@ void BsonReader::SetReadFunc(void* func) {
     if (impl_ && impl_->reader)
         bson_reader_set_read_func(impl_->reader,
             reinterpret_cast<bson_reader_read_func_t>(func));
+}
+
+void BsonReader::SetDestroyFunc(void* func) {
+    if (impl_ && impl_->reader)
+        bson_reader_set_destroy_func(impl_->reader,
+            reinterpret_cast<bson_reader_destroy_func_t>(func));
 }
 
 int64_t BsonReader::Tell() const {
@@ -424,6 +473,65 @@ void BsonValue::Destroy() {
 
 void* BsonValue::Raw() { return storage_; }
 const void* BsonValue::Raw() const { return storage_; }
+
+// ═══════════════════════════════════════════════════════════════════════
+// BsonStrUtil
+// ═══════════════════════════════════════════════════════════════════════
+
+char* BsonStrUtil::Strdup(const char* str) {
+    return bson_strdup(str);
+}
+
+char* BsonStrUtil::Strndup(const char* str, size_t n_bytes) {
+    return bson_strndup(str, n_bytes);
+}
+
+char* BsonStrUtil::StrdupPrintf(const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    char* result = bson_strdupv_printf(format, args);
+    va_end(args);
+    return result;
+}
+
+char* BsonStrUtil::StrdupvPrintf(const char* format, va_list args) {
+    return bson_strdupv_printf(format, args);
+}
+
+void BsonStrUtil::Strncpy(char* dst, const char* src, size_t size) {
+    bson_strncpy(dst, src, size);
+}
+
+void BsonStrUtil::Vsnprintf(char* str, size_t size, const char* format, va_list ap) {
+    bson_vsnprintf(str, size, format, ap);
+}
+
+void BsonStrUtil::Snprintf(char* str, size_t size, const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    bson_vsnprintf(str, size, format, args);
+    va_end(args);
+}
+
+void BsonStrUtil::Strfreev(char** strv) {
+    bson_strfreev(strv);
+}
+
+size_t BsonStrUtil::Strnlen(const char* s, size_t maxlen) {
+    return bson_strnlen(s, maxlen);
+}
+
+int64_t BsonStrUtil::AsciiStrtoll(const char* str, char** endptr, int base) {
+    return bson_ascii_strtoll(str, endptr, base);
+}
+
+int BsonStrUtil::Strcasecmp(const char* s1, const char* s2) {
+    return bson_strcasecmp(s1, s2);
+}
+
+bool BsonStrUtil::Isspace(int c) {
+    return bson_isspace(c);
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // BsonKeys constants

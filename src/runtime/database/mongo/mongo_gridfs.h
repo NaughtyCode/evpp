@@ -43,6 +43,7 @@ public:
 
     const char* GetFilename() const;
     int64_t GetLength() const;
+    const char* GetContentType() const;
     int32_t GetChunkSize() const;
     int64_t GetUploadDate() const;
     const char* GetMd5() const;
@@ -142,6 +143,10 @@ private:
 // Modern GridFS Bucket API (wraps mongoc_gridfs_bucket_t).
 class ENGINE_API MongoGridFsBucket {
 public:
+    // Create a new GridFS bucket from a database.
+    static MongoGridFsBucket* New(void* raw_database, const BsonDocument* opts,
+                                   const MongoReadPrefs* read_prefs, MongoError* error);
+
     void Destroy();
 
     // Upload

@@ -28,6 +28,11 @@ public:
     uint32_t Code() const;
     const char* Message() const;
 
+    // Set this error with printf-style formatting.
+    void SetError(uint32_t domain, uint32_t code, const char* format, ...);
+    // Thread-safe strerror.
+    static const char* StrErrorR(int errno_val);
+
     bool HasLabel(const BsonDocument& reply, const char* label) const;
 
     // Access the raw bson_error_t pointer for internal use only.

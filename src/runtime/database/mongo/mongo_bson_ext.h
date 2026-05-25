@@ -105,6 +105,8 @@ public:
     static BsonJsonReader NewFromFd(int fd, bool close_on_destroy);
     static BsonJsonReader NewFromFile(const char* filename, MongoError* error);
     static BsonJsonReader NewFromData(const uint8_t* data, size_t length);
+    // Callback-based reader: cb and dcb are bson_json_reader_cb / bson_json_destroy_cb function pointers.
+    static BsonJsonReader New(void* data, void* cb, void* dcb, bool allow_multiple, size_t buf_size);
 
     BsonJsonReader();
     ~BsonJsonReader();
@@ -120,6 +122,27 @@ public:
     const char* ErrorDescription() const;
 
     void* Raw(); // returns bson_json_reader_t*
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+// Incremental JSON data reader — feeds raw JSON bytes and produces BSON.
+class ENGINE_API BsonJsonDataReader {
+public:
+    BsonJsonDataReader();
+    ~BsonJsonDataReader();
+
+    BsonJsonDataReader(const BsonJsonDataReader&) = delete;
+    BsonJsonDataReader& operator=(const BsonJsonDataReader&) = delete;
+    BsonJsonDataReader(BsonJsonDataReader&&) noexcept;
+    BsonJsonDataReader& operator=(BsonJsonDataReader&&) noexcept;
+
+    bool Ingest(const uint8_t* data, size_t len);
+    void Destroy();
+
+    void* Raw(); // returns bson_json_data_reader_t*
 
 private:
     struct Impl;
@@ -148,6 +171,7 @@ public:
     bool Read(BsonDocument* out, MongoError* error = nullptr);
     void SetData(const uint8_t* data, size_t length);
     void SetReadFunc(void* func);
+    void SetDestroyFunc(void* func);
     int64_t Tell() const;
     void Reset();
 
@@ -250,6 +274,23 @@ public:
 private:
     // bson_value_t is a tagged union; inline storage
     alignas(8) char storage_[64];
+};
+
+// String utility functions (wraps bson-string.h free functions).
+class ENGINE_API BsonStrUtil {
+public:
+    static char* Strdup(const char* str);
+    static char* Strndup(const char* str, size_t n_bytes);
+    static char* StrdupPrintf(const char* format, ...);
+    static char* StrdupvPrintf(const char* format, va_list args);
+    static void  Strncpy(char* dst, const char* src, size_t size);
+    static void  Vsnprintf(char* str, size_t size, const char* format, va_list ap);
+    static void  Snprintf(char* str, size_t size, const char* format, ...);
+    static void  Strfreev(char** strv);
+    static size_t Strnlen(const char* s, size_t maxlen);
+    static int64_t AsciiStrtoll(const char* str, char** endptr, int base);
+    static int   Strcasecmp(const char* s1, const char* s2);
+    static bool  Isspace(int c);
 };
 
 // Key constants for well-known BSON keys (wraps bson-keys.h).

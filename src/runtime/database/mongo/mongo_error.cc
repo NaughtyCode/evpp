@@ -1,6 +1,7 @@
 #include "runtime/database/mongo/mongo_error.h"
 
 #include <bson/bson.h>
+#include <cstdarg>
 #include <cstring>
 #include <mongoc/mongoc.h>
 
@@ -32,10 +33,7 @@ MongoError& MongoError::operator=(MongoError&& other) noexcept {
 }
 
 void MongoError::Clear() {
-    auto* e = static_cast<bson_error_t*>(RawError());
-    e->domain = 0;
-    e->code = 0;
-    e->message[0] = '\0';
+    bson_error_clear(static_cast<bson_error_t*>(RawError()));
 }
 
 uint32_t MongoError::Domain() const {
@@ -48,6 +46,21 @@ uint32_t MongoError::Code() const {
 
 const char* MongoError::Message() const {
     return static_cast<const bson_error_t*>(RawError())->message;
+}
+
+void MongoError::SetError(uint32_t domain, uint32_t code, const char* format, ...) {
+    auto* e = static_cast<bson_error_t*>(RawError());
+    e->domain = domain;
+    e->code = code;
+    va_list args;
+    va_start(args, format);
+    bson_vsnprintf(e->message, sizeof(e->message), format, args);
+    va_end(args);
+    e->message[sizeof(e->message) - 1] = '\0';
+}
+
+const char* MongoError::StrErrorR(int errno_val) {
+    return bson_strerror_r(errno_val);
 }
 
 bool MongoError::HasLabel(const BsonDocument& reply, const char* label) const {

@@ -94,6 +94,10 @@ const char* MongoGridFsFile::GetMd5() const {
     return impl_ && impl_->file ? mongoc_gridfs_file_get_md5(impl_->file) : nullptr;
 }
 
+const char* MongoGridFsFile::GetContentType() const {
+    return impl_ && impl_->file ? mongoc_gridfs_file_get_content_type(impl_->file) : nullptr;
+}
+
 void MongoGridFsFile::GetId(BsonDocument* out) const {
     if (impl_ && impl_->file && out)
         bson_copy_to(mongoc_gridfs_file_get_id(impl_->file),
@@ -320,6 +324,19 @@ struct MongoGridFsBucket::Impl {
 
 MongoGridFsBucket::MongoGridFsBucket() : impl_(std::make_unique<Impl>()) {}
 MongoGridFsBucket::~MongoGridFsBucket() { Destroy(); }
+
+MongoGridFsBucket* MongoGridFsBucket::New(void* raw_database, const BsonDocument* opts,
+                                            const MongoReadPrefs* read_prefs, MongoError* error) {
+    mongoc_gridfs_bucket_t* bucket = mongoc_gridfs_bucket_new(
+        static_cast<mongoc_database_t*>(raw_database),
+        opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr,
+        read_prefs ? static_cast<const mongoc_read_prefs_t*>(read_prefs->RawReadPrefs()) : nullptr,
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+    if (!bucket) return nullptr;
+    auto* result = new MongoGridFsBucket();
+    result->impl_->bucket = bucket;
+    return result;
+}
 
 void MongoGridFsBucket::Destroy() {
     if (impl_ && impl_->bucket) {
