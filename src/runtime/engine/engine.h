@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <memory>
@@ -93,7 +94,7 @@ private:
     std::chrono::steady_clock::time_point last_work_time_;
     std::chrono::milliseconds frame_interval_{33};
     bool cleaned_up_{false};
-    bool running_{false};
+    std::atomic<bool> running_{false};
     uint64_t frame_count_{0};
     uint64_t last_slow_frame_log_{0};
 

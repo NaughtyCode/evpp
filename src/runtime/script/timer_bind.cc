@@ -275,28 +275,31 @@ void ShutdownTimerBindings(ScriptVM& vm) {
 
     // Collect IDs first — destroy_timer may fire callbacks synchronously,
     // which would invalidate iterators if we traversed the map directly.
-    size_t count = state->ctxs.size();
-    std::vector<TimerId> ids;
-    ids.reserve(count);
-    for (auto& [id, ctx] : state->ctxs) {
-        (void)ctx;
-        ids.push_back(id);
-    }
-
-    for (TimerId id : ids) {
-        auto it = state->ctxs.find(id);
-        if (it == state->ctxs.end()) continue;
-        auto& ctx = it->second;
-        // Set ref to LUA_NOREF first so the callback (which may fire
-        // synchronously during destroy_timer) will bail out instead of
-        // accessing a dangling L or erased state.
-        if (ctx->ref != LUA_NOREF && ctx->L) {
-            luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->ref);
-            ctx->ref = LUA_NOREF;
+    // Loop until no more timers remain: a Lua callback invoked during
+    // shutdown could create new timers, which would otherwise leak.
+    size_t count = 0;
+    constexpr int kMaxShutdownPasses = 8;  // safety bound against infinite re-creation
+    for (int pass = 0; pass < kMaxShutdownPasses && !state->ctxs.empty(); ++pass) {
+        std::vector<TimerId> ids;
+        ids.reserve(state->ctxs.size());
+        for (auto& [id, ctx] : state->ctxs) {
+            (void)ctx;
+            ids.push_back(id);
         }
-        ctx->owner = nullptr;  // prevent callback from touching state->ctxs
-        TimerManager::instance().destroy_timer(id);
-        state->ctxs.erase(id);
+        count += ids.size();
+
+        for (TimerId id : ids) {
+            auto it = state->ctxs.find(id);
+            if (it == state->ctxs.end()) continue;
+            auto& ctx = it->second;
+            if (ctx->ref != LUA_NOREF && ctx->L) {
+                luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->ref);
+                ctx->ref = LUA_NOREF;
+            }
+            ctx->owner = nullptr;
+            TimerManager::instance().destroy_timer(id);
+            state->ctxs.erase(id);
+        }
     }
 
     ENGINE_LOG_INFO(logger, "ScriptBind: shut down [{}] timer binding(s)", count);

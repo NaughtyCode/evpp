@@ -64,10 +64,7 @@ int main(int argc, char* argv[]) {
 
     std::fprintf(stderr, "[main] calling Engine::Init()\n");
     auto& engine = engine::Engine::Instance();
-    if (!engine.Init(engine::ConfigManager::Instance().GetEngineConfig())) {
-        std::cerr << "Engine::Init() failed" << std::endl;
-        return 1;
-    }
+    engine.Init(engine::ConfigManager::Instance().GetEngineConfig());
     std::fprintf(stderr, "[main] Engine::Init() returned, calling Engine::Run()\n");
     engine.Run();
 

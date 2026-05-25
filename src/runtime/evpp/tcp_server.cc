@@ -34,7 +34,10 @@ bool TCPServer::Init() {
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     assert(status_ == kNull);
     listener_.reset(new Listener(loop_, listen_addr_));
-    listener_->Listen();
+    if (!listener_->Listen()) {
+        listener_.reset();
+        return false;
+    }
     status_.store(kInitialized);
     return true;
 }

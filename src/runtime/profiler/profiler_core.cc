@@ -103,6 +103,7 @@ bool ProfilerManager::StartSession() {
     }
     session_->Setup(cfg);
     session_->StartBlocking();
+    session_active_ = true;
 
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "ProfilerManager: session started");
@@ -113,6 +114,7 @@ void ProfilerManager::StopSession() {
     if (!session_) return;
 
     session_->StopBlocking();
+    session_active_ = false;
 
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "ProfilerManager: session stopped");
@@ -121,7 +123,7 @@ void ProfilerManager::StopSession() {
 // ── State Queries ──────────────────────────────────────────────────────
 
 bool ProfilerManager::IsActive() const {
-    return session_ != nullptr;
+    return session_active_;
 }
 
 bool ProfilerManager::IsEnabled() {

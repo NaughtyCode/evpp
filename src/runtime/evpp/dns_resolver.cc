@@ -59,7 +59,9 @@ void DNSResolver::SyncDNSResolve() {
             ENGINE_LOG_TRACE(engine::GetLogger(), "this={} host={} resolved a ip={}", (void*)this, host_, inet_ntoa(a->sin_addr));
         }
     }
-    evutil_freeaddrinfo(answer);
+    if (answer) {
+        evutil_freeaddrinfo(answer);
+    }
     OnResolved();
 }
 

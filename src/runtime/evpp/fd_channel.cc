@@ -28,9 +28,11 @@ void FdChannel::Close() {
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={} fd={}", (void*)this, fd_);
     assert(event_);
     if (event_) {
-        assert(!attached_);
+        // Callers should detach before Close(); if they didn't (e.g.
+        // during error recovery) detach now to avoid leaking the event.
         if (attached_) {
             EventDel(event_);
+            attached_ = false;
         }
 
         delete (event_);

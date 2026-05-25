@@ -51,6 +51,7 @@ private:
     ProfilerConfig config_;
     std::unique_ptr<perfetto::TracingSession> session_;
     bool initialized_ = false;
+    bool session_active_ = false;
 };
 
 } // namespace engine

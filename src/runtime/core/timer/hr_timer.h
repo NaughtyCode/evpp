@@ -364,7 +364,7 @@ public:
     // Process all expired timers, calling their callbacks.
     // Returns the number of timers fired.
     size_t process_expired(TimePoint now, size_t max_to_process = SIZE_MAX) {
-        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        std::unique_lock<std::recursive_mutex> lock(mutex_);
         size_t processed = 0;
 
         while (!queue_.empty() && processed < max_to_process) {
@@ -380,17 +380,14 @@ public:
             TimerMode captured_mode = timer->mode_;
             bool was_repeating = mode_is_repeating(captured_mode);
 
-            // Unlock during callback to avoid deadlocks.  Use RAII so the
-            // lock is always re-acquired even if the callback throws.
+            // Unlock during callback to avoid deadlocks, re-lock afterwards
+            // so that the unique_lock destructor always unlocks a locked mutex.
             TimerResult result;
             int64_t latency = time_delta_ns(now, timer->expires());
             stats_.record_expire(latency);
-            {
-                std::unique_lock<std::recursive_mutex> ulock(mutex_, std::adopt_lock);
-                ulock.unlock();
-                result = timer->callback_ ? timer->callback_(timer) : TimerResult::kNoRestart;
-                // ulock destructor re-locks via unique_lock's RAII
-            }
+            lock.unlock();
+            result = timer->callback_ ? timer->callback_(timer) : TimerResult::kNoRestart;
+            lock.lock();
 
             processed++;
 

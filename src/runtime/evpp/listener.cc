@@ -21,13 +21,13 @@ Listener::~Listener() {
     }
 }
 
-void Listener::Listen(int backlog) {
+bool Listener::Listen(int backlog) {
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     fd_ = sock::CreateNonblockingSocket();
     if (fd_ < 0) {
         int serrno = EVPP_ERRNO;
         ENGINE_LOG_CRITICAL(engine::GetLogger(), "Create a nonblocking socket failed {}", strerror(serrno));
-        return;
+        return false;
     }
 
     struct sockaddr_storage addr = sock::ParseFromIPPort(addr_.data());
@@ -36,13 +36,20 @@ void Listener::Listen(int backlog) {
     if (ret < 0) {
         int serrno = EVPP_ERRNO;
         ENGINE_LOG_CRITICAL(engine::GetLogger(), "bind error :{} . addr={}", strerror(serrno), addr_);
+        EVUTIL_CLOSESOCKET(fd_);
+        fd_ = INVALID_SOCKET;
+        return false;
     }
 
     ret = ::listen(fd_, backlog);
     if (ret < 0) {
         int serrno = EVPP_ERRNO;
         ENGINE_LOG_CRITICAL(engine::GetLogger(), "Listen failed {}", strerror(serrno));
+        EVUTIL_CLOSESOCKET(fd_);
+        fd_ = INVALID_SOCKET;
+        return false;
     }
+    return true;
 }
 
 void Listener::Accept() {

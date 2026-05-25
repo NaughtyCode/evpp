@@ -233,8 +233,7 @@ void Engine::Tick() {
 void Engine::Shutdown() {
     ENGINE_PROFILE_SCOPE("engine", "Shutdown");
 
-    if (running_) {
-        running_ = false;
+    if (running_.exchange(false)) {
         // Only stop the engine's own loop. In library mode the host
         // manages the external EventLoop lifetime.
         if (owned_loop_) {

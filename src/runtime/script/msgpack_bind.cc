@@ -439,8 +439,12 @@ void DecodeToLuaType(lua_State* L, DecodeCursor* c, int depth) {
         break;
     case 0xd1:  // int 16
         if (!c->Need(3)) return;
-        lua_pushinteger(L, static_cast<int16_t>(
-            (c->p[1] << 8) | c->p[2]));
+        {
+            uint16_t u16 = static_cast<uint16_t>((c->p[1] << 8) | c->p[2]);
+            int16_t i16;
+            std::memcpy(&i16, &u16, sizeof(i16));
+            lua_pushinteger(L, i16);
+        }
         c->Consume(3);
         break;
     case 0xce:  // uint 32
@@ -454,11 +458,16 @@ void DecodeToLuaType(lua_State* L, DecodeCursor* c, int depth) {
         break;
     case 0xd2:  // int 32
         if (!c->Need(5)) return;
-        lua_pushinteger(L,
-            (static_cast<int32_t>(c->p[1]) << 24) |
-            (static_cast<int32_t>(c->p[2]) << 16) |
-            (static_cast<int32_t>(c->p[3]) << 8) |
-             static_cast<int32_t>(c->p[4]));
+        {
+            uint32_t u32 =
+                (static_cast<uint32_t>(c->p[1]) << 24) |
+                (static_cast<uint32_t>(c->p[2]) << 16) |
+                (static_cast<uint32_t>(c->p[3]) << 8) |
+                 static_cast<uint32_t>(c->p[4]);
+            int32_t i32;
+            std::memcpy(&i32, &u32, sizeof(i32));
+            lua_pushinteger(L, i32);
+        }
         c->Consume(5);
         break;
     case 0xcf:  // uint 64
@@ -476,15 +485,20 @@ void DecodeToLuaType(lua_State* L, DecodeCursor* c, int depth) {
         break;
     case 0xd3:  // int 64
         if (!c->Need(9)) return;
-        lua_pushinteger(L,
-            (static_cast<int64_t>(c->p[1]) << 56) |
-            (static_cast<int64_t>(c->p[2]) << 48) |
-            (static_cast<int64_t>(c->p[3]) << 40) |
-            (static_cast<int64_t>(c->p[4]) << 32) |
-            (static_cast<int64_t>(c->p[5]) << 24) |
-            (static_cast<int64_t>(c->p[6]) << 16) |
-            (static_cast<int64_t>(c->p[7]) << 8) |
-             static_cast<int64_t>(c->p[8]));
+        {
+            uint64_t u64 =
+                (static_cast<uint64_t>(c->p[1]) << 56) |
+                (static_cast<uint64_t>(c->p[2]) << 48) |
+                (static_cast<uint64_t>(c->p[3]) << 40) |
+                (static_cast<uint64_t>(c->p[4]) << 32) |
+                (static_cast<uint64_t>(c->p[5]) << 24) |
+                (static_cast<uint64_t>(c->p[6]) << 16) |
+                (static_cast<uint64_t>(c->p[7]) << 8) |
+                 static_cast<uint64_t>(c->p[8]);
+            int64_t i64;
+            std::memcpy(&i64, &u64, sizeof(i64));
+            lua_pushinteger(L, i64);
+        }
         c->Consume(9);
         break;
     case 0xc0:  // nil

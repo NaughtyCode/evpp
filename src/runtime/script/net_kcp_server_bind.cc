@@ -391,17 +391,35 @@ void ShutdownKcpServerBindings() {
         if (ctx->disposed) continue;
         ctx->disposed = true;
         ctx->server->Stop(true);
-        if (ctx->L) {
-            if (ctx->on_message_ref != LUA_NOREF) {
-                luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->on_message_ref);
-                ctx->on_message_ref = LUA_NOREF;
+
+        // Defer unref + delete so pending RunInLoop message callbacks
+        // (queued before Stop returned) execute before we free the refs.
+        // Same pattern as ReleaseKcpServer.
+        int old_msg_ref = ctx->on_message_ref.exchange(LUA_NOREF);
+        int old_inst_ref = ctx->instance_ref;
+        ctx->instance_ref = LUA_NOREF;
+        lua_State* L_ptr = ctx->L;
+
+        auto* loop = Engine::Instance().GetEventLoop();
+        if (loop && loop->IsRunning()) {
+            loop->RunInLoop([L_ptr, old_msg_ref, old_inst_ref, ctx] {
+                if (old_msg_ref != LUA_NOREF && L_ptr) {
+                    luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_msg_ref);
+                }
+                if (old_inst_ref != LUA_NOREF && L_ptr) {
+                    luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_inst_ref);
+                }
+                delete ctx;
+            });
+        } else {
+            if (old_msg_ref != LUA_NOREF && L_ptr) {
+                luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_msg_ref);
             }
-            if (ctx->instance_ref != LUA_NOREF) {
-                luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->instance_ref);
-                ctx->instance_ref = LUA_NOREF;
+            if (old_inst_ref != LUA_NOREF && L_ptr) {
+                luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_inst_ref);
             }
+            delete ctx;
         }
-        delete ctx;
     }
 
     if (!ctxs.empty()) {
