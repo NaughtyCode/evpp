@@ -259,8 +259,10 @@ void TCPConn::HandleClose() {
     // This setting is required, it indicates connecting state and must not be removed
     status_ = kDisconnecting;
     assert(loop_->IsInLoopThread());
-    chan_->DisableAllEvent();
-    chan_->Close();
+    if (chan_) {
+        chan_->DisableAllEvent();
+        chan_->Close();
+    }
 
     TCPConnPtr conn(shared_from_this());
 

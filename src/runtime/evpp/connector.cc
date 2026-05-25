@@ -28,10 +28,12 @@ Connector::~Connector() {
         reconnect_timer_->Cancel();
         reconnect_timer_.reset();
     }
-    if (status_ == kDNSResolving) {
+    if (status_ == kDisconnected || status_ == kDNSResolving) {
         assert(!chan_.get());
-        assert(!dns_resolver_.get());
-        assert(!timer_.get());
+        if (status_ == kDNSResolving) {
+            assert(!dns_resolver_.get());
+            assert(!timer_.get());
+        }
     } else if (!IsConnected()) {
         // A connected tcp-connection's sockfd has been transfered to TCPConn.
         // But the sockfd of unconnected tcp-connections need to be closed by myself.
@@ -209,10 +211,14 @@ void Connector::HandleError() {
         reconnect_timer_.reset();
     }
 
+    // Capture auto_reconnect before invoking user callback, since the
+    // callback may delete the TCPClient (owner_tcp_client_).
+    bool do_reconnect = owner_tcp_client_->auto_reconnect();
+
     // If the connection is refused or it will not try again,
     // We need to notify the user layer that the connection established failed.
     // Otherwise we will try to do reconnection silently.
-    if (EVUTIL_ERR_CONNECT_REFUSED(serrno) || !owner_tcp_client_->auto_reconnect()) {
+    if (EVUTIL_ERR_CONNECT_REFUSED(serrno) || !do_reconnect) {
         conn_fn_(-1, "");
     }
 
@@ -222,7 +228,7 @@ void Connector::HandleError() {
     // But if we could not connect to the remote server at the very beginning,
     // the TCPClient's Reconnect() will never be triggled.
     // So Connector needs to do reconnection automatically itself.
-    if (owner_tcp_client_->auto_reconnect()) {
+    if (do_reconnect) {
 
         // We must close(fd) firstly and then we can do the reconnection.
         if (fd_ > 0) {

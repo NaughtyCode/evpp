@@ -28,7 +28,7 @@
 #include <limits.h>
 #include <stdlib.h>
 
-#if __cplusplus
+#ifdef __cplusplus
 #include <limits>
 
 namespace evpp {
@@ -2450,6 +2450,6 @@ http_parser_pause(http_parser *parser, int paused) {
     }
 }
 
-#if __cplusplus
+#ifdef __cplusplus
 }
 #endif /* __cplusplus */

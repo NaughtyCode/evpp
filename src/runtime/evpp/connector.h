@@ -44,7 +44,7 @@ private:
     std::string StatusToString() const;
 private:
     enum Status { kDisconnected, kDNSResolving, kDNSResolved, kConnecting, kConnected };
-    Status status_;
+    std::atomic<Status> status_{kDisconnected};
     EventLoop* loop_;
     TCPClient* owner_tcp_client_;
 

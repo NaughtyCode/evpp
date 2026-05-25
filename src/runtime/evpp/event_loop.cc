@@ -51,7 +51,9 @@ EventLoop::EventLoop(struct event_base* base)
     bool rc = watcher_->AsyncWait();
     if (!rc) {
         std::fprintf(stderr, "[EventLoop] PipeEventWatcher::AsyncWait() failed (external base)\n");
-        ENGINE_LOG_CRITICAL(engine::GetLogger(), "PipeEventWatcher init failed.");
+        if (auto* l = engine::GetLogger()) {
+            ENGINE_LOG_CRITICAL(l, "PipeEventWatcher init failed.");
+        }
     }
     assert(rc);
     status_.store(kRunning);
@@ -120,7 +122,9 @@ void EventLoop::Run() {
     int rc = watcher_->AsyncWait();
     if (!rc) {
         std::fprintf(stderr, "[EventLoop] PipeEventWatcher::AsyncWait() failed\n");
-        ENGINE_LOG_CRITICAL(engine::GetLogger(), "PipeEventWatcher AsyncWait failed.");
+        if (auto* l = engine::GetLogger()) {
+            ENGINE_LOG_CRITICAL(l, "PipeEventWatcher AsyncWait failed.");
+        }
     }
     assert(rc);
 
