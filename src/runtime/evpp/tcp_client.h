@@ -69,16 +69,16 @@ public:
         auto_reconnect_.store(v);
     }
     Duration reconnect_interval() const {
-        return reconnect_interval_;
+        return Duration(reconnect_interval_ns_.load(std::memory_order_acquire));
     }
     void set_reconnect_interval(Duration timeout) {
-        reconnect_interval_ = timeout;
+        reconnect_interval_ns_.store(timeout.Nanoseconds(), std::memory_order_release);
     }
     Duration connecting_timeout() const {
-        return connecting_timeout_;
+        return Duration(connecting_timeout_ns_.load(std::memory_order_acquire));
     }
     void set_connecting_timeout(Duration timeout) {
-        connecting_timeout_ = timeout;
+        connecting_timeout_ns_.store(timeout.Nanoseconds(), std::memory_order_release);
     }
     void set_context(const Any& c) {
         context_ = c;
@@ -112,7 +112,7 @@ private:
     std::string remote_addr_; // host:port
     std::string name_;
     std::atomic<bool> auto_reconnect_ = { true }; // The flag whether it reconnects automatically, Default : true
-    Duration reconnect_interval_ = Duration(3.0); // Default : 3 seconds
+    std::atomic<int64_t> reconnect_interval_ns_{3000000000}; // Default : 3 seconds (in ns)
 
     Any context_;
 
@@ -120,7 +120,7 @@ private:
     TCPConnPtr conn_;
 
     std::shared_ptr<Connector> connector_;
-    Duration connecting_timeout_ = Duration(3.0); // Default : 3 seconds
+    std::atomic<int64_t> connecting_timeout_ns_{3000000000}; // Default : 3 seconds (in ns)
 
     ConnectionCallback conn_fn_;
     MessageCallback msg_fn_;

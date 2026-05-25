@@ -72,17 +72,19 @@ std::mutex g_http_mutex;
 //     without touching the ref (shutdown already released it).
 void HandleHttpResponse(lua_State* L, int ref,
                         const std::shared_ptr<evpp::httpc::Response>& resp) {
-    if (!g_net_alive.load()) return;
-
-    if (resp) {
-        std::string body(resp->body().data(), resp->body().size());
-        call_lua_http_handler(L, ref, resp->http_code(), body);
-    } else {
-        call_lua_http_handler(L, ref, 0, "");
-    }
-
     {
         std::lock_guard<std::mutex> lock(g_http_mutex);
+        if (!g_net_alive.load()) return;
+
+        // Dispatch the Lua callback under the mutex so ShutdownHttpBindings
+        // cannot unref the pending registry refs concurrently.
+        if (resp) {
+            std::string body(resp->body().data(), resp->body().size());
+            call_lua_http_handler(L, ref, resp->http_code(), body);
+        } else {
+            call_lua_http_handler(L, ref, 0, "");
+        }
+
         if (!g_net_alive.load()) return;
         luaL_unref(L, LUA_REGISTRYINDEX, ref);
         auto it = std::find(g_http_pending_refs.begin(),

@@ -29,6 +29,7 @@ struct TimerEntry {
     game_timer_cb_t cb;
     void*           userdata;
     bool            repeating;  /* false = one-shot (timeout), true = interval */
+    int             lua_timer_id; /* Lua-side timer ID for cancellation */
 };
 
 /* Simple registry: timer_id → callback. Protected by mutex because the
@@ -101,8 +102,16 @@ game_error_t game_timer_timeout(game_client_t* client, int64_t delay_ms,
         return GAME_ERR_GENERIC;
     }
 
-    /* The returned timer_id from Lua is ignored — we use our own. */
+    /* Store the Lua-side timer ID so cancel() can find the Lua timer. */
+    int lua_timer_id = static_cast<int>(lua_tointeger(L, -1));
     lua_pop(L, 1);
+    {
+        std::lock_guard<std::mutex> lock(g_timer_mutex);
+        auto it = g_timers.find(timer_id);
+        if (it != g_timers.end()) {
+            it->second.lua_timer_id = lua_timer_id;
+        }
+    }
     *out_id = timer_id;
     return GAME_OK;
 }
@@ -140,7 +149,16 @@ game_error_t game_timer_interval(game_client_t* client, int64_t interval_ms,
         return GAME_ERR_GENERIC;
     }
 
+    /* Store the Lua-side timer ID so cancel() can find the Lua timer. */
+    int lua_timer_id = static_cast<int>(lua_tointeger(L, -1));
     lua_pop(L, 1);
+    {
+        std::lock_guard<std::mutex> lock(g_timer_mutex);
+        auto it = g_timers.find(timer_id);
+        if (it != g_timers.end()) {
+            it->second.lua_timer_id = lua_timer_id;
+        }
+    }
     *out_id = timer_id;
     return GAME_OK;
 }
@@ -148,12 +166,12 @@ game_error_t game_timer_interval(game_client_t* client, int64_t interval_ms,
 game_error_t game_timer_cancel(game_client_t* client, int timer_id) {
     if (!client || !client->initialized) return GAME_ERR_INVALID_ARG;
 
-    /* Remove from our registry first, then cancel the Lua timer.
-     * The Lua timer.cancel is safe to call from within a callback. */
+    int lua_timer_id = -1;
     {
         std::lock_guard<std::mutex> lock(g_timer_mutex);
         auto it = g_timers.find(timer_id);
         if (it == g_timers.end()) return GAME_ERR_NOT_FOUND;
+        lua_timer_id = it->second.lua_timer_id;
         g_timers.erase(it);
     }
 
@@ -164,7 +182,7 @@ game_error_t game_timer_cancel(game_client_t* client, int timer_id) {
     lua_getglobal(L, "timer");                    /* timer        */
     lua_getfield(L, -1, "cancel");                /* timer, cancel */
     lua_remove(L, -2);                            /* cancel       */
-    lua_pushinteger(L, timer_id);                 /* cancel, id   */
+    lua_pushinteger(L, lua_timer_id);             /* cancel, id   */
 
     if (lua_pcall(L, 1, 1, 0) != LUA_OK) {
         lua_pop(L, 1);

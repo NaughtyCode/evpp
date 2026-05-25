@@ -49,7 +49,12 @@ int URLParser::parse(const std::string& url_s) {
         if (it != url_s.end()) {
             last_it = it;
             it = std::find_if(last_it, url_s.end(), equal_key);
-            port = ::atoi(&(*last_it));
+            std::string port_str(last_it, it);
+            char* end = nullptr;
+            long p = std::strtol(port_str.c_str(), &end, 10);
+            if (end != port_str.c_str() && *end == '\0' && p > 0 && p <= 65535) {
+                port = static_cast<int>(p);
+            }
         }
     }
 
@@ -64,7 +69,9 @@ int URLParser::parse(const std::string& url_s) {
 
         if (it != url_s.end()) {
             last_it = it;
-            query.assign(last_it, url_s.end());
+            auto frag_it = std::find_if(last_it, url_s.end(), [](unsigned char c) { return c == '#'; });
+            query.assign(last_it, frag_it);
+            it = frag_it;
         }
     }
 

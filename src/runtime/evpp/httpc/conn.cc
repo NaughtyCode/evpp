@@ -52,7 +52,12 @@ bool Conn::Init() {
 
 #if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL)
     if (enable_ssl()) {
-        ssl_ = SSL_new(GetSSLCtx());
+        SSL_CTX* ctx = GetSSLCtx();
+        if (!ctx) {
+            ENGINE_LOG_ERROR(engine::GetLogger(), "SSL context is null — InitSSL may not have been called.");
+            return false;
+        }
+        ssl_ = SSL_new(ctx);
         if (!ssl_) {
             ENGINE_LOG_ERROR(engine::GetLogger(), "SSL_new failed.");
             return false;

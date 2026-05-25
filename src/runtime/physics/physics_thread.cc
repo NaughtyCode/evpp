@@ -248,7 +248,7 @@ void PhysicsThread::EventLoop() {
             continue;  // timeout — check running_ flag
         }
 
-        { ENGINE_PROFILE_PHYSICS_CMD_DEQUEUE();
+        { ENGINE_PROFILE_PHYSICS_CMD_DEQUEUE(cmd);
         try {
             switch (cmd.type) {
             case CommandType::Spawn: {
@@ -301,9 +301,11 @@ void PhysicsThread::EventLoop() {
             PHYSICS_LOG_ERROR(logger_,"PhysicsThread: exception in event loop: {}",
                              e.what());
             healthy_.store(false, std::memory_order_release);
+            break;  // exit event loop — world may be in corrupted state
         } catch (...) {
             PHYSICS_LOG_ERROR(logger_,"PhysicsThread: unknown exception in event loop");
             healthy_.store(false, std::memory_order_release);
+            break;
         }
         }  // CmdDequeue slice ends
     }

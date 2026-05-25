@@ -271,6 +271,10 @@ void EncodeLuaType(lua_State* L, EncodeBuf& buf, int level);
 void EncodeLuaString(lua_State* L, EncodeBuf& buf) {
     size_t len = 0;
     const char* s = lua_tolstring(L, -1, &len);
+    if (!s) {
+        s = "";
+        len = 0;
+    }
     EncodeBytes(buf, reinterpret_cast<const unsigned char*>(s), len);
 }
 
@@ -386,6 +390,10 @@ void DecodeToLuaArray(lua_State* L, DecodeCursor* c, size_t len, int depth) {
         c->err = CurError::BadFmt;
         return;
     }
+    if (len > static_cast<size_t>(INT_MAX)) {
+        c->err = CurError::BadFmt;
+        return;
+    }
     lua_createtable(L, static_cast<int>(len), 0);
     luaL_checkstack(L, 1, "in function DecodeToLuaArray");
     for (size_t j = 0; j < len; ++j) {
@@ -398,6 +406,10 @@ void DecodeToLuaArray(lua_State* L, DecodeCursor* c, size_t len, int depth) {
 
 void DecodeToLuaHash(lua_State* L, DecodeCursor* c, size_t len, int depth) {
     if (depth >= GetMaxNesting()) {
+        c->err = CurError::BadFmt;
+        return;
+    }
+    if (len > static_cast<size_t>(INT_MAX)) {
         c->err = CurError::BadFmt;
         return;
     }
@@ -560,8 +572,8 @@ void DecodeToLuaType(lua_State* L, DecodeCursor* c, int depth) {
                        (static_cast<size_t>(c->p[2]) << 16) |
                        (static_cast<size_t>(c->p[3]) << 8) |
                         static_cast<size_t>(c->p[4]);
+            if (!c->Need(5 + l)) return;
             c->Consume(5);
-            if (!c->Need(l)) return;
             lua_pushlstring(L, reinterpret_cast<const char*>(c->p), l);
             c->Consume(l);
         }

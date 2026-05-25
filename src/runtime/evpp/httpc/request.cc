@@ -136,7 +136,9 @@ void Request::ExecuteInLoop() {
     }
 
     if (evhttp_make_request(conn_->evhttp_conn(), req, req_type, uri_.c_str()) != 0) {
-        // At here conn_ has owned this req, so don't need to free it.
+        // evhttp_make_request only takes ownership on success (return 0).
+        // On failure (return -1) the caller must free the request.
+        evhttp_request_free(req);
         errmsg = "evhttp_make_request fail";
         goto failed;
     }

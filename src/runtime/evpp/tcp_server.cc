@@ -144,12 +144,12 @@ void TCPServer::HandleNewConn(evpp_socket_t sockfd,
 
     assert(IsRunning());
     EventLoop* io_loop = GetNextLoop(raddr);
+    ++next_conn_id_;
 #ifdef H_DEBUG_MODE
     std::string n = name_ + "-" + remote_addr + "#" + std::to_string(next_conn_id_);
 #else
     std::string n = remote_addr;
 #endif
-    ++next_conn_id_;
     TCPConnPtr conn(new TCPConn(io_loop, n, sockfd, listen_addr_, remote_addr, next_conn_id_));
     assert(conn->type() == TCPConn::kIncoming);
     conn->SetMessageCallback(msg_fn_);

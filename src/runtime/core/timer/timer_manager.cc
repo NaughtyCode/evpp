@@ -36,14 +36,10 @@ std::unique_ptr<TimerManager> TimerManager::instance_;
 std::mutex TimerManager::instance_mutex_;
 
 TimerManager& TimerManager::instance() {
-    // Double-checked locking without call_once so destroy_instance() can
-    // safely reset the instance and allow re-creation.
+    std::lock_guard<std::mutex> lock(instance_mutex_);
     if (!instance_) {
-        std::lock_guard<std::mutex> lock(instance_mutex_);
-        if (!instance_) {
-            instance_ = std::unique_ptr<TimerManager>(new TimerManager());
-            instance_->initialize();
-        }
+        instance_ = std::unique_ptr<TimerManager>(new TimerManager());
+        instance_->initialize();
     }
     return *instance_;
 }

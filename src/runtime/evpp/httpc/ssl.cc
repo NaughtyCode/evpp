@@ -28,6 +28,8 @@ bool InitSSL() {
     X509_STORE* store = SSL_CTX_get_cert_store(g_ssl_ctx);
     if (X509_STORE_set_default_paths(store) != 1) {
         ENGINE_LOG_ERROR(engine::GetLogger(), "X509_STORE_set_default_paths failed");
+        SSL_CTX_free(g_ssl_ctx);
+        g_ssl_ctx = nullptr;
         return false;
     }
     return true;
@@ -36,6 +38,7 @@ bool InitSSL() {
 void CleanSSL() {
     if (g_ssl_ctx != nullptr) {
         SSL_CTX_free(g_ssl_ctx);
+        g_ssl_ctx = nullptr;
     }
     ERR_free_strings();
     EVP_cleanup();

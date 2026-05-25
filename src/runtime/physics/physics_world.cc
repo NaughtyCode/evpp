@@ -68,10 +68,12 @@ void ContactListenerImpl::OnContactPersisted(const JPH::Body& inBody1,
         cp1_sum += inManifold.GetWorldSpaceContactPointOn1(i);
         cp2_sum += inManifold.GetWorldSpaceContactPointOn2(i);
     }
-    double inv = 1.0 / static_cast<double>(count);
-    PushRecord(inBody1.GetID().GetIndexAndSequenceNumber(),
-               inBody2.GetID().GetIndexAndSequenceNumber(),
-               CollisionEvent::Type::Persist, cp1_sum * inv, cp2_sum * inv);
+    if (count > 0) {
+        double inv = 1.0 / static_cast<double>(count);
+        PushRecord(inBody1.GetID().GetIndexAndSequenceNumber(),
+                   inBody2.GetID().GetIndexAndSequenceNumber(),
+                   CollisionEvent::Type::Persist, cp1_sum * inv, cp2_sum * inv);
+    }
 }
 
 void ContactListenerImpl::OnContactRemoved(
@@ -506,12 +508,17 @@ void PhysicsWorld::CollectCollisionEvents(PhysicsFrameResult& result) {
     std::unordered_map<uint64_t, CollisionEvent> event_map;
 
     for (const auto& rec : records) {
-        uint64_t key = (static_cast<uint64_t>(rec.body_a) << 32) | rec.body_b;
+        uint32_t lo = (rec.body_a < rec.body_b) ? rec.body_a : rec.body_b;
+        uint32_t hi = (rec.body_a < rec.body_b) ? rec.body_b : rec.body_a;
+        uint64_t key = (static_cast<uint64_t>(lo) << 32) | hi;
 
         auto& evt = event_map[key];
         if (evt.body_a == 0 && evt.body_b == 0) {
             evt.body_a = rec.body_a;
             evt.body_b = rec.body_b;
+            evt.type = rec.type;
+        } else if (rec.type != evt.type) {
+            // Update type if a later event is more significant (e.g. Persist after Start)
             evt.type = rec.type;
         }
         // Collect both contact points

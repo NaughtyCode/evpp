@@ -24,6 +24,10 @@ Connector::Connector(EventLoop* l, TCPClient* client)
 Connector::~Connector() {
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
     assert(loop_->IsInLoopThread());
+    if (reconnect_timer_) {
+        reconnect_timer_->Cancel();
+        reconnect_timer_.reset();
+    }
     if (status_ == kDNSResolving) {
         assert(!chan_.get());
         assert(!dns_resolver_.get());
@@ -77,6 +81,11 @@ void Connector::Cancel() {
         timer_.reset();
     }
 
+    if (reconnect_timer_) {
+        reconnect_timer_->Cancel();
+        reconnect_timer_.reset();
+    }
+
     if (status_ == kDNSResolving) {
         assert(chan_.get() == nullptr);
         conn_fn_(-1, "");
@@ -99,7 +108,7 @@ void Connector::Connect() {
     if (!laddr.empty()) {
         struct sockaddr_storage ss = sock::ParseFromIPPort(laddr.data());
         struct sockaddr* addr = sock::sockaddr_cast(&ss);
-        int rc = ::bind(fd_, addr, sizeof(*addr));
+        int rc = ::bind(fd_, addr, sizeof(ss));
         if (rc != 0) {
             int serrno = EVPP_ERRNO;
             ENGINE_LOG_ERROR(engine::GetLogger(), "bind failed, errno={} {}", serrno, strerror(serrno));
@@ -108,7 +117,7 @@ void Connector::Connect() {
         }
     }
     struct sockaddr* addr = sock::sockaddr_cast(&raddr_);
-    int rc = ::connect(fd_, addr, sizeof(*addr));
+    int rc = ::connect(fd_, addr, sizeof(raddr_));
     if (rc != 0) {
         int serrno = EVPP_ERRNO;
         if (!EVUTIL_ERR_CONNECT_RETRIABLE(serrno)) {

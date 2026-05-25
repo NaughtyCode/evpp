@@ -69,12 +69,19 @@ public:
         , callback_(std::move(other.callback_))
         , data_(other.data_)
         , queue_it_(other.queue_it_) {
+        // Moving an armed alarm would leave a dangling pointer in the
+        // TimerQueue. The caller must cancel the alarm before moving.
+        assert(other.state_ != kStateEnqueued);
         other.state_ = kStateInactive;
         other.queue_it_ = MapIterator();
     }
 
     Alarm& operator=(Alarm&& other) noexcept {
+        // Target must not be armed — cancel before move-assigning.
+        assert(state_ != kStateEnqueued);
         if (this != &other) {
+            // Source must not be armed either.
+            assert(other.state_ != kStateEnqueued);
             expires_ = other.expires_;
             type_ = other.type_;
             state_ = other.state_;

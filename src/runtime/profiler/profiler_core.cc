@@ -37,7 +37,7 @@ ProfilerManager::~ProfilerManager() = default;
 // ── Initialize / Shutdown ───────────────────────────────────────────────
 
 bool ProfilerManager::Initialize(const ProfilerConfig& cfg) {
-    if (initialized_.exchange(true)) return true;
+    if (initialized_.load()) return true;
 
     config_ = cfg;
 
@@ -53,6 +53,8 @@ bool ProfilerManager::Initialize(const ProfilerConfig& cfg) {
     ENGINE_LOG_INFO(logger, "ProfilerManager: after Tracing::Init, before Register");
 
     perfetto::TrackEvent::Register();
+
+    initialized_.store(true);
 
     ENGINE_LOG_INFO(logger, "ProfilerManager: initialized, buffer=[{}KB]", cfg.buffer_size_kb);
 
@@ -163,9 +165,17 @@ void ProfilerManager::SaveTrace() {
     auto t = std::chrono::system_clock::to_time_t(now);
     std::tm tm_buf{};
 #ifdef _WIN32
-    localtime_s(&tm_buf, &t);
+    if (localtime_s(&tm_buf, &t) != 0) {
+        auto* logger = GetLogger();
+        ENGINE_LOG_ERROR(logger, "ProfilerManager: localtime_s failed");
+        return;
+    }
 #else
-    localtime_r(&t, &tm_buf);
+    if (!localtime_r(&t, &tm_buf)) {
+        auto* logger = GetLogger();
+        ENGINE_LOG_ERROR(logger, "ProfilerManager: localtime_r failed");
+        return;
+    }
 #endif
     std::ostringstream oss;
     oss << std::put_time(&tm_buf, "%Y%m%d_%H%M%S");

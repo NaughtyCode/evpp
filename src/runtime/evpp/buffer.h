@@ -325,28 +325,28 @@ public:
     // Peek int64_t/int32_t/int16_t/int8_t with network endian
 
     int64_t PeekInt64() const {
-        assert(length() >= sizeof(int64_t));
+        if (length() < sizeof(int64_t)) return 0;
         int64_t be64 = 0;
         ::memcpy(&be64, data(), sizeof be64);
         return evppbswap_64(be64);
     }
 
     int32_t PeekInt32() const {
-        assert(length() >= sizeof(int32_t));
+        if (length() < sizeof(int32_t)) return 0;
         int32_t be32 = 0;
         ::memcpy(&be32, data(), sizeof be32);
         return ntohl(be32);
     }
 
     int16_t PeekInt16() const {
-        assert(length() >= sizeof(int16_t));
+        if (length() < sizeof(int16_t)) return 0;
         int16_t be16 = 0;
         ::memcpy(&be16, data(), sizeof be16);
         return ntohs(be16);
     }
 
     int8_t PeekInt8() const {
-        assert(length() >= sizeof(int8_t));
+        if (length() < sizeof(int8_t)) return 0;
         int8_t x = *data();
         return x;
     }

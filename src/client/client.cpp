@@ -77,6 +77,9 @@ extern "C" game_error_t game_client_init(game_client_t* client,
     auto* loop = new (std::nothrow) evpp::EventLoop();
     if (!loop) {
         set_error(client, "EventLoop allocation failed");
+#ifdef _WIN32
+        WSACleanup();
+#endif
         return GAME_ERR_OUT_OF_MEMORY;
     }
     client->owns_loop = true;

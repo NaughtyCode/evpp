@@ -377,7 +377,7 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(
     else if (type == "height_field" || type == "heightField") {
         JPH::HeightFieldShapeSettings settings;
         auto& df_arr = get_arr("dataFile");
-        if (df_arr.is_array()) {
+        if (df_arr.is_array() && df_arr.size() > 0) {
             // Resolve dataFile path relative to assets_dir, or use absolute
             std::string data_path = std::string(df_arr[0u].template get<std::string>());
             if (!assets_dir.empty() && !data_path.empty() && data_path[0] != '/'
@@ -428,6 +428,11 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(
             uint32_t sample_count = static_cast<uint32_t>(get_num("sampleCount", 0));
             if (sample_count == 0) {
                 sample_count = static_cast<uint32_t>(std::sqrt(samples.size()));
+                if (static_cast<size_t>(sample_count) * sample_count != samples.size()) {
+                    result.error = "height_field: inline sampleCount not specified "
+                                   "and sample array size is not a perfect square";
+                    return result;
+                }
             }
             if (sample_count == 0 || sample_count > 65536) {
                 result.error = "height_field sampleCount must be in [1, 65536]";

@@ -40,7 +40,7 @@ void DNSResolver::SyncDNSResolve() {
     hints.ai_family = AF_UNSPEC; /* v4 or v6 is fine. */
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP; /* We want a TCP socket */
-    hints.ai_flags = AI_PASSIVE;    /* For wildcard IP address */
+    hints.ai_flags = 0;
 
     /* Look up the hostname. */
     struct addrinfo* answer = nullptr;
@@ -115,7 +115,7 @@ void DNSResolver::AsyncDNSResolve() {
     hints.ai_family = AF_UNSPEC; /* v4 or v6 is fine. */
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP; /* We want a TCP socket */
-    hints.ai_flags = AI_PASSIVE;    /* For wildcard IP address */
+    hints.ai_flags = 0;
 
 
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={} call shared_from_this", (void*)this);

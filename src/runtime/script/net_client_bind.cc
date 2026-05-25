@@ -138,10 +138,17 @@ int l_net_client_connect(lua_State* L) {
                 ctx_ptr->is_connected = false;
                 auto* logger = GetLogger();
                 ENGINE_LOG_INFO(logger, "[net.client] disconnected");
+
+                // Set disposed BEFORE dispatching on_close: the Lua handler
+                // may call disconnect() re-entrantly which queues delete.
+                // If we checked disposed after the callback, ctx_ptr could
+                // already be freed.
+                bool already_disposed = ctx_ptr->disposed;
+                ctx_ptr->disposed = true;
+
                 CallClientMethod(L_ptr, inst_ref, "on_close");
 
-                if (!ctx_ptr->disposed) {
-                    ctx_ptr->disposed = true;
+                if (!already_disposed) {
                     if (inst_ref != LUA_NOREF) {
                         lua_rawgeti(L_ptr, LUA_REGISTRYINDEX, inst_ref);
                         lua_pushnil(L_ptr);

@@ -56,6 +56,12 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
     script_vm_ = std::make_unique<PhysicsScriptVM>();
     script_vm_->SetImportPath(scripts_dir);
 
+    // Register subsystem objects in the VM's custom-pointer store so they
+    // can be retrieved from any lua_State* via typed accessors.
+    // Must be done BEFORE DoDirectory — physics scripts may call physics
+    // APIs during top-level execution.
+    InitCustomPtrStore();
+
     // Register physics API bindings
     physics_bindings::Register(*script_vm_);
 
@@ -71,10 +77,6 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
     }
 
     is_initialized_ = true;
-
-    // Register subsystem objects in the VM's custom-pointer store so they
-    // can be retrieved from any lua_State* via typed accessors.
-    InitCustomPtrStore();
 
     ENGINE_LOG_INFO(GetLogger(), "PhysicsSystem: initialized (physics thread NOT started)");
     return true;

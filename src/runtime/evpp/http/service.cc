@@ -49,7 +49,7 @@ namespace evpp {
 					return;
 				}
 
-				std::once_flag flag;
+				static std::once_flag flag;
 				std::call_once(flag, &InitHTTPCodeString);
 			}
 
@@ -89,6 +89,7 @@ namespace evpp {
 						SSL_OP_SINGLE_DH_USE |
 						SSL_OP_SINGLE_ECDH_USE |
 						SSL_OP_NO_SSLv2 /*disable SSLv2*/ |
+						SSL_OP_NO_SSLv3 /*disable SSLv3*/ |
 						SSL_OP_NO_TLSv1 /*disable TLSv1*/);
 			/* Whether to verify peer certificate (server-side, use SSL_VERIFY_NONE to skip verification) */
 			SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
@@ -146,6 +147,7 @@ namespace evpp {
 				return r;
 			};
 			evhttp_set_bevcb (evhttp_, bevcb, ctx);
+			EC_KEY_free(ecdh);
 			ssl_ctx_ = ctx;
 			return true;
 		}

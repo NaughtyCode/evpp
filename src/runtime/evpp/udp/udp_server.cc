@@ -109,9 +109,9 @@ Server::~Server() {
 bool Server::Init(int port) {
     RecvThreadPtr t(new RecvThread(this));
     bool ret = t->Listen(port);
-    assert(ret);
+    if (!ret) return false;
     recv_threads_.push_back(t);
-    return ret;
+    return true;
 }
 
 bool Server::Init(const std::vector<int>& ports) {

@@ -264,8 +264,7 @@ void Engine::Shutdown() {
 void Engine::Cleanup() {
     ENGINE_PROFILE_SCOPE("engine", "Cleanup");
 
-    if (cleaned_up_) return;
-    cleaned_up_ = true;
+    if (cleaned_up_.exchange(true)) return;
 
     // Shutdown physics (stops thread + destroys physics VM) — before engine VM
     PhysicsEngineBridge::Instance().Shutdown();
@@ -276,16 +275,16 @@ void Engine::Cleanup() {
         frame_timer_.reset();
     }
 
+    script::ShutdownNetBindings();
+    if (script_vm_) {
+        script::ShutdownTimerBindings(*script_vm_);
+    }
+
     if (script_vm_) {
         script_vm_->DestroyScript();
         int mem_kb = lua_gc(script_vm_->GetState(), LUA_GCCOUNT, 0);
         auto* logger = GetLogger();
         ENGINE_LOG_INFO(logger, "ScriptVM: final memory [{} KB], exiting", mem_kb);
-    }
-
-    script::ShutdownNetBindings();
-    if (script_vm_) {
-        script::ShutdownTimerBindings(*script_vm_);
     }
     TimerManager::destroy_instance();
 

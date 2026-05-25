@@ -13,7 +13,7 @@ static_assert(FdChannel::kWritable == EV_WRITE, "");
 FdChannel::FdChannel(EventLoop* l, evpp_socket_t f, bool r, bool w)
     : loop_(l), attached_(false), event_(nullptr), fd_(f) {
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={} fd={}", (void*)this, fd_);
-    assert(fd_ > 0);
+    assert(fd_ >= 0);
     events_ = (r ? kReadable : 0) | (w ? kWritable : 0);
     event_ = new event;
     memset(event_, 0, sizeof(struct event));

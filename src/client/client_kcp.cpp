@@ -226,6 +226,11 @@ game_error_t game_kcp_request(game_kcp_client_t* kcp,
 
     size_t len = 0;
     const char* resp = lua_tolstring(L, -1, &len);
+    if (!resp) {
+        lua_pop(L, 1);
+        if (out_resp_len) *out_resp_len = 0;
+        return GAME_ERR_GENERIC;
+    }
     int copy_len = (static_cast<int>(len) < resp_cap)
                    ? static_cast<int>(len) : (resp_cap - 1);
     std::memcpy(resp_buf, resp, copy_len);
@@ -420,7 +425,7 @@ void game_kcp_server_resume(game_kcp_server_t* srv) {
     lua_State* L = get_L();
     if (!L) return;
     lua_rawgeti(L, LUA_REGISTRYINDEX, get_kcp_srv_ref(srv));
-    lua_getfield(L, -1, "continue");
+    lua_getfield(L, -1, "resume");
     lua_insert(L, -2);
     if (lua_pcall(L, 1, 0, 0) != LUA_OK) { lua_pop(L, 1); }
 }

@@ -211,7 +211,7 @@ failed:
 }
 
 void PipeEventWatcher::DoClose() {
-    if (pipe_[0] > 0) {
+    if (pipe_[0] >= 0) {
         EVUTIL_CLOSESOCKET(pipe_[0]);
         EVUTIL_CLOSESOCKET(pipe_[1]);
         memset(pipe_, 0, sizeof(pipe_[0]) * 2);

@@ -338,6 +338,11 @@ void game_tcp_disconnect(game_net_client_t** conn_ptr) {
     unregister_handle(conn->lua_ref);
     lua_State* L = get_L();
     if (L && conn->lua_ref != LUA_NOREF) {
+        // Clear _capi to prevent dangling pointer in Lua-held references
+        lua_rawgeti(L, LUA_REGISTRYINDEX, conn->lua_ref);
+        lua_pushnil(L);
+        lua_setfield(L, -2, "_capi");
+        lua_pop(L, 1);
         luaL_unref(L, LUA_REGISTRYINDEX, conn->lua_ref);
     }
     delete conn;
@@ -440,6 +445,11 @@ void game_tcp_server_stop(game_net_server_t** server_ptr) {
 
     lua_State* L = get_L();
     if (L && srv_ref != LUA_NOREF) {
+        // Clear _capi to prevent dangling pointer in Lua-held references
+        lua_rawgeti(L, LUA_REGISTRYINDEX, srv_ref);
+        lua_pushnil(L);
+        lua_setfield(L, -2, "_capi");
+        lua_pop(L, 1);
         luaL_unref(L, LUA_REGISTRYINDEX, srv_ref);
     }
     delete srv;
@@ -508,6 +518,11 @@ void game_tcp_conn_close(game_tcp_conn_t** conn_ptr) {
 
     lua_State* L = get_L();
     if (L && conn->lua_ref != LUA_NOREF) {
+        // Clear _capi to prevent dangling pointer in Lua-held references
+        lua_rawgeti(L, LUA_REGISTRYINDEX, conn->lua_ref);
+        lua_pushnil(L);
+        lua_setfield(L, -2, "_capi");
+        lua_pop(L, 1);
         luaL_unref(L, LUA_REGISTRYINDEX, conn->lua_ref);
     }
     delete conn;

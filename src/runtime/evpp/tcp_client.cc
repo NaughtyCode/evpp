@@ -84,7 +84,7 @@ void TCPClient::DisconnectInLoop() {
 }
 
 void TCPClient::Reconnect() {
-    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} Try to reconnect to {} in {}s again", (void*)this, remote_addr_, reconnect_interval_.Seconds());
+    ENGINE_LOG_TRACE(engine::GetLogger(), "this={} Try to reconnect to {} in {}s again", (void*)this, remote_addr_, reconnect_interval().Seconds());
     Connect();
 }
 

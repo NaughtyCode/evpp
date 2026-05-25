@@ -70,9 +70,11 @@ int VMCustomPtrStore::CopyTo(void** dst, int max_count) const {
 
 void VMCustomPtrStore::CopyFrom(void* const* src, int count) {
     Clear();
-    Reserve(count);
-    for (int i = 0; i < count; ++i)
-        Push(src[i]);
+    if (count <= 0) return;
+    if (!Reserve(count)) return;
+    for (int i = 0; i < count; ++i) {
+        if (Push(src[i]) == 0) break;
+    }
 }
 
 }  // namespace engine
