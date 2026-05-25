@@ -21,6 +21,7 @@ public:
     uint64_t low()  const { return low_; }
 
     bool FromString(const char* str);
+    bool FromStringLen(const char* str, int len);
     std::string ToString() const;
 
 private:
@@ -175,11 +176,14 @@ public:
     // Find variants
     bool FindCase(const char* key);
     bool FindDescendant(const char* dotkey, BsonIter* descendant);
+    bool FindWLen(const char* key, int keylen);
 
     // Init-and-find (initialize iterator and find key in one call)
     bool InitFind(const BsonDocument& doc, const char* key);
     bool InitFindCase(const BsonDocument& doc, const char* key);
+    bool InitFindWLen(const BsonDocument& doc, const char* key, int keylen);
     bool InitFromData(const uint8_t* data, size_t length);
+    bool InitFromDataAtOffset(const uint8_t* data, size_t length, uint32_t offset, uint32_t keylen);
     const char* KeyUnsafe() const;
     uint32_t KeyLen() const;
     char* DupUtf8(uint32_t* length) const;
@@ -190,6 +194,9 @@ public:
 
     // Timeval
     void AsTimeval(void* tv) const; // struct timeval*
+
+    // DBPointer type access
+    void AsDBPointer(uint32_t* collection_len, const char** collection, const void** oid) const;
 
     // Visit all fields with a visitor callback
     bool VisitAll(const void* visitor, void* data);

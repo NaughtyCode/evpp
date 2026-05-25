@@ -480,6 +480,10 @@ bool BsonIter::FindDescendant(const char* dotkey, BsonIter* descendant) {
                                       static_cast<bson_iter_t*>(descendant->RawIter()));
 }
 
+bool BsonIter::FindWLen(const char* key, int keylen) {
+    return bson_iter_find_w_len(static_cast<bson_iter_t*>(RawIter()), key, keylen);
+}
+
 bool BsonIter::InitFind(const BsonDocument& doc, const char* key) {
     return bson_iter_init_find(static_cast<bson_iter_t*>(RawIter()),
                                static_cast<const bson_t*>(doc.RawBson()), key);
@@ -488,6 +492,10 @@ bool BsonIter::InitFind(const BsonDocument& doc, const char* key) {
 bool BsonIter::InitFindCase(const BsonDocument& doc, const char* key) {
     return bson_iter_init_find_case(static_cast<bson_iter_t*>(RawIter()),
                                     static_cast<const bson_t*>(doc.RawBson()), key);
+}
+bool BsonIter::InitFindWLen(const BsonDocument& doc, const char* key, int keylen) {
+    return bson_iter_init_find_w_len(static_cast<bson_iter_t*>(RawIter()),
+                                      static_cast<const bson_t*>(doc.RawBson()), key, keylen);
 }
 
 const char* BsonIter::KeyUnsafe() const {
@@ -508,6 +516,11 @@ BsonIter BsonIter::Recurse() const {
 bool BsonIter::InitFromData(const uint8_t* data, size_t length) {
     return bson_iter_init_from_data(static_cast<bson_iter_t*>(RawIter()), data, length);
 }
+bool BsonIter::InitFromDataAtOffset(const uint8_t* data, size_t length,
+                                     uint32_t offset, uint32_t keylen) {
+    return bson_iter_init_from_data_at_offset(static_cast<bson_iter_t*>(RawIter()),
+                                               data, length, offset, keylen);
+}
 
 uint32_t BsonIter::KeyLen() const {
     return bson_iter_key_len(static_cast<const bson_iter_t*>(RawIter()));
@@ -527,6 +540,11 @@ bool BsonIter::BinaryEqual(const BsonIter& a, const BsonIter& b) {
 void BsonIter::AsTimeval(void* tv) const {
     bson_iter_timeval(static_cast<const bson_iter_t*>(RawIter()),
                       static_cast<struct timeval*>(tv));
+}
+void BsonIter::AsDBPointer(uint32_t* collection_len, const char** collection,
+                            const void** oid) const {
+    bson_iter_dbpointer(static_cast<const bson_iter_t*>(RawIter()),
+                         collection_len, collection, oid);
 }
 
 bool BsonIter::VisitAll(const void* visitor, void* data) {
@@ -593,6 +611,10 @@ const void* BsonIter::RawIter() const { return static_cast<const void*>(storage_
 
 bool MongoDecimal128::FromString(const char* str) {
     return bson_decimal128_from_string(str,
+        reinterpret_cast<bson_decimal128_t*>(this));
+}
+bool MongoDecimal128::FromStringLen(const char* str, int len) {
+    return bson_decimal128_from_string_w_len(str, len,
         reinterpret_cast<bson_decimal128_t*>(this));
 }
 
