@@ -1,0 +1,56 @@
+--- HTTP Client API
+--- Module: net.http
+---
+--- 基于 evpp HTTP client 的异步 HTTP(S) 请求模块。
+--- 提供 GET 和 POST 方法，请求在后台线程执行，
+--- 结果通过回调函数在事件循环线程中返回。
+---
+--- 超时时间由服务端配置 http.timeout_sec 控制。
+--- 引擎关闭时会安全取消所有进行中的请求，防止回调访问已释放的 Lua 状态。
+
+-- ============================================================================
+-- net.http 方法
+-- ============================================================================
+
+--- 发送异步 HTTP GET 请求。
+---
+--- 在后台线程中执行 HTTP GET 请求，完成后在事件循环线程中调用回调。
+--- 超时或请求失败时，http_code 为 0，body 为空字符串。
+---
+--- 使用示例:
+--- ```lua
+--- net.http.get("https://api.example.com/data", function(http_code, body)
+---     if http_code == 200 then
+---         print("response:", body)
+---     else
+---         print("request failed, code:", http_code)
+---     end
+--- end)
+--- ```
+---
+---@param url         string   请求 URL（支持 http 和 https）
+---@param on_response function  响应回调: fun(http_code: integer, body: string)
+---                             成功时 body 为响应内容，失败/超时时 http_code=0, body=""
+function net.http.get(url, on_response) end
+
+--- 发送异步 HTTP POST 请求。
+---
+--- 在后台线程中执行 HTTP POST 请求，完成后在事件循环线程中调用回调。
+--- 请求体为原始字符串。超时或请求失败时，http_code 为 0，body 为空字符串。
+---
+--- 使用示例:
+--- ```lua
+--- net.http.post("https://api.example.com/submit", "key=value", function(http_code, body)
+---     if http_code == 200 then
+---         print("response:", body)
+---     else
+---         print("request failed, code:", http_code)
+---     end
+--- end)
+--- ```
+---
+---@param url         string   请求 URL（支持 http 和 https）
+---@param body        string   请求体（原始字符串）
+---@param on_response function  响应回调: fun(http_code: integer, body: string)
+---                             成功时 body 为响应内容，失败/超时时 http_code=0, body=""
+function net.http.post(url, body, on_response) end
