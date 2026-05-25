@@ -301,10 +301,12 @@ void PhysicsThread::EventLoop() {
             PHYSICS_LOG_ERROR(logger_,"PhysicsThread: exception in event loop: {}",
                              e.what());
             healthy_.store(false, std::memory_order_release);
+            running_.store(false, std::memory_order_release);
             break;  // exit event loop — world may be in corrupted state
         } catch (...) {
             PHYSICS_LOG_ERROR(logger_,"PhysicsThread: unknown exception in event loop");
             healthy_.store(false, std::memory_order_release);
+            running_.store(false, std::memory_order_release);
             break;
         }
         }  // CmdDequeue slice ends

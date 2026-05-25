@@ -315,16 +315,19 @@ namespace evpp {
 					return;
 				}
 
+				int http_code = x->response_http_code();
+				if (http_code < 0 || http_code > kMaxHTTPCode) {
+					http_code = HTTP_NOTFOUND;
+				}
+
 				if (!response->buffer) {
-					evhttp_send_reply(x->req(), HTTP_NOTFOUND,
-								g_http_code_string[HTTP_NOTFOUND], nullptr);
+					evhttp_send_reply(x->req(), http_code,
+								g_http_code_string[http_code], nullptr);
 					return;
 				}
 
-				assert(x->response_http_code() <= kMaxHTTPCode);
-				assert(x->response_http_code() >= 100);
-				evhttp_send_reply(x->req(), x->response_http_code(),
-							g_http_code_string[x->response_http_code()],
+				evhttp_send_reply(x->req(), http_code,
+							g_http_code_string[http_code],
 							response->buffer);
 			};
 

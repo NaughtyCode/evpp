@@ -113,23 +113,41 @@ bool ParseFromIPPort(const char* address, struct sockaddr_storage& ss) {
         family = AF_INET6;
     }
 
-    struct sockaddr_in* addr = sockaddr_in_cast(&ss);
-    int rc = ::evutil_inet_pton(family, host.data(), &addr->sin_addr);
-    if (rc == 0) {
-        ENGINE_LOG_INFO(engine::GetLogger(), "ParseFromIPPort evutil_inet_pton (AF_INET '{}', ...) rc=0. {} is not a valid IP address. Maybe it is a hostname.", host.data(), host.data());
-        return false;
-    } else if (rc < 0) {
-        int serrno = EVPP_ERRNO;
-        if (serrno == 0) {
-            ENGINE_LOG_INFO(engine::GetLogger(), "[{}] is not a IP address. Maybe it is a hostname.", host.data());
-        } else {
-            ENGINE_LOG_WARN(engine::GetLogger(), "ParseFromIPPort evutil_inet_pton (AF_INET, '{}', ...) failed : {}", host.data(), strerror(serrno));
+    if (family == AF_INET6) {
+        struct sockaddr_in6* addr6 = sockaddr_in6_cast(&ss);
+        int rc = ::evutil_inet_pton(family, host.data(), &addr6->sin6_addr);
+        if (rc == 0) {
+            ENGINE_LOG_INFO(engine::GetLogger(), "ParseFromIPPort evutil_inet_pton (AF_INET6 '{}', ...) rc=0. {} is not a valid IP address. Maybe it is a hostname.", host.data(), host.data());
+            return false;
+        } else if (rc < 0) {
+            int serrno = EVPP_ERRNO;
+            if (serrno == 0) {
+                ENGINE_LOG_INFO(engine::GetLogger(), "[{}] is not a IP address. Maybe it is a hostname.", host.data());
+            } else {
+                ENGINE_LOG_WARN(engine::GetLogger(), "ParseFromIPPort evutil_inet_pton (AF_INET6, '{}', ...) failed : {}", host.data(), strerror(serrno));
+            }
+            return false;
         }
-        return false;
+        addr6->sin6_family = family;
+        addr6->sin6_port = htons(port);
+    } else {
+        struct sockaddr_in* addr = sockaddr_in_cast(&ss);
+        int rc = ::evutil_inet_pton(family, host.data(), &addr->sin_addr);
+        if (rc == 0) {
+            ENGINE_LOG_INFO(engine::GetLogger(), "ParseFromIPPort evutil_inet_pton (AF_INET '{}', ...) rc=0. {} is not a valid IP address. Maybe it is a hostname.", host.data(), host.data());
+            return false;
+        } else if (rc < 0) {
+            int serrno = EVPP_ERRNO;
+            if (serrno == 0) {
+                ENGINE_LOG_INFO(engine::GetLogger(), "[{}] is not a IP address. Maybe it is a hostname.", host.data());
+            } else {
+                ENGINE_LOG_WARN(engine::GetLogger(), "ParseFromIPPort evutil_inet_pton (AF_INET, '{}', ...) failed : {}", host.data(), strerror(serrno));
+            }
+            return false;
+        }
+        addr->sin_family = family;
+        addr->sin_port = htons(port);
     }
-
-    addr->sin_family = family;
-    addr->sin_port = htons(port);
 
     return true;
 }

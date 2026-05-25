@@ -63,6 +63,7 @@ void Client::SetKcpMtu(int mtu) {
 }
 
 bool Client::Connect(const struct sockaddr_in& addr, uint32_t conv) {
+    memset(&remote_addr_, 0, sizeof(remote_addr_));
     memcpy(&remote_addr_, &addr, sizeof(addr));
     conv_ = conv;
     return Connect();

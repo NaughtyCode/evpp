@@ -17,6 +17,7 @@ Client::~Client(void) {
 }
 
 bool Client::Connect(const struct sockaddr_in& addr) {
+    memset(&remote_addr_, 0, sizeof(remote_addr_));
     memcpy(&remote_addr_, &addr, sizeof(addr));
     return Connect();
 }
@@ -41,6 +42,7 @@ bool Client::Connect(const char* addr/*host:port*/) {
 }
 
 bool Client::Connect(const struct sockaddr& addr) {
+    memset(&remote_addr_, 0, sizeof(remote_addr_));
     memcpy(&remote_addr_, &addr, sizeof(addr));
     return Connect();
 }
