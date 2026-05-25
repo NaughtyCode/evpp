@@ -10,6 +10,7 @@
 
 #include "runtime/core/log/log.h"
 #include "runtime/engine/engine.h"
+#include "runtime/evpp/event_loop.h"
 #include "runtime/vm/vm.h"
 
 #include <cstdlib>

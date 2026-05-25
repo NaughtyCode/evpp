@@ -7,7 +7,7 @@
 
 #include "client_internal.h"
 
-#include "runtime/core/log/log_macros.h"
+#include "runtime/core/log/log.h"
 
 extern "C" {
 
