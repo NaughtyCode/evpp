@@ -174,6 +174,7 @@ bool PipeEventWatcher::DoInit() {
                          ::WSAGetLastError());
             EVUTIL_CLOSESOCKET(listener);
             EVUTIL_CLOSESOCKET(pipe_[0]);
+            pipe_[0] = INVALID_SOCKET;
             goto failed;
         }
 
@@ -183,6 +184,7 @@ bool PipeEventWatcher::DoInit() {
             std::fprintf(stderr, "[PipeEventWatcher] accept() failed, WSA err=%d\n",
                          ::WSAGetLastError());
             EVUTIL_CLOSESOCKET(pipe_[0]);
+            pipe_[0] = INVALID_SOCKET;
             goto failed;
         }
     }

@@ -93,12 +93,18 @@ void Listener::HandleAccept() {
 
     if (new_conn_fn_) {
         new_conn_fn_(nfd, raddr, sock::sockaddr_in_cast(&ss));
+    } else {
+        ENGINE_LOG_WARN(engine::GetLogger(), "{} no NewConnectionCallback set, closing accepted fd={}", __FUNCTION__, nfd);
+        EVUTIL_CLOSESOCKET(nfd);
     }
 }
 
 void Listener::Stop() {
     assert(loop_->IsInLoopThread());
     chan_->DisableAllEvent();
-    chan_->Close();
+    // Don't call chan_->Close() here — it would delete event_ and set it
+    // to nullptr, then ~FdChannel() calls Close() again which asserts on
+    // the now-null event_. DisableAllEvent() already detaches the event
+    // from the loop; the destructor handles the actual deletion.
 }
 }

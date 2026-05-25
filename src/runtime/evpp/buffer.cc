@@ -34,7 +34,9 @@ ssize_t Buffer::ReadFromFD(evpp_socket_t fd, int* savedErrno) {
     const ssize_t n = ::readv(fd, vec, iovcnt);
 
     if (n < 0) {
-        *savedErrno = EVPP_ERRNO;
+        if (savedErrno) {
+            *savedErrno = EVPP_ERRNO;
+        }
     } else if (static_cast<size_t>(n) <= writable) {
         write_index_ += n;
     } else {

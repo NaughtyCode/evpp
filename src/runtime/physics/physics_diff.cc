@@ -92,6 +92,12 @@ std::optional<DiffPacket> GenerateDiff(
 //============================================================================
 
 void ObjectRegistry::Register(uint32_t body_id, const std::string& asset_name) {
+    // If this body_id was already registered with a different name,
+    // remove the stale name-to-id mapping before overwriting.
+    auto it = id_to_name_.find(body_id);
+    if (it != id_to_name_.end() && !it->second.empty() && it->second != asset_name) {
+        name_to_id_.erase(it->second);
+    }
     id_to_name_[body_id] = asset_name;
     if (!asset_name.empty()) {
         name_to_id_[asset_name] = body_id;

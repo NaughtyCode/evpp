@@ -266,7 +266,9 @@ int l_server_stop(lua_State* L) {
     auto* loop = Engine::Instance().GetEventLoop();
     if (loop) {
         ServerCtx* del_ctx = ctx;
-        loop->RunInLoop([del_ctx] { delete del_ctx; });
+        // Use QueueInLoop so HandleClose (queued by Close() in StopInLoop)
+        // fires first, allowing ConnCtx cleanup before ServerCtx is freed.
+        loop->QueueInLoop([del_ctx] { delete del_ctx; });
     } else {
         delete ctx;
     }
@@ -322,7 +324,9 @@ int l_server_gc(lua_State* L) {
     auto* loop = Engine::Instance().GetEventLoop();
     if (loop) {
         ServerCtx* del_ctx = ctx;
-        loop->RunInLoop([del_ctx] { delete del_ctx; });
+        // Use QueueInLoop so HandleClose (queued by Close() in StopInLoop)
+        // fires first, allowing ConnCtx cleanup before ServerCtx is freed.
+        loop->QueueInLoop([del_ctx] { delete del_ctx; });
     } else {
         delete ctx;
     }
@@ -371,10 +375,11 @@ int l_net_server_listen(lua_State* L) {
     // ── Connection callback (connect / disconnect) ─────────────────
     ctx->server->SetConnectionCallback(
         [L_ptr, server_inst_ref, ctx_ptr](const evpp::TCPConnPtr& conn) {
-            if (ctx_ptr->disposed) return;
-
             if (conn->IsConnected()) {
                 // ── New connection ─────────────────────────────
+                // Skip new connections if server is shutting down.
+                if (ctx_ptr->disposed) return;
+
                 auto* conn_ctx = new ConnCtx();
                 conn_ctx->L = L_ptr;
                 conn_ctx->conn = conn;
@@ -428,12 +433,17 @@ int l_net_server_listen(lua_State* L) {
                 int conn_ref = conn_ctx->instance_ref;
                 int sv_ref   = conn_ctx->server_inst_ref;
 
-                // Per-connection on_close overrides server-wide.
-                if (HasMethod(L_ptr, conn_ref, "on_close")) {
-                    CallInstMethodStr(L_ptr, conn_ref, "on_close", remote);
-                } else {
-                    CallInstMethodTableStr(L_ptr, sv_ref, "on_close",
-                                           conn_ref, remote);
+                // Skip Lua callbacks if server is shutting down (ctx_ptr
+                // may be freed by QueueInLoop delete after HandleClose),
+                // but still clean up ConnCtx below to avoid leaks.
+                if (!ctx_ptr->disposed) {
+                    // Per-connection on_close overrides server-wide.
+                    if (HasMethod(L_ptr, conn_ref, "on_close")) {
+                        CallInstMethodStr(L_ptr, conn_ref, "on_close", remote);
+                    } else {
+                        CallInstMethodTableStr(L_ptr, sv_ref, "on_close",
+                                               conn_ref, remote);
+                    }
                 }
 
                 // l_conn_close sets instance_ref = LUA_NOREF after unref;

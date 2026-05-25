@@ -66,9 +66,11 @@ bool Client::Connect() {
 }
 
 void Client::Close() {
-    EVUTIL_CLOSESOCKET(sockfd_);
-    sockfd_ = INVALID_SOCKET;
-    connected_ = false;
+    if (sockfd_ != INVALID_SOCKET) {
+        EVUTIL_CLOSESOCKET(sockfd_);
+        sockfd_ = INVALID_SOCKET;
+        connected_ = false;
+    }
 }
 
 

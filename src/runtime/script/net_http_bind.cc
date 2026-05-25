@@ -72,25 +72,48 @@ std::mutex g_http_mutex;
 //     without touching the ref (shutdown already released it).
 void HandleHttpResponse(lua_State* L, int ref,
                         const std::shared_ptr<evpp::httpc::Response>& resp) {
+    // Unlink the ref from the pending list under the mutex. This must be
+    // done before dispatching to Lua — if the Lua callback calls
+    // net.http.get/post, those functions acquire g_http_mutex and would
+    // deadlock on this thread if we still held it.
     {
         std::lock_guard<std::mutex> lock(g_http_mutex);
         if (!g_net_alive.load()) return;
 
-        // Dispatch the Lua callback under the mutex so ShutdownHttpBindings
-        // cannot unref the pending registry refs concurrently.
-        if (resp) {
-            std::string body(resp->body().data(), resp->body().size());
-            call_lua_http_handler(L, ref, resp->http_code(), body);
-        } else {
-            call_lua_http_handler(L, ref, 0, "");
-        }
-
-        if (!g_net_alive.load()) return;
-        luaL_unref(L, LUA_REGISTRYINDEX, ref);
         auto it = std::find(g_http_pending_refs.begin(),
                             g_http_pending_refs.end(), ref);
-        if (it != g_http_pending_refs.end()) g_http_pending_refs.erase(it);
+        if (it != g_http_pending_refs.end()) {
+            g_http_pending_refs.erase(it);
+        } else {
+            // ShutdownHttpBindings already took ownership of this ref.
+            return;
+        }
     }
+
+    // Re-check g_net_alive before dispatching to Lua. If ShutdownHttpBindings
+    // ran between the mutex release and here, skip the callback (but still
+    // unref — the Lua state is still valid since DestroyScript runs after
+    // ShutdownNetBindings in Engine::Cleanup).
+    if (!g_net_alive.load()) {
+        luaL_unref(L, LUA_REGISTRYINDEX, ref);
+        return;
+    }
+
+    // Dispatch the Lua callback WITHOUT the mutex held, to avoid
+    // re-entrant deadlock when the Lua handler calls net.http.get/post.
+    if (resp) {
+        std::string body(resp->body().data(), resp->body().size());
+        call_lua_http_handler(L, ref, resp->http_code(), body);
+    } else {
+        call_lua_http_handler(L, ref, 0, "");
+    }
+
+    // Unref. Safe even if g_net_alive became false during the callback:
+    // ShutdownHttpBindings (which sets g_net_alive) runs before
+    // DestroyScript, so the Lua state is still valid. And since we
+    // removed this ref from g_http_pending_refs above, ShutdownHttpBindings
+    // won't double-unref it.
+    luaL_unref(L, LUA_REGISTRYINDEX, ref);
 }
 
 // ── l_net_http_get(url, on_response) ─────────────────────────────────────

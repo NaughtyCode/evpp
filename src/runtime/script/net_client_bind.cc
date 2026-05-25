@@ -221,6 +221,12 @@ int l_client_disconnect(lua_State* L) {
 
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger, "[net.client] disconnecting");
+
+    // Clear callbacks before Disconnect() — TCPConn::Close() uses
+    // QueueInLoop (always defers), so HandleClose may execute after
+    // delete ctx below, and the stored callbacks capture raw ClientCtx*.
+    ctx->client->SetConnectionCallback(evpp::ConnectionCallback());
+    ctx->client->SetMessageCallback(evpp::MessageCallback());
     ctx->client->Disconnect();
 
     auto* loop = Engine::Instance().GetEventLoop();
@@ -267,6 +273,10 @@ int l_client_gc(lua_State* L) {
         ctx->instance_ref = LUA_NOREF;
     }
 
+    // Clear callbacks to prevent use-after-free (same rationale as
+    // l_client_disconnect above).
+    ctx->client->SetConnectionCallback(evpp::ConnectionCallback());
+    ctx->client->SetMessageCallback(evpp::MessageCallback());
     ctx->client->Disconnect();
 
     auto* loop = Engine::Instance().GetEventLoop();

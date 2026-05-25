@@ -136,7 +136,10 @@ quill::Logger* GetLogger(const std::string& name) {
 }
 
 quill::Logger* CreateLogger(const LogConfig& config) {
-    quill::Backend::start(GetBackendOptions());
+    static std::atomic<bool> backend_started{false};
+    if (!backend_started.exchange(true, std::memory_order_acq_rel)) {
+        quill::Backend::start(GetBackendOptions());
+    }
 
     auto console_sink = quill::Frontend::create_or_get_sink<quill::ConsoleSink>("console");
 

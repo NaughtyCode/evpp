@@ -278,7 +278,6 @@ void SetTimeout(evpp_socket_t fd, uint32_t timeout_ms) {
     tv.tv_usec = (timeout_ms % 1000) * 1000;
 #endif
     int ret = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
-    assert(ret == 0);
     if (ret != 0) {
         int err = EVPP_ERRNO;
         ENGINE_LOG_ERROR(engine::GetLogger(), "setsockopt SO_RCVTIMEO ERROR {}{}", err, strerror(err));
