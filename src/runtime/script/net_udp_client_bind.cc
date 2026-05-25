@@ -31,8 +31,6 @@ namespace {
 
 struct UdpClientCtx {
     std::unique_ptr<evpp::udp::sync::Client> client;
-    lua_State* L = nullptr;
-    int instance_ref = LUA_NOREF;
     bool connected = false;
     bool disposed = false;
 };
@@ -60,7 +58,6 @@ int l_udp_client_connect(lua_State* L) {
     }
 
     auto* ctx = new UdpClientCtx();
-    ctx->L = L;
 
     // Build Lua class instance table
     lua_newtable(L);
@@ -73,10 +70,6 @@ int l_udp_client_connect(lua_State* L) {
     luaL_getmetatable(L, kUdpClientMetaName);
     lua_setmetatable(L, -2);
 
-    // Ref instance table in registry
-    lua_pushvalue(L, -1);
-    ctx->instance_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-
     // Create SyncUDPClient and connect
     ctx->client = std::make_unique<evpp::udp::sync::Client>();
     if (!ctx->client->Connect(host, port)) {
@@ -86,8 +79,6 @@ int l_udp_client_connect(lua_State* L) {
         // Null _ctx before delete so __gc won't read a dangling pointer
         lua_pushnil(L);
         lua_setfield(L, -2, "_ctx");
-        luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
-        ctx->instance_ref = LUA_NOREF;
         delete ctx;
         lua_pop(L, 1);
         lua_pushnil(L);
@@ -149,11 +140,6 @@ int l_udp_client_close(lua_State* L) {
     lua_pushnil(L);
     lua_setfield(L, 1, "_ctx");
 
-    if (ctx->instance_ref != LUA_NOREF) {
-        luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->instance_ref);
-        ctx->instance_ref = LUA_NOREF;
-    }
-
     ctx->client->Close();
     delete ctx;
 
@@ -181,11 +167,6 @@ int l_udp_client_gc(lua_State* L) {
 
     lua_pushnil(L);
     lua_setfield(L, 1, "_ctx");
-
-    if (ctx->instance_ref != LUA_NOREF) {
-        luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->instance_ref);
-        ctx->instance_ref = LUA_NOREF;
-    }
 
     ctx->client->Close();
     delete ctx;
