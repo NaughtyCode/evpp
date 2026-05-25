@@ -111,7 +111,13 @@ mongoc_oidc_credential_t* oidc_trampoline(mongoc_oidc_callback_params_t* params)
     auto* ctx = static_cast<OidcCtx*>(mongoc_oidc_callback_params_get_user_data(params));
     if (!ctx || !ctx->fn) return nullptr;
     MongoOidcCallbackParams wrapper(params);
-    MongoOidcCredential* cred = ctx->fn(wrapper);
+    MongoOidcCredential* cred = nullptr;
+    try {
+        cred = ctx->fn(wrapper);
+    } catch (...) {
+        // Do not let exceptions unwind through C stack frames
+        return nullptr;
+    }
     if (!cred) return nullptr;
     auto* raw = static_cast<mongoc_oidc_credential_t*>(cred->ReleaseRaw());
     delete cred;

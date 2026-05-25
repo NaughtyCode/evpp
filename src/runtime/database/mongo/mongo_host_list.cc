@@ -3,6 +3,7 @@
 #include <mongoc/mongoc.h>
 
 #include <cstring>
+#include <mutex>
 
 namespace engine {
 namespace mongo {
@@ -10,6 +11,7 @@ namespace mongo {
 struct MongoHostList::Impl {
     mongoc_host_list_t entry;
     MongoHostList* next = nullptr;
+    mutable std::once_flag next_once;
 };
 
 MongoHostList::MongoHostList() : impl_(std::make_unique<Impl>()) {
@@ -30,11 +32,11 @@ int MongoHostList::GetFamily() const { return impl_->entry.family; }
 
 MongoHostList* MongoHostList::GetNext() const {
     if (!impl_->entry.next) return nullptr;
-    if (!impl_->next) {
+    std::call_once(impl_->next_once, [this]() {
         auto* self = const_cast<MongoHostList*>(this);
         self->impl_->next = new MongoHostList();
         memcpy(&self->impl_->next->impl_->entry, impl_->entry.next, sizeof(mongoc_host_list_t));
-    }
+    });
     return impl_->next;
 }
 

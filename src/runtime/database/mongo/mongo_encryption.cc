@@ -30,7 +30,13 @@ bool kms_cred_provider_trampoline(void* userdata, const bson_t* params, bson_t* 
     }
     BsonDocument out_doc;
     MongoError mongo_err;
-    bool ok = ctx->cb(ctx->userdata, params_doc, &out_doc, &mongo_err);
+    bool ok = false;
+    try {
+        ok = ctx->cb(ctx->userdata, params_doc, &out_doc, &mongo_err);
+    } catch (...) {
+        // Do not let exceptions unwind through C stack frames
+        return false;
+    }
     if (ok && out) bson_copy_to(static_cast<const bson_t*>(out_doc.RawBson()), out);
     if (!ok && error) {
         auto* raw_err = static_cast<bson_error_t*>(mongo_err.RawError());

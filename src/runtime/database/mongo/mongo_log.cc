@@ -41,8 +41,12 @@ void MongoLog::SetHandler(LogFunc handler) {
 void MongoLog::Log(MongoLogLevel level, const char* domain, const char* format, ...) {
     va_list args;
     va_start(args, format);
-    mongoc_log(static_cast<mongoc_log_level_t>(level), domain, format, args);
+    char* msg = bson_strdupv_printf(format, args);
     va_end(args);
+    if (msg) {
+        mongoc_log(static_cast<mongoc_log_level_t>(level), domain, "%s", msg);
+        bson_free(msg);
+    }
 }
 
 const char* MongoLog::LevelToString(MongoLogLevel level) {
@@ -105,8 +109,12 @@ struct MongoStructuredLogOpts::Impl {
 static void structured_log_trampoline(const mongoc_structured_log_entry_t* entry, void* user_data) {
     auto* handler = static_cast<std::function<void(const MongoStructuredLogEntry&)>*>(user_data);
     if (handler) {
-        MongoStructuredLogEntry wrapper(entry);
-        (*handler)(wrapper);
+        try {
+            MongoStructuredLogEntry wrapper(entry);
+            (*handler)(wrapper);
+        } catch (...) {
+            // Do not let exceptions unwind through C stack frames
+        }
     }
 }
 

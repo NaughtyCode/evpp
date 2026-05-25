@@ -288,7 +288,14 @@ bool with_transaction_trampoline(mongoc_client_session_t* session,
     BsonDocument reply_doc;
     MongoError mongo_err;
 
-    bool ok = txn_ctx->cb(tmp_session, &reply_doc, &mongo_err);
+    bool ok = false;
+    try {
+        ok = txn_ctx->cb(tmp_session, &reply_doc, &mongo_err);
+    } catch (...) {
+        tmp_session->ReleaseSession();
+        MongoSession::Destroy(tmp_session);
+        return false;
+    }
 
     tmp_session->ReleaseSession();
     MongoSession::Destroy(tmp_session);
