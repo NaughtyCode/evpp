@@ -4,5 +4,6 @@
   },
   "msgpack": {
     "max_nesting_depth": 16
-  }
+  },
+  "scripts_dir": "resources/script/server"
 }

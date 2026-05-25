@@ -1,10 +1,13 @@
--- engine_init.lua
--- Engine lifecycle script — called automatically at startup.
--- Define these three global functions to hook into the engine lifecycle.
+-- server/init.lua
+-- Server entry script — loaded automatically at startup.
+-- First loads all shared runtime modules, then defines server lifecycle hooks.
+
+-- Load all shared runtime modules
+import("runtime.init")
 
 function InitScript()
     -- Called once when the engine starts, after all scripts are loaded.
-    log_info("=== InitScript ===")
+    log_info("=== Server InitScript ===")
 
     -- Example: create a repeating timer that fires every 2 seconds
     -- local tid = timer.interval(2000, function()
@@ -26,5 +29,5 @@ end
 
 function DestroyScript()
     -- Called once when the engine shuts down.
-    log_info("=== DestroyScript ===")
+    log_info("=== Server DestroyScript ===")
 end

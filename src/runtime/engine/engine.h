@@ -30,9 +30,14 @@ public:
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
 
-    // Initialize the engine. In library mode, pass the host's EventLoop;
-    // the engine will use it for all async operations but will not own it.
-    void Init(const EngineConfig& config,
+    // Initialize the engine.
+    // runtime_cfg provides log, frame, and runtime scripts_dir settings.
+    // entry_scripts_dir is the role-specific scripts directory
+    // (e.g. resources/script/server or resources/script/client).
+    // In library mode, pass the host's EventLoop; the engine will use it
+    // for all async operations but will not own it.
+    void Init(const RuntimeConfig& runtime_cfg,
+              const std::string& entry_scripts_dir,
               evpp::EventLoop* external_loop = nullptr);
 
     // ── Standalone mode ──────────────────────────────────────────────

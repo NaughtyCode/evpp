@@ -43,9 +43,10 @@ extern "C" game_error_t game_client_init(game_client_t* client,
     if (client->initialized) return GAME_ERR_ALREADY_EXISTS;
 
     auto& engine = engine::Engine::Instance();
+    auto& cfg_mgr = engine::ConfigManager::Instance();
 
     if (config_dir && *config_dir) {
-        engine::ConfigManager::Instance().Load(config_dir);
+        cfg_mgr.Load(config_dir);
     }
 
     /* Library mode: create our own EventLoop so the user can drive it with
@@ -58,8 +59,9 @@ extern "C" game_error_t game_client_init(game_client_t* client,
     }
     client->owns_loop = true;
 
-    engine::EngineConfig cfg;
-    engine.Init(cfg, loop);
+    auto& runtime_cfg = cfg_mgr.GetRuntimeConfig();
+    auto& client_cfg = cfg_mgr.GetClientConfig();
+    engine.Init(runtime_cfg, client_cfg.scripts_dir, loop);
 
     client->initialized = true;
     return GAME_OK;

@@ -14,6 +14,7 @@
 
 #include <csignal>
 #include <cstdio>
+#include <filesystem>
 #include <memory>
 #include <thread>
 
@@ -53,10 +54,12 @@ ScriptVM& Engine::GetScriptVM() {
 // Init
 //============================================================================
 
-void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
+void Engine::Init(const RuntimeConfig& runtime_cfg,
+                  const std::string& entry_scripts_dir,
+                  evpp::EventLoop* external_loop) {
     std::fprintf(stderr, "[engine] Init() begin\n");
     std::fprintf(stderr, "[engine] InitLogger...\n");
-    InitLogger(config.log);
+    InitLogger(runtime_cfg.log);
 
     auto* logger = GetLogger();
     std::fprintf(stderr, "[engine] logger created\n");
@@ -76,9 +79,11 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
 
     ENGINE_LOG_INFO(logger,
                     "engine initializing, log_dir=[{}], log_level=[{}], "
-                    "scripts_dir=[{}], frame_interval=[{}ms], library_mode=[{}]",
-                    config.log.dir, config.log.level,
-                    config.scripts_dir, config.frame.interval_ms,
+                    "runtime_scripts_dir=[{}], entry_scripts_dir=[{}], "
+                    "frame_interval=[{}ms], library_mode=[{}]",
+                    runtime_cfg.log.dir, runtime_cfg.log.level,
+                    runtime_cfg.scripts_dir, entry_scripts_dir,
+                    runtime_cfg.frame.interval_ms,
                     (external_loop != nullptr));
 
     std::fprintf(stderr, "[engine] creating TimerManager...\n");
@@ -94,10 +99,10 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
         loop_ = owned_loop_.get();
         std::fprintf(stderr, "[engine] EventLoop created\n");
     }
-    if (config.frame.target_fps > 0) {
-        frame_interval_ = std::chrono::milliseconds(1000 / config.frame.target_fps);
+    if (runtime_cfg.frame.target_fps > 0) {
+        frame_interval_ = std::chrono::milliseconds(1000 / runtime_cfg.frame.target_fps);
     } else {
-        frame_interval_ = std::chrono::milliseconds(config.frame.interval_ms);
+        frame_interval_ = std::chrono::milliseconds(runtime_cfg.frame.interval_ms);
     }
 
     script_vm_ = std::make_unique<ScriptVM>();
@@ -105,14 +110,12 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
     std::fprintf(stderr, "[engine] ScriptVM created\n");
 
     // ── Physics system initialization ──────────────────────────────────
-    // Loads config + creates physics-dedicated ScriptVM + loads scripts.
-    // Does NOT start the physics thread (requires explicit Start() by upper layer).
     {
         std::fprintf(stderr, "[engine] initializing physics...\n");
+        auto phys_cfg = runtime_cfg.resource_dir + "/physics/configs";
+        auto phys_data = runtime_cfg.resource_dir + "/physics/data/scene.json";
         bool ok = PhysicsEngineBridge::Instance().Initialize(
-            "resources/physics/configs",
-            "resources/physics/data/scene.json",
-            "resources/script");
+            phys_cfg, phys_data, runtime_cfg.scripts_dir);
         if (!ok) {
             ENGINE_LOG_WARN(logger, "physics system failed to initialize");
         } else {
@@ -123,18 +126,28 @@ void Engine::Init(const EngineConfig& config, evpp::EventLoop* external_loop) {
         std::fprintf(stderr, "[engine] physics init done (ok=%d)\n", ok);
     }
 
-    script_vm_->SetImportPath(config.scripts_dir);
+    // Set import search path to the shared scripts root (parent of runtime/,
+    // client/, server/) so that import("runtime.init") resolves from both
+    // client and server entry scripts.
+    {
+        std::string scripts_root =
+            std::filesystem::path(runtime_cfg.scripts_dir).parent_path().string();
+        if (scripts_root.empty()) {
+            scripts_root = ".";
+        }
+        script_vm_->SetImportPath(scripts_root);
+    }
     script::ExportAll(*script_vm_);
 
     last_frame_time_ = std::chrono::steady_clock::now();
     last_work_time_ = last_frame_time_;
 
-    if (!config.scripts_dir.empty()) {
-        std::fprintf(stderr, "[engine] loading scripts from [%s]...\n", config.scripts_dir.c_str());
-        size_t failed = script_vm_->DoDirectory(config.scripts_dir);
+    if (!entry_scripts_dir.empty()) {
+        std::fprintf(stderr, "[engine] loading scripts from [%s]...\n", entry_scripts_dir.c_str());
+        size_t failed = script_vm_->DoDirectory(entry_scripts_dir);
         if (failed > 0) {
             ENGINE_LOG_WARN(logger, "scripts dir [{}]: [{}] file(s) failed to load",
-                            config.scripts_dir, failed);
+                            entry_scripts_dir, failed);
         }
         script_vm_->InitScript();
         std::fprintf(stderr, "[engine] scripts loaded\n");

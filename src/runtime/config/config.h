@@ -36,10 +36,18 @@ struct FrameConfig {
     int slow_threshold_multiplier = 2;
 };
 
-struct EngineConfig {
+// Runtime (engine-level) config — shared by both client and server.
+// Loaded from resources/config/runtime/runtime.json.
+struct RuntimeConfig {
+    std::string resource_dir = "resources";
     LogConfig log;
     FrameConfig frame;
-    std::string scripts_dir = "resources/script";
+    std::string scripts_dir = "resources/script/runtime";
+};
+
+// Client config — loaded from resources/config/client/client.json.
+struct ClientConfig {
+    std::string scripts_dir = "resources/script/client";
 };
 
 struct HttpConfig {
@@ -50,9 +58,11 @@ struct MsgpackConfig {
     int max_nesting_depth = 16;
 };
 
+// Server config — loaded from resources/config/server/server.json.
 struct ServerConfig {
     HttpConfig http;
     MsgpackConfig msgpack;
+    std::string scripts_dir = "resources/script/server";
 };
 
 //============================================================================
@@ -67,21 +77,21 @@ public:
     ConfigManager& operator=(const ConfigManager&) = delete;
 
     // ── From JSON strings (text) ─────────────────────────────────────
-    // Parse config directly from JSON strings. Useful for programmatic
-    // configuration or when config comes from a database/network.
-    // Returns false on parse error (current values are preserved).
 
-    bool LoadEngineFromString(const std::string& json);
+    bool LoadRuntimeFromString(const std::string& json);
+    bool LoadClientFromString(const std::string& json);
     bool LoadServerFromString(const std::string& json);
-    bool LoadFromString(const std::string& engine_json,
-                        const std::string& server_json);
 
     // ── From files ───────────────────────────────────────────────────
-    // Load a single config file or both from a directory.
-    // Returns false if the file is missing or malformed.
 
-    bool LoadEngineFromFile(const std::string& path);
+    bool LoadRuntimeFromFile(const std::string& path);
+    bool LoadClientFromFile(const std::string& path);
     bool LoadServerFromFile(const std::string& path);
+
+    // Load all configs from a directory tree:
+    //   {config_dir}/runtime/runtime.json
+    //   {config_dir}/client/client.json   (optional)
+    //   {config_dir}/server/server.json   (optional)
     bool Load(const std::string& config_dir);
 
     // ── Reload ───────────────────────────────────────────────────────
@@ -92,8 +102,11 @@ public:
 
     // ── Accessors ────────────────────────────────────────────────────
 
-    const EngineConfig& GetEngineConfig() const { return engine_config_; }
-    EngineConfig& GetEngineConfigMutable() { return engine_config_; }
+    const RuntimeConfig& GetRuntimeConfig() const { return runtime_config_; }
+    RuntimeConfig& GetRuntimeConfigMutable() { return runtime_config_; }
+
+    const ClientConfig& GetClientConfig() const { return client_config_; }
+    ClientConfig& GetClientConfigMutable() { return client_config_; }
 
     const ServerConfig& GetServerConfig() const { return server_config_; }
     ServerConfig& GetServerConfigMutable() { return server_config_; }
@@ -101,7 +114,8 @@ public:
 private:
     ConfigManager() = default;
 
-    EngineConfig engine_config_;
+    RuntimeConfig runtime_config_;
+    ClientConfig client_config_;
     ServerConfig server_config_;
 };
 
