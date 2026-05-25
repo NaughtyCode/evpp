@@ -1,9 +1,9 @@
 include_directories(${PROJECT_SOURCE_DIR}/tests/apps ${PROJECT_SOURCE_DIR}/thirdparty)
 
 if (UNIX)
-    set(LIBRARIES ServerEngine event pthread)
+    set(LIBRARIES CloudEngine event pthread)
 else(UNIX)
-    set(LIBRARIES ServerEngine event)
+    set(LIBRARIES CloudEngine event)
 endif(UNIX)
 
 # All test apps output under artifacts/tests

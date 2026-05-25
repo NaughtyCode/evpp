@@ -12,7 +12,7 @@ if (WIN32)
     list (APPEND evpp_SRCS ${PROJECT_SOURCE_DIR}/thirdparty/win32code/getopt/getopt_long.c)
 endif (WIN32)
 add_executable(benchmark_ioevent_evpp ${evpp_SRCS})
-target_link_libraries(benchmark_ioevent_evpp ServerEngine ${DEPENDENT_LIBRARIES})
+target_link_libraries(benchmark_ioevent_evpp CloudEngine ${DEPENDENT_LIBRARIES})
 
 
 
@@ -23,7 +23,7 @@ if (WIN32)
 endif (WIN32)
 
 add_executable(benchmark_ioevent_evpp_pipe_watcher ${evpp_SRCS})
-target_link_libraries(benchmark_ioevent_evpp_pipe_watcher ServerEngine ${DEPENDENT_LIBRARIES})
+target_link_libraries(benchmark_ioevent_evpp_pipe_watcher CloudEngine ${DEPENDENT_LIBRARIES})
 
 set_target_properties(benchmark_ioevent_evpp benchmark_ioevent_evpp_pipe_watcher PROPERTIES FOLDER "tests/benchmarks")
 

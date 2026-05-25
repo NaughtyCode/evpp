@@ -14,7 +14,7 @@ endif()
 
 add_executable(evpp_unittest ${evpp_unittest_SRCS})
 set_target_properties(evpp_unittest PROPERTIES FOLDER "tests")
-target_link_libraries(evpp_unittest ServerEngine ${DEPENDENT_LIBRARIES})
+target_link_libraries(evpp_unittest CloudEngine ${DEPENDENT_LIBRARIES})
 
 if(HTTPS)
     file(GLOB evpp_https_unittest_SRCS https_client_test.cc
@@ -22,5 +22,5 @@ if(HTTPS)
          ${PROJECT_SOURCE_DIR}/thirdparty/gtest/src/gtest_main.cc)
     add_executable(evpp_https_unittest ${evpp_https_unittest_SRCS})
     set_target_properties(evpp_https_unittest PROPERTIES FOLDER "tests")
-    target_link_libraries(evpp_https_unittest ServerEngine ${DEPENDENT_LIBRARIES})
+    target_link_libraries(evpp_https_unittest CloudEngine ${DEPENDENT_LIBRARIES})
 endif()

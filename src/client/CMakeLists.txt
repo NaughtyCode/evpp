@@ -60,7 +60,7 @@ target_include_directories(GameClient
 
 target_compile_definitions(GameClient PRIVATE CLIENT_BUILD)
 
-target_link_libraries(GameClient ServerEngine)
+target_link_libraries(GameClient CloudEngine)
 
 if(WIN32)
     target_link_libraries(GameClient ws2_32)

@@ -252,7 +252,7 @@ set(MONGO_BIND_SOURCES
 source_group("database\\mongo_bind" FILES ${MONGO_BIND_SOURCES})
 
 # ═══════════════════════════════════════════════════════════════════════
-# ServerEngine library
+# CloudEngine library
 # ═══════════════════════════════════════════════════════════════════════
 
 # Physics sources are always visible as headers; .cc files are compiled
@@ -280,9 +280,9 @@ if(ENGINE_PHYSICS_ENABLED)
     list(APPEND SERVERENGINE_SOURCES ${PHYSICS_CC})
 endif()
 
-add_library(ServerEngine SHARED ${SERVERENGINE_SOURCES})
+add_library(CloudEngine SHARED ${SERVERENGINE_SOURCES})
 
-target_include_directories(ServerEngine PUBLIC
+target_include_directories(CloudEngine PUBLIC
     ${PROJECT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include
     ${PROJECT_SOURCE_DIR}/thirdparty/lua/src
@@ -290,11 +290,11 @@ target_include_directories(ServerEngine PUBLIC
 
 # ── Compile definitions ───────────────────────────────────────────────
 if(ENGINE_PHYSICS_ENABLED)
-    target_compile_definitions(ServerEngine PUBLIC ENGINE_PHYSICS_ENABLED)
+    target_compile_definitions(CloudEngine PUBLIC ENGINE_PHYSICS_ENABLED)
 endif()
 
 if(ENGINE_PROFILER_ENABLED)
-    target_compile_definitions(ServerEngine PUBLIC ENGINE_PROFILER_ENABLED)
+    target_compile_definitions(CloudEngine PUBLIC ENGINE_PROFILER_ENABLED)
 endif()
 
 # ── JoltPhysics ───────────────────────────────────────────────────────
@@ -306,31 +306,31 @@ if(ENGINE_PHYSICS_ENABLED)
     set(CMAKE_CXX_STANDARD 23)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-    target_include_directories(ServerEngine PUBLIC
+    target_include_directories(CloudEngine PUBLIC
         ${PROJECT_SOURCE_DIR}/thirdparty/JoltPhysics/JoltPhysics
     )
-    target_link_libraries(ServerEngine PUBLIC Jolt)
+    target_link_libraries(CloudEngine PUBLIC Jolt)
 endif()
 
 # ── Link mongo-c-driver ─────────────────────────────────────────────────
 if(TARGET bson_static)
-    target_link_libraries(ServerEngine PUBLIC bson_static)
+    target_link_libraries(CloudEngine PUBLIC bson_static)
 endif()
 if(TARGET mongoc_static)
-    target_link_libraries(ServerEngine PUBLIC mongoc_static)
+    target_link_libraries(CloudEngine PUBLIC mongoc_static)
     if(WIN32)
-        target_link_libraries(ServerEngine PUBLIC secur32 crypt32 Bcrypt ncrypt Dnsapi)
+        target_link_libraries(CloudEngine PUBLIC secur32 crypt32 Bcrypt ncrypt Dnsapi)
     endif()
 endif()
 
 # ── Link system libraries ─────────────────────────────────────────────
-target_link_directories(ServerEngine PUBLIC "${PROJECT_BINARY_DIR}/libevent/lib/$<CONFIG>")
-target_link_libraries(ServerEngine PUBLIC ${LIBRARIES})
+target_link_directories(CloudEngine PUBLIC "${PROJECT_BINARY_DIR}/libevent/lib/$<CONFIG>")
+target_link_libraries(CloudEngine PUBLIC ${LIBRARIES})
 
 # ── Post-build: copy DLL to bin/ ──────────────────────────────────────
-add_custom_command(TARGET ServerEngine POST_BUILD
+add_custom_command(TARGET CloudEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "$<TARGET_FILE:ServerEngine>"
-    "${PROJECT_SOURCE_DIR}/../artifacts/bin/$<CONFIG>/$<TARGET_FILE_NAME:ServerEngine>"
-    COMMENT "Copying ServerEngine.dll to bin/"
+    "$<TARGET_FILE:CloudEngine>"
+    "${PROJECT_SOURCE_DIR}/../artifacts/bin/$<CONFIG>/$<TARGET_FILE_NAME:CloudEngine>"
+    COMMENT "Copying CloudEngine.dll to bin/"
 )

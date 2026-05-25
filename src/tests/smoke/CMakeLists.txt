@@ -4,5 +4,5 @@ if(ENGINE_PHYSICS_ENABLED)
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
         FOLDER "tests")
-    target_link_libraries(physics_smoke ServerEngine)
+    target_link_libraries(physics_smoke CloudEngine)
 endif()

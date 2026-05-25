@@ -1,6 +1,6 @@
 add_executable(server server.cc)
 set_target_properties(server PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
-target_link_libraries(server ServerEngine)
+target_link_libraries(server CloudEngine)
 if(WIN32)
     target_link_libraries(server ws2_32)
 endif()
