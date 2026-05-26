@@ -1,9 +1,11 @@
+get_filename_component(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
+
 # Redirect all test executables to artifacts/tests
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/../artifacts/tests)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${ENGINE_ROOT}/../artifacts/tests)
 
 
-include_directories(${PROJECT_SOURCE_DIR}/thirdparty
-                    ${PROJECT_SOURCE_DIR}/thirdparty/gtest)
+include_directories(${ENGINE_ROOT}/thirdparty
+                    ${ENGINE_ROOT}/thirdparty/gtest)
 
 include(CTest)
 add_test(NAME evpp_unittest COMMAND evpp_unittest)

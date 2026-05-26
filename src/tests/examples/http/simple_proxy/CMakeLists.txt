@@ -1,11 +1,4 @@
-file(GLOB example_SRCS *.cc)
-
-
-#include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/thirdparty)
-#link_directories(${PROJECT_SOURCE_DIR}/thirdparty/libevent-release-2.1.7-rc/build/lib/Debug/
-#				 ${PROJECT_SOURCE_DIR}/msvc/bin/Debug/
-#				${PROJECT_SOURCE_DIR}/build/lib/Debug/)
-#				 
+file(GLOB example_SRCS CONFIGURE_DEPENDS *.cc)
 
 add_executable(example_http_simple_proxy ${example_SRCS})
 target_link_libraries(example_http_simple_proxy ${LIBRARIES})

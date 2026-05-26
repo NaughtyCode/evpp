@@ -1,12 +1,6 @@
-
-set(LINKED_LIBRARIES CloudEngine ${DEPENDENT_LIBRARIES})
-set(LINKED_LOCKFREE_LIBRARIES CloudEngine ${DEPENDENT_LIBRARIES})
-set(LINKED_CONCURRENTQUEUE_LIBRARIES CloudEngine ${DEPENDENT_LIBRARIES})
-if (WIN32)
-	link_directories(${PROJECT_SOURCE_DIR}/vsprojects/bin/${CMAKE_BUILD_TYPE}/
-                     ${LIBRARY_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}/
-                     ${PROJECT_SOURCE_DIR}/thirdparty/glog-0.3.4/${CMAKE_BUILD_TYPE})
-endif(WIN32)
+set(LINKED_LIBRARIES CloudEngine)
+set(LINKED_LOCKFREE_LIBRARIES CloudEngine)
+set(LINKED_CONCURRENTQUEUE_LIBRARIES CloudEngine)
 
 add_executable(benchmark_post_task1 post_task1.cc)
 target_link_libraries(benchmark_post_task1 ${LINKED_LIBRARIES})
@@ -41,7 +35,7 @@ if (UNIX)
 
 	add_executable(benchmark_post_task_boost_lockfree_queue5 post_task5.cc)
 	target_link_libraries(benchmark_post_task_boost_lockfree_queue5 ${LINKED_LOCKFREE_LIBRARIES})
-	
+
 	add_executable(benchmark_post_task_boost_lockfree_queue6 post_task6.cc)
 	target_link_libraries(benchmark_post_task_boost_lockfree_queue6 ${LINKED_LOCKFREE_LIBRARIES})
 

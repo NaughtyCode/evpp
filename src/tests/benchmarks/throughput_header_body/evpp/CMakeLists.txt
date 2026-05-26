@@ -1,10 +1,6 @@
-include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/thirdparty)
+include_directories(${ENGINE_ROOT} ${ENGINE_ROOT}/thirdparty)
 
-set(LIBRARIES CloudEngine ${DEPENDENT_LIBRARIES})
-if (WIN32)
-link_directories(${PROJECT_SOURCE_DIR}/vsprojects/bin/${CMAKE_BUILD_TYPE}/
-				 ${PROJECT_SOURCE_DIR}/thirdparty/glog-0.3.4/${CMAKE_BUILD_TYPE})
-endif(WIN32)
+set(LIBRARIES CloudEngine)
 
 add_executable(benchmark_pingpong_header_body_client client.cc)
 target_link_libraries(benchmark_pingpong_header_body_client ${LIBRARIES})

@@ -1,9 +1,10 @@
 
-set(CMAKE_C_FLAGS -std=gnu99)
-file(GLOB evmc_SRCS *.cc
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_EXTENSIONS ON)
+file(GLOB evmc_SRCS CONFIGURE_DEPENDS *.cc
                     *.h
-                    ${PROJECT_SOURCE_DIR}/thirdparty/libhashkit/*.c)
-file(GLOB evmc_PUBLIC_HEADERS *.h)
+                    ${ENGINE_ROOT}/thirdparty/libhashkit/*.c)
+file(GLOB evmc_PUBLIC_HEADERS CONFIGURE_DEPENDS *.h)
 
 add_library(evmc_static STATIC ${evmc_SRCS})
 target_link_libraries(evmc_static ${LIBRARIES})
@@ -13,15 +14,6 @@ if (UNIX)
     add_library(evmc SHARED ${evmc_SRCS})
     target_link_libraries(evmc ${LIBRARIES})
     set_property(TARGET evmc PROPERTY FOLDER "tests/apps")
-
-    set (CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
-    include (utils)
-    include (packages)
-    set_target_properties (
-        evmc evnsq PROPERTIES
-        VERSION     "${PACKAGE_VERSION}"
-        SOVERSION   "${PACKAGE_SOVERSION}"
-    )
 
     install (
       TARGETS evmc

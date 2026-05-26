@@ -125,8 +125,6 @@ build_runtime/*
 build_client/*
 build_server/*
 
-build_test*/*
+build_*/*
 
 */CMakeFiles/*
-build_t*/*
-

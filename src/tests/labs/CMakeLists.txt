@@ -1,16 +1,12 @@
-
-include_directories(${PROJECT_SOURCE_DIR}/tests/apps
-                    ${PROJECT_SOURCE_DIR}/tests/labs
-                    ${PROJECT_SOURCE_DIR}/thirdparty)
+include_directories(${ENGINE_ROOT}/tests/apps
+                    ${ENGINE_ROOT}/tests/labs
+                    ${ENGINE_ROOT}/thirdparty)
 
 if (UNIX)
 set(LIBRARIES CloudEngine event pthread)
-link_directories("/home/s/safe/lib" ${PROJECT_BUILD_DIR}/lib)
-else(UNIX)
-set(LIBRARIES CloudEngine event)
-link_directories(${PROJECT_SOURCE_DIR}/vsprojects/bin/${CMAKE_BUILD_TYPE}/
-				 ${LIBRARY_OUTPUT_PATH}/${CMAKE_BUILD_TYPE}/)
-endif(UNIX)
+else()
+set(LIBRARIES CloudEngine event_core_static event_extra_static)
+endif()
 
 
 if(THRIFT_COMPILER AND THRIFT_INCLUDE_DIR AND THRIFT_LIBRARY)

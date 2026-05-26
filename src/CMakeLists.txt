@@ -2,12 +2,19 @@ cmake_minimum_required(VERSION 4.0)
 
 project(CloudEngine C CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# ── Platform definitions (MSVC) ───────────────────────────────────────
+# Directory-scoped so all subprojects (runtime, tests, server, client)
+# inherit these definitions.
+if(MSVC)
+    add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN _WIN32)
+endif()
+
 # ── Output paths ──────────────────────────────────────────────────────
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/../artifacts/bin)
-set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/../artifacts/lib)
+set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../artifacts/bin)
+set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../artifacts/lib)
 set(CMAKE_MACOSX_RPATH 0)
 
 message(STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})
@@ -18,9 +25,9 @@ message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
 # sub-project.  This file is a thin wrapper for building all projects
 # together in a single build tree.
 
-add_subdirectory(runtime)
-add_subdirectory(tests)
 add_subdirectory(server)
 add_subdirectory(client)
 
-set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT server)
+add_subdirectory(tests)
+
+set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT GameServer)

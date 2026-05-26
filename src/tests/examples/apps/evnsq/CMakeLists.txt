@@ -1,18 +1,14 @@
-include_directories(${PROJECT_SOURCE_DIR}/tests/apps ${PROJECT_SOURCE_DIR}/thirdparty)
+include_directories(${ENGINE_ROOT}/tests/apps ${ENGINE_ROOT}/thirdparty)
 
-if (UNIX)
-set(LIBRARIES evpp ${DEPENDENT_LIBRARIES})
-else(UNIX)
-set(LIBRARIES CloudEngine ${DEPENDENT_LIBRARIES})
-endif(UNIX)
+set(LIBRARIES CloudEngine)
 
 add_executable(example_evnsq_tail evnsq_tail/main.cc)
 target_link_libraries(example_evnsq_tail evnsq_static ${LIBRARIES})
 
 set (evnsq_producer_SRCS evnsq_producer/main.cc)
 if (WIN32)
-	list (APPEND evnsq_producer_SRCS ${PROJECT_SOURCE_DIR}/thirdparty/win32code/getopt/getopt.c)
-    list (APPEND evnsq_producer_SRCS ${PROJECT_SOURCE_DIR}/thirdparty/win32code/getopt/getopt_long.c)
+	list (APPEND evnsq_producer_SRCS ${ENGINE_ROOT}/thirdparty/win32code/getopt/getopt.c)
+    list (APPEND evnsq_producer_SRCS ${ENGINE_ROOT}/thirdparty/win32code/getopt/getopt_long.c)
 endif (WIN32)
 
 add_executable(example_evnsq_producer ${evnsq_producer_SRCS})

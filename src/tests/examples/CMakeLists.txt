@@ -1,12 +1,7 @@
-include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/thirdparty)
+include_directories(${ENGINE_ROOT} ${ENGINE_ROOT}/thirdparty)
 
 
-set(LIBRARIES CloudEngine ${DEPENDENT_LIBRARIES})
-if (UNIX)
-else(UNIX)
-link_directories(${PROJECT_SOURCE_DIR}/vsprojects/bin/${CMAKE_BUILD_TYPE}/
-				 ${PROJECT_SOURCE_DIR}/thirdparty/glog-0.3.4/${CMAKE_BUILD_TYPE})
-endif(UNIX)
+set(LIBRARIES CloudEngine)
 
 add_subdirectory(apps)
 add_subdirectory(chatroom)

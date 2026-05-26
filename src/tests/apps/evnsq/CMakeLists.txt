@@ -1,5 +1,5 @@
-file(GLOB evnsq_SRCS *.cc *.h)
-file(GLOB evnsq_PUBLIC_HEADERS *.h)
+file(GLOB evnsq_SRCS CONFIGURE_DEPENDS *.cc *.h)
+file(GLOB evnsq_PUBLIC_HEADERS CONFIGURE_DEPENDS *.h)
 
 add_library(evnsq_static STATIC ${evnsq_SRCS})
 target_link_libraries(evnsq_static ${LIBRARIES})
@@ -9,15 +9,6 @@ if (UNIX)
     add_library(evnsq SHARED ${evnsq_SRCS})
     target_link_libraries(evnsq ${LIBRARIES})
     set_property(TARGET evnsq PROPERTY FOLDER "tests/apps")
-
-    set (CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
-    include (utils)
-    include (packages)
-    set_target_properties (
-        evnsq PROPERTIES
-        VERSION     "${PACKAGE_VERSION}"
-        SOVERSION   "${PACKAGE_SOVERSION}"
-    )
 
     install (
       TARGETS evnsq
