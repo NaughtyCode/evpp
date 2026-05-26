@@ -4,7 +4,6 @@
 
 #include <cstdio>
 #include <fstream>
-#include <mutex>
 
 #include <glaze/glaze.hpp>
 
@@ -34,9 +33,6 @@ bool FileExists(const std::string& path) {
     std::ifstream f(path);
     return f.good();
 }
-
-// Thread-safe protection for hot-reload fields
-std::mutex g_thresholds_mutex;
 
 } // namespace
 
@@ -245,8 +241,8 @@ bool PhysicsConfigManager::ValidateConfigs(std::string& error_out) const {
 //============================================================================
 
 bool PhysicsConfigManager::ReloadThresholds(const std::string& config_dir) {
-    std::lock_guard<std::mutex> lock(g_thresholds_mutex);
-
+    // Single-threaded: only called from PhysicsSystem::ReloadThresholds()
+    // on the main thread. No concurrent access — no lock needed.
     ThresholdsConfig new_cfg;
     std::string path = config_dir + "/thresholds.json";
     std::string buf = ReadFile(path);

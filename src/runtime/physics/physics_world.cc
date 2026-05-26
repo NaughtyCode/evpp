@@ -42,6 +42,9 @@ std::atomic<bool> PhysicsWorld::s_jolt_registered_{false};
 void ContactListenerImpl::PushRecord(uint32_t body_a, uint32_t body_b,
                                       CollisionEvent::Type type,
                                       JPH::RVec3Arg cp1, JPH::RVec3Arg cp2) {
+    // Lock: serializes concurrent appends from multiple JT workers during
+    // system_.Update(). Drain() is called after all JT workers finish, so
+    // this lock never serializes JT against PT.
     std::lock_guard<std::mutex> lock(mutex_);
     records_.push_back({body_a, body_b, type, cp1, cp2});
 }
@@ -95,6 +98,10 @@ JPH::ValidateResult ContactListenerImpl::OnContactValidate(
 }
 
 std::vector<ContactListenerImpl::ContactRecord> ContactListenerImpl::Drain() {
+    // Lock: technically unnecessary at this point (all JT workers have
+    // finished — this is called from CollectCollisionEvents() after
+    // system_.Update() returns). Included for consistency with PushRecord()
+    // and as defense-in-depth against future code changes.
     std::lock_guard<std::mutex> lock(mutex_);
     std::vector<ContactRecord> drained;
     drained.swap(records_);
@@ -107,23 +114,34 @@ std::vector<ContactListenerImpl::ContactRecord> ContactListenerImpl::Drain() {
 
 void BodyActivationListenerImpl::OnBodyActivated(const JPH::BodyID& inBodyID,
                                                    JPH::uint64 inBodyUserData) {
+    // Lock: serializes JT writes (during system_.Update()) against
+    // MT reads from GetStats(). Multiple JT workers may fire this
+    // callback concurrently.
     std::lock_guard<std::mutex> lock(mutex_);
     active_bodies_[inBodyID.GetIndexAndSequenceNumber()] = true;
 }
 
 void BodyActivationListenerImpl::OnBodyDeactivated(const JPH::BodyID& inBodyID,
                                                      JPH::uint64 inBodyUserData) {
+    // Lock: same reasoning as OnBodyActivated — JT writes vs MT reads.
     std::lock_guard<std::mutex> lock(mutex_);
     active_bodies_[inBodyID.GetIndexAndSequenceNumber()] = false;
 }
 
 bool BodyActivationListenerImpl::IsActive(const JPH::BodyID& id) const {
+    // Lock: serializes against JT writes during system_.Update().
+    // This is called from:
+    //   - GenerateDiffs() on PT (after Update, no JT race, but lock
+    //     is needed for consistency with the MT path below)
+    //   - GetStats() on MT (may race with JT writes — lock is REQUIRED)
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = active_bodies_.find(id.GetIndexAndSequenceNumber());
     return it != active_bodies_.end() && it->second;
 }
 
 void BodyActivationListenerImpl::Clear() {
+    // Lock: defense-in-depth. Clear() is only called from ~PhysicsWorld
+    // after the physics thread has been joined (no concurrent access).
     std::lock_guard<std::mutex> lock(mutex_);
     active_bodies_.clear();
 }

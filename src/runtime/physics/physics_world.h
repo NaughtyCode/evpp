@@ -46,11 +46,25 @@ class TempAllocator;
 namespace engine {
 
 //============================================================================
-// ContactListenerImpl — thread-safe contact event collector [J8]
+// ContactListenerImpl — contact event collector with JT-synchronization
 //
-// Jolt callbacks run on its own job threads (JT). Events are appended to a
-// mutex-protected buffer and collected by the physics thread after each
-// Step() completes.
+// Jolt contact callbacks (OnContactAdded, OnContactPersisted,
+// OnContactRemoved) run on Jolt's own job threads (JT) during
+// system_.Update(). When the JobSystem is configured for multi-threaded
+// operation, multiple JT workers may fire callbacks concurrently.
+//
+// Thread model:
+//   - Writers: JT (multiple, during system_.Update()) — PushRecord()
+//   - Reader:  PT (single, after system_.Update() returns) — Drain()
+//
+// The mutex serializes concurrent PushRecord() calls from multiple JT
+// workers appending to records_. Drain() is called AFTER system_.Update()
+// returns (all JT workers have finished), so there is no JT<->PT race.
+// The mutex only protects JT<->JT concurrency during the Update phase.
+//
+// If the JobSystem is single-threaded (e.g. JobSystemSingleThreaded),
+// the mutex is never contended and the overhead is a single uncontended
+// lock/unlock per callback.
 //============================================================================
 
 class ContactListenerImpl final : public JPH::ContactListener {
@@ -92,7 +106,31 @@ private:
 };
 
 //============================================================================
-// BodyActivationListenerImpl — tracks active body set for diff generation [J9]
+// BodyActivationListenerImpl — active body tracker with JT/MT synchronization
+//
+// Tracks which bodies are currently active (awake) in the physics simulation.
+// The active set is populated by Jolt callbacks during system_.Update() and
+// queried from two independent call paths, creating a genuine cross-thread
+// race that the mutex protects against.
+//
+// Thread model:
+//   - Writers:   JT (multiple, during system_.Update())
+//                — OnBodyActivated / OnBodyDeactivated
+//   - Readers:
+//       a) PT (single, after system_.Update() returns, inside Step())
+//          — IsActive() in GenerateDiffs(). No JT race here (all JT workers
+//          are finished by the time Step() reads), but see (b).
+//       b) MT (any time, including concurrently with system_.Update() on PT)
+//          — IsActive() in GetStats(), called via PhysicsSystem::
+//          GetPhysicsStats() -> PhysicsThread::GetWorld().GetStats().
+//          This call can arrive while JT workers are writing to
+//          active_bodies_ during system_.Update().
+//
+// The mutex serializes JT writes against MT reads (case b). Without it,
+// concurrent insert/read on std::unordered_map is a data race.
+//
+// Clear() is only called from the PhysicsWorld destructor, after the physics
+// thread has been joined — no concurrent access, no lock contention.
 //============================================================================
 
 class BodyActivationListenerImpl final : public JPH::BodyActivationListener {
@@ -100,8 +138,10 @@ public:
     void OnBodyActivated(const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData) override;
     void OnBodyDeactivated(const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData) override;
 
-    // Active body set (for diff filtering)
+    // Returns true if the body is in the active (awake) set.
+    // Thread-safe: locked internally (called from PT and MT).
     bool IsActive(const JPH::BodyID& id) const;
+    // Clear all tracked bodies. Called only from ~PhysicsWorld (after PT join).
     void Clear();
 
 private:
@@ -128,10 +168,15 @@ private:
 //       RayCast(), etc. use Jolt's BodyLockInterface for cross-thread safety.
 //
 //   Internal locks:
-//     - ContactListenerImpl::mutex_: JT writes -> PT reads via Drain()
-//       (Drain() is only called after Step() completes and JT jobs have
-//       finished, so there is no real contention; the mutex is defensive.)
-//     - BodyActivationListenerImpl::mutex_: same pattern
+//     - ContactListenerImpl::mutex_: Serializes JT<->JT writes to the
+//       contact record buffer during system_.Update(). Drain() is called
+//       from PT after all JT workers finish, so the mutex never serializes
+//       JT<->PT contention — only multi-JT concurrency during Update.
+//       (With single-threaded JobSystem: zero contention, minimum overhead.)
+//     - BodyActivationListenerImpl::mutex_: Serializes JT writes (during
+//       system_.Update()) against MT reads (GetStats() can be called from
+//       the main thread at any time). Without this mutex, concurrent
+//       insert/read on std::unordered_map is a genuine data race.
 //
 //   Critical constraint:
 //     - All write operations (CreateBody, DestroyBody, ApplyForce,
