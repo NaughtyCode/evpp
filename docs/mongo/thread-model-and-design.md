@@ -69,7 +69,12 @@ struct _mongoc_client_pool_t {
 
 **关键点**:
 
-1. 所有 pool 中的 client 共享同一个 `mongoc_topology_t`，其中包含 SDAM (Server Discovery and Monitoring) 状态、后台监控线程等。
+1. 所有 pool 中的 client 共享同一个 `mongoc_topology_t`，其中包含多个共享资源：
+   - SDAM (Server Discovery and Monitoring) 状态和后台监控线程
+   - `mongoc_server_session_pool`（线程安全的 LIFO session 池，`bson_mutex_t` 保护）
+   - `mongoc_log_and_monitor_instance_t`（APM 回调、结构化日志）
+   - `mongoc_oidc_cache_t`（OIDC 认证缓存）
+   - 客户端加密状态（`mongoc_topology_cse_state_t`，可选）
 2. `client_initialized` 标志位在首次 `pop()` 成功创建新 client 后（`_initialize_new_client()` 内）设置为 true。之后以下 API 被阻止调用（返回 false 或 assert）：
    - `set_server_api` — 返回 false + error
    - `set_structured_log_opts` — 返回 false
@@ -160,11 +165,13 @@ main():
 | `mongoc_client_pool_set_*` | 是 (仅首次 pop 前) | `client_initialized` 标志位 + mutex |
 | `mongoc_client_pool_destroy` | **否** | 必须 join 所有线程后调用 |
 | `mongoc_client_t` (所有操作) | **否** | 无内部锁, 每线程独占 |
-| `mongoc_cursor_t` | **否** | 派生自 client |
-| `mongoc_database_t` | **否** | 派生自 client |
-| `mongoc_collection_t` | **否** | 派生自 client |
-| `mongoc_gridfs_*` | **否** | 文档明确标注 |
-| `mongoc_client_encryption_t` | **否** | 文档明确标注 |
+| `mongoc_cursor_t` | **否** | 纯数据聚合结构体，无内部锁 |
+| `mongoc_database_t` | **否** | 纯数据聚合结构体，无内部锁 |
+| `mongoc_collection_t` | **否** | 纯数据聚合结构体，无内部锁 |
+| `mongoc_client_session_t` | **否** | 纯数据聚合结构体，无内部锁 |
+| `mongoc_gridfs_*` | **否** | 纯数据聚合结构体，无内部锁 |
+| `mongoc_client_encryption_t` | **否** | 纯数据聚合结构体，无内部锁 |
+| `mongoc_server_session_pool` (内嵌于 topology) | 是 | `bson_mutex_t` (LIFO 空闲 session 栈) |
 | Topology 状态修改 | 是 | `bson_mutex_t` (tpld_modification_mtx + srv_polling_mtx) |
 | Topology Description 读取 | 是 (共享锁) | `mc_shared_tpld` 原子引用计数 + 全局 `bson_shared_mutex_t` (共享模式, 多读者并发) |
 
@@ -206,6 +213,35 @@ Topology 的线程安全设计分两层:
 **注意**: 虽然使用了全局读写锁，但临界区极短（仅指针 load/store，不含 description 的深拷贝），且读操作持共享锁允许多读者并发。这与常见的 per-object 读写锁在性能特性上有本质区别——锁竞争只发生在指针交换瞬间，而非整个 topology 查询期间。
 
 这种设计的优势: 高频的 topology 读取 (每个 client 操作都需要查询 server 地址) 只在获取/释放共享指针快照时短暂持锁（纳秒级），之后的整个查询过程中持有的是不可变的 description 快照，完全无锁。
+
+### 1.9 服务端 Session 池
+
+`mongoc_topology_t` 内嵌一个线程安全的 `mongoc_server_session_pool`（由 `MONGOC_DECL_SPECIAL_TS_POOL` 宏生成），为 pool 中所有 client 提供隐式会话共享:
+
+**内部结构** (`mongoc-ts-pool.c`):
+```c
+struct mongoc_ts_pool {
+    mongoc_ts_pool_params params;  // init/destroy/prune 回调
+    pool_node *head;               // LIFO 空闲 session 链表头
+    int32_t size;                  // 原子读取, 无需锁
+    bson_mutex_t mtx;              // 保护 head 链表操作
+};
+```
+
+**操作**:
+- `mongoc_server_session_pool_get()`: 从池中 LIFO pop 一个 session，若为空则创建新 session
+- `mongoc_server_session_pool_return()`: 检查 prune 条件后 push 回池（LIFO）
+- `mongoc_server_session_pool_drop()`: 从池中永久移除一个 session
+
+**Prune 条件** (`_server_session_should_prune`):
+- `dirty` session（遇到过网络错误）→ 丢弃
+- 从未使用过的 session（`last_used_usec == SESSION_NEVER_USED`）→ 丢弃
+- Load-balanced topology 中永不 prune
+- 其他: `last_used + topology.session_timeout_minutes × 60s < now - 1min` → 超时丢弃
+
+**线程安全**: pool 的 `bson_mutex_t` 保护 push/pop，`size` 字段支持原子无锁读取（`mongoc_ts_pool_size()` / `mongoc_ts_pool_is_empty()`）。
+
+**关键**: `mongoc_client_session_t`（从 pool 取出包装后的 session 对象）本身**没有内部锁**，不是线程安全的。一个 session 只应由一个线程使用。但底层的 `mongoc_server_session_pool`（存储和复用原始 server session）是线程安全的。
 
 ---
 
@@ -417,14 +453,15 @@ void high_freq_worker(engine::mongo::MongoClientPool& pool) {
 |------|--------|------|
 | `maxPoolSize` | `std::thread::hardware_concurrency() * 2` | 略大于线程数, 允许一定弹性 |
 | `waitQueueTimeoutMS` | `5000` (5秒) | 阻塞 Pop 的超时, 防止死等。**注意**: mongo-c-driver 默认值为 `-1` (无限等待), 建议显式设置 |
-| `maxIdleTimeMS` | `60000` (60秒) | 闲置连接回收, 需 MongoDB 4.0+ |
 | `socketTimeoutMS` | `0` (无限) | 阻塞模式下推荐无限, 由业务层控制超时 |
 
-**关于 `minPoolSize`**: mongo-c-driver 已弃用并移除该参数 (CDRIVER-2390)。Pool 始终从空队列开始，按需创建 client，因此不应在 URI 中设置 `minPoolSize`。
+**关于 `minPoolSize`**: mongo-c-driver 已弃用并移除该参数 (CDRIVER-2390)。Pool 始终从空队列开始，按需创建 client。
+
+**关于 `maxIdleTimeMS`**: mongo-c-driver **不支持此参数**（`MONGOC_URI_MAXIDLETIMEMS` 已被移除）。连接的空闲超时由服务端 `logicalSessionTimeoutMinutes` 通过 SDAM 心跳自动获取，客户端无需也无法配置。maxIdleTimeMS 是 Java/Python driver 的概念，C driver 无等价选项。
 
 URI 示例:
 ```
-mongodb://localhost:27017/?maxPoolSize=16&waitQueueTimeoutMS=5000&maxIdleTimeMS=60000
+mongodb://localhost:27017/?maxPoolSize=16&waitQueueTimeoutMS=5000
 ```
 
 ### 3.5 生命周期严格顺序
