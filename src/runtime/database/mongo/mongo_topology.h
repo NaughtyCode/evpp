@@ -47,7 +47,7 @@ private:
 class ENGINE_API MongoTopologyDescription {
 public:
     explicit MongoTopologyDescription(void* raw); // takes mongoc_topology_description_t* (non-owning)
-    ~MongoTopologyDescription() = default;
+    ~MongoTopologyDescription();
 
     MongoTopologyDescription(const MongoTopologyDescription&) = delete;
     MongoTopologyDescription& operator=(const MongoTopologyDescription&) = delete;

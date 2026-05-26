@@ -334,8 +334,7 @@ std::string BsonDocument::ToJson() const {
 }
 
 BsonDocument BsonDocument::NewFromJson(const char* json, size_t len) {
-    bson_error_t err;
-    bson_t* b = bson_new_from_json(reinterpret_cast<const uint8_t*>(json), static_cast<int64_t>(len), &err);
+    bson_t* b = bson_new_from_json(reinterpret_cast<const uint8_t*>(json), static_cast<int64_t>(len), nullptr);
     BsonDocument result;
     if (b) {
         bson_destroy(static_cast<bson_t*>(result.RawBson()));
@@ -347,8 +346,7 @@ BsonDocument BsonDocument::NewFromJson(const char* json, size_t len) {
 }
 
 BsonDocument BsonDocument::NewFromJson(const uint8_t* data, size_t len) {
-    bson_error_t err;
-    bson_t* b = bson_new_from_json(data, static_cast<int64_t>(len), &err);
+    bson_t* b = bson_new_from_json(data, static_cast<int64_t>(len), nullptr);
     BsonDocument result;
     if (b) {
         bson_destroy(static_cast<bson_t*>(result.RawBson()));

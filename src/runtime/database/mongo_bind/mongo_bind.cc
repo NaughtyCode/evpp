@@ -9,7 +9,6 @@
 extern "C" {
 #include "lauxlib.h"
 #include "lua.h"
-#include "lualib.h"
 }
 
 #include "runtime/core/log/log.h"

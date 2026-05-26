@@ -16,7 +16,11 @@ namespace mongo {
 
 MongoServerDescription::MongoServerDescription(void* raw) : sd_(raw) {}
 
-MongoServerDescription::~MongoServerDescription() = default;
+MongoServerDescription::~MongoServerDescription() {
+    if (owns_ && sd_) {
+        mongoc_server_description_destroy(static_cast<mongoc_server_description_t*>(sd_));
+    }
+}
 
 uint32_t MongoServerDescription::Id() const {
     return sd_ ? mongoc_server_description_id(static_cast<mongoc_server_description_t*>(sd_)) : 0;
@@ -88,6 +92,12 @@ void* MongoServerDescription::Raw() const { return sd_; }
 // ═══════════════════════════════════════════════════════════════════════
 
 MongoTopologyDescription::MongoTopologyDescription(void* raw) : td_(raw) {}
+
+MongoTopologyDescription::~MongoTopologyDescription() {
+    if (owns_ && td_) {
+        mongoc_topology_description_destroy(static_cast<mongoc_topology_description_t*>(td_));
+    }
+}
 
 bool MongoTopologyDescription::HasReadableServer(const MongoReadPrefs* prefs) const {
     if (!td_) return false;

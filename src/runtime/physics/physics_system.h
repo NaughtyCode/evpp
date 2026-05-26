@@ -2,6 +2,7 @@
 
 #ifdef ENGINE_PHYSICS_ENABLED
 
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <string>
@@ -153,7 +154,7 @@ private:
     std::string assets_path_;
     std::string scripts_dir_;
 
-    bool is_initialized_ = false;
+    std::atomic<bool> is_initialized_{false};
 };
 
 // Forward declare bindings registration (implemented in physics_bindings.cc)

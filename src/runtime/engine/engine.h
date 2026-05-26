@@ -83,7 +83,7 @@ public:
     // ── Accessors ────────────────────────────────────────────────────
 
     bool running() const { return running_; }
-    uint64_t frame_count() const { return frame_count_; }
+    uint64_t frame_count() const { return frame_count_.load(std::memory_order_relaxed); }
 
     ScriptVM& GetScriptVM();
     evpp::EventLoop* GetEventLoop() const { return loop_; }
@@ -100,7 +100,7 @@ private:
     std::chrono::milliseconds frame_interval_{33};
     std::atomic<bool> cleaned_up_{false};
     std::atomic<bool> running_{false};
-    uint64_t frame_count_{0};
+    std::atomic<uint64_t> frame_count_{0};
     uint64_t last_slow_frame_log_{0};
 
     float fixed_delta_time_{0.01667f};  // physics fixed timestep (from PhysicsConfig or default)

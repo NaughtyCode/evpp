@@ -207,13 +207,22 @@ public:
 
     // ── Runtime / Client / Server accessors ──────────────────────────
 
-    const RuntimeConfig& GetRuntimeConfig() const { return runtime_config_; }
+    RuntimeConfig GetRuntimeConfig() const {
+        std::shared_lock<std::shared_mutex> lock(config_mutex_);
+        return runtime_config_;
+    }
     RuntimeConfig& GetRuntimeConfigMutable() { return runtime_config_; }
 
-    const ClientConfig& GetClientConfig() const { return client_config_; }
+    ClientConfig GetClientConfig() const {
+        std::shared_lock<std::shared_mutex> lock(config_mutex_);
+        return client_config_;
+    }
     ClientConfig& GetClientConfigMutable() { return client_config_; }
 
-    const ServerConfig& GetServerConfig() const { return server_config_; }
+    ServerConfig GetServerConfig() const {
+        std::shared_lock<std::shared_mutex> lock(config_mutex_);
+        return server_config_;
+    }
     ServerConfig& GetServerConfigMutable() { return server_config_; }
 
     // ── MongoDB config file paths (thread-safe) ──────────────────────

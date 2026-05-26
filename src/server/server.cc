@@ -73,8 +73,8 @@ int main(int argc, char* argv[]) {
 
     std::fprintf(stderr, "[main] calling Engine::Init()\n");
     auto& engine = engine::Engine::Instance();
-    auto& runtime_cfg = engine::ConfigManager::Instance().GetRuntimeConfig();
-    auto& server_cfg = engine::ConfigManager::Instance().GetServerConfig();
+    const auto& runtime_cfg = engine::ConfigManager::Instance().GetRuntimeConfig();
+    const auto& server_cfg = engine::ConfigManager::Instance().GetServerConfig();
     engine.Init(runtime_cfg, server_cfg.scripts_dir);
     std::fprintf(stderr, "[main] Engine::Init() returned, calling Engine::Run()\n");
     engine.Run();

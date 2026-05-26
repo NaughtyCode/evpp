@@ -210,6 +210,10 @@ void ScriptImporter::AddPath(const std::string& path) {
 
 void ScriptImporter::ClearCache(lua_State* L) {
     lua_getglobal(L, "package");     // ..., package
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        return;
+    }
     lua_newtable(L);                 // ..., package, new_loaded
     lua_setfield(L, -2, "loaded");   // package.loaded = {}
     lua_pop(L, 1);                   // ...

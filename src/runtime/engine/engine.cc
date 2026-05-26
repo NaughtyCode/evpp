@@ -231,7 +231,7 @@ void Engine::Run() {
     ENGINE_LOG_INFO(logger, "entering main loop");
     std::fprintf(stderr, "[engine] entering main loop (loop_->Run())\n");
     loop_->Run();
-    ENGINE_LOG_INFO(logger, "main loop exited, frame_count=[{}]", frame_count_);
+    ENGINE_LOG_INFO(logger, "main loop exited, frame_count=[{}]", frame_count_.load());
     std::fprintf(stderr, "[engine] main loop exited\n");
 
     Cleanup();
@@ -344,17 +344,17 @@ void Engine::FrameLoop() {
         frame_start - last_frame_time_);
     last_frame_time_ = frame_start;
 
-    ++frame_count_;
+    uint64_t fc = frame_count_.fetch_add(1, std::memory_order_relaxed) + 1;
 
-    ENGINE_PROFILE_FRAME_BEGIN(frame_count_, elapsed.count());
+    ENGINE_PROFILE_FRAME_BEGIN(fc, elapsed.count());
 
     { ENGINE_PROFILE_TIMER_UPDATE();
     TimerManager::instance().update();
     }  // TimerUpdate slice ends
 
     // [D17.1][D17.2] Trigger physics simulation (Tick enqueues command; physics thread steps)
-    { ENGINE_PROFILE_PHYSICS_TICK(frame_count_);
-    PhysicsEngineBridge::Instance().Tick(frame_count_, fixed_delta_time_);
+    { ENGINE_PROFILE_PHYSICS_TICK(fc);
+    PhysicsEngineBridge::Instance().Tick(fc, fixed_delta_time_);
     }  // PhysicsTick slice ends
 
     // [D17.3] Engine Lua script update + non-physics tasks
@@ -365,8 +365,8 @@ void Engine::FrameLoop() {
     }  // ScriptUpdate slice ends
 
     // [D17.4] Fetch physics result for this frame
-    { ENGINE_PROFILE_PHYSICS_FETCH(frame_count_);
-    auto result = PhysicsEngineBridge::Instance().FetchResult(frame_count_, 5);
+    { ENGINE_PROFILE_PHYSICS_FETCH(fc);
+    auto result = PhysicsEngineBridge::Instance().FetchResult(fc, 5);
     if (result) {
         // [D17.5] Game object state update from result->transforms would go here
         // [D17.6] Physics VM collision callbacks — after FetchResult
@@ -385,12 +385,12 @@ void Engine::FrameLoop() {
     ENGINE_PROFILE_SLOW_FRAME(frame_elapsed, frame_interval_.count() * 2);
 
     if (elapsed > frame_interval_ * 2) {
-        if (frame_count_ - last_slow_frame_log_ > 30) {
+        if (fc - last_slow_frame_log_ > 30) {
             auto* logger = GetLogger();
             ENGINE_LOG_DEBUG(logger,
                              "frame [{}] took [{}ms] (slow)",
-                             frame_count_, elapsed.count());
-            last_slow_frame_log_ = frame_count_;
+                             fc, elapsed.count());
+            last_slow_frame_log_ = fc;
         }
     }
 }
