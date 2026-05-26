@@ -30,7 +30,11 @@ mongo-c-driver 在 `src/common/src/common-thread-private.h` 提供了跨平台�
 | `bson_once_t` | `pthread_once_t` | `INIT_ONCE` | 一次性初始化 |
 | `mongoc_cond_t` | `pthread_cond_t` | `CONDITION_VARIABLE` | 条件变量 |
 
-**注意**: `bson_shared_mutex_t` 存在于原语层，但仅用于 `mongoc-scram.c`、`mongoc-oidc-cache.c` 和 `mongoc-shared.c` 的共享指针实现中。**Topology 不使用读写锁**——其内部状态保护使用两个独立的 `bson_mutex_t`（`srv_polling_mtx` + `tpld_modification_mtx`），而 topology description 的跨线程共享通过引用计数原子指针 (`mc_shared_tpld`) 实现无锁读取。
+**注意**: `bson_shared_mutex_t` 的实际用途：
+- `mongoc-shared.c`: 全局 `g_shared_ptr_mtx` 保护 `mc_shared_tpld` 的原子 load/store（读持共享锁，写持独占锁）
+- `mongoc-scram.c` / `mongoc-oidc-cache.c`: 内部状态保护
+
+**Topology 自身不使用读写锁**——其内部状态保护使用两个独立的 `bson_mutex_t`（`srv_polling_mtx` + `tpld_modification_mtx`），外加两个 `mongoc_cond_t`（`cond_client` + `srv_polling_cond`）和两个原子变量（`scanner_state`、`_atomic_srv_polling_rescan_interval_ms`）。Topology description 的跨线程共享通过 `mc_shared_tpld` 引用计数指针实现，其 load/store 操作使用全局 `bson_shared_mutex_t`（见 1.8 节）。
 
 线程创建使用 `mcommon_thread_create()` / `mcommon_thread_join()`。
 
@@ -75,23 +79,30 @@ struct _mongoc_client_pool_t {
 **`mongoc_client_pool_pop()` (阻塞获取)**:
 ```
 1. lock(pool->mutex)
-2. if queue 非空 → pop LIFO 队列 → 返回 client
-3. if size < max_pool_size → 创建新 client → size++ → 返回
+2. if queue 非空 → pop LIFO 队列 (pop_head) → 返回 client
+3. if size < max_pool_size → 创建新 mongoc_client_t (继承 pool 的 SSL/APM/error_api 等配置)
+   → size++ → 返回
 4. otherwise → cond_wait(&pool->cond, &pool->mutex)  // 阻塞等待
-   - 若设置了 waitQueueTimeoutMS > 0 → cond_timedwait → 超时返回 NULL
-   - waitQueueTimeoutMS 默认值: -1 (无限等待)
+   - 若设置了 waitQueueTimeoutMS > 0 → cond_timedwait (计算剩余时间) → 超时返回 NULL
+   - waitQueueTimeoutMS 默认值: -1 (无限等待), 设为 0 也等同于无限等待
 5. unlock(pool->mutex)
+6. [成功获取后] _start_scanner_if_needed(pool):
+   → 原子 CAS topology->scanner_state (OFF → BG_RUNNING), 仅首个线程启动后台监控
 ```
 
 **`mongoc_client_pool_push()` (归还)**:
 ```
-1. lock(pool->mutex)
-2. 重置 client 的 socket 超时状态
-3. 对比 last_known_serverids: 遍历 client 内部连接, 清理不在当前
-   集群拓扑中的 server 连接 (防止连接到已移除的 replica set 成员)
-4. push client 到 queue 头部 (LIFO)
-5. cond_signal() 唤醒一个等待线程
-6. unlock(pool->mutex)
+1. [无锁] 重置 client 的 sockettimeoutms 为默认值 (300s) 或 URI 配置值
+   — 防止上一个使用者通过 set_sockettimeoutms() 修改的超时设置泄漏
+2. lock(pool->mutex)
+3. 获取当前 topology description 快照，对比 pool->last_known_serverids
+   — 若 server ID 集合发生变化 (replica set 成员变更):
+     a. 更新 pool->last_known_serverids 为新集合
+     b. 遍历队列中所有已缓存的 client (prune_client)，断开到已移除 server 的连接
+4. 对本次归还的 client 执行 prune_client — 同样断开到已移除 server 的连接
+5. _mongoc_queue_push_head() 将 client 插入队列头部 (LIFO)
+6. mongoc_cond_signal() 唤醒一个在 pop() 中等待的线程
+7. unlock(pool->mutex)
 ```
 
 **`mongoc_client_pool_try_pop()` (非阻塞获取)**:
@@ -99,15 +110,16 @@ struct _mongoc_client_pool_t {
 
 ### 1.5 后台线程
 
-Pool 首次 `pop()` 时会通过原子 CAS 确保只启动一次 scanner 线程:
+Pool 首次 `pop()` 成功后调用 `_start_scanner_if_needed()` → `_mongoc_topology_background_monitoring_start()`，后者通过原子 CAS (`scanner_state`: OFF → BG_RUNNING) 确保所有后台监控线程只启动一次:
 
-| 线程 | 启动方式 | 功能 |
-|------|---------|------|
-| SRV polling thread | topology 初始化时按需创建 | 周期性重新解析 SRV DNS 记录 |
-| Server monitor threads | topology 连接每个 server 时创建 | 每个 server 一个，心跳检测 (SDAM) |
-| Connection scanner | 首次 pop 时原子 CAS 确保只启动一次 | 扫描空闲连接、执行健康检查 |
+| 线程 | 数量 | 启动方式 | 功能 |
+|------|------|---------|------|
+| Server monitor threads | 每 server 一个 | `mongoc_server_monitor_run()` 创建 | 心跳检测 (SDAM)，周期性向各 server 发送 `hello` 命令 |
+| RTT monitor threads | 每 server 一个 | `mongoc_server_monitor_run_as_rtt()` 创建 | 往返时间测量，用于驱动 nearest 读偏好 |
+| SRV polling thread | 1 个 | `mcommon_thread_create(srv_polling_run)` 创建 | 周期性重新解析 SRV DNS 记录 (仅 `mongodb+srv://`) |
+| Connection scanner | 1 个 (逻辑上) | 与上述线程同一 CAS 保护 | 扫描空闲连接健康状态 |
 
-这些后台线程由 pool/topology 管理，对调用者透明。其中 server monitor 和 SRV polling 线程在 `mongoc_topology_t` 中创建和管理。
+所有后台线程的启停由 `mongoc_topology_t` 内的 `scanner_state` 原子变量统一管理（状态机: OFF → BG_RUNNING → OFF）。这些线程对调用者完全透明，无需应用层管理。
 
 ### 1.6 生命周期契约
 
@@ -142,8 +154,8 @@ main():
 | `mongoc_collection_t` | **否** | 派生自 client |
 | `mongoc_gridfs_*` | **否** | 文档明确标注 |
 | `mongoc_client_encryption_t` | **否** | 文档明确标注 |
-| Topology 状态修改 | 是 | `bson_mutex_t` (srv_polling_mtx + tpld_modification_mtx) |
-| Topology Description 读取 | 是 (无锁) | `mc_shared_tpld` 原子引用计数共享指针 |
+| Topology 状态修改 | 是 | `bson_mutex_t` (tpld_modification_mtx + srv_polling_mtx) |
+| Topology Description 读取 | 是 (共享锁) | `mc_shared_tpld` 原子引用计数 + 全局 `bson_shared_mutex_t` (共享模式, 多读者并发) |
 
 ### 1.8 Topology Description 共享指针机制
 
@@ -151,30 +163,38 @@ Topology 的线程安全设计分两层:
 
 **修改层** (`tpld_modification_mtx` + `srv_polling_mtx`):
 - `mongoc_topology_t` 使用两个独立的 `bson_mutex_t`（**不是** `bson_shared_mutex_t` / 读写锁）保护内部可变状态
-- `tpld_modification_mtx`: 保护 topology description 的修改 (server 发现、状态变更等)
-- `srv_polling_mtx`: 保护 SRV DNS 轮询相关的状态
+- `tpld_modification_mtx`: 保护 topology description 的修改 (server 发现、状态变更等)，也用于 `cond_client` 的条件等待
+- `srv_polling_mtx`: 保护 SRV DNS 轮询线程的状态和 `srv_polling_cond`
 
-**读取层** (`mc_shared_tpld` 无锁共享):
-- `mc_shared_tpld` 是一个引用计数原子共享指针，包裹 `mongoc_topology_description_t`
-- 读操作通过 `mongoc_atomic_shared_ptr_load()` 获取当前 description 的快照，**无需获取任何锁**
-- 修改操作在 `tpld_modification_mtx` 保护下创建新的 description，然后通过原子 store 替换旧指针
-- `mongoc_cond_t cond_client` 条件变量通知等待者 topology 变更
+**读取层** (`mc_shared_tpld` + 全局读写锁):
+- `mc_shared_tpld` 是一个 union，包裹 `mongoc_shared_ptr`（引用计数指针）指向 `mongoc_topology_description_t`
+- `mongoc_topology_description_t` 自身是一个**纯数据结构**（无锁、无引用计数），不可变 (immutable)
+- 引用计数由 `mongoc_shared_ptr` 的 `_aux` 辅助结构管理，增/减引用计数使用 `mcommon_atomic_int_fetch_add/sub`（无锁原子操作）
+- **关键**: 共享指针本身的 load/store 操作使用**全局** `bson_shared_mutex_t g_shared_ptr_mtx`（读写锁）保护：
+  - `mongoc_atomic_shared_ptr_load()` 持共享锁（读锁），允许多个读线程并发获取 topology description 快照
+  - `mongoc_atomic_shared_ptr_store()` 持独占锁（写锁），修改时阻塞所有读者
 
 ```
-读取路径 (无锁):
-  mc_tpld_take_ref(&topology)           // 原子 load + incref
-  → 使用 description 快照
-  → mc_tpld_drop_ref(&topology)         // 原子 decref
+读取路径 (共享锁, 允许多读者并发):
+  bson_shared_mutex_lock_shared(&g_shared_ptr_mtx)  // 全局共享锁
+  → mongoc_atomic_shared_ptr_load()                   // 原子 incref
+  → bson_shared_mutex_unlock_shared(&g_shared_ptr_mtx)
+  → 返回 description 快照 (不可变, 无需继续持锁)
+  → 用完后 mc_tpld_drop_ref() → 原子 decref
 
-修改路径 (持锁):
+修改路径 (独占锁 + tpld_modification_mtx):
   lock(tpld_modification_mtx)
-  → 创建新 description (copy-on-write)
-  → 原子 store 新指针
-  → cond_broadcast(&cond_client)        // 通知等待者
+  → copy-on-write: 创建新 description 深拷贝
+  → bson_shared_mutex_lock(&g_shared_ptr_mtx)        // 全局独占锁
+  → mongoc_atomic_shared_ptr_store()                  // 原子替换指针
+  → bson_shared_mutex_unlock(&g_shared_ptr_mtx)
+  → cond_broadcast(&cond_client)                      // 唤醒等待的 client 线程
   → unlock(tpld_modification_mtx)
 ```
 
-这种设计的优势: 高频的 topology 读取 (每个 client 操作都需要查询 server 地址) 不会与低频的 topology 修改 (SDAM 心跳更新) 产生锁竞争。
+**注意**: 虽然使用了全局读写锁，但临界区极短（仅指针 load/store，不含 description 的深拷贝），且读操作持共享锁允许多读者并发。这与常见的 per-object 读写锁在性能特性上有本质区别——锁竞争只发生在指针交换瞬间，而非整个 topology 查询期间。
+
+这种设计的优势: 高频的 topology 读取 (每个 client 操作都需要查询 server 地址) 只在获取/释放共享指针快照时短暂持锁（纳秒级），之后的整个查询过程中持有的是不可变的 description 快照，完全无锁。
 
 ---
 
@@ -189,10 +209,15 @@ MongoSystem               (mongo_system.h/.cc)
   └─ Singleton: 管理 mongoc_init() / mongoc_cleanup() 全局生命周期
   └─ 必须在所有 mongo 操作之前初始化, 之后关闭
 
+MongoInit                (mongo_init.h/.cc)
+  └─ 静态工具类: Init() / Cleanup() — MongoSystem 的替代初始化方式
+  └─ 内部调用 mongoc_init() / mongoc_cleanup()
+
 MongoClientPool          (mongo_client_pool.h/.cc)
   └─ 封装 mongoc_client_pool_t
   └─ Pop() / Push() / TryPop() — 标准 pool 操作
-  └─ 构造时传 MongoUri, 析构时 destroy pool
+  └─ 静态 New() 工厂 + Destroy(); 禁止拷贝/移动
+  └─ SetMaxSize(), SetAppname(), SetApmCallbacks(), SetServerApi() 等配置方法
 
 MongoClient              (mongo_client.h/.cc)
   └─ 封装 mongoc_client_t
@@ -261,8 +286,10 @@ public:
     MongoClientGuard& operator=(MongoClientGuard&& other) noexcept;
 
     // 访问内部 client
-    MongoClient* operator->()       { return client_.get(); }
-    MongoClient* get()              { return client_.get(); }
+    MongoClient* operator->()       { return client_; }
+    MongoClient* get()              { return client_; }
+    const MongoClient* operator->() const { return client_; }
+    const MongoClient* get() const        { return client_; }
     explicit operator bool() const  { return client_ != nullptr; }
 
 private:
@@ -301,7 +328,7 @@ void worker_thread(engine::mongo::MongoClientPool& pool, int thread_id) {
 
         // 同步查询
         engine::mongo::BsonDocument filter;
-        filter.Append("_id", i);
+        filter.AppendInt32("_id", i);
         engine::mongo::MongoCursor* cursor =
             coll->FindWithOpts(filter, nullptr, nullptr);
         // 遍历 cursor ...
