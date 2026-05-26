@@ -65,9 +65,10 @@ if(MSVC)
     add_definitions(-D_WIN32_WINNT=0x0A00)
     add_compile_options(/bigobj /Zc:preprocessor /utf-8)
     add_compile_options(
-        /wd4005 /wd4244 /wd4251 /wd4355 /wd4503 /wd4530
+        /wd4005 /wd4244 /wd4251 /wd4267 /wd4355 /wd4503 /wd4530
         /wd4577 /wd4715 /wd4800 /wd4819 /wd4996
     )
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 
 # ── Platform libraries (from runtime) ─────────────────────────────────

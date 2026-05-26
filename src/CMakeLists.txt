@@ -4,12 +4,15 @@ project(CloudEngine C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 # ── Platform definitions (MSVC) ───────────────────────────────────────
 # Directory-scoped so all subprojects (runtime, tests, server, client)
 # inherit these definitions.
 if(MSVC)
     add_compile_definitions(NOMINMAX _WIN32)
+    add_compile_options(/utf-8 /bigobj /Zc:preprocessor)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 
 # ── Output paths ──────────────────────────────────────────────────────
