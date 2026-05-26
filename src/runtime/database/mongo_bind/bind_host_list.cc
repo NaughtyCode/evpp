@@ -13,14 +13,14 @@ namespace {
 
 const char* kMetaName = "mongoc.host_list";
 
-int l_gc(lua_State* L) {
+int l_host_list_gc(lua_State* L) {
     auto* hl = GetUserdata<mongo::MongoHostList>(L, 1, kMetaName);
     delete hl;
     *CheckUserdata<mongo::MongoHostList>(L, 1, kMetaName) = nullptr;
     return 0;
 }
 
-int l_new(lua_State* L) {
+int l_host_list_new(lua_State* L) {
     auto* hl = new (std::nothrow) mongo::MongoHostList();
     if (!hl) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
     auto** ud = NewUserdata<mongo::MongoHostList>(L, kMetaName);
@@ -28,9 +28,9 @@ int l_new(lua_State* L) {
     return 1;
 }
 
-int l_destroy(lua_State* L) { l_gc(L); return 0; }
+int l_host_list_destroy(lua_State* L) { l_host_list_gc(L); return 0; }
 
-int l_get_host(lua_State* L) {
+int l_host_list_get_host(lua_State* L) {
     auto* hl = GetUserdata<mongo::MongoHostList>(L, 1, kMetaName);
     const char* s = hl ? hl->GetHost() : nullptr;
     if (s) lua_pushstring(L, s);
@@ -38,7 +38,7 @@ int l_get_host(lua_State* L) {
     return 1;
 }
 
-int l_get_host_and_port(lua_State* L) {
+int l_host_list_get_host_and_port(lua_State* L) {
     auto* hl = GetUserdata<mongo::MongoHostList>(L, 1, kMetaName);
     const char* s = hl ? hl->GetHostAndPort() : nullptr;
     if (s) lua_pushstring(L, s);
@@ -46,19 +46,19 @@ int l_get_host_and_port(lua_State* L) {
     return 1;
 }
 
-int l_get_port(lua_State* L) {
+int l_host_list_get_port(lua_State* L) {
     auto* hl = GetUserdata<mongo::MongoHostList>(L, 1, kMetaName);
     lua_pushinteger(L, hl ? hl->GetPort() : 0);
     return 1;
 }
 
-int l_get_family(lua_State* L) {
+int l_host_list_get_family(lua_State* L) {
     auto* hl = GetUserdata<mongo::MongoHostList>(L, 1, kMetaName);
     lua_pushinteger(L, hl ? hl->GetFamily() : 0);
     return 1;
 }
 
-int l_get_next(lua_State* L) {
+int l_host_list_get_next(lua_State* L) {
     auto* hl = GetUserdata<mongo::MongoHostList>(L, 1, kMetaName);
     if (!hl) { lua_pushnil(L); return 1; }
     auto* next = hl->GetNext();
@@ -70,20 +70,20 @@ int l_get_next(lua_State* L) {
 }
 
 const luaL_Reg kLib[] = {
-    {"host_list_new", l_new},
-    {"host_list_destroy", l_destroy},
-    {"host_list_get_host", l_get_host},
-    {"host_list_get_host_and_port", l_get_host_and_port},
-    {"host_list_get_port", l_get_port},
-    {"host_list_get_family", l_get_family},
-    {"host_list_get_next", l_get_next},
+    {"host_list_new", l_host_list_new},
+    {"host_list_destroy", l_host_list_destroy},
+    {"host_list_get_host", l_host_list_get_host},
+    {"host_list_get_host_and_port", l_host_list_get_host_and_port},
+    {"host_list_get_port", l_host_list_get_port},
+    {"host_list_get_family", l_host_list_get_family},
+    {"host_list_get_next", l_host_list_get_next},
     {nullptr, nullptr},
 };
 
 } // namespace
 
 void RegisterMongoHostListMeta(lua_State* L) {
-    RegisterMetatable(L, kMetaName, nullptr, l_gc);
+    RegisterMetatable(L, kMetaName, nullptr, l_host_list_gc);
 }
 
 const luaL_Reg* GetMongoHostListLib() { return kLib; }

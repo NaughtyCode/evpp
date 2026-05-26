@@ -14,14 +14,14 @@ namespace {
 
 const char* kMetaName = "mongoc.bulk_write_exception";
 
-int l_gc(lua_State* L) {
+int l_bulk_write_exc_gc(lua_State* L) {
     auto* exc = GetUserdata<mongo::MongoBulkWriteException>(L, 1, kMetaName);
     delete exc;
     *CheckUserdata<mongo::MongoBulkWriteException>(L, 1, kMetaName) = nullptr;
     return 0;
 }
 
-int l_new(lua_State* L) {
+int l_bulk_write_exc_new(lua_State* L) {
     auto* exc = new (std::nothrow) mongo::MongoBulkWriteException();
     if (!exc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
     auto** ud = NewUserdata<mongo::MongoBulkWriteException>(L, kMetaName);
@@ -29,9 +29,9 @@ int l_new(lua_State* L) {
     return 1;
 }
 
-int l_destroy(lua_State* L) { l_gc(L); return 0; }
+int l_bulk_write_exc_destroy(lua_State* L) { l_bulk_write_exc_gc(L); return 0; }
 
-int l_error(lua_State* L) {
+int l_bulk_write_exc_error(lua_State* L) {
     auto* exc = GetUserdata<mongo::MongoBulkWriteException>(L, 1, kMetaName);
     if (!exc) { lua_pushboolean(L, false); lua_pushnil(L); return 2; }
     mongo::MongoError error;
@@ -43,16 +43,16 @@ int l_error(lua_State* L) {
 }
 
 const luaL_Reg kLib[] = {
-    {"bulk_write_exception_new", l_new},
-    {"bulk_write_exception_destroy", l_destroy},
-    {"bulk_write_exception_error", l_error},
+    {"bulk_write_exception_new", l_bulk_write_exc_new},
+    {"bulk_write_exception_destroy", l_bulk_write_exc_destroy},
+    {"bulk_write_exception_error", l_bulk_write_exc_error},
     {nullptr, nullptr},
 };
 
 } // namespace
 
 void RegisterMongoBulkWriteExceptionMeta(lua_State* L) {
-    RegisterMetatable(L, kMetaName, nullptr, l_gc);
+    RegisterMetatable(L, kMetaName, nullptr, l_bulk_write_exc_gc);
 }
 
 const luaL_Reg* GetMongoBulkWriteExceptionLib() { return kLib; }

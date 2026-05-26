@@ -20,7 +20,7 @@ namespace {
 
 const char* kMetaName = "mongoc.database";
 
-int l_gc(lua_State* L) {
+int l_db_gc(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     if (db) db->Destroy();
     delete db;
@@ -28,9 +28,9 @@ int l_gc(lua_State* L) {
     return 0;
 }
 
-int l_destroy(lua_State* L) { l_gc(L); return 0; }
+int l_db_destroy(lua_State* L) { l_db_gc(L); return 0; }
 
-int l_get_collection(lua_State* L) {
+int l_db_get_collection(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     const char* name = luaL_checkstring(L, 2);
     if (!db) { lua_pushnil(L); return 1; }
@@ -41,7 +41,7 @@ int l_get_collection(lua_State* L) {
     return 1;
 }
 
-int l_get_name(lua_State* L) {
+int l_db_get_name(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     const char* name = db ? db->GetName() : nullptr;
     if (name) lua_pushstring(L, name);
@@ -49,7 +49,7 @@ int l_get_name(lua_State* L) {
     return 1;
 }
 
-int l_drop(lua_State* L) {
+int l_db_drop(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     if (!db) { lua_pushboolean(L, false); lua_pushnil(L); return 2; }
     mongo::MongoError error;
@@ -60,7 +60,7 @@ int l_drop(lua_State* L) {
     return 2;
 }
 
-int l_command_simple(lua_State* L) {
+int l_db_command_simple(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     auto* cmd = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     if (!db || !cmd) { lua_pushnil(L); lua_pushstring(L, "invalid args"); return 2; }
@@ -81,28 +81,28 @@ int l_command_simple(lua_State* L) {
     return 3;
 }
 
-int l_set_read_prefs(lua_State* L) {
+int l_db_set_read_prefs(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     auto* prefs = GetUserdata<mongo::MongoReadPrefs>(L, 2, "mongoc.read_prefs");
     if (db && prefs) db->SetReadPrefs(*prefs);
     return 0;
 }
 
-int l_set_write_concern(lua_State* L) {
+int l_db_set_write_concern(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 2, "mongoc.write_concern");
     if (db && concern) db->SetWriteConcern(*concern);
     return 0;
 }
 
-int l_set_read_concern(lua_State* L) {
+int l_db_set_read_concern(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     auto* concern = GetUserdata<mongo::MongoReadConcern>(L, 2, "mongoc.read_concern");
     if (db && concern) db->SetReadConcern(*concern);
     return 0;
 }
 
-int l_watch(lua_State* L) {
+int l_db_watch(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     auto* pipeline = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     auto* opts = lua_isnoneornil(L, 3) ? nullptr
@@ -115,7 +115,7 @@ int l_watch(lua_State* L) {
     return 1;
 }
 
-int l_get_collection_names(lua_State* L) {
+int l_db_get_collection_names(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     if (!db) { lua_pushnil(L); return 1; }
     mongo::MongoError error;
@@ -131,7 +131,7 @@ int l_get_collection_names(lua_State* L) {
     return 1;
 }
 
-int l_has_collection(lua_State* L) {
+int l_db_has_collection(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     const char* name = luaL_checkstring(L, 2);
     if (!db) { lua_pushboolean(L, false); return 1; }
@@ -140,7 +140,7 @@ int l_has_collection(lua_State* L) {
     return 1;
 }
 
-int l_command_with_opts(lua_State* L) {
+int l_db_command_with_opts(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     auto* cmd = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     auto* prefs = lua_isnoneornil(L, 3) ? nullptr
@@ -163,7 +163,7 @@ int l_command_with_opts(lua_State* L) {
     return 3;
 }
 
-int l_create_collection(lua_State* L) {
+int l_db_create_collection(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     const char* name = luaL_checkstring(L, 2);
     auto* opts = lua_isnoneornil(L, 3) ? nullptr
@@ -181,7 +181,7 @@ int l_create_collection(lua_State* L) {
     return 1;
 }
 
-int l_aggregate(lua_State* L) {
+int l_db_aggregate(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     auto* pipeline = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     auto* opts = lua_isnoneornil(L, 3) ? nullptr
@@ -195,27 +195,27 @@ int l_aggregate(lua_State* L) {
 }
 
 const luaL_Reg kLib[] = {
-    {"db_destroy", l_destroy},
-    {"db_get_collection", l_get_collection},
-    {"db_create_collection", l_create_collection},
-    {"db_aggregate", l_aggregate},
-    {"db_get_name", l_get_name},
-    {"db_drop", l_drop},
-    {"db_command_simple", l_command_simple},
-    {"db_set_read_prefs", l_set_read_prefs},
-    {"db_set_write_concern", l_set_write_concern},
-    {"db_set_read_concern", l_set_read_concern},
-    {"db_watch", l_watch},
-    {"db_get_collection_names", l_get_collection_names},
-    {"db_has_collection", l_has_collection},
-    {"db_command_with_opts", l_command_with_opts},
+    {"db_destroy", l_db_destroy},
+    {"db_get_collection", l_db_get_collection},
+    {"db_create_collection", l_db_create_collection},
+    {"db_aggregate", l_db_aggregate},
+    {"db_get_name", l_db_get_name},
+    {"db_drop", l_db_drop},
+    {"db_command_simple", l_db_command_simple},
+    {"db_set_read_prefs", l_db_set_read_prefs},
+    {"db_set_write_concern", l_db_set_write_concern},
+    {"db_set_read_concern", l_db_set_read_concern},
+    {"db_watch", l_db_watch},
+    {"db_get_collection_names", l_db_get_collection_names},
+    {"db_has_collection", l_db_has_collection},
+    {"db_command_with_opts", l_db_command_with_opts},
     {nullptr, nullptr},
 };
 
 } // namespace
 
 void RegisterMongoDatabaseMeta(lua_State* L) {
-    RegisterMetatable(L, kMetaName, nullptr, l_gc);
+    RegisterMetatable(L, kMetaName, nullptr, l_db_gc);
 }
 
 const luaL_Reg* GetMongoDatabaseLib() { return kLib; }

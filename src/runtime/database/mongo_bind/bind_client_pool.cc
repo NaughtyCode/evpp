@@ -15,7 +15,7 @@ namespace {
 
 const char* kMetaName = "mongoc.pool";
 
-int l_gc(lua_State* L) {
+int l_pool_gc(lua_State* L) {
     auto* pool = GetUserdata<mongo::MongoClientPool>(L, 1, kMetaName);
     if (pool) pool->Destroy();
     delete pool;
@@ -23,7 +23,7 @@ int l_gc(lua_State* L) {
     return 0;
 }
 
-int l_new(lua_State* L) {
+int l_pool_new(lua_State* L) {
     const char* uri_str = luaL_checkstring(L, 1);
     auto uri = mongo::MongoUri::New(uri_str);
     auto* pool = mongo::MongoClientPool::New(uri);
@@ -37,9 +37,9 @@ int l_new(lua_State* L) {
     return 1;
 }
 
-int l_destroy(lua_State* L) { l_gc(L); return 0; }
+int l_pool_destroy(lua_State* L) { l_pool_gc(L); return 0; }
 
-int l_pop(lua_State* L) {
+int l_pool_pop(lua_State* L) {
     auto* pool = GetUserdata<mongo::MongoClientPool>(L, 1, kMetaName);
     if (!pool) { lua_pushnil(L); return 1; }
     auto* client = pool->Pop();
@@ -49,28 +49,28 @@ int l_pop(lua_State* L) {
     return 1;
 }
 
-int l_push(lua_State* L) {
+int l_pool_push(lua_State* L) {
     auto* pool = GetUserdata<mongo::MongoClientPool>(L, 1, kMetaName);
     auto* client = GetUserdata<mongo::MongoClient>(L, 2, "mongoc.client");
     if (pool && client) pool->Push(client);
     return 0;
 }
 
-int l_set_max_size(lua_State* L) {
+int l_pool_set_max_size(lua_State* L) {
     auto* pool = GetUserdata<mongo::MongoClientPool>(L, 1, kMetaName);
     auto size = static_cast<uint32_t>(luaL_checkinteger(L, 2));
     if (pool) pool->SetMaxSize(size);
     return 0;
 }
 
-int l_set_appname(lua_State* L) {
+int l_pool_set_appname(lua_State* L) {
     auto* pool = GetUserdata<mongo::MongoClientPool>(L, 1, kMetaName);
     const char* appname = luaL_checkstring(L, 2);
     if (pool) pool->SetAppname(appname);
     return 0;
 }
 
-int l_try_pop(lua_State* L) {
+int l_pool_try_pop(lua_State* L) {
     auto* pool = GetUserdata<mongo::MongoClientPool>(L, 1, kMetaName);
     if (!pool) { lua_pushnil(L); return 1; }
     auto* client = pool->TryPop();
@@ -81,20 +81,20 @@ int l_try_pop(lua_State* L) {
 }
 
 const luaL_Reg kLib[] = {
-    {"pool_new", l_new},
-    {"pool_destroy", l_destroy},
-    {"pool_pop", l_pop},
-    {"pool_try_pop", l_try_pop},
-    {"pool_push", l_push},
-    {"pool_set_max_size", l_set_max_size},
-    {"pool_set_appname", l_set_appname},
+    {"pool_new", l_pool_new},
+    {"pool_destroy", l_pool_destroy},
+    {"pool_pop", l_pool_pop},
+    {"pool_try_pop", l_pool_try_pop},
+    {"pool_push", l_pool_push},
+    {"pool_set_max_size", l_pool_set_max_size},
+    {"pool_set_appname", l_pool_set_appname},
     {nullptr, nullptr},
 };
 
 } // namespace
 
 void RegisterMongoClientPoolMeta(lua_State* L) {
-    RegisterMetatable(L, kMetaName, nullptr, l_gc);
+    RegisterMetatable(L, kMetaName, nullptr, l_pool_gc);
 }
 
 const luaL_Reg* GetMongoClientPoolLib() { return kLib; }

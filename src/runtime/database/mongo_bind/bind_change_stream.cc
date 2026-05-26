@@ -15,7 +15,7 @@ namespace {
 
 const char* kMetaName = "mongoc.change_stream";
 
-int l_gc(lua_State* L) {
+int l_change_stream_gc(lua_State* L) {
     auto* stream = GetUserdata<mongo::MongoChangeStream>(L, 1, kMetaName);
     if (stream) stream->Destroy();
     delete stream;
@@ -23,9 +23,9 @@ int l_gc(lua_State* L) {
     return 0;
 }
 
-int l_destroy(lua_State* L) { l_gc(L); return 0; }
+int l_change_stream_destroy(lua_State* L) { l_change_stream_gc(L); return 0; }
 
-int l_next(lua_State* L) {
+int l_change_stream_next(lua_State* L) {
     auto* stream = GetUserdata<mongo::MongoChangeStream>(L, 1, kMetaName);
     if (!stream) { lua_pushboolean(L, false); return 1; }
     auto* doc = new (std::nothrow) mongo::BsonDocument();
@@ -43,7 +43,22 @@ int l_next(lua_State* L) {
     return 1;
 }
 
-int l_error_document(lua_State* L) {
+int l_change_stream_get_resume_token(lua_State* L) {
+    auto* stream = GetUserdata<mongo::MongoChangeStream>(L, 1, kMetaName);
+    if (!stream) { lua_pushnil(L); return 1; }
+    const void* raw = stream->GetResumeToken();
+    if (!raw) { lua_pushnil(L); return 1; }
+    auto* doc = new (std::nothrow) mongo::BsonDocument(
+        mongo::BsonDocument::NewFromData(static_cast<const uint8_t*>(static_cast<const bson_t*>(raw) ?
+            bson_get_data(static_cast<const bson_t*>(raw)) : nullptr),
+            raw ? static_cast<const bson_t*>(raw)->len : 0));
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+    *ud = doc;
+    return 1;
+}
+
+int l_change_stream_error_document(lua_State* L) {
     auto* stream = GetUserdata<mongo::MongoChangeStream>(L, 1, kMetaName);
     if (!stream) { lua_pushboolean(L, false); return 1; }
     mongo::MongoError error;
@@ -56,16 +71,16 @@ int l_error_document(lua_State* L) {
 }
 
 const luaL_Reg kLib[] = {
-    {"change_stream_destroy", l_destroy},
-    {"change_stream_next", l_next},
-    {"change_stream_error_document", l_error_document},
+    {"change_stream_destroy", l_change_stream_destroy},
+    {"change_stream_next", l_change_stream_next},
+    {"change_stream_error_document", l_change_stream_error_document},
     {nullptr, nullptr},
 };
 
 } // namespace
 
 void RegisterMongoChangeStreamMeta(lua_State* L) {
-    RegisterMetatable(L, kMetaName, nullptr, l_gc);
+    RegisterMetatable(L, kMetaName, nullptr, l_change_stream_gc);
 }
 
 const luaL_Reg* GetMongoChangeStreamLib() { return kLib; }

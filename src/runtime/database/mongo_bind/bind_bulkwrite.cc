@@ -15,14 +15,14 @@ namespace {
 
 const char* kMetaName = "mongoc.bulkwrite";
 
-int l_gc(lua_State* L) {
+int l_bulkwrite_gc(lua_State* L) {
     auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
     if (bw) bw->Destroy();
     *CheckUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName) = nullptr;
     return 0;
 }
 
-int l_new(lua_State* L) {
+int l_bulkwrite_new(lua_State* L) {
     auto* bw = mongo::MongoBulkWrite::New();
     if (!bw) { lua_pushnil(L); lua_pushstring(L, "failed to create bulk write"); return 2; }
     auto** ud = NewUserdata<mongo::MongoBulkWrite>(L, kMetaName);
@@ -30,9 +30,9 @@ int l_new(lua_State* L) {
     return 1;
 }
 
-int l_destroy(lua_State* L) { l_gc(L); return 0; }
+int l_bulkwrite_destroy(lua_State* L) { l_bulkwrite_gc(L); return 0; }
 
-int l_append_insert_one(lua_State* L) {
+int l_bulkwrite_append_insert_one(lua_State* L) {
     auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
     const char* ns = luaL_checkstring(L, 2);
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
@@ -45,7 +45,7 @@ int l_append_insert_one(lua_State* L) {
     return 2;
 }
 
-int l_append_update_one(lua_State* L) {
+int l_bulkwrite_append_update_one(lua_State* L) {
     auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
     const char* ns = luaL_checkstring(L, 2);
     auto* filter = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
@@ -61,7 +61,7 @@ int l_append_update_one(lua_State* L) {
     return 2;
 }
 
-int l_append_delete_one(lua_State* L) {
+int l_bulkwrite_append_delete_one(lua_State* L) {
     auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
     const char* ns = luaL_checkstring(L, 2);
     auto* filter = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
@@ -74,7 +74,7 @@ int l_append_delete_one(lua_State* L) {
     return 2;
 }
 
-int l_append_update_many(lua_State* L) {
+int l_bulkwrite_append_update_many(lua_State* L) {
     auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
     const char* ns = luaL_checkstring(L, 2);
     auto* filter = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
@@ -90,7 +90,7 @@ int l_append_update_many(lua_State* L) {
     return 2;
 }
 
-int l_append_replace_one(lua_State* L) {
+int l_bulkwrite_append_replace_one(lua_State* L) {
     auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
     const char* ns = luaL_checkstring(L, 2);
     auto* filter = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
@@ -106,7 +106,7 @@ int l_append_replace_one(lua_State* L) {
     return 2;
 }
 
-int l_append_delete_many(lua_State* L) {
+int l_bulkwrite_append_delete_many(lua_State* L) {
     auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
     const char* ns = luaL_checkstring(L, 2);
     auto* filter = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
@@ -119,7 +119,7 @@ int l_append_delete_many(lua_State* L) {
     return 2;
 }
 
-int l_execute(lua_State* L) {
+int l_bulkwrite_execute(lua_State* L) {
     auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
     if (!bw) { lua_pushnil(L); lua_pushstring(L, "invalid bulk write"); return 2; }
 
@@ -152,22 +152,22 @@ int l_execute(lua_State* L) {
 }
 
 const luaL_Reg kLib[] = {
-    {"bulkwrite_new", l_new},
-    {"bulkwrite_destroy", l_destroy},
-    {"bulkwrite_append_insert_one", l_append_insert_one},
-    {"bulkwrite_append_update_one", l_append_update_one},
-    {"bulkwrite_append_update_many", l_append_update_many},
-    {"bulkwrite_append_replace_one", l_append_replace_one},
-    {"bulkwrite_append_delete_one", l_append_delete_one},
-    {"bulkwrite_append_delete_many", l_append_delete_many},
-    {"bulkwrite_execute", l_execute},
+    {"bulkwrite_new", l_bulkwrite_new},
+    {"bulkwrite_destroy", l_bulkwrite_destroy},
+    {"bulkwrite_append_insert_one", l_bulkwrite_append_insert_one},
+    {"bulkwrite_append_update_one", l_bulkwrite_append_update_one},
+    {"bulkwrite_append_update_many", l_bulkwrite_append_update_many},
+    {"bulkwrite_append_replace_one", l_bulkwrite_append_replace_one},
+    {"bulkwrite_append_delete_one", l_bulkwrite_append_delete_one},
+    {"bulkwrite_append_delete_many", l_bulkwrite_append_delete_many},
+    {"bulkwrite_execute", l_bulkwrite_execute},
     {nullptr, nullptr},
 };
 
 } // namespace
 
 void RegisterMongoBulkWriteMeta(lua_State* L) {
-    RegisterMetatable(L, kMetaName, nullptr, l_gc);
+    RegisterMetatable(L, kMetaName, nullptr, l_bulkwrite_gc);
 }
 
 const luaL_Reg* GetMongoBulkWriteLib() { return kLib; }

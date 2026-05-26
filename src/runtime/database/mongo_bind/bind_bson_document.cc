@@ -17,7 +17,7 @@ namespace {
 
 const char* kMetaName = "bson.doc";
 
-int l_gc(lua_State* L) {
+int l_bson_doc_gc(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     delete doc;
     *CheckUserdata<mongo::BsonDocument>(L, 1, kMetaName) = nullptr;
@@ -26,7 +26,7 @@ int l_gc(lua_State* L) {
 
 // ── Constructors ──────────────────────────────────────────────────────
 
-int l_new(lua_State* L) {
+int l_bson_doc_new(lua_State* L) {
     auto* doc = new (std::nothrow) mongo::BsonDocument();
     if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
     auto** ud = NewUserdata<mongo::BsonDocument>(L, kMetaName);
@@ -34,9 +34,9 @@ int l_new(lua_State* L) {
     return 1;
 }
 
-int l_destroy(lua_State* L) { l_gc(L); return 0; }
+int l_bson_doc_destroy(lua_State* L) { l_bson_doc_gc(L); return 0; }
 
-int l_from_json(lua_State* L) {
+int l_bson_doc_from_json(lua_State* L) {
     size_t len;
     const char* json = luaL_checklstring(L, 1, &len);
     auto* doc = new (std::nothrow) mongo::BsonDocument(
@@ -47,7 +47,7 @@ int l_from_json(lua_State* L) {
     return 1;
 }
 
-int l_from_data(lua_State* L) {
+int l_bson_doc_from_data(lua_State* L) {
     size_t len;
     const char* data = luaL_checklstring(L, 1, &len);
     auto* doc = new (std::nothrow) mongo::BsonDocument(
@@ -60,7 +60,7 @@ int l_from_data(lua_State* L) {
 
 // ── Serialization ─────────────────────────────────────────────────────
 
-int l_as_json(lua_State* L) {
+int l_bson_doc_as_json(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     if (!doc) { lua_pushnil(L); return 1; }
     std::string json = doc->ToJson();
@@ -68,7 +68,7 @@ int l_as_json(lua_State* L) {
     return 1;
 }
 
-int l_get_data(lua_State* L) {
+int l_bson_doc_get_data(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     if (!doc) { lua_pushnil(L); return 1; }
     const uint8_t* data = doc->GetData();
@@ -79,7 +79,7 @@ int l_get_data(lua_State* L) {
 
 // ── Append fields ─────────────────────────────────────────────────────
 
-int l_append_int32(lua_State* L) {
+int l_bson_doc_append_int32(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     auto val = luaL_checkinteger(L, 3);
@@ -88,7 +88,7 @@ int l_append_int32(lua_State* L) {
     return 1;
 }
 
-int l_append_int64(lua_State* L) {
+int l_bson_doc_append_int64(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     auto value = static_cast<int64_t>(luaL_checkinteger(L, 3));
@@ -96,7 +96,7 @@ int l_append_int64(lua_State* L) {
     return 1;
 }
 
-int l_append_double(lua_State* L) {
+int l_bson_doc_append_double(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     double value = static_cast<double>(luaL_checknumber(L, 3));
@@ -104,7 +104,7 @@ int l_append_double(lua_State* L) {
     return 1;
 }
 
-int l_append_utf8(lua_State* L) {
+int l_bson_doc_append_utf8(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     size_t len;
@@ -113,7 +113,7 @@ int l_append_utf8(lua_State* L) {
     return 1;
 }
 
-int l_append_bool(lua_State* L) {
+int l_bson_doc_append_bool(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     bool value = lua_toboolean(L, 3) != 0;
@@ -121,7 +121,7 @@ int l_append_bool(lua_State* L) {
     return 1;
 }
 
-int l_append_oid(lua_State* L) {
+int l_bson_doc_append_oid(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     const char* oid_str = luaL_checkstring(L, 3);
@@ -135,14 +135,14 @@ int l_append_oid(lua_State* L) {
     return 1;
 }
 
-int l_append_null(lua_State* L) {
+int l_bson_doc_append_null(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     lua_pushboolean(L, doc && doc->AppendNull(key));
     return 1;
 }
 
-int l_append_document(lua_State* L) {
+int l_bson_doc_append_document(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     auto* subdoc = GetUserdata<mongo::BsonDocument>(L, 3, kMetaName);
@@ -150,7 +150,7 @@ int l_append_document(lua_State* L) {
     return 1;
 }
 
-int l_append_timestamp(lua_State* L) {
+int l_bson_doc_append_timestamp(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     auto ts = luaL_checkinteger(L, 3);
@@ -160,7 +160,7 @@ int l_append_timestamp(lua_State* L) {
     return 1;
 }
 
-int l_append_datetime(lua_State* L) {
+int l_bson_doc_append_datetime(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     auto value = static_cast<int64_t>(luaL_checkinteger(L, 3));
@@ -168,7 +168,7 @@ int l_append_datetime(lua_State* L) {
     return 1;
 }
 
-int l_append_binary(lua_State* L) {
+int l_bson_doc_append_binary(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     auto subtype = static_cast<int>(luaL_checkinteger(L, 3));
@@ -179,7 +179,7 @@ int l_append_binary(lua_State* L) {
     return 1;
 }
 
-int l_append_array(lua_State* L) {
+int l_bson_doc_append_array(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     auto* array_doc = GetUserdata<mongo::BsonDocument>(L, 3, kMetaName);
@@ -187,7 +187,7 @@ int l_append_array(lua_State* L) {
     return 1;
 }
 
-int l_append_regex(lua_State* L) {
+int l_bson_doc_append_regex(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     const char* regex = luaL_checkstring(L, 3);
@@ -196,7 +196,7 @@ int l_append_regex(lua_State* L) {
     return 1;
 }
 
-int l_append_code(lua_State* L) {
+int l_bson_doc_append_code(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     const char* code = luaL_checkstring(L, 3);
@@ -204,7 +204,7 @@ int l_append_code(lua_State* L) {
     return 1;
 }
 
-int l_append_symbol(lua_State* L) {
+int l_bson_doc_append_symbol(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     const char* symbol = luaL_checkstring(L, 3);
@@ -212,35 +212,35 @@ int l_append_symbol(lua_State* L) {
     return 1;
 }
 
-int l_append_minkey(lua_State* L) {
+int l_bson_doc_append_minkey(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     lua_pushboolean(L, doc && doc->AppendMinkey(key));
     return 1;
 }
 
-int l_append_maxkey(lua_State* L) {
+int l_bson_doc_append_maxkey(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     lua_pushboolean(L, doc && doc->AppendMaxkey(key));
     return 1;
 }
 
-int l_append_undefined(lua_State* L) {
+int l_bson_doc_append_undefined(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     lua_pushboolean(L, doc && doc->AppendUndefined(key));
     return 1;
 }
 
-int l_append_now_utc(lua_State* L) {
+int l_bson_doc_append_now_utc(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     lua_pushboolean(L, doc && doc->AppendNowUtc(key));
     return 1;
 }
 
-int l_append_decimal128(lua_State* L) {
+int l_bson_doc_append_decimal128(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     const char* dec_str = luaL_checkstring(L, 3);
@@ -255,7 +255,7 @@ int l_append_decimal128(lua_State* L) {
 
 // ── Copy / utility ─────────────────────────────────────────────────────
 
-int l_copy(lua_State* L) {
+int l_bson_doc_copy(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     if (!doc) { lua_pushnil(L); return 1; }
     auto* copy = new (std::nothrow) mongo::BsonDocument(doc->Copy());
@@ -265,20 +265,45 @@ int l_copy(lua_State* L) {
     return 1;
 }
 
-int l_clear(lua_State* L) {
+int l_bson_doc_clear(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     if (doc) doc->Clear();
     return 0;
 }
 
-int l_equal(lua_State* L) {
+int l_bson_doc_equal(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     auto* other = GetUserdata<mongo::BsonDocument>(L, 2, kMetaName);
     lua_pushboolean(L, doc && other && doc->Equal(*other));
     return 1;
 }
 
-int l_validate(lua_State* L) {
+int l_bson_doc_concat(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    auto* src = GetUserdata<mongo::BsonDocument>(L, 2, kMetaName);
+    lua_pushboolean(L, doc && src && doc->Concat(*src));
+    return 1;
+}
+
+int l_bson_doc_compare(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    auto* other = GetUserdata<mongo::BsonDocument>(L, 2, kMetaName);
+    if (!doc || !other) { lua_pushinteger(L, 0); return 1; }
+    lua_pushinteger(L, doc->Compare(*other));
+    return 1;
+}
+
+int l_bson_doc_init_from_json(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    if (!doc) { lua_pushboolean(L, false); return 1; }
+    size_t len;
+    const char* json = luaL_checklstring(L, 2, &len);
+    mongo::MongoError error;
+    lua_pushboolean(L, doc->InitFromJson(json, static_cast<int64_t>(len), &error));
+    return 1;
+}
+
+int l_bson_doc_validate(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     if (!doc) { lua_pushboolean(L, false); lua_pushnil(L); return 2; }
     mongo::MongoError error;
@@ -294,66 +319,69 @@ int l_validate(lua_State* L) {
 
 // ── Query / access ────────────────────────────────────────────────────
 
-int l_count_keys(lua_State* L) {
+int l_bson_doc_count_keys(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     lua_pushinteger(L, doc ? doc->CountKeys() : 0);
     return 1;
 }
 
-int l_has_field(lua_State* L) {
+int l_bson_doc_has_field(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     lua_pushboolean(L, doc && doc->HasField(key));
     return 1;
 }
 
-int l_empty(lua_State* L) {
+int l_bson_doc_empty(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
     lua_pushboolean(L, doc && doc->Empty());
     return 1;
 }
 
 const luaL_Reg kLib[] = {
-    {"new", l_new},
-    {"destroy", l_destroy},
-    {"from_json", l_from_json},
-    {"from_data", l_from_data},
-    {"as_json", l_as_json},
-    {"get_data", l_get_data},
-    {"append_int32", l_append_int32},
-    {"append_int64", l_append_int64},
-    {"append_double", l_append_double},
-    {"append_utf8", l_append_utf8},
-    {"append_bool", l_append_bool},
-    {"append_oid", l_append_oid},
-    {"append_null", l_append_null},
-    {"append_document", l_append_document},
-    {"append_timestamp", l_append_timestamp},
-    {"append_datetime", l_append_datetime},
-    {"append_binary", l_append_binary},
-    {"count_keys", l_count_keys},
-    {"has_field", l_has_field},
-    {"empty", l_empty},
-    {"append_array", l_append_array},
-    {"append_regex", l_append_regex},
-    {"append_code", l_append_code},
-    {"append_symbol", l_append_symbol},
-    {"append_minkey", l_append_minkey},
-    {"append_maxkey", l_append_maxkey},
-    {"append_undefined", l_append_undefined},
-    {"append_now_utc", l_append_now_utc},
-    {"append_decimal128", l_append_decimal128},
-    {"copy", l_copy},
-    {"clear", l_clear},
-    {"equal", l_equal},
-    {"validate", l_validate},
+    {"new", l_bson_doc_new},
+    {"destroy", l_bson_doc_destroy},
+    {"from_json", l_bson_doc_from_json},
+    {"from_data", l_bson_doc_from_data},
+    {"as_json", l_bson_doc_as_json},
+    {"get_data", l_bson_doc_get_data},
+    {"append_int32", l_bson_doc_append_int32},
+    {"append_int64", l_bson_doc_append_int64},
+    {"append_double", l_bson_doc_append_double},
+    {"append_utf8", l_bson_doc_append_utf8},
+    {"append_bool", l_bson_doc_append_bool},
+    {"append_oid", l_bson_doc_append_oid},
+    {"append_null", l_bson_doc_append_null},
+    {"append_document", l_bson_doc_append_document},
+    {"append_timestamp", l_bson_doc_append_timestamp},
+    {"append_datetime", l_bson_doc_append_datetime},
+    {"append_binary", l_bson_doc_append_binary},
+    {"count_keys", l_bson_doc_count_keys},
+    {"has_field", l_bson_doc_has_field},
+    {"empty", l_bson_doc_empty},
+    {"append_array", l_bson_doc_append_array},
+    {"append_regex", l_bson_doc_append_regex},
+    {"append_code", l_bson_doc_append_code},
+    {"append_symbol", l_bson_doc_append_symbol},
+    {"append_minkey", l_bson_doc_append_minkey},
+    {"append_maxkey", l_bson_doc_append_maxkey},
+    {"append_undefined", l_bson_doc_append_undefined},
+    {"append_now_utc", l_bson_doc_append_now_utc},
+    {"append_decimal128", l_bson_doc_append_decimal128},
+    {"copy", l_bson_doc_copy},
+    {"clear", l_bson_doc_clear},
+    {"equal", l_bson_doc_equal},
+    {"concat", l_bson_doc_concat},
+    {"compare", l_bson_doc_compare},
+    {"init_from_json", l_bson_doc_init_from_json},
+    {"validate", l_bson_doc_validate},
     {nullptr, nullptr},
 };
 
 } // namespace
 
 void RegisterBsonDocumentMeta(lua_State* L) {
-    RegisterMetatable(L, kMetaName, nullptr, l_gc);
+    RegisterMetatable(L, kMetaName, nullptr, l_bson_doc_gc);
 }
 
 const luaL_Reg* GetBsonDocumentLib() { return kLib; }

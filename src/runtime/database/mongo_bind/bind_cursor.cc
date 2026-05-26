@@ -16,7 +16,7 @@ namespace {
 
 const char* kMetaName = "mongoc.cursor";
 
-int l_gc(lua_State* L) {
+int l_cursor_gc(lua_State* L) {
     auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
     if (cursor) cursor->Destroy();
     delete cursor;
@@ -24,9 +24,9 @@ int l_gc(lua_State* L) {
     return 0;
 }
 
-int l_destroy(lua_State* L) { l_gc(L); return 0; }
+int l_cursor_destroy(lua_State* L) { l_cursor_gc(L); return 0; }
 
-int l_next(lua_State* L) {
+int l_cursor_next(lua_State* L) {
     auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
     if (!cursor) { lua_pushboolean(L, false); return 1; }
     auto* doc = new (std::nothrow) mongo::BsonDocument();
@@ -50,13 +50,13 @@ int l_next(lua_State* L) {
     return 1;
 }
 
-int l_more(lua_State* L) {
+int l_cursor_more(lua_State* L) {
     auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
     lua_pushboolean(L, cursor && cursor->More());
     return 1;
 }
 
-int l_set_batch_size(lua_State* L) {
+int l_cursor_set_batch_size(lua_State* L) {
     auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
     auto val = luaL_checkinteger(L, 2);
     if (val < 0 || val > UINT32_MAX) return 0;
@@ -64,54 +64,81 @@ int l_set_batch_size(lua_State* L) {
     return 0;
 }
 
-int l_set_limit(lua_State* L) {
+int l_cursor_set_limit(lua_State* L) {
     auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
     auto val = static_cast<int64_t>(luaL_checkinteger(L, 2));
     if (cursor) cursor->SetLimit(val);
     return 0;
 }
 
-int l_get_batch_size(lua_State* L) {
+int l_cursor_get_batch_size(lua_State* L) {
     auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
     lua_pushinteger(L, cursor ? cursor->GetBatchSize() : 0);
     return 1;
 }
 
-int l_get_server_id(lua_State* L) {
+int l_cursor_get_server_id(lua_State* L) {
     auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
     lua_pushinteger(L, cursor ? cursor->GetServerId() : 0);
     return 1;
 }
 
-int l_get_id(lua_State* L) {
+int l_cursor_get_id(lua_State* L) {
     auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
     lua_pushinteger(L, cursor ? cursor->GetId() : 0);
     return 1;
 }
 
-int l_get_limit(lua_State* L) {
+int l_cursor_get_limit(lua_State* L) {
     auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
     lua_pushinteger(L, cursor ? cursor->GetLimit() : 0);
     return 1;
 }
 
+int l_cursor_set_max_await_time_ms(lua_State* L) {
+    auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
+    auto val = luaL_checkinteger(L, 2);
+    if (val < 0 || val > UINT32_MAX) return 0;
+    if (cursor) cursor->SetMaxAwaitTimeMs(static_cast<uint32_t>(val));
+    return 0;
+}
+
+int l_cursor_get_max_await_time_ms(lua_State* L) {
+    auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
+    lua_pushinteger(L, cursor ? cursor->GetMaxAwaitTimeMs() : 0);
+    return 1;
+}
+
+int l_cursor_clone(lua_State* L) {
+    auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
+    if (!cursor) { lua_pushnil(L); return 1; }
+    auto* clone = cursor->Clone();
+    if (!clone) { lua_pushnil(L); return 1; }
+    auto** ud = NewUserdata<mongo::MongoCursor>(L, kMetaName);
+    *ud = clone;
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
-    {"cursor_destroy", l_destroy},
-    {"cursor_next", l_next},
-    {"cursor_more", l_more},
-    {"cursor_set_batch_size", l_set_batch_size},
-    {"cursor_set_limit", l_set_limit},
-    {"cursor_get_batch_size", l_get_batch_size},
-    {"cursor_get_server_id", l_get_server_id},
-    {"cursor_get_id", l_get_id},
-    {"cursor_get_limit", l_get_limit},
+    {"cursor_destroy", l_cursor_destroy},
+    {"cursor_next", l_cursor_next},
+    {"cursor_more", l_cursor_more},
+    {"cursor_set_batch_size", l_cursor_set_batch_size},
+    {"cursor_set_limit", l_cursor_set_limit},
+    {"cursor_get_batch_size", l_cursor_get_batch_size},
+    {"cursor_get_server_id", l_cursor_get_server_id},
+    {"cursor_get_id", l_cursor_get_id},
+    {"cursor_get_limit", l_cursor_get_limit},
+    {"cursor_set_max_await_time_ms", l_cursor_set_max_await_time_ms},
+    {"cursor_get_max_await_time_ms", l_cursor_get_max_await_time_ms},
+    {"cursor_clone", l_cursor_clone},
     {nullptr, nullptr},
 };
 
 } // namespace
 
 void RegisterMongoCursorMeta(lua_State* L) {
-    RegisterMetatable(L, kMetaName, nullptr, l_gc);
+    RegisterMetatable(L, kMetaName, nullptr, l_cursor_gc);
 }
 
 const luaL_Reg* GetMongoCursorLib() { return kLib; }

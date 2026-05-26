@@ -21,7 +21,7 @@ namespace {
 
 const char* kMetaName = "mongoc.collection";
 
-int l_gc(lua_State* L) {
+int l_coll_gc(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     if (coll) coll->Destroy();
     delete coll;
@@ -29,9 +29,9 @@ int l_gc(lua_State* L) {
     return 0;
 }
 
-int l_destroy(lua_State* L) { l_gc(L); return 0; }
+int l_coll_destroy(lua_State* L) { l_coll_gc(L); return 0; }
 
-int l_insert_one(lua_State* L) {
+int l_coll_insert_one(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     auto* opts = lua_isnoneornil(L, 3) ? nullptr
@@ -46,7 +46,7 @@ int l_insert_one(lua_State* L) {
     return 2;
 }
 
-int l_find(lua_State* L) {
+int l_coll_find(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* filter = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     auto* opts = lua_isnoneornil(L, 3) ? nullptr
@@ -59,7 +59,7 @@ int l_find(lua_State* L) {
     return 1;
 }
 
-int l_update_one(lua_State* L) {
+int l_coll_update_one(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* selector = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     auto* update = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
@@ -77,7 +77,7 @@ int l_update_one(lua_State* L) {
     return 2;
 }
 
-int l_update_many(lua_State* L) {
+int l_coll_update_many(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* selector = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     auto* update = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
@@ -95,7 +95,7 @@ int l_update_many(lua_State* L) {
     return 2;
 }
 
-int l_delete_one(lua_State* L) {
+int l_coll_delete_one(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* selector = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     auto* opts = lua_isnoneornil(L, 3) ? nullptr
@@ -112,7 +112,7 @@ int l_delete_one(lua_State* L) {
     return 2;
 }
 
-int l_delete_many(lua_State* L) {
+int l_coll_delete_many(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* selector = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     auto* opts = lua_isnoneornil(L, 3) ? nullptr
@@ -129,7 +129,7 @@ int l_delete_many(lua_State* L) {
     return 2;
 }
 
-int l_count(lua_State* L) {
+int l_coll_count(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* filter = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     auto* opts = lua_isnoneornil(L, 3) ? nullptr
@@ -147,7 +147,7 @@ int l_count(lua_State* L) {
     return 1;
 }
 
-int l_drop(lua_State* L) {
+int l_coll_drop(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     if (!coll) { lua_pushboolean(L, false); lua_pushnil(L); return 2; }
     mongo::MongoError error;
@@ -158,7 +158,7 @@ int l_drop(lua_State* L) {
     return 2;
 }
 
-int l_get_name(lua_State* L) {
+int l_coll_get_name(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     const char* name = coll ? coll->GetName() : nullptr;
     if (name) lua_pushstring(L, name);
@@ -166,28 +166,28 @@ int l_get_name(lua_State* L) {
     return 1;
 }
 
-int l_set_read_prefs(lua_State* L) {
+int l_coll_set_read_prefs(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* prefs = GetUserdata<mongo::MongoReadPrefs>(L, 2, "mongoc.read_prefs");
     if (coll && prefs) coll->SetReadPrefs(*prefs);
     return 0;
 }
 
-int l_set_write_concern(lua_State* L) {
+int l_coll_set_write_concern(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 2, "mongoc.write_concern");
     if (coll && concern) coll->SetWriteConcern(*concern);
     return 0;
 }
 
-int l_set_read_concern(lua_State* L) {
+int l_coll_set_read_concern(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* concern = GetUserdata<mongo::MongoReadConcern>(L, 2, "mongoc.read_concern");
     if (coll && concern) coll->SetReadConcern(*concern);
     return 0;
 }
 
-int l_watch(lua_State* L) {
+int l_coll_watch(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* pipeline = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     auto* opts = lua_isnoneornil(L, 3) ? nullptr
@@ -200,7 +200,7 @@ int l_watch(lua_State* L) {
     return 1;
 }
 
-int l_find_and_modify(lua_State* L) {
+int l_coll_find_and_modify(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* query = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     auto* opts = lua_isnoneornil(L, 3) ? nullptr
@@ -221,7 +221,7 @@ int l_find_and_modify(lua_State* L) {
     return 3;
 }
 
-int l_create_index(lua_State* L) {
+int l_coll_create_index(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* keys = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     auto* opts = lua_isnoneornil(L, 3) ? nullptr
@@ -242,7 +242,7 @@ int l_create_index(lua_State* L) {
     return 3;
 }
 
-int l_drop_index(lua_State* L) {
+int l_coll_drop_index(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     const char* name = luaL_checkstring(L, 2);
     if (!coll) { lua_pushboolean(L, false); return 1; }
@@ -251,7 +251,7 @@ int l_drop_index(lua_State* L) {
     return 1;
 }
 
-int l_find_indexes(lua_State* L) {
+int l_coll_find_indexes(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* opts = lua_isnoneornil(L, 2) ? nullptr
                   : GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
@@ -263,7 +263,7 @@ int l_find_indexes(lua_State* L) {
     return 1;
 }
 
-int l_create_bulk_operation(lua_State* L) {
+int l_coll_create_bulk_operation(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     bool ordered = lua_toboolean(L, 2) != 0;
     if (!coll) { lua_pushnil(L); return 1; }
@@ -274,7 +274,54 @@ int l_create_bulk_operation(lua_State* L) {
     return 1;
 }
 
-int l_replace_one(lua_State* L) {
+int l_coll_create_bulk_operation_with_opts(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    auto* opts = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    if (!coll || !opts) { lua_pushnil(L); return 1; }
+    auto* bulk = coll->CreateBulkOperationWithOpts(opts);
+    if (!bulk) { lua_pushnil(L); return 1; }
+    auto** ud = NewUserdata<mongo::MongoBulkOperation>(L, "mongoc.bulk_operation");
+    *ud = bulk;
+    return 1;
+}
+
+int l_coll_drop_index_with_opts(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    const char* name = luaL_checkstring(L, 2);
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr
+                  : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    if (!coll) { lua_pushboolean(L, false); return 1; }
+    mongo::MongoError error;
+    lua_pushboolean(L, coll->DropIndexWithOpts(name, opts, &error));
+    return 1;
+}
+
+int l_coll_estimated_document_count(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    auto* opts = lua_isnoneornil(L, 2) ? nullptr
+                  : GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* prefs = lua_isnoneornil(L, 3) ? nullptr
+                   : GetUserdata<mongo::MongoReadPrefs>(L, 3, "mongoc.read_prefs");
+    if (!coll) { lua_pushnil(L); return 1; }
+    mongo::MongoError error;
+    int64_t count = coll->EstimatedDocumentCount(opts, prefs, &error);
+    if (count < 0) { lua_pushnil(L); lua_pushstring(L, error.Message()); return 2; }
+    lua_pushinteger(L, static_cast<lua_Integer>(count));
+    return 1;
+}
+
+int l_coll_rename(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    const char* new_db = luaL_checkstring(L, 2);
+    const char* new_name = luaL_checkstring(L, 3);
+    bool drop_target = lua_toboolean(L, 4) != 0;
+    if (!coll) { lua_pushboolean(L, false); return 1; }
+    mongo::MongoError error;
+    lua_pushboolean(L, coll->Rename(new_db, new_name, drop_target, &error));
+    return 1;
+}
+
+int l_coll_replace_one(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* selector = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     auto* replacement = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
@@ -292,7 +339,7 @@ int l_replace_one(lua_State* L) {
     return 2;
 }
 
-int l_insert_many(lua_State* L) {
+int l_coll_insert_many(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     if (!coll || !lua_istable(L, 2)) { lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2; }
 
@@ -317,7 +364,7 @@ int l_insert_many(lua_State* L) {
     return 2;
 }
 
-int l_aggregate(lua_State* L) {
+int l_coll_aggregate(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* pipeline = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     auto* opts = lua_isnoneornil(L, 3) ? nullptr
@@ -331,35 +378,39 @@ int l_aggregate(lua_State* L) {
 }
 
 const luaL_Reg kLib[] = {
-    {"coll_destroy", l_destroy},
-    {"coll_insert_one", l_insert_one},
-    {"coll_find", l_find},
-    {"coll_update_one", l_update_one},
-    {"coll_update_many", l_update_many},
-    {"coll_replace_one", l_replace_one},
-    {"coll_delete_one", l_delete_one},
-    {"coll_delete_many", l_delete_many},
-    {"coll_insert_many", l_insert_many},
-    {"coll_aggregate", l_aggregate},
-    {"coll_count", l_count},
-    {"coll_drop", l_drop},
-    {"coll_get_name", l_get_name},
-    {"coll_set_read_prefs", l_set_read_prefs},
-    {"coll_set_write_concern", l_set_write_concern},
-    {"coll_set_read_concern", l_set_read_concern},
-    {"coll_watch", l_watch},
-    {"coll_find_and_modify", l_find_and_modify},
-    {"coll_create_index", l_create_index},
-    {"coll_drop_index", l_drop_index},
-    {"coll_find_indexes", l_find_indexes},
-    {"coll_create_bulk_operation", l_create_bulk_operation},
+    {"coll_destroy", l_coll_destroy},
+    {"coll_insert_one", l_coll_insert_one},
+    {"coll_find", l_coll_find},
+    {"coll_update_one", l_coll_update_one},
+    {"coll_update_many", l_coll_update_many},
+    {"coll_replace_one", l_coll_replace_one},
+    {"coll_delete_one", l_coll_delete_one},
+    {"coll_delete_many", l_coll_delete_many},
+    {"coll_insert_many", l_coll_insert_many},
+    {"coll_aggregate", l_coll_aggregate},
+    {"coll_count", l_coll_count},
+    {"coll_drop", l_coll_drop},
+    {"coll_get_name", l_coll_get_name},
+    {"coll_set_read_prefs", l_coll_set_read_prefs},
+    {"coll_set_write_concern", l_coll_set_write_concern},
+    {"coll_set_read_concern", l_coll_set_read_concern},
+    {"coll_watch", l_coll_watch},
+    {"coll_find_and_modify", l_coll_find_and_modify},
+    {"coll_create_index", l_coll_create_index},
+    {"coll_drop_index", l_coll_drop_index},
+    {"coll_find_indexes", l_coll_find_indexes},
+    {"coll_create_bulk_operation", l_coll_create_bulk_operation},
+    {"coll_create_bulk_operation_with_opts", l_coll_create_bulk_operation_with_opts},
+    {"coll_drop_index_with_opts", l_coll_drop_index_with_opts},
+    {"coll_estimated_document_count", l_coll_estimated_document_count},
+    {"coll_rename", l_coll_rename},
     {nullptr, nullptr},
 };
 
 } // namespace
 
 void RegisterMongoCollectionMeta(lua_State* L) {
-    RegisterMetatable(L, kMetaName, nullptr, l_gc);
+    RegisterMetatable(L, kMetaName, nullptr, l_coll_gc);
 }
 
 const luaL_Reg* GetMongoCollectionLib() { return kLib; }

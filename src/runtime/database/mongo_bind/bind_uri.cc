@@ -14,14 +14,14 @@ namespace {
 
 const char* kMetaName = "mongoc.uri";
 
-int l_gc(lua_State* L) {
+int l_uri_gc(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     delete uri;
     *CheckUserdata<mongo::MongoUri>(L, 1, kMetaName) = nullptr;
     return 0;
 }
 
-int l_new(lua_State* L) {
+int l_uri_new(lua_State* L) {
     const char* uri_str = luaL_checkstring(L, 1);
     auto* uri = new (std::nothrow) mongo::MongoUri(mongo::MongoUri::New(uri_str));
     if (!uri) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
@@ -30,9 +30,9 @@ int l_new(lua_State* L) {
     return 1;
 }
 
-int l_destroy(lua_State* L) { l_gc(L); return 0; }
+int l_uri_destroy(lua_State* L) { l_uri_gc(L); return 0; }
 
-int l_get_string(lua_State* L) {
+int l_uri_get_string(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     if (!uri) { lua_pushnil(L); return 1; }
     const char* s = uri->GetString();
@@ -41,7 +41,7 @@ int l_get_string(lua_State* L) {
     return 1;
 }
 
-int l_get_database(lua_State* L) {
+int l_uri_get_database(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     if (!uri) { lua_pushnil(L); return 1; }
     const char* s = uri->GetDatabase();
@@ -50,21 +50,21 @@ int l_get_database(lua_State* L) {
     return 1;
 }
 
-int l_set_database(lua_State* L) {
+int l_uri_set_database(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     const char* db = luaL_checkstring(L, 2);
     lua_pushboolean(L, uri && uri->SetDatabase(db));
     return 1;
 }
 
-int l_set_appname(lua_State* L) {
+int l_uri_set_appname(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     const char* appname = luaL_checkstring(L, 2);
     lua_pushboolean(L, uri && uri->SetAppname(appname));
     return 1;
 }
 
-int l_get_appname(lua_State* L) {
+int l_uri_get_appname(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     if (!uri) { lua_pushnil(L); return 1; }
     const char* s = uri->GetAppname();
@@ -73,7 +73,7 @@ int l_get_appname(lua_State* L) {
     return 1;
 }
 
-int l_get_username(lua_State* L) {
+int l_uri_get_username(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     if (!uri) { lua_pushnil(L); return 1; }
     const char* s = uri->GetUsername();
@@ -82,7 +82,7 @@ int l_get_username(lua_State* L) {
     return 1;
 }
 
-int l_get_password(lua_State* L) {
+int l_uri_get_password(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     if (!uri) { lua_pushnil(L); return 1; }
     const char* s = uri->GetPassword();
@@ -91,7 +91,7 @@ int l_get_password(lua_State* L) {
     return 1;
 }
 
-int l_get_auth_source(lua_State* L) {
+int l_uri_get_auth_source(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     if (!uri) { lua_pushnil(L); return 1; }
     const char* s = uri->GetAuthSource();
@@ -100,7 +100,7 @@ int l_get_auth_source(lua_State* L) {
     return 1;
 }
 
-int l_get_auth_mechanism(lua_State* L) {
+int l_uri_get_auth_mechanism(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     if (!uri) { lua_pushnil(L); return 1; }
     const char* s = uri->GetAuthMechanism();
@@ -109,7 +109,7 @@ int l_get_auth_mechanism(lua_State* L) {
     return 1;
 }
 
-int l_get_replica_set(lua_State* L) {
+int l_uri_get_replica_set(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     if (!uri) { lua_pushnil(L); return 1; }
     const char* s = uri->GetReplicaSet();
@@ -118,62 +118,62 @@ int l_get_replica_set(lua_State* L) {
     return 1;
 }
 
-int l_get_tls(lua_State* L) {
+int l_uri_get_tls(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     lua_pushboolean(L, uri && uri->GetTls());
     return 1;
 }
 
-int l_has_option(lua_State* L) {
+int l_uri_has_option(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     const char* key = luaL_checkstring(L, 2);
     lua_pushboolean(L, uri && uri->HasOption(key));
     return 1;
 }
 
-int l_set_username(lua_State* L) {
+int l_uri_set_username(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     const char* val = luaL_checkstring(L, 2);
     lua_pushboolean(L, uri && uri->SetUsername(val));
     return 1;
 }
 
-int l_set_password(lua_State* L) {
+int l_uri_set_password(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     const char* val = luaL_checkstring(L, 2);
     lua_pushboolean(L, uri && uri->SetPassword(val));
     return 1;
 }
 
-int l_set_auth_source(lua_State* L) {
+int l_uri_set_auth_source(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     const char* val = luaL_checkstring(L, 2);
     lua_pushboolean(L, uri && uri->SetAuthSource(val));
     return 1;
 }
 
-int l_set_auth_mechanism(lua_State* L) {
+int l_uri_set_auth_mechanism(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     const char* val = luaL_checkstring(L, 2);
     lua_pushboolean(L, uri && uri->SetAuthMechanism(val));
     return 1;
 }
 
-int l_set_compressors(lua_State* L) {
+int l_uri_set_compressors(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     const char* val = luaL_checkstring(L, 2);
     lua_pushboolean(L, uri && uri->SetCompressors(val));
     return 1;
 }
 
-int l_set_mechanism_properties(lua_State* L) {
+int l_uri_set_mechanism_properties(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     auto* props = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     lua_pushboolean(L, uri && props && uri->SetMechanismProperties(*props));
     return 1;
 }
 
-int l_set_read_prefs(lua_State* L) {
+int l_uri_set_read_prefs(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     auto* prefs = GetUserdata<mongo::MongoReadPrefs>(L, 2, "mongoc.read_prefs");
     if (!uri || !prefs) { lua_pushboolean(L, false); return 1; }
@@ -182,7 +182,7 @@ int l_set_read_prefs(lua_State* L) {
     return 1;
 }
 
-int l_set_write_concern(lua_State* L) {
+int l_uri_set_write_concern(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 2, "mongoc.write_concern");
     if (!uri || !concern) { lua_pushboolean(L, false); return 1; }
@@ -191,7 +191,7 @@ int l_set_write_concern(lua_State* L) {
     return 1;
 }
 
-int l_set_read_concern(lua_State* L) {
+int l_uri_set_read_concern(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     auto* concern = GetUserdata<mongo::MongoReadConcern>(L, 2, "mongoc.read_concern");
     if (!uri || !concern) { lua_pushboolean(L, false); return 1; }
@@ -200,14 +200,14 @@ int l_set_read_concern(lua_State* L) {
     return 1;
 }
 
-int l_set_server_monitoring_mode(lua_State* L) {
+int l_uri_set_server_monitoring_mode(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     const char* mode = luaL_checkstring(L, 2);
     lua_pushboolean(L, uri && uri->SetServerMonitoringMode(mode));
     return 1;
 }
 
-int l_get_option_int32(lua_State* L) {
+int l_uri_get_option_int32(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     const char* opt = luaL_checkstring(L, 2);
     auto fallback = static_cast<int32_t>(luaL_optinteger(L, 3, 0));
@@ -215,7 +215,7 @@ int l_get_option_int32(lua_State* L) {
     return 1;
 }
 
-int l_set_option_int32(lua_State* L) {
+int l_uri_set_option_int32(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     const char* opt = luaL_checkstring(L, 2);
     auto val = static_cast<int32_t>(luaL_checkinteger(L, 3));
@@ -223,7 +223,7 @@ int l_set_option_int32(lua_State* L) {
     return 1;
 }
 
-int l_set_option_bool(lua_State* L) {
+int l_uri_set_option_bool(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     const char* opt = luaL_checkstring(L, 2);
     bool val = lua_toboolean(L, 3) != 0;
@@ -232,40 +232,40 @@ int l_set_option_bool(lua_State* L) {
 }
 
 const luaL_Reg kLib[] = {
-    {"uri_new", l_new},
-    {"uri_destroy", l_destroy},
-    {"uri_get_string", l_get_string},
-    {"uri_get_database", l_get_database},
-    {"uri_set_database", l_set_database},
-    {"uri_set_appname", l_set_appname},
-    {"uri_get_appname", l_get_appname},
-    {"uri_set_username", l_set_username},
-    {"uri_set_password", l_set_password},
-    {"uri_set_auth_source", l_set_auth_source},
-    {"uri_set_auth_mechanism", l_set_auth_mechanism},
-    {"uri_set_compressors", l_set_compressors},
-    {"uri_get_option_int32", l_get_option_int32},
-    {"uri_set_option_int32", l_set_option_int32},
-    {"uri_set_option_bool", l_set_option_bool},
-    {"uri_get_username", l_get_username},
-    {"uri_get_password", l_get_password},
-    {"uri_get_auth_source", l_get_auth_source},
-    {"uri_get_auth_mechanism", l_get_auth_mechanism},
-    {"uri_get_replica_set", l_get_replica_set},
-    {"uri_get_tls", l_get_tls},
-    {"uri_has_option", l_has_option},
-    {"uri_set_mechanism_properties", l_set_mechanism_properties},
-    {"uri_set_read_prefs", l_set_read_prefs},
-    {"uri_set_write_concern", l_set_write_concern},
-    {"uri_set_read_concern", l_set_read_concern},
-    {"uri_set_server_monitoring_mode", l_set_server_monitoring_mode},
+    {"uri_new", l_uri_new},
+    {"uri_destroy", l_uri_destroy},
+    {"uri_get_string", l_uri_get_string},
+    {"uri_get_database", l_uri_get_database},
+    {"uri_set_database", l_uri_set_database},
+    {"uri_set_appname", l_uri_set_appname},
+    {"uri_get_appname", l_uri_get_appname},
+    {"uri_set_username", l_uri_set_username},
+    {"uri_set_password", l_uri_set_password},
+    {"uri_set_auth_source", l_uri_set_auth_source},
+    {"uri_set_auth_mechanism", l_uri_set_auth_mechanism},
+    {"uri_set_compressors", l_uri_set_compressors},
+    {"uri_get_option_int32", l_uri_get_option_int32},
+    {"uri_set_option_int32", l_uri_set_option_int32},
+    {"uri_set_option_bool", l_uri_set_option_bool},
+    {"uri_get_username", l_uri_get_username},
+    {"uri_get_password", l_uri_get_password},
+    {"uri_get_auth_source", l_uri_get_auth_source},
+    {"uri_get_auth_mechanism", l_uri_get_auth_mechanism},
+    {"uri_get_replica_set", l_uri_get_replica_set},
+    {"uri_get_tls", l_uri_get_tls},
+    {"uri_has_option", l_uri_has_option},
+    {"uri_set_mechanism_properties", l_uri_set_mechanism_properties},
+    {"uri_set_read_prefs", l_uri_set_read_prefs},
+    {"uri_set_write_concern", l_uri_set_write_concern},
+    {"uri_set_read_concern", l_uri_set_read_concern},
+    {"uri_set_server_monitoring_mode", l_uri_set_server_monitoring_mode},
     {nullptr, nullptr},
 };
 
 } // namespace
 
 void RegisterMongoUriMeta(lua_State* L) {
-    RegisterMetatable(L, kMetaName, nullptr, l_gc);
+    RegisterMetatable(L, kMetaName, nullptr, l_uri_gc);
 }
 
 const luaL_Reg* GetMongoUriLib() { return kLib; }
