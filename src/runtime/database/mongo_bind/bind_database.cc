@@ -261,6 +261,36 @@ int l_db_write_command_with_opts(lua_State* L) {
     return 3;
 }
 
+int l_db_get_collection_names_with_opts(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    auto* opts = lua_isnoneornil(L, 2) ? nullptr
+                 : GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    if (!db) { lua_pushnil(L); return 1; }
+    mongo::MongoError error;
+    char** names = db->GetCollectionNamesWithOpts(opts, &error);
+    if (!names) { lua_pushnil(L); lua_pushstring(L, error.Message()); return 2; }
+    lua_newtable(L);
+    int i = 1;
+    for (char** p = names; *p; ++p) {
+        lua_pushstring(L, *p);
+        lua_rawseti(L, -2, i++);
+    }
+    bson_strfreev(names);
+    return 1;
+}
+
+int l_db_find_collections_with_opts(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    auto* opts = lua_isnoneornil(L, 2) ? nullptr
+                 : GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    if (!db) { lua_pushnil(L); return 1; }
+    auto* cursor = db->FindCollectionsWithOpts(opts);
+    if (!cursor) { lua_pushnil(L); return 1; }
+    auto** ud = NewUserdata<mongo::MongoCursor>(L, "mongoc.cursor");
+    *ud = cursor;
+    return 1;
+}
+
 int l_db_read_write_command_with_opts(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     auto* cmd = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
@@ -304,6 +334,8 @@ const luaL_Reg kLib[] = {
     {"db_read_command_with_opts", l_db_read_command_with_opts},
     {"db_write_command_with_opts", l_db_write_command_with_opts},
     {"db_read_write_command_with_opts", l_db_read_write_command_with_opts},
+    {"db_get_collection_names_with_opts", l_db_get_collection_names_with_opts},
+    {"db_find_collections_with_opts", l_db_find_collections_with_opts},
     {nullptr, nullptr},
 };
 

@@ -333,6 +333,19 @@ int l_coll_rename(lua_State* L) {
     return 1;
 }
 
+int l_coll_rename_with_opts(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    const char* new_db = luaL_checkstring(L, 2);
+    const char* new_name = luaL_checkstring(L, 3);
+    bool drop_target = lua_toboolean(L, 4) != 0;
+    auto* opts = lua_isnoneornil(L, 5) ? nullptr
+                 : GetUserdata<mongo::BsonDocument>(L, 5, "bson.doc");
+    if (!coll) { lua_pushboolean(L, false); return 1; }
+    mongo::MongoError error;
+    lua_pushboolean(L, coll->RenameWithOpts(new_db, new_name, drop_target, opts, &error));
+    return 1;
+}
+
 int l_coll_replace_one(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* selector = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
@@ -551,6 +564,7 @@ const luaL_Reg kLib[] = {
     {"coll_drop_index_with_opts", l_coll_drop_index_with_opts},
     {"coll_estimated_document_count", l_coll_estimated_document_count},
     {"coll_rename", l_coll_rename},
+    {"coll_rename_with_opts", l_coll_rename_with_opts},
     {"coll_command_simple", l_coll_command_simple},
     {"coll_command_with_opts", l_coll_command_with_opts},
     {"coll_read_command_with_opts", l_coll_read_command_with_opts},

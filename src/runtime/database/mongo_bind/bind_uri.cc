@@ -284,6 +284,33 @@ int l_uri_set_option_as_utf8(lua_State* L) {
     return 1;
 }
 
+int l_uri_get_srv_hostname(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    const char* s = uri->GetSrvHostname();
+    if (s) lua_pushstring(L, s);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_uri_get_srv_service_name(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    const char* s = uri->GetSrvServiceName();
+    if (s) lua_pushstring(L, s);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_uri_get_server_monitoring_mode(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    const char* s = uri->GetServerMonitoringMode();
+    if (s) lua_pushstring(L, s);
+    else lua_pushnil(L);
+    return 1;
+}
+
 int l_uri_get_mechanism_properties(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     if (!uri) { lua_pushnil(L); return 1; }
@@ -333,6 +360,9 @@ const luaL_Reg kLib[] = {
     {"uri_get_option_as_utf8", l_uri_get_option_as_utf8},
     {"uri_set_option_as_int64", l_uri_set_option_as_int64},
     {"uri_set_option_as_utf8", l_uri_set_option_as_utf8},
+    {"uri_get_srv_hostname", l_uri_get_srv_hostname},
+    {"uri_get_srv_service_name", l_uri_get_srv_service_name},
+    {"uri_get_server_monitoring_mode", l_uri_get_server_monitoring_mode},
     {"uri_get_mechanism_properties", l_uri_get_mechanism_properties},
     {nullptr, nullptr},
 };

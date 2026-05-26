@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <new>
 
+#include <bson/bson.h>
+
 #include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_cursor.h"
 #include "runtime/database/mongo/mongo_error.h"
@@ -136,6 +138,19 @@ int l_cursor_error_document(lua_State* L) {
     return 2;
 }
 
+int l_cursor_current(lua_State* L) {
+    auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
+    if (!cursor) { lua_pushnil(L); return 1; }
+    auto* raw = static_cast<const bson_t*>(cursor->Current());
+    if (!raw) { lua_pushnil(L); return 1; }
+    auto* doc = new (std::nothrow) mongo::BsonDocument(
+        mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+    *ud = doc;
+    return 1;
+}
+
 int l_cursor_clone(lua_State* L) {
     auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
     if (!cursor) { lua_pushnil(L); return 1; }
@@ -158,6 +173,7 @@ const luaL_Reg kLib[] = {
     {"cursor_get_limit", l_cursor_get_limit},
     {"cursor_set_max_await_time_ms", l_cursor_set_max_await_time_ms},
     {"cursor_get_max_await_time_ms", l_cursor_get_max_await_time_ms},
+    {"cursor_current", l_cursor_current},
     {"cursor_clone", l_cursor_clone},
     {"cursor_set_server_id", l_cursor_set_server_id},
     {"cursor_has_error", l_cursor_has_error},

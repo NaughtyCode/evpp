@@ -5,6 +5,8 @@
 
 #include <new>
 
+#include <bson/bson.h>
+
 #include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_error.h"
 #include "runtime/database/mongo/mongo_session.h"
@@ -106,6 +108,32 @@ int l_session_advance_operation_time(lua_State* L) {
     return 0;
 }
 
+int l_session_get_cluster_time_raw(lua_State* L) {
+    auto* session = GetUserdata<mongo::MongoSession>(L, 1, kMetaName);
+    if (!session) { lua_pushnil(L); return 1; }
+    auto* raw = static_cast<const bson_t*>(session->GetClusterTimeRaw());
+    if (!raw) { lua_pushnil(L); return 1; }
+    auto* doc = new (std::nothrow) mongo::BsonDocument(
+        mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+    *ud = doc;
+    return 1;
+}
+
+int l_session_get_session_id_raw(lua_State* L) {
+    auto* session = GetUserdata<mongo::MongoSession>(L, 1, kMetaName);
+    if (!session) { lua_pushnil(L); return 1; }
+    auto* raw = static_cast<const bson_t*>(session->GetSessionIdRaw());
+    if (!raw) { lua_pushnil(L); return 1; }
+    auto* doc = new (std::nothrow) mongo::BsonDocument(
+        mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+    *ud = doc;
+    return 1;
+}
+
 int l_session_append_to_opts(lua_State* L) {
     auto* session = GetUserdata<mongo::MongoSession>(L, 1, kMetaName);
     auto* opts = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
@@ -128,6 +156,8 @@ const luaL_Reg kLib[] = {
     {"session_get_operation_time", l_session_get_operation_time},
     {"session_advance_operation_time", l_session_advance_operation_time},
     {"session_append_to_opts", l_session_append_to_opts},
+    {"session_get_cluster_time_raw", l_session_get_cluster_time_raw},
+    {"session_get_session_id_raw", l_session_get_session_id_raw},
     {nullptr, nullptr},
 };
 
