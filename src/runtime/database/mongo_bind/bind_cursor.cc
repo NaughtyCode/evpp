@@ -83,6 +83,12 @@ int l_get_server_id(lua_State* L) {
     return 1;
 }
 
+int l_get_limit(lua_State* L) {
+    auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
+    lua_pushinteger(L, cursor ? cursor->GetLimit() : 0);
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"cursor_destroy", l_destroy},
     {"cursor_next", l_next},
@@ -91,6 +97,7 @@ const luaL_Reg kLib[] = {
     {"cursor_set_limit", l_set_limit},
     {"cursor_get_batch_size", l_get_batch_size},
     {"cursor_get_server_id", l_get_server_id},
+    {"cursor_get_limit", l_get_limit},
     {nullptr, nullptr},
 };
 

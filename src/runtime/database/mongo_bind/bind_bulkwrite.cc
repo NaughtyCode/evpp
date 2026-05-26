@@ -74,6 +74,51 @@ int l_append_delete_one(lua_State* L) {
     return 2;
 }
 
+int l_append_update_many(lua_State* L) {
+    auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
+    const char* ns = luaL_checkstring(L, 2);
+    auto* filter = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    auto* update = GetUserdata<mongo::BsonDocument>(L, 4, "bson.doc");
+    if (!bw || !filter || !update) {
+        lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2;
+    }
+    mongo::MongoError error;
+    bool ok = bw->AppendUpdateMany(ns, *filter, *update, nullptr, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
+int l_append_replace_one(lua_State* L) {
+    auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
+    const char* ns = luaL_checkstring(L, 2);
+    auto* filter = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    auto* replacement = GetUserdata<mongo::BsonDocument>(L, 4, "bson.doc");
+    if (!bw || !filter || !replacement) {
+        lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2;
+    }
+    mongo::MongoError error;
+    bool ok = bw->AppendReplaceOne(ns, *filter, *replacement, nullptr, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
+int l_append_delete_many(lua_State* L) {
+    auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
+    const char* ns = luaL_checkstring(L, 2);
+    auto* filter = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    if (!bw || !filter) { lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::MongoError error;
+    bool ok = bw->AppendDeleteMany(ns, *filter, nullptr, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
 int l_execute(lua_State* L) {
     auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
     if (!bw) { lua_pushnil(L); lua_pushstring(L, "invalid bulk write"); return 2; }
@@ -111,7 +156,10 @@ const luaL_Reg kLib[] = {
     {"bulkwrite_destroy", l_destroy},
     {"bulkwrite_append_insert_one", l_append_insert_one},
     {"bulkwrite_append_update_one", l_append_update_one},
+    {"bulkwrite_append_update_many", l_append_update_many},
+    {"bulkwrite_append_replace_one", l_append_replace_one},
     {"bulkwrite_append_delete_one", l_append_delete_one},
+    {"bulkwrite_append_delete_many", l_append_delete_many},
     {"bulkwrite_execute", l_execute},
     {nullptr, nullptr},
 };

@@ -136,6 +136,87 @@ int l_offset(lua_State* L) {
     return 1;
 }
 
+// ── Document / array accessors ──────────────────────────────────────────
+
+int l_as_document(lua_State* L) {
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
+    if (!iter) { lua_pushnil(L); return 1; }
+    uint32_t len;
+    const uint8_t* data;
+    iter->AsDocument(&len, &data);
+    auto* doc = new (std::nothrow) mongo::BsonDocument(data, len);
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+    *ud = doc;
+    return 1;
+}
+
+int l_as_array(lua_State* L) {
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
+    if (!iter) { lua_pushnil(L); return 1; }
+    uint32_t len;
+    const uint8_t* data;
+    iter->AsArray(&len, &data);
+    auto* doc = new (std::nothrow) mongo::BsonDocument(data, len);
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+    *ud = doc;
+    return 1;
+}
+
+int l_as_timestamp(lua_State* L) {
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
+    if (!iter) { lua_pushnil(L); return 1; }
+    uint32_t timestamp, increment;
+    iter->AsTimestamp(&timestamp, &increment);
+    lua_pushinteger(L, timestamp);
+    lua_pushinteger(L, increment);
+    return 2;
+}
+
+int l_as_int64_coerce(lua_State* L) {
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
+    lua_pushinteger(L, iter ? iter->AsInt64Coerce() : 0);
+    return 1;
+}
+
+int l_as_double_coerce(lua_State* L) {
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
+    lua_pushnumber(L, iter ? iter->AsDoubleCoerce() : 0.0);
+    return 1;
+}
+
+int l_as_code(lua_State* L) {
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
+    if (!iter) { lua_pushnil(L); return 1; }
+    uint32_t len;
+    const char* s = iter->AsCode(&len);
+    if (s) lua_pushlstring(L, s, len);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_as_regex(lua_State* L) {
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
+    if (!iter) { lua_pushnil(L); return 1; }
+    const char* regex;
+    const char* options;
+    iter->AsRegex(&regex, &options);
+    lua_pushstring(L, regex ? regex : "");
+    lua_pushstring(L, options ? options : "");
+    return 2;
+}
+
+int l_as_decimal128(lua_State* L) {
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
+    if (!iter) { lua_pushnil(L); return 1; }
+    mongo::MongoDecimal128 dec;
+    if (!iter->AsDecimal128(&dec)) { lua_pushnil(L); return 1; }
+    std::string s = dec.ToString();
+    lua_pushlstring(L, s.data(), s.size());
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"iter_new", l_new},
     {"iter_next", l_next},
@@ -152,6 +233,14 @@ const luaL_Reg kLib[] = {
     {"iter_recurse", l_recurse},
     {"iter_as_binary", l_as_binary},
     {"iter_offset", l_offset},
+    {"iter_as_document", l_as_document},
+    {"iter_as_array", l_as_array},
+    {"iter_as_timestamp", l_as_timestamp},
+    {"iter_as_int64_coerce", l_as_int64_coerce},
+    {"iter_as_double_coerce", l_as_double_coerce},
+    {"iter_as_code", l_as_code},
+    {"iter_as_regex", l_as_regex},
+    {"iter_as_decimal128", l_as_decimal128},
     {nullptr, nullptr},
 };
 

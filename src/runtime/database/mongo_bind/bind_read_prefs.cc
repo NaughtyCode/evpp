@@ -51,12 +51,19 @@ int l_set_max_staleness_seconds(lua_State* L) {
     return 0;
 }
 
+int l_is_valid(lua_State* L) {
+    auto* prefs = GetUserdata<mongo::MongoReadPrefs>(L, 1, kMetaName);
+    lua_pushboolean(L, prefs && prefs->IsValid());
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"read_prefs_new", l_new},
     {"read_prefs_destroy", l_destroy},
     {"read_prefs_get_mode", l_get_mode},
     {"read_prefs_set_mode", l_set_mode},
     {"read_prefs_set_max_staleness_seconds", l_set_max_staleness_seconds},
+    {"read_prefs_is_valid", l_is_valid},
     {nullptr, nullptr},
 };
 

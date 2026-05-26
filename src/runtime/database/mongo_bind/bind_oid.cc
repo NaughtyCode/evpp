@@ -61,11 +61,55 @@ int l_oid_compare(lua_State* L) {
     return 1;
 }
 
+int l_oid_hash(lua_State* L) {
+    const char* str = luaL_checkstring(L, 1);
+    mongo::MongoOid oid;
+    if (!oid.IsValid(str, strlen(str))) {
+        lua_pushnil(L);
+        lua_pushstring(L, "invalid OID string");
+        return 2;
+    }
+    oid.InitFromString(str);
+    lua_pushinteger(L, oid.Hash());
+    return 1;
+}
+
+int l_oid_get_time(lua_State* L) {
+    const char* str = luaL_checkstring(L, 1);
+    mongo::MongoOid oid;
+    if (!oid.IsValid(str, strlen(str))) {
+        lua_pushnil(L);
+        lua_pushstring(L, "invalid OID string");
+        return 2;
+    }
+    oid.InitFromString(str);
+    lua_pushinteger(L, static_cast<lua_Integer>(oid.GetTimeT()));
+    return 1;
+}
+
+int l_oid_equal(lua_State* L) {
+    const char* a_str = luaL_checkstring(L, 1);
+    const char* b_str = luaL_checkstring(L, 2);
+    mongo::MongoOid a, b;
+    if (!a.IsValid(a_str, strlen(a_str)) || !b.IsValid(b_str, strlen(b_str))) {
+        lua_pushnil(L);
+        lua_pushstring(L, "invalid OID string");
+        return 2;
+    }
+    a.InitFromString(a_str);
+    b.InitFromString(b_str);
+    lua_pushboolean(L, a.Equal(b));
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"oid_new", l_oid_new},
     {"oid_is_valid", l_oid_is_valid},
     {"oid_from_string", l_oid_from_string},
     {"oid_compare", l_oid_compare},
+    {"oid_hash", l_oid_hash},
+    {"oid_get_time", l_oid_get_time},
+    {"oid_equal", l_oid_equal},
     {nullptr, nullptr},
 };
 

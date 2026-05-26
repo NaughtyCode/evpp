@@ -6,6 +6,7 @@
 #include <new>
 
 #include "runtime/database/mongo/mongo_uri.h"
+#include "runtime/database/mongo/mongo_settings.h"
 
 namespace engine {
 namespace script {
@@ -72,6 +73,64 @@ int l_get_appname(lua_State* L) {
     return 1;
 }
 
+int l_get_username(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    const char* s = uri->GetUsername();
+    if (s) lua_pushstring(L, s);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_get_password(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    const char* s = uri->GetPassword();
+    if (s) lua_pushstring(L, s);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_get_auth_source(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    const char* s = uri->GetAuthSource();
+    if (s) lua_pushstring(L, s);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_get_auth_mechanism(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    const char* s = uri->GetAuthMechanism();
+    if (s) lua_pushstring(L, s);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_get_replica_set(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    const char* s = uri->GetReplicaSet();
+    if (s) lua_pushstring(L, s);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_get_tls(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    lua_pushboolean(L, uri && uri->GetTls());
+    return 1;
+}
+
+int l_has_option(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    lua_pushboolean(L, uri && uri->HasOption(key));
+    return 1;
+}
+
 int l_set_username(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     const char* val = luaL_checkstring(L, 2);
@@ -104,6 +163,47 @@ int l_set_compressors(lua_State* L) {
     auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
     const char* val = luaL_checkstring(L, 2);
     lua_pushboolean(L, uri && uri->SetCompressors(val));
+    return 1;
+}
+
+int l_set_mechanism_properties(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    auto* props = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    lua_pushboolean(L, uri && props && uri->SetMechanismProperties(*props));
+    return 1;
+}
+
+int l_set_read_prefs(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    auto* prefs = GetUserdata<mongo::MongoReadPrefs>(L, 2, "mongoc.read_prefs");
+    if (!uri || !prefs) { lua_pushboolean(L, false); return 1; }
+    uri->SetReadPrefs(*prefs);
+    lua_pushboolean(L, true);
+    return 1;
+}
+
+int l_set_write_concern(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 2, "mongoc.write_concern");
+    if (!uri || !concern) { lua_pushboolean(L, false); return 1; }
+    uri->SetWriteConcern(*concern);
+    lua_pushboolean(L, true);
+    return 1;
+}
+
+int l_set_read_concern(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    auto* concern = GetUserdata<mongo::MongoReadConcern>(L, 2, "mongoc.read_concern");
+    if (!uri || !concern) { lua_pushboolean(L, false); return 1; }
+    uri->SetReadConcern(*concern);
+    lua_pushboolean(L, true);
+    return 1;
+}
+
+int l_set_server_monitoring_mode(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    const char* mode = luaL_checkstring(L, 2);
+    lua_pushboolean(L, uri && uri->SetServerMonitoringMode(mode));
     return 1;
 }
 
@@ -147,6 +247,18 @@ const luaL_Reg kLib[] = {
     {"uri_get_option_int32", l_get_option_int32},
     {"uri_set_option_int32", l_set_option_int32},
     {"uri_set_option_bool", l_set_option_bool},
+    {"uri_get_username", l_get_username},
+    {"uri_get_password", l_get_password},
+    {"uri_get_auth_source", l_get_auth_source},
+    {"uri_get_auth_mechanism", l_get_auth_mechanism},
+    {"uri_get_replica_set", l_get_replica_set},
+    {"uri_get_tls", l_get_tls},
+    {"uri_has_option", l_has_option},
+    {"uri_set_mechanism_properties", l_set_mechanism_properties},
+    {"uri_set_read_prefs", l_set_read_prefs},
+    {"uri_set_write_concern", l_set_write_concern},
+    {"uri_set_read_concern", l_set_read_concern},
+    {"uri_set_server_monitoring_mode", l_set_server_monitoring_mode},
     {nullptr, nullptr},
 };
 

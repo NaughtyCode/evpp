@@ -7,6 +7,7 @@
 
 #include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_client.h"
+#include "runtime/database/mongo/mongo_cursor.h"
 #include "runtime/database/mongo/mongo_error.h"
 
 namespace engine {
@@ -90,9 +91,42 @@ int l_set_write_concern(lua_State* L) {
     return 0;
 }
 
+int l_create_collection(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    const char* name = luaL_checkstring(L, 2);
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr
+                 : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    if (!db || !name) { lua_pushnil(L); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::MongoError error;
+    auto* coll = db->CreateCollection(name, opts, &error);
+    if (!coll) {
+        lua_pushnil(L);
+        lua_pushstring(L, error.Message());
+        return 2;
+    }
+    auto** ud = NewUserdata<mongo::MongoCollection>(L, "mongoc.collection");
+    *ud = coll;
+    return 1;
+}
+
+int l_aggregate(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    auto* pipeline = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr
+                 : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    if (!db || !pipeline) { lua_pushnil(L); return 1; }
+    auto* cursor = db->Aggregate(*pipeline, opts, nullptr);
+    if (!cursor) { lua_pushnil(L); return 1; }
+    auto** ud = NewUserdata<mongo::MongoCursor>(L, "mongoc.cursor");
+    *ud = cursor;
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"db_destroy", l_destroy},
     {"db_get_collection", l_get_collection},
+    {"db_create_collection", l_create_collection},
+    {"db_aggregate", l_aggregate},
     {"db_get_name", l_get_name},
     {"db_drop", l_drop},
     {"db_command_simple", l_command_simple},

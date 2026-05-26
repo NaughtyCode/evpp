@@ -215,6 +215,7 @@ set(MONGO_BIND_SOURCES
     ${RUNTIME_DIR}/database/mongo_bind/bind_bson_document.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bson_document.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_bson_iter.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bson_iter.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_oid.cc ${RUNTIME_DIR}/database/mongo_bind/bind_oid.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_array_builder.cc ${RUNTIME_DIR}/database/mongo_bind/bind_array_builder.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_uri.cc ${RUNTIME_DIR}/database/mongo_bind/bind_uri.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_client.cc ${RUNTIME_DIR}/database/mongo_bind/bind_client.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_database.cc ${RUNTIME_DIR}/database/mongo_bind/bind_database.h
@@ -222,12 +223,21 @@ set(MONGO_BIND_SOURCES
     ${RUNTIME_DIR}/database/mongo_bind/bind_cursor.cc ${RUNTIME_DIR}/database/mongo_bind/bind_cursor.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_client_pool.cc ${RUNTIME_DIR}/database/mongo_bind/bind_client_pool.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_session.cc ${RUNTIME_DIR}/database/mongo_bind/bind_session.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_transaction_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_transaction_opts.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_session_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_session_opts.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_change_stream.cc ${RUNTIME_DIR}/database/mongo_bind/bind_change_stream.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_read_prefs.cc ${RUNTIME_DIR}/database/mongo_bind/bind_read_prefs.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_write_concern.cc ${RUNTIME_DIR}/database/mongo_bind/bind_write_concern.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_read_concern.cc ${RUNTIME_DIR}/database/mongo_bind/bind_read_concern.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_operation.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_operation.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_bulkwrite.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulkwrite.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_opts.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_result.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_result.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_exception.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_exception.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_server_api.cc ${RUNTIME_DIR}/database/mongo_bind/bind_server_api.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_find_and_modify_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_find_and_modify_opts.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_error.cc ${RUNTIME_DIR}/database/mongo_bind/bind_error.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_host_list.cc ${RUNTIME_DIR}/database/mongo_bind/bind_host_list.h
     ${RUNTIME_DIR}/database/mongo_bind/mongo_bind.cc ${RUNTIME_DIR}/database/mongo_bind/mongo_bind.h
 )
 source_group("database\\mongo_bind" FILES ${MONGO_BIND_SOURCES})

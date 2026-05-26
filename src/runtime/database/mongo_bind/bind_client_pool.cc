@@ -70,10 +70,21 @@ int l_set_appname(lua_State* L) {
     return 0;
 }
 
+int l_try_pop(lua_State* L) {
+    auto* pool = GetUserdata<mongo::MongoClientPool>(L, 1, kMetaName);
+    if (!pool) { lua_pushnil(L); return 1; }
+    auto* client = pool->TryPop();
+    if (!client) { lua_pushnil(L); return 1; }
+    auto** ud = NewUserdata<mongo::MongoClient>(L, "mongoc.client");
+    *ud = client;
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"pool_new", l_new},
     {"pool_destroy", l_destroy},
     {"pool_pop", l_pop},
+    {"pool_try_pop", l_try_pop},
     {"pool_push", l_push},
     {"pool_set_max_size", l_set_max_size},
     {"pool_set_appname", l_set_appname},

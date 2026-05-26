@@ -4,6 +4,7 @@
 #include "runtime/database/mongo_bind/bind_util.h"
 
 #include <new>
+#include <vector>
 
 #include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_client.h"
@@ -175,14 +176,73 @@ int l_set_write_concern(lua_State* L) {
     return 0;
 }
 
+int l_replace_one(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    auto* selector = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* replacement = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 4) ? nullptr
+                 : GetUserdata<mongo::BsonDocument>(L, 4, "bson.doc");
+    if (!coll || !selector || !replacement) {
+        lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2;
+    }
+    mongo::BsonDocument reply;
+    mongo::MongoError error;
+    bool ok = coll->ReplaceOne(*selector, *replacement, opts, &reply, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
+int l_insert_many(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    if (!coll || !lua_istable(L, 2)) { lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2; }
+
+    int n = static_cast<int>(lua_rawlen(L, 2));
+    if (n <= 0) { lua_pushboolean(L, false); lua_pushstring(L, "empty table"); return 2; }
+
+    std::vector<const mongo::BsonDocument*> docs(n);
+    for (int i = 1; i <= n; ++i) {
+        lua_rawgeti(L, 2, i);
+        docs[i-1] = GetUserdata<mongo::BsonDocument>(L, -1, "bson.doc");
+        lua_pop(L, 1);
+        if (!docs[i-1]) { lua_pushboolean(L, false); lua_pushstring(L, "invalid doc in table"); return 2; }
+    }
+
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    mongo::BsonDocument reply;
+    mongo::MongoError error;
+    bool ok = coll->InsertMany(docs.data(), n, opts, &reply, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
+int l_aggregate(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    auto* pipeline = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr
+                 : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    if (!coll || !pipeline) { lua_pushnil(L); return 1; }
+    auto* cursor = coll->Aggregate(*pipeline, opts, nullptr);
+    if (!cursor) { lua_pushnil(L); return 1; }
+    auto** ud = NewUserdata<mongo::MongoCursor>(L, "mongoc.cursor");
+    *ud = cursor;
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"coll_destroy", l_destroy},
     {"coll_insert_one", l_insert_one},
     {"coll_find", l_find},
     {"coll_update_one", l_update_one},
     {"coll_update_many", l_update_many},
+    {"coll_replace_one", l_replace_one},
     {"coll_delete_one", l_delete_one},
     {"coll_delete_many", l_delete_many},
+    {"coll_insert_many", l_insert_many},
+    {"coll_aggregate", l_aggregate},
     {"coll_count", l_count},
     {"coll_drop", l_drop},
     {"coll_get_name", l_get_name},

@@ -9,6 +9,7 @@
 
 #include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_oid.h"
+#include "runtime/database/mongo/mongo_error.h"
 
 namespace engine {
 namespace script {
@@ -178,6 +179,119 @@ int l_append_binary(lua_State* L) {
     return 1;
 }
 
+int l_append_array(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    auto* array_doc = GetUserdata<mongo::BsonDocument>(L, 3, kMetaName);
+    lua_pushboolean(L, doc && array_doc && doc->AppendArray(key, *array_doc));
+    return 1;
+}
+
+int l_append_regex(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    const char* regex = luaL_checkstring(L, 3);
+    const char* options = luaL_checkstring(L, 4);
+    lua_pushboolean(L, doc && doc->AppendRegex(key, regex, options));
+    return 1;
+}
+
+int l_append_code(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    const char* code = luaL_checkstring(L, 3);
+    lua_pushboolean(L, doc && doc->AppendCode(key, code));
+    return 1;
+}
+
+int l_append_symbol(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    const char* symbol = luaL_checkstring(L, 3);
+    lua_pushboolean(L, doc && doc->AppendSymbol(key, symbol));
+    return 1;
+}
+
+int l_append_minkey(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    lua_pushboolean(L, doc && doc->AppendMinkey(key));
+    return 1;
+}
+
+int l_append_maxkey(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    lua_pushboolean(L, doc && doc->AppendMaxkey(key));
+    return 1;
+}
+
+int l_append_undefined(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    lua_pushboolean(L, doc && doc->AppendUndefined(key));
+    return 1;
+}
+
+int l_append_now_utc(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    lua_pushboolean(L, doc && doc->AppendNowUtc(key));
+    return 1;
+}
+
+int l_append_decimal128(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    const char* dec_str = luaL_checkstring(L, 3);
+    mongo::MongoDecimal128 dec;
+    if (!dec.FromString(dec_str)) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
+    lua_pushboolean(L, doc && doc->AppendDecimal128(key, dec));
+    return 1;
+}
+
+// ── Copy / utility ─────────────────────────────────────────────────────
+
+int l_copy(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    if (!doc) { lua_pushnil(L); return 1; }
+    auto* copy = new (std::nothrow) mongo::BsonDocument(doc->Copy());
+    if (!copy) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, kMetaName);
+    *ud = copy;
+    return 1;
+}
+
+int l_clear(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    if (doc) doc->Clear();
+    return 0;
+}
+
+int l_equal(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    auto* other = GetUserdata<mongo::BsonDocument>(L, 2, kMetaName);
+    lua_pushboolean(L, doc && other && doc->Equal(*other));
+    return 1;
+}
+
+int l_validate(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    if (!doc) { lua_pushboolean(L, false); lua_pushnil(L); return 2; }
+    mongo::MongoError error;
+    bool ok = doc->Validate(&error);
+    lua_pushboolean(L, ok);
+    if (ok) lua_pushnil(L);
+    else {
+        const char* msg = error.Message();
+        lua_pushstring(L, msg ? msg : "unknown error");
+    }
+    return 2;
+}
+
 // ── Query / access ────────────────────────────────────────────────────
 
 int l_count_keys(lua_State* L) {
@@ -220,6 +334,19 @@ const luaL_Reg kLib[] = {
     {"count_keys", l_count_keys},
     {"has_field", l_has_field},
     {"empty", l_empty},
+    {"append_array", l_append_array},
+    {"append_regex", l_append_regex},
+    {"append_code", l_append_code},
+    {"append_symbol", l_append_symbol},
+    {"append_minkey", l_append_minkey},
+    {"append_maxkey", l_append_maxkey},
+    {"append_undefined", l_append_undefined},
+    {"append_now_utc", l_append_now_utc},
+    {"append_decimal128", l_append_decimal128},
+    {"copy", l_copy},
+    {"clear", l_clear},
+    {"equal", l_equal},
+    {"validate", l_validate},
     {nullptr, nullptr},
 };
 

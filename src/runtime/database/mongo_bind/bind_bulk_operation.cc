@@ -91,10 +91,28 @@ int l_set_write_concern(lua_State* L) {
     return 0;
 }
 
+int l_update(lua_State* L) {
+    auto* bulk = GetUserdata<mongo::MongoBulkOperation>(L, 1, kMetaName);
+    auto* selector = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* document = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    bool upsert = lua_toboolean(L, 4) != 0;
+    if (bulk && selector && document) bulk->Update(*selector, *document, upsert);
+    return 0;
+}
+
+int l_remove(lua_State* L) {
+    auto* bulk = GetUserdata<mongo::MongoBulkOperation>(L, 1, kMetaName);
+    auto* selector = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    if (bulk && selector) bulk->Remove(*selector);
+    return 0;
+}
+
 const luaL_Reg kLib[] = {
     {"bulk_new", l_new},
     {"bulk_destroy", l_destroy},
     {"bulk_insert", l_insert},
+    {"bulk_update", l_update},
+    {"bulk_remove", l_remove},
     {"bulk_remove_one", l_remove_one},
     {"bulk_update_one", l_update_one},
     {"bulk_replace_one", l_replace_one},

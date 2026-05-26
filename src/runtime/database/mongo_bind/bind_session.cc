@@ -74,6 +74,12 @@ int l_get_dirty(lua_State* L) {
     return 1;
 }
 
+int l_get_transaction_state(lua_State* L) {
+    auto* session = GetUserdata<mongo::MongoSession>(L, 1, kMetaName);
+    lua_pushinteger(L, session ? static_cast<int>(session->GetTransactionState()) : 0);
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"session_destroy", l_destroy},
     {"session_start_transaction", l_start_transaction},
@@ -82,6 +88,7 @@ const luaL_Reg kLib[] = {
     {"session_in_transaction", l_in_transaction},
     {"session_get_server_id", l_get_server_id},
     {"session_get_dirty", l_get_dirty},
+    {"session_get_transaction_state", l_get_transaction_state},
     {nullptr, nullptr},
 };
 

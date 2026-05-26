@@ -75,6 +75,18 @@ int l_is_acknowledged(lua_State* L) {
     return 1;
 }
 
+int l_is_valid(lua_State* L) {
+    auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 1, kMetaName);
+    lua_pushboolean(L, concern && concern->IsValid());
+    return 1;
+}
+
+int l_is_default(lua_State* L) {
+    auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 1, kMetaName);
+    lua_pushboolean(L, concern && concern->IsDefault());
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"write_concern_new", l_new},
     {"write_concern_destroy", l_destroy},
@@ -85,6 +97,8 @@ const luaL_Reg kLib[] = {
     {"write_concern_get_w_timeout", l_get_w_timeout},
     {"write_concern_set_w_timeout", l_set_w_timeout},
     {"write_concern_is_acknowledged", l_is_acknowledged},
+    {"write_concern_is_valid", l_is_valid},
+    {"write_concern_is_default", l_is_default},
     {nullptr, nullptr},
 };
 

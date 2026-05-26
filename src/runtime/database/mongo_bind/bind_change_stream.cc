@@ -7,6 +7,7 @@
 
 #include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_change_stream.h"
+#include "runtime/database/mongo/mongo_error.h"
 
 namespace engine {
 namespace script {
@@ -42,9 +43,22 @@ int l_next(lua_State* L) {
     return 1;
 }
 
+int l_error_document(lua_State* L) {
+    auto* stream = GetUserdata<mongo::MongoChangeStream>(L, 1, kMetaName);
+    if (!stream) { lua_pushboolean(L, false); return 1; }
+    mongo::MongoError error;
+    const void* raw_doc = nullptr;
+    bool has_err = stream->ErrorDocument(&error, &raw_doc);
+    lua_pushboolean(L, has_err);
+    if (has_err) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
 const luaL_Reg kLib[] = {
     {"change_stream_destroy", l_destroy},
     {"change_stream_next", l_next},
+    {"change_stream_error_document", l_error_document},
     {nullptr, nullptr},
 };
 

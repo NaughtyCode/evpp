@@ -52,12 +52,21 @@ int l_is_default(lua_State* L) {
     return 1;
 }
 
+int l_append_to_opts(lua_State* L) {
+    auto* concern = GetUserdata<mongo::MongoReadConcern>(L, 1, kMetaName);
+    auto* opts = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    if (!concern || !opts) { lua_pushboolean(L, false); return 1; }
+    lua_pushboolean(L, concern->AppendToOpts(*opts));
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"read_concern_new", l_new},
     {"read_concern_destroy", l_destroy},
     {"read_concern_get_level", l_get_level},
     {"read_concern_set_level", l_set_level},
     {"read_concern_is_default", l_is_default},
+    {"read_concern_append_to_opts", l_append_to_opts},
     {nullptr, nullptr},
 };
 
