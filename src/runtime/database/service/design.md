@@ -267,7 +267,7 @@ struct DbRequest {
 struct DbResponse {
     uint64_t    request_id = 0;     // 匹配请求
     bool        success = false;
-    int         error_code = 0;     // MongoDB error code
+    uint32_t    error_code = 0;     // MongoDB error code (matches MongoError::Code())
     std::string error_message;
     std::string result_data;        // BSON/JSON 序列化结果（格式见上表）
     int64_t     affected_count = 0; // insert/update/delete 影响的行数
@@ -376,84 +376,77 @@ private:
 ```
 EventLoop():
 
-  try {
-
   // ── 1. 获取 MongoClient（阻塞，Pop 超时由 waitQueueTimeoutMS 控制）──
   client_ = pool_->Pop()
   if client_ == nullptr:
     ENGINE_LOG_ERROR(logger_, "DBThread[{}]: pool Pop failed (timeout or pool closed)", index_)
     running_ = false  // 线程即将退出，确保 IsRunning() 报告正确状态
-    return  // healthy_ stays false
+    return  // healthy_ stays false; no client → no cleanup needed
 
-  // ── 2. 注册 DBScriptVM 的 CustomPtr 槽位 ──────────────────────
-  script_vm_.RegisterSubsystemObjects(this, client_, pool_)
+  // ── Init + Main loop ──────────────────────────────────────────
+  try {
 
-  // ── 3. 注册 API 绑定 ───────────────────────────────────────────
-  ExportDbLog(script_vm_, logger_)    // R9: log_trace/.../log_fatal → logger_
-  script::ExportMongo(script_vm_)     // R10: mongoc.* / bson.* 全局模块表
-  // ExportMongo 创建 mongoc / bson 全局表变量，但 Lua require() 检查
-  // package.loaded 而非全局变量。注册到 package.loaded 使两者都可用：
-  script_vm_.DoString(
-      "package.loaded.mongoc = mongoc; "
-      "package.loaded.bson   = bson")
-  ExportDbRuntime(script_vm_)         // db_get_client / db_get_pool → CustomPtr
+    // ── 2. 注册 DBScriptVM 的 CustomPtr 槽位 ────────────────────
+    script_vm_.RegisterSubsystemObjects(this, client_, pool_)
 
-  // ── 4. 设置脚本 import 路径（R12） ────────────────────────────
-  // Lua require 搜索路径：先 db 专属，后 runtime 公共
-  script_vm_.SetImportPath(
-      config_.script.db_scripts_dir + ";" +
-      config_.script.runtime_scripts_dir)
+    // ── 3. 注册 API 绑定 ─────────────────────────────────────────
+    ExportDbLog(script_vm_, logger_)    // R9
+    script::ExportMongo(script_vm_)     // R10: mongoc.* / bson.* 全局模块表
+    // ExportMongo 创建全局表变量，注册到 package.loaded 使 require() 可用：
+    script_vm_.DoString(
+        "package.loaded.mongoc = mongoc; "
+        "package.loaded.bson   = bson")
+    ExportDbRuntime(script_vm_)         // db_get_client / db_get_pool 全局函数
 
-  // ── 5. Lua 初始化（R12: 先公共后专属）─────────────────────────
-  if config_.script.auto_load:
-    // 1. 加载公共运行时脚本（基础工具库、通用模块）
-    script_vm_.DoDirectory(config_.script.runtime_scripts_dir)
-    // 2. 加载数据服务专属脚本（覆盖/扩展业务逻辑）
-    script_vm_.DoDirectory(config_.script.db_scripts_dir)
-  script_vm_.InitScript()             // 调用全局 InitScript()
+    // ── 4. 设置脚本 import 路径（R12） ──────────────────────────
+    script_vm_.SetImportPath(
+        config_.script.db_scripts_dir + ";" +
+        config_.script.runtime_scripts_dir)
 
-  healthy_ = true
+    // ── 5. Lua 初始化（R12: 先公共后专属）───────────────────────
+    if config_.script.auto_load:
+      script_vm_.DoDirectory(config_.script.runtime_scripts_dir)
+      script_vm_.DoDirectory(config_.script.db_scripts_dir)
+    script_vm_.InitScript()
 
-  // ── 6. 主循环 ──────────────────────────────────────────────────
-  while running_:
-    try {
-      if req = request_queue_.try_dequeue():
-        if req.operation != DbOperation::kNoOp:
-          ProcessRequest(req)
-          // kNoOp: wakeup sentinel from Stop(), silently skipped
-      else:
-        // 空闲时短暂休眠，避免忙等（50ms，参考 PhysicsThread）
-        std::this_thread::sleep_for(std::chrono::microseconds(50000))
-    } catch (const std::exception& e) {
-      ENGINE_LOG_ERROR(logger_, "DBThread[{}]: exception in event loop: {}",
-                      index_, e.what())
-      healthy_ = false
-      running_ = false
-      break  // exit event loop
-    } catch (...) {
-      ENGINE_LOG_ERROR(logger_, "DBThread[{}]: unknown exception in event loop",
-                      index_)
-      healthy_ = false
-      running_ = false
-      break
-    }
+    healthy_ = true
 
-  // ── 7. 清理 ────────────────────────────────────────────────────
-  healthy_ = false
-  script_vm_.DestroyScript()
-  pool_->Push(client_)
+    // ── 6. 主循环 ────────────────────────────────────────────────
+    while running_:
+      try {
+        if req = request_queue_.try_dequeue():
+          if req.operation != DbOperation::kNoOp:
+            ProcessRequest(req)
+        else:
+          // 空闲时短暂休眠，避免忙等（50ms，参考 PhysicsThread）
+          std::this_thread::sleep_for(std::chrono::microseconds(50000))
+      } catch (const std::exception& e) {
+        ENGINE_LOG_ERROR(logger_, "DBThread[{}]: exception in event loop: {}",
+                        index_, e.what())
+        healthy_ = false
+        running_ = false
+        break  // → 跳到 finally 块执行清理
+      } catch (...) {
+        ENGINE_LOG_ERROR(logger_, "DBThread[{}]: unknown exception in event loop",
+                        index_)
+        healthy_ = false
+        running_ = false
+        break
+      }
 
   } catch (const std::exception& e) {
     ENGINE_LOG_ERROR(logger_, "DBThread[{}]: init phase exception: {}",
                     index_, e.what())
-    healthy_ = false
-    running_ = false
   } catch (...) {
     ENGINE_LOG_ERROR(logger_, "DBThread[{}]: init phase unknown exception",
                     index_)
-    healthy_ = false
-    running_ = false
   }
+
+  // ── 7. finally: 始终执行的清理（正常退出/init异常/loop异常 均到达）──
+  healthy_ = false
+  script_vm_.DestroyScript()
+  pool_->Push(client_)   // Pop 成功后必须归还，否则 pool 资源泄漏
+  running_ = false
 ```
 
 ### 6.2 Start / Stop 实现要点
@@ -466,7 +459,7 @@ EventLoop():
 **Stop()**（MT 调用）：
 1. 检查 `running_`，未运行则直接返回
 2. `running_ = false`
-3. **Wakeup 机制**：向 `request_queue_` 入队一条 `DbOperation::kNoOp` 请求，确保 EventLoop 从 sleep 中醒来
+3. **Wakeup 机制**：向 `request_queue_` 入队一条 `DbOperation::kNoOp` 请求，确保 EventLoop 从 sleep 中醒来。注意：若线程尚未进入主循环（仍阻塞在 `pool_->Pop()`），wakeup 无效——此时依赖 `waitQueueTimeoutMS` 超时使 Pop 返回 nullptr，线程随后自然退出。这也意味着 `waitQueueTimeoutMS` 决定了 Shutdown 的最坏响应延迟。
 4. `thread_->join()` + `thread_.reset()`
 
 ### 6.3 队列容量控制
@@ -644,6 +637,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 - `kUpdateOne` / `kUpdateMany`：filter 从 `bson_data` 解析，update 描述从 `bson_data2` 解析。
 - `kCommand` 仅需要 `db` 句柄（或通过 `client_->CommandSimple`），`kAggregate` 可能在 db 或 collection 层级。
 - `db`/`coll` 指针：初始化为 nullptr，按需赋值，catch 后通过 nullptr 检查安全清理。
+- 输入校验（实现阶段）：所有 CRUD 操作均应对 `bson_data` / `database` / `collection` 做非空校验。写操作尤其是 `DeleteMany` 若传入空 filter 会清空整个集合；读操作若 collection 为空则 `GetCollection` 可能返回无效句柄导致 nullptr 解引用。
 - `affected_count` 通过 BsonIter 从 reply 文档提取（`InitFind("nModified")` → `AsInt64()`）。
 - `SerializeCursor` 是内部辅助函数，遍历 cursor 并将文档序列化为 JSON 数组。
 - `kInsertMany`：`bson_data` 为 JSON 数组，需逐元素解析为 `BsonDocument`，构建 `BsonDocument*[]` 数组后传入 `coll->InsertMany()`。
@@ -872,9 +866,11 @@ struct DbConnectionPoolConfig {
     int max_pool_size = 16;            // MongoClientPool 最大 client 数
                                        //   必须 >= thread_count，建议 thread_count * 2
                                        //   过小会导致 Pop 阻塞超时
-    int wait_queue_timeout_ms = 5000;  // Pop 阻塞超时（毫秒），0 = 永不超时
-                                       //   注意：此值需嵌入 MongoUri query 参数：
-                                       //   mongodb://host/db?waitQueueTimeoutMS=5000
+    int wait_queue_timeout_ms = 5000;  // Pop 阻塞超时（毫秒），0 = 永不超时（危险：
+                                       //   若设为 0 且 pool 中无空闲 client，Pop 将永久阻塞，
+                                       //   导致 Stop() join 挂起。强烈建议设置正整数值）
+                                       //   注意：此值通过 MongoUri::SetOptionAsInt32 注入：
+                                       //   uri.SetOptionAsInt32("waitQueueTimeoutMS", timeout_ms)
 };
 
 struct DbServiceConfig {
@@ -1033,9 +1029,13 @@ Engine::Init()
   ├─ ConfigManager::Load()          // 解析所有 JSON 配置（含 server.json → db_service.json）
   ├─ MongoSystem::Instance().Initialize()
   │
-  ├─ // 构造 URI（从已加载的 MongoDB 集群配置）
+  ├─ // 构造 URI（从已加载的 MongoDB 集群配置，通过 SetOption 注入 pool 超时参数）
   │  auto& mongo_cfg = ConfigManager::Instance().GetMongoDbDevConfig();
-  │  MongoUri uri(mongo_cfg.connection.uri);
+  │  auto uri = MongoUri::New(mongo_cfg.connection.uri.c_str());
+  │  if (db_svc_config.connection_pool.wait_queue_timeout_ms > 0) {
+  │      uri.SetOptionAsInt32("waitQueueTimeoutMS",
+  │          static_cast<int32_t>(db_svc_config.connection_pool.wait_queue_timeout_ms));
+  │  }
   │
   ├─ DatabaseService::Instance().Initialize(db_svc_config, uri)
   └─ ...
