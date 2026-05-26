@@ -204,6 +204,86 @@ int l_db_aggregate(lua_State* L) {
     return 1;
 }
 
+int l_db_drop_with_opts(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    auto* opts = lua_isnoneornil(L, 2) ? nullptr
+                 : GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    if (!db) { lua_pushboolean(L, false); lua_pushnil(L); return 2; }
+    mongo::MongoError error;
+    bool ok = db->DropWithOpts(opts, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
+int l_db_read_command_with_opts(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    auto* cmd = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* prefs = lua_isnoneornil(L, 3) ? nullptr
+                   : GetUserdata<mongo::MongoReadPrefs>(L, 3, "mongoc.read_prefs");
+    auto* opts = lua_isnoneornil(L, 4) ? nullptr
+                  : GetUserdata<mongo::BsonDocument>(L, 4, "bson.doc");
+    if (!db || !cmd) { lua_pushnil(L); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::BsonDocument reply;
+    mongo::MongoError error;
+    bool ok = db->ReadCommandWithOpts(*cmd, prefs, opts, &reply, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) { lua_pushstring(L, error.Message()); lua_pushnil(L); }
+    else {
+        auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+        if (!doc) { lua_pushnil(L); lua_pushnil(L); return 3; }
+        lua_pushnil(L);
+        auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+        *ud = doc;
+    }
+    return 3;
+}
+
+int l_db_write_command_with_opts(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    auto* cmd = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr
+                  : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    if (!db || !cmd) { lua_pushnil(L); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::BsonDocument reply;
+    mongo::MongoError error;
+    bool ok = db->WriteCommandWithOpts(*cmd, opts, &reply, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) { lua_pushstring(L, error.Message()); lua_pushnil(L); }
+    else {
+        auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+        if (!doc) { lua_pushnil(L); lua_pushnil(L); return 3; }
+        lua_pushnil(L);
+        auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+        *ud = doc;
+    }
+    return 3;
+}
+
+int l_db_read_write_command_with_opts(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    auto* cmd = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* prefs = lua_isnoneornil(L, 3) ? nullptr
+                   : GetUserdata<mongo::MongoReadPrefs>(L, 3, "mongoc.read_prefs");
+    auto* opts = lua_isnoneornil(L, 4) ? nullptr
+                  : GetUserdata<mongo::BsonDocument>(L, 4, "bson.doc");
+    if (!db || !cmd) { lua_pushnil(L); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::BsonDocument reply;
+    mongo::MongoError error;
+    bool ok = db->ReadWriteCommandWithOpts(*cmd, prefs, opts, &reply, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) { lua_pushstring(L, error.Message()); lua_pushnil(L); }
+    else {
+        auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+        if (!doc) { lua_pushnil(L); lua_pushnil(L); return 3; }
+        lua_pushnil(L);
+        auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+        *ud = doc;
+    }
+    return 3;
+}
+
 const luaL_Reg kLib[] = {
     {"db_destroy", l_db_destroy},
     {"db_get_collection", l_db_get_collection},
@@ -220,6 +300,10 @@ const luaL_Reg kLib[] = {
     {"db_get_collection_names", l_db_get_collection_names},
     {"db_has_collection", l_db_has_collection},
     {"db_command_with_opts", l_db_command_with_opts},
+    {"db_drop_with_opts", l_db_drop_with_opts},
+    {"db_read_command_with_opts", l_db_read_command_with_opts},
+    {"db_write_command_with_opts", l_db_write_command_with_opts},
+    {"db_read_write_command_with_opts", l_db_read_write_command_with_opts},
     {nullptr, nullptr},
 };
 

@@ -6,6 +6,8 @@
 #include <new>
 #include <vector>
 
+#include <bson/bson.h>
+
 #include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_bulk.h"
 #include "runtime/database/mongo/mongo_change_stream.h"
@@ -387,6 +389,140 @@ int l_coll_aggregate(lua_State* L) {
     return 1;
 }
 
+int l_coll_command_simple(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    auto* cmd = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* prefs = lua_isnoneornil(L, 3) ? nullptr
+                   : GetUserdata<mongo::MongoReadPrefs>(L, 3, "mongoc.read_prefs");
+    if (!coll || !cmd) { lua_pushnil(L); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::BsonDocument reply;
+    mongo::MongoError error;
+    bool ok = coll->CommandSimple(*cmd, prefs, &reply, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) { lua_pushstring(L, error.Message()); lua_pushnil(L); }
+    else {
+        auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+        if (!doc) { lua_pushnil(L); lua_pushnil(L); return 3; }
+        lua_pushnil(L);
+        auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+        *ud = doc;
+    }
+    return 3;
+}
+
+int l_coll_command_with_opts(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    auto* cmd = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* prefs = lua_isnoneornil(L, 3) ? nullptr
+                   : GetUserdata<mongo::MongoReadPrefs>(L, 3, "mongoc.read_prefs");
+    auto* opts = lua_isnoneornil(L, 4) ? nullptr
+                  : GetUserdata<mongo::BsonDocument>(L, 4, "bson.doc");
+    if (!coll || !cmd) { lua_pushnil(L); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::BsonDocument reply;
+    mongo::MongoError error;
+    bool ok = coll->CommandWithOpts(*cmd, prefs, opts, &reply, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) { lua_pushstring(L, error.Message()); lua_pushnil(L); }
+    else {
+        auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+        if (!doc) { lua_pushnil(L); lua_pushnil(L); return 3; }
+        lua_pushnil(L);
+        auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+        *ud = doc;
+    }
+    return 3;
+}
+
+int l_coll_read_command_with_opts(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    auto* cmd = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* prefs = lua_isnoneornil(L, 3) ? nullptr
+                   : GetUserdata<mongo::MongoReadPrefs>(L, 3, "mongoc.read_prefs");
+    auto* opts = lua_isnoneornil(L, 4) ? nullptr
+                  : GetUserdata<mongo::BsonDocument>(L, 4, "bson.doc");
+    if (!coll || !cmd) { lua_pushnil(L); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::BsonDocument reply;
+    mongo::MongoError error;
+    bool ok = coll->ReadCommandWithOpts(*cmd, prefs, opts, &reply, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) { lua_pushstring(L, error.Message()); lua_pushnil(L); }
+    else {
+        auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+        if (!doc) { lua_pushnil(L); lua_pushnil(L); return 3; }
+        lua_pushnil(L);
+        auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+        *ud = doc;
+    }
+    return 3;
+}
+
+int l_coll_write_command_with_opts(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    auto* cmd = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr
+                  : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    if (!coll || !cmd) { lua_pushnil(L); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::BsonDocument reply;
+    mongo::MongoError error;
+    bool ok = coll->WriteCommandWithOpts(*cmd, opts, &reply, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) { lua_pushstring(L, error.Message()); lua_pushnil(L); }
+    else {
+        auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+        if (!doc) { lua_pushnil(L); lua_pushnil(L); return 3; }
+        lua_pushnil(L);
+        auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+        *ud = doc;
+    }
+    return 3;
+}
+
+int l_coll_read_write_command_with_opts(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    auto* cmd = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* prefs = lua_isnoneornil(L, 3) ? nullptr
+                   : GetUserdata<mongo::MongoReadPrefs>(L, 3, "mongoc.read_prefs");
+    auto* opts = lua_isnoneornil(L, 4) ? nullptr
+                  : GetUserdata<mongo::BsonDocument>(L, 4, "bson.doc");
+    if (!coll || !cmd) { lua_pushnil(L); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::BsonDocument reply;
+    mongo::MongoError error;
+    bool ok = coll->ReadWriteCommandWithOpts(*cmd, prefs, opts, &reply, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) { lua_pushstring(L, error.Message()); lua_pushnil(L); }
+    else {
+        auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+        if (!doc) { lua_pushnil(L); lua_pushnil(L); return 3; }
+        lua_pushnil(L);
+        auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+        *ud = doc;
+    }
+    return 3;
+}
+
+int l_coll_drop_with_opts(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    auto* opts = lua_isnoneornil(L, 2) ? nullptr
+                 : GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    if (!coll) { lua_pushboolean(L, false); lua_pushnil(L); return 2; }
+    mongo::MongoError error;
+    bool ok = coll->DropWithOpts(opts, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
+int l_coll_keys_to_index_string(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    auto* keys = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    if (!coll || !keys) { lua_pushnil(L); return 1; }
+    char* str = coll->KeysToIndexString(*keys);
+    if (str) { lua_pushstring(L, str); bson_free(str); }
+    else lua_pushnil(L);
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"coll_destroy", l_coll_destroy},
     {"coll_insert_one", l_coll_insert_one},
@@ -415,6 +551,13 @@ const luaL_Reg kLib[] = {
     {"coll_drop_index_with_opts", l_coll_drop_index_with_opts},
     {"coll_estimated_document_count", l_coll_estimated_document_count},
     {"coll_rename", l_coll_rename},
+    {"coll_command_simple", l_coll_command_simple},
+    {"coll_command_with_opts", l_coll_command_with_opts},
+    {"coll_read_command_with_opts", l_coll_read_command_with_opts},
+    {"coll_write_command_with_opts", l_coll_write_command_with_opts},
+    {"coll_read_write_command_with_opts", l_coll_read_write_command_with_opts},
+    {"coll_drop_with_opts", l_coll_drop_with_opts},
+    {"coll_keys_to_index_string", l_coll_keys_to_index_string},
     {nullptr, nullptr},
 };
 

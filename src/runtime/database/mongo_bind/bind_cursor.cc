@@ -109,6 +109,13 @@ int l_cursor_get_max_await_time_ms(lua_State* L) {
     return 1;
 }
 
+int l_cursor_set_server_id(lua_State* L) {
+    auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
+    auto server_id = static_cast<uint32_t>(luaL_checkinteger(L, 2));
+    if (cursor) cursor->SetServerId(server_id);
+    return 0;
+}
+
 int l_cursor_has_error(lua_State* L) {
     auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
     if (!cursor) { lua_pushboolean(L, false); return 1; }
@@ -152,6 +159,7 @@ const luaL_Reg kLib[] = {
     {"cursor_set_max_await_time_ms", l_cursor_set_max_await_time_ms},
     {"cursor_get_max_await_time_ms", l_cursor_get_max_await_time_ms},
     {"cursor_clone", l_cursor_clone},
+    {"cursor_set_server_id", l_cursor_set_server_id},
     {"cursor_has_error", l_cursor_has_error},
     {"cursor_error_document", l_cursor_error_document},
     {nullptr, nullptr},

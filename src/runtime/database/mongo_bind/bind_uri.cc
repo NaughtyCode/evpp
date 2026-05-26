@@ -5,6 +5,7 @@
 
 #include <new>
 
+#include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_uri.h"
 #include "runtime/database/mongo/mongo_settings.h"
 
@@ -231,6 +232,73 @@ int l_uri_set_option_bool(lua_State* L) {
     return 1;
 }
 
+int l_uri_copy(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    auto* copy = new (std::nothrow) mongo::MongoUri(uri->Copy());
+    if (!copy) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::MongoUri>(L, kMetaName);
+    *ud = copy;
+    return 1;
+}
+
+int l_uri_get_option_as_int64(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    const char* opt = luaL_checkstring(L, 2);
+    auto fallback = static_cast<int64_t>(luaL_optinteger(L, 3, 0));
+    lua_pushinteger(L, uri ? uri->GetOptionAsInt64(opt, fallback) : fallback);
+    return 1;
+}
+
+int l_uri_get_option_as_bool(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    const char* opt = luaL_checkstring(L, 2);
+    bool fallback = lua_toboolean(L, 3) != 0;
+    lua_pushboolean(L, uri ? uri->GetOptionAsBool(opt, fallback) : fallback);
+    return 1;
+}
+
+int l_uri_get_option_as_utf8(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    const char* opt = luaL_checkstring(L, 2);
+    const char* fallback = luaL_optstring(L, 3, nullptr);
+    const char* val = uri ? uri->GetOptionAsUtf8(opt, fallback) : fallback;
+    if (val) lua_pushstring(L, val);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_uri_set_option_as_int64(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    const char* opt = luaL_checkstring(L, 2);
+    auto val = static_cast<int64_t>(luaL_checkinteger(L, 3));
+    lua_pushboolean(L, uri && uri->SetOptionAsInt64(opt, val));
+    return 1;
+}
+
+int l_uri_set_option_as_utf8(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    const char* opt = luaL_checkstring(L, 2);
+    const char* val = luaL_checkstring(L, 3);
+    lua_pushboolean(L, uri && uri->SetOptionAsUtf8(opt, val));
+    return 1;
+}
+
+int l_uri_get_mechanism_properties(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    auto* doc = new (std::nothrow) mongo::BsonDocument();
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    if (!uri->GetMechanismProperties(*doc)) {
+        delete doc;
+        lua_pushnil(L);
+        return 1;
+    }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+    *ud = doc;
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"uri_new", l_uri_new},
     {"uri_destroy", l_uri_destroy},
@@ -259,6 +327,13 @@ const luaL_Reg kLib[] = {
     {"uri_set_write_concern", l_uri_set_write_concern},
     {"uri_set_read_concern", l_uri_set_read_concern},
     {"uri_set_server_monitoring_mode", l_uri_set_server_monitoring_mode},
+    {"uri_copy", l_uri_copy},
+    {"uri_get_option_as_int64", l_uri_get_option_as_int64},
+    {"uri_get_option_as_bool", l_uri_get_option_as_bool},
+    {"uri_get_option_as_utf8", l_uri_get_option_as_utf8},
+    {"uri_set_option_as_int64", l_uri_set_option_as_int64},
+    {"uri_set_option_as_utf8", l_uri_set_option_as_utf8},
+    {"uri_get_mechanism_properties", l_uri_get_mechanism_properties},
     {nullptr, nullptr},
 };
 

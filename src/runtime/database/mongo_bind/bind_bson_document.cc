@@ -7,6 +7,8 @@
 #include <cstring>
 #include <string>
 
+#include <bson/bson.h>
+
 #include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_oid.h"
 #include "runtime/database/mongo/mongo_error.h"
@@ -338,6 +340,46 @@ int l_bson_doc_empty(lua_State* L) {
     return 1;
 }
 
+int l_bson_doc_get_length(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    lua_pushinteger(L, doc ? doc->GetLength() : 0);
+    return 1;
+}
+
+int l_bson_doc_reinit(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    if (doc) doc->Reinit();
+    return 0;
+}
+
+int l_bson_doc_as_canonical_extended_json(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    if (!doc) { lua_pushnil(L); return 1; }
+    size_t len = 0;
+    char* str = doc->AsCanonicalExtendedJson(&len);
+    if (str) {
+        lua_pushlstring(L, str, len);
+        bson_free(str);
+    } else {
+        lua_pushnil(L);
+    }
+    return 1;
+}
+
+int l_bson_doc_as_relaxed_extended_json(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    if (!doc) { lua_pushnil(L); return 1; }
+    size_t len = 0;
+    char* str = doc->AsRelaxedExtendedJson(&len);
+    if (str) {
+        lua_pushlstring(L, str, len);
+        bson_free(str);
+    } else {
+        lua_pushnil(L);
+    }
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"new", l_bson_doc_new},
     {"destroy", l_bson_doc_destroy},
@@ -359,6 +401,10 @@ const luaL_Reg kLib[] = {
     {"count_keys", l_bson_doc_count_keys},
     {"has_field", l_bson_doc_has_field},
     {"empty", l_bson_doc_empty},
+    {"get_length", l_bson_doc_get_length},
+    {"reinit", l_bson_doc_reinit},
+    {"as_canonical_extended_json", l_bson_doc_as_canonical_extended_json},
+    {"as_relaxed_extended_json", l_bson_doc_as_relaxed_extended_json},
     {"append_array", l_bson_doc_append_array},
     {"append_regex", l_bson_doc_append_regex},
     {"append_code", l_bson_doc_append_code},

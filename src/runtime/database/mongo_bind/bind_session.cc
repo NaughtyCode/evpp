@@ -81,6 +81,31 @@ int l_session_get_transaction_state(lua_State* L) {
     return 1;
 }
 
+int l_session_advance_cluster_time(lua_State* L) {
+    auto* session = GetUserdata<mongo::MongoSession>(L, 1, kMetaName);
+    auto* cluster_time = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    if (session && cluster_time) session->AdvanceClusterTime(*cluster_time);
+    return 0;
+}
+
+int l_session_get_operation_time(lua_State* L) {
+    auto* session = GetUserdata<mongo::MongoSession>(L, 1, kMetaName);
+    if (!session) { lua_pushinteger(L, 0); lua_pushinteger(L, 0); return 2; }
+    uint32_t timestamp = 0, increment = 0;
+    session->GetOperationTime(&timestamp, &increment);
+    lua_pushinteger(L, timestamp);
+    lua_pushinteger(L, increment);
+    return 2;
+}
+
+int l_session_advance_operation_time(lua_State* L) {
+    auto* session = GetUserdata<mongo::MongoSession>(L, 1, kMetaName);
+    auto timestamp = static_cast<uint32_t>(luaL_checkinteger(L, 2));
+    auto increment = static_cast<uint32_t>(luaL_checkinteger(L, 3));
+    if (session) session->AdvanceOperationTime(timestamp, increment);
+    return 0;
+}
+
 int l_session_append_to_opts(lua_State* L) {
     auto* session = GetUserdata<mongo::MongoSession>(L, 1, kMetaName);
     auto* opts = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
@@ -99,6 +124,9 @@ const luaL_Reg kLib[] = {
     {"session_get_server_id", l_session_get_server_id},
     {"session_get_dirty", l_session_get_dirty},
     {"session_get_transaction_state", l_session_get_transaction_state},
+    {"session_advance_cluster_time", l_session_advance_cluster_time},
+    {"session_get_operation_time", l_session_get_operation_time},
+    {"session_advance_operation_time", l_session_advance_operation_time},
     {"session_append_to_opts", l_session_append_to_opts},
     {nullptr, nullptr},
 };
