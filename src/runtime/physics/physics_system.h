@@ -235,12 +235,8 @@ private:
     //   PhysicsEngineBridge. Therefore PhysicsEngineBridge needs access
     //   to all PhysicsSystem methods.
     //
-    // physics_bindings::Register: Lua binding registration.
-    //   Needs access to script_vm_ to register C++ functions into Lua.
-    //   Called during Initialize() while PT is not yet started (no races).
     // ==================================================================
     friend class PhysicsEngineBridge;
-    friend void physics_bindings::Register(ScriptVM& vm);
 
     // ── Members ──────────────────────────────────────────────────────
     //
@@ -262,11 +258,6 @@ private:
 
     std::atomic<bool> is_initialized_{false};                  // [MT] lifecycle methods only
 };
-
-// Forward declaration: binding registration (implemented in physics_bindings.cc)
-namespace physics_bindings {
-    void Register(ScriptVM& vm);
-}
 
 } // namespace engine
 

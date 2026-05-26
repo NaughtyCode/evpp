@@ -2,6 +2,7 @@
 
 #define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/physics_system.h"
+#include "runtime/physics/physics_bindings.h"
 
 #include <cstdio>
 #include <chrono>
