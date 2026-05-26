@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_optional.h"
 
 #include <mongoc/mongoc.h>
@@ -48,3 +50,5 @@ void* MongoOptional::Raw() { return storage_; }
 
 } // namespace mongo
 } // namespace engine
+
+#endif

@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_bson_ext.h"
 
 #include <cstdarg>
@@ -666,3 +668,5 @@ const char* kOid = "$oid";
 
 } // namespace mongo
 } // namespace engine
+
+#endif

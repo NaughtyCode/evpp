@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_bson.h"
 
 // mongo-c-driver headers — only included in .cc files, never in .h
@@ -921,3 +923,5 @@ void* BsonArrayBuilder::Raw() { return ptr_; }
 
 } // namespace mongo
 } // namespace engine
+
+#endif

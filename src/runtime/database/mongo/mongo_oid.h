@@ -1,5 +1,8 @@
 #pragma once
 
+#if defined(ENGINE_MONGODB_ENABLED)
+
+
 #include <cstdint>
 #include <string>
 
@@ -43,3 +46,5 @@ static_assert(sizeof(MongoOid) == 12, "MongoOid must be 12 bytes");
 
 } // namespace mongo
 } // namespace engine
+
+#endif

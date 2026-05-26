@@ -360,9 +360,11 @@ set(SERVERENGINE_SOURCES
     ${PROFILER_SOURCES}
     ${PHYSICS_HEADERS}
     ${EVPP_SOURCES}
-    ${MONGO_SOURCES}
-    ${MONGO_BIND_SOURCES}
 )
+
+if(ENGINE_MONGODB_ENABLED)
+    list(APPEND SERVERENGINE_SOURCES ${MONGO_SOURCES} ${MONGO_BIND_SOURCES})
+endif()
 
 if(ENGINE_PHYSICS_ENABLED)
     list(APPEND SERVERENGINE_SOURCES ${PHYSICS_CC})
@@ -387,6 +389,10 @@ endif()
 
 if(ENGINE_PROFILER_ENABLED)
     target_compile_definitions(CloudEngine PUBLIC ENGINE_PROFILER_ENABLED)
+endif()
+
+if(ENGINE_MONGODB_ENABLED)
+    target_compile_definitions(CloudEngine PUBLIC ENGINE_MONGODB_ENABLED)
 endif()
 
 # ── JoltPhysics ───────────────────────────────────────────────────────

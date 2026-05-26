@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_bulkwrite.h"
 
 #include <mongoc/mongoc.h>
@@ -630,3 +632,5 @@ void* MongoBulkWrite::Raw() { return impl_ ? impl_->bw : nullptr; }
 
 } // namespace mongo
 } // namespace engine
+
+#endif

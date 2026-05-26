@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_gridfs.h"
 
 #include <mongoc/mongoc.h>
@@ -448,3 +450,5 @@ void* MongoGridFsBucket::Raw() { return impl_ ? impl_->bucket : nullptr; }
 
 } // namespace mongo
 } // namespace engine
+
+#endif

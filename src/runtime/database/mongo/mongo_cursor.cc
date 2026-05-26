@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_cursor.h"
 
 #include <mongoc/mongoc.h>
@@ -147,3 +149,5 @@ uint32_t MongoCursor::GetMaxAwaitTimeMs() const {
 
 } // namespace mongo
 } // namespace engine
+
+#endif

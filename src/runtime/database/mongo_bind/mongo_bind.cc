@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo_bind/mongo_bind.h"
 
 #include <cstdint>
@@ -671,3 +673,5 @@ void ExportMongo(ScriptVM& vm) {
 
 } // namespace script
 } // namespace engine
+
+#endif

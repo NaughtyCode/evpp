@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_change_stream.h"
 
 #include <mongoc/mongoc.h>
@@ -67,3 +69,5 @@ void MongoChangeStream::SetRawStream(void* stream) {
 
 } // namespace mongo
 } // namespace engine
+
+#endif

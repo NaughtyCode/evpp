@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_oidc.h"
 
 #include <mongoc/mongoc.h>
@@ -174,3 +176,5 @@ void* MongoOidcCallback::Raw() { return impl_ ? impl_->cb : nullptr; }
 
 } // namespace mongo
 } // namespace engine
+
+#endif

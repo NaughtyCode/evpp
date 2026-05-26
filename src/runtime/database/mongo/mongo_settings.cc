@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_settings.h"
 #include "runtime/database/mongo/mongo_bson.h"
 
@@ -291,3 +293,5 @@ const void* MongoReadConcern::RawReadConcern() const {
 
 } // namespace mongo
 } // namespace engine
+
+#endif

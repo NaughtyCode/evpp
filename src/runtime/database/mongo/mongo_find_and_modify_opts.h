@@ -1,5 +1,8 @@
 #pragma once
 
+#if defined(ENGINE_MONGODB_ENABLED)
+
+
 #include <cstdint>
 #include <memory>
 
@@ -66,3 +69,5 @@ private:
 
 } // namespace mongo
 } // namespace engine
+
+#endif

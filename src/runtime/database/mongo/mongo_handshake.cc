@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_handshake.h"
 
 #include <mongoc/mongoc.h>
@@ -11,3 +13,5 @@ bool MongoHandshake::DataAppend(const char* driver_name, const char* driver_vers
 
 } // namespace mongo
 } // namespace engine
+
+#endif

@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_encryption.h"
 
 #include <mongoc/mongoc.h>
@@ -740,3 +742,5 @@ void* MongoClientEncryption::Raw() { return impl_ ? impl_->enc : nullptr; }
 
 } // namespace mongo
 } // namespace engine
+
+#endif

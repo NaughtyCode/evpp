@@ -1,5 +1,8 @@
 #pragma once
 
+#if defined(ENGINE_MONGODB_ENABLED)
+
+
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -309,3 +312,5 @@ private:
 
 } // namespace mongo
 } // namespace engine
+
+#endif

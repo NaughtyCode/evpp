@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_ssl.h"
 
 #include <mongoc/mongoc.h>
@@ -97,3 +99,5 @@ void* MongoSslOpts::Raw() { return &impl_->opts; }
 
 } // namespace mongo
 } // namespace engine
+
+#endif

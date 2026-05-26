@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_oid.h"
 
 #include <bson/bson.h>
@@ -78,3 +80,5 @@ time_t MongoOid::GetTimeT() const {
 
 } // namespace mongo
 } // namespace engine
+
+#endif

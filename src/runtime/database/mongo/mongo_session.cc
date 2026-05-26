@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_session.h"
 
 #include <mongoc/mongoc.h>
@@ -343,3 +345,5 @@ void MongoSession::SetRawSession(void* session) {
 
 } // namespace mongo
 } // namespace engine
+
+#endif

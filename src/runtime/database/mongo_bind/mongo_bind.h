@@ -1,5 +1,8 @@
 #pragma once
 
+#if defined(ENGINE_MONGODB_ENABLED)
+
+
 #include "runtime/core/engine_api.h"
 
 namespace engine {
@@ -14,3 +17,5 @@ ENGINE_API void ExportMongo(ScriptVM& vm);
 
 } // namespace script
 } // namespace engine
+
+#endif

@@ -1,5 +1,8 @@
 #pragma once
 
+#if defined(ENGINE_MONGODB_ENABLED)
+
+
 #include <cstddef>
 
 #include "runtime/core/engine_api.h"
@@ -15,3 +18,5 @@ struct ENGINE_API MongoIovec {
 
 } // namespace mongo
 } // namespace engine
+
+#endif

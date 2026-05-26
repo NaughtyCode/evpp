@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_index_model.h"
 
 #include <mongoc/mongoc.h>
@@ -40,3 +42,5 @@ void* MongoIndexModel::Raw() { return impl_ ? impl_->model : nullptr; }
 
 } // namespace mongo
 } // namespace engine
+
+#endif

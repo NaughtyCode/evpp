@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_bson_vector.h"
 
 #include <bson/bson.h>
@@ -388,3 +390,5 @@ bool BsonArrayBuilderAppendVectorElements(BsonArrayBuilder& builder, const BsonI
 
 } // namespace mongo
 } // namespace engine
+
+#endif

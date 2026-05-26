@@ -1,5 +1,8 @@
 #pragma once
 
+#if defined(ENGINE_MONGODB_ENABLED)
+
+
 // Forward declarations for all mongo wrapper types.
 // No mongo-c-driver headers included here — this header is safe to
 // include anywhere in the project.
@@ -102,3 +105,5 @@ struct MongoSocketPollFd;
 
 } // namespace mongo
 } // namespace engine
+
+#endif

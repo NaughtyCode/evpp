@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_client_pool.h"
 
 #include <mongoc/mongoc.h>
@@ -133,3 +135,5 @@ void* MongoClientPool::RawPool() {
 
 } // namespace mongo
 } // namespace engine
+
+#endif

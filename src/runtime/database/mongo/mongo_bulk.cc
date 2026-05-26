@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_bulk.h"
 
 #include <mongoc/mongoc.h>
@@ -196,3 +198,5 @@ void MongoBulkOperation::SetRawBulkOperation(void* bulk) {
 
 } // namespace mongo
 } // namespace engine
+
+#endif

@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_log.h"
 
 #include <mongoc/mongoc.h>
@@ -215,3 +217,5 @@ void* MongoStructuredLogOpts::Raw() { return impl_ ? impl_->opts : nullptr; }
 
 } // namespace mongo
 } // namespace engine
+
+#endif

@@ -1,5 +1,8 @@
 #pragma once
 
+#if defined(ENGINE_MONGODB_ENABLED)
+
+
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -68,3 +71,5 @@ struct ENGINE_API MongoSocketPollFd {
 
 } // namespace mongo
 } // namespace engine
+
+#endif

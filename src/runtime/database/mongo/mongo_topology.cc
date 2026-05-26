@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_topology.h"
 
 #include <mongoc/mongoc.h>
@@ -146,3 +148,5 @@ void* MongoTopologyDescription::Raw() const { return td_; }
 
 } // namespace mongo
 } // namespace engine
+
+#endif

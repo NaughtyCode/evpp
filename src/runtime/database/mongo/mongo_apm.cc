@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_apm.h"
 
 #include <mongoc/mongoc.h>
@@ -488,3 +490,5 @@ APM_SET_CB(server_heartbeat_failed, ServerHeartbeatFailed)
 
 } // namespace mongo
 } // namespace engine
+
+#endif

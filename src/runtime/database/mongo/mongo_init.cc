@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_init.h"
 
 #include <mongoc/mongoc.h>
@@ -10,3 +12,5 @@ void MongoInit::Cleanup() { mongoc_cleanup(); }
 
 } // namespace mongo
 } // namespace engine
+
+#endif

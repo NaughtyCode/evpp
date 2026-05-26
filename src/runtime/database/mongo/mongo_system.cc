@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_system.h"
 
 #include <mongoc/mongoc.h>
@@ -29,3 +31,5 @@ bool MongoSystem::IsInitialized() const {
 
 } // namespace mongo
 } // namespace engine
+
+#endif

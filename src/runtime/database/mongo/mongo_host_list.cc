@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_host_list.h"
 
 #include <mongoc/mongoc.h>
@@ -53,3 +55,5 @@ void* MongoHostList::Raw() { return &impl_->entry; }
 
 } // namespace mongo
 } // namespace engine
+
+#endif

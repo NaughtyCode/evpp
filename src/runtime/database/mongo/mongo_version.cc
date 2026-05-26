@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_version.h"
 
 #include <mongoc/mongoc.h>
@@ -24,3 +26,5 @@ bool MongoVersion::CheckBsonVersion(int major, int minor, int micro) {
 
 } // namespace mongo
 } // namespace engine
+
+#endif

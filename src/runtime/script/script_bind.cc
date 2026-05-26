@@ -7,7 +7,9 @@
 #include "runtime/script/msgpack_bind.h"
 #include "runtime/script/net_bind.h"
 #include "runtime/script/import_bind.h"
+#if defined(ENGINE_MONGODB_ENABLED)
 #include "runtime/database/mongo_bind/mongo_bind.h"
+#endif
 #include "runtime/vm/vm.h"
 
 namespace engine {
@@ -22,7 +24,9 @@ void ExportAll(ScriptVM& vm) {
     { ENGINE_PROFILE_SCRIPT_EXPORT("net");    ExportNet(vm);    }
     { ENGINE_PROFILE_SCRIPT_EXPORT("msgpack"); ExportMsgPack(vm); }
     { ENGINE_PROFILE_SCRIPT_EXPORT("import"); engine::ExportImport(vm); }
+#if defined(ENGINE_MONGODB_ENABLED)
     { ENGINE_PROFILE_SCRIPT_EXPORT("mongo");  ExportMongo(vm);  }
+#endif
 
     ENGINE_LOG_INFO(logger, "ScriptBind: all APIs exported");
 }

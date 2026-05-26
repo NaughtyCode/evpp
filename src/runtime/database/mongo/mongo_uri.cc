@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_uri.h"
 #include "runtime/database/mongo/mongo_bson.h"
 
@@ -275,3 +277,5 @@ bool MongoUri::SetOptionAsUtf8(const char* option, const char* value) {
 
 } // namespace mongo
 } // namespace engine
+
+#endif

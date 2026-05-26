@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_client.h"
 
 #include <mongoc/mongoc.h>
@@ -1040,3 +1042,5 @@ bool MongoCollection::CreateIndexesWithOpts(const void* const* models, size_t n_
 
 } // namespace mongo
 } // namespace engine
+
+#endif

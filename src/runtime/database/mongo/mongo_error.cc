@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_error.h"
 
 #include <bson/bson.h>
@@ -79,3 +81,5 @@ const void* MongoError::RawError() const {
 
 } // namespace mongo
 } // namespace engine
+
+#endif

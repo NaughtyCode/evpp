@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_rand.h"
 
 #include <mongoc/mongoc.h>
@@ -19,3 +21,5 @@ int MongoRand::Status() {
 
 } // namespace mongo
 } // namespace engine
+
+#endif

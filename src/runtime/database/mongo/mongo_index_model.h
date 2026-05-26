@@ -1,5 +1,8 @@
 #pragma once
 
+#if defined(ENGINE_MONGODB_ENABLED)
+
+
 #include <memory>
 
 #include "runtime/core/engine_api.h"
@@ -30,3 +33,5 @@ private:
 
 } // namespace mongo
 } // namespace engine
+
+#endif

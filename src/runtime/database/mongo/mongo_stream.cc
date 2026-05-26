@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_stream.h"
 
 #include <mongoc/mongoc.h>
@@ -275,3 +277,5 @@ void* MongoStream::Raw() { return impl_ ? impl_->stream : nullptr; }
 
 } // namespace mongo
 } // namespace engine
+
+#endif

@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_find_and_modify_opts.h"
 
 #include <mongoc/mongoc.h>
@@ -110,3 +112,5 @@ const void* MongoFindAndModifyOpts::RawOpts() const {
 
 } // namespace mongo
 } // namespace engine
+
+#endif

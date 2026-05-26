@@ -1,5 +1,8 @@
 #pragma once
 
+#if defined(ENGINE_MONGODB_ENABLED)
+
+
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -336,3 +339,5 @@ namespace BsonKeys {
 
 } // namespace mongo
 } // namespace engine
+
+#endif

@@ -1,3 +1,5 @@
+#if defined(ENGINE_MONGODB_ENABLED)
+
 #include "runtime/database/mongo/mongo_server_api.h"
 
 #include <mongoc/mongoc.h>
@@ -86,3 +88,5 @@ const void* MongoServerApi::RawServerApi() const {
 
 } // namespace mongo
 } // namespace engine
+
+#endif
