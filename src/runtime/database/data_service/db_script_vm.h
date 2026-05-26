@@ -59,7 +59,7 @@ enum DbCustomPtr : int {
 //   1. RegisterSubsystemObjects() — store DBThread/MongoClient/MongoClientPool ptrs
 //   2. ExportDbLog()               — per-thread log functions (R9)
 //   3. script::ExportMongo()       — mongoc.* / bson.* global modules (R10)
-//   4. ExportDbRuntime()           — db_get_client / db_get_pool globals
+//   4. ExportDbRuntime()           — db_get_client / db_get_pool / db_get_thread_info / db_get_config
 //   5. SetImportPath()             — configure require() search order (R12)
 //   6. DoDirectory() + InitScript()— load scripts (R12)
 
@@ -107,17 +107,16 @@ public:
 void ExportDbLog(ScriptVM& vm, quill::Logger* logger);
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ExportDbRuntime — register db_get_client / db_get_pool globals (R5)
+// ExportDbRuntime — register db_* runtime globals
 // ══════════════════════════════════════════════════════════════════════════════
 //
-// These globals let Lua scripts retrieve the current thread's MongoClient*
-// and pool's MongoClientPool* from the VM's CustomPtrStore (through the
-// DBScriptVM* upvalue). Used together with ExportMongo's mongoc.* bindings:
+// Registers global functions that Lua scripts use to access DBThread resources
+// and metadata from the VM's CustomPtrStore (through the DBScriptVM* upvalue):
 //
-//   local mongoc = require("mongoc")
-//   local client = db_get_client()
-//   local coll = mongoc.collection.new(client, "db", "coll")
-//   coll:insert_one(doc)
+//   db_get_client()      → MongoClient*       (lightuserdata for mongoc.* APIs)
+//   db_get_pool()        → MongoClientPool*    (lightuserdata for pool access)
+//   db_get_thread_info() → {index, running, healthy}  table
+//   db_get_config()      → {log, thread_pool, connection_pool, script}  table
 //
 // Called after ExportMongo (R10) and before InitScript.
 

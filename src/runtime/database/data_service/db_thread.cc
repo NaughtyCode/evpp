@@ -204,10 +204,12 @@ void DBThread::EnqueueResponse(DbResponse&& resp) {
 //      i. Set healthy_ = true.
 //
 //   3. Main loop (while running_):
-//      - try_dequeue a request (non-blocking).
-//      - kNoOp → discard (wakeup sentinel, already filtered above).
-//      - Other → ProcessRequest(req).
-//      - Empty queue → sleep 50ms (prevents busy-wait, matches PhysicsThread).
+//      Each iteration = one "frame". Drains all available requests
+//      (up to max_requests_per_frame if configured). Frame rate is
+//      maintained via target_fps — sleeps at end of frame to match
+//      the target rate; overruns are logged at WARN level.
+//      - target_fps = 0: unlimited mode, 1ms idle sleep only when queue empty.
+//      - Empty queue → sleep to avoid busy-wait.
 //      - Catch std::exception / ... → log, mark unhealthy, break to cleanup.
 //
 //   4. Cleanup (always executed, regardless of exit path):
@@ -266,20 +268,41 @@ void DBThread::EventLoop() {
         // 2i. Signal readiness to MT
         healthy_.store(true, std::memory_order_release);
 
-        // ── Phase 3: Main loop ─────────────────────────────────────────
+        // ── Phase 3: Main loop (frame-aware) ──────────────────────────
+        //
+        // Each iteration is one "frame". Within a frame the thread
+        // drains as many requests as possible (up to max_requests_per_frame,
+        // or unlimited if 0). Frame rate is gated by target_fps:
+        //   target_fps = 0  → unlimited, 1ms idle sleep to prevent CPU spin
+        //   target_fps > 0  → sleep at end of frame to maintain target rate
+        //
+        // Exception safety: any exception during request processing
+        // terminates the loop (same as before). This is deliberate —
+        // ProcessRequest has its own internal try/catch, so exceptions
+        // reaching here indicate a fatal VM or system error.
+
+        auto frame_interval = std::chrono::microseconds(0);
+        if (config_.thread_pool.target_fps > 0) {
+            frame_interval = std::chrono::microseconds(
+                1000000 / config_.thread_pool.target_fps);
+        }
+
         while (running_.load(std::memory_order_acquire)) {
+            auto frame_start = std::chrono::steady_clock::now();
+            int processed = 0;
+            int max_per_frame = config_.thread_pool.max_requests_per_frame;
+
             try {
                 DbRequest req;
-                if (request_queue_.try_dequeue(req)) {
+                while (request_queue_.try_dequeue(req)) {
                     if (req.operation != DbOperation::kNoOp) {
                         ProcessRequest(req);
                     }
                     // kNoOp is silently discarded — it's the wakeup sentinel
-                } else {
-                    // Idle: sleep to avoid busy-wait.
-                    // 50ms matches PhysicsThread convention — responsive enough
-                    // for interactive use, loose enough to keep CPU low.
-                    std::this_thread::sleep_for(std::chrono::microseconds(50000));
+                    processed++;
+                    if (max_per_frame > 0 && processed >= max_per_frame) {
+                        break;
+                    }
                 }
             } catch (const std::exception& e) {
                 ENGINE_LOG_ERROR(logger_, "DBThread[{}]: exception in event loop: {}",
@@ -293,6 +316,34 @@ void DBThread::EventLoop() {
                 healthy_.store(false, std::memory_order_release);
                 running_.store(false, std::memory_order_release);
                 break;
+            }
+
+            
+
+            frame_count_++;
+
+            // ── Frame rate control ─────────────────────────────────
+            if (config_.thread_pool.target_fps > 0) {
+                auto elapsed = std::chrono::steady_clock::now() - frame_start;
+                if (elapsed < frame_interval) {
+                    std::this_thread::sleep_for(frame_interval - elapsed);
+                } else if (processed > 0 &&
+                           elapsed > frame_interval * 2) {
+                    ENGINE_LOG_WARN(logger_,
+                        "DBThread[{}]: frame overrun, elapsed={}us budget={}us "
+                        "processed={} frame={}",
+                        index_,
+                        std::chrono::duration_cast<std::chrono::microseconds>(
+                            elapsed).count(),
+                        frame_interval.count(),
+                        processed,
+                        frame_count_);
+                }
+            } else if (processed == 0) {
+                // Unlimited mode: minimal sleep when idle to avoid
+                // busy-wait. 1ms keeps latency low while preventing
+                // 100% CPU spin on an empty queue.
+                std::this_thread::sleep_for(std::chrono::microseconds(1000));
             }
         }
     } catch (const std::exception& e) {

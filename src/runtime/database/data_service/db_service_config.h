@@ -51,11 +51,18 @@ struct DbScriptConfig {
 // Each DBThread has two moodycamel::ConcurrentQueue instances:
 //   request_queue  (MT → DBT): gated by request_queue_size  (back-pressure)
 //   response_queue (DBT → MT): gated by response_queue_size (oldest dropped)
+//
+// Frame rate control:
+//   target_fps = 0           → unlimited: process all available requests, 1ms idle sleep
+//   target_fps = N (e.g. 60) → maintain N iterations/sec, sleep at end of each frame
+//   max_requests_per_frame   → cap requests per frame (0 = unlimited)
 
 struct DbThreadPoolConfig {
     int thread_count = 4;              // number of DBThreads (R7, default 4)
     int request_queue_size = 1024;     // max pending requests per thread
     int response_queue_size = 1024;    // max pending responses per thread
+    int target_fps = 0;                // target loop iterations per second (0 = unlimited, as fast as possible)
+    int max_requests_per_frame = 0;    // max requests to process per frame (0 = unlimited)
 };
 
 // ══════════════════════════════════════════════════════════════════════════════

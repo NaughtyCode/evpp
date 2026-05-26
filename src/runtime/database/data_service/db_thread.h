@@ -87,6 +87,7 @@ public:
     bool IsHealthy() const { return healthy_.load(std::memory_order_acquire); }
     int  Index() const { return index_; }
     quill::Logger* GetLogger() const { return logger_; }
+    const DbServiceConfig& GetConfig() const { return config_; }
 
     // ── ScriptVM access (module-internal, DBT only) ────────────────────
 
@@ -144,6 +145,9 @@ private:
     std::unique_ptr<std::thread> thread_;                          // [MT] lifecycle (spawned in Start, joined in Stop)
     std::atomic<bool> running_{false};                             // [ATOM] MT writes (Start/Stop), DBT reads (loop condition)
     std::atomic<bool> healthy_{false};                             // [ATOM] DBT writes (init done / error), MT reads (IsHealthy)
+
+    // ── Frame timing ────────────────────────────────────────────────────
+    int64_t frame_count_ = 0;                                      // [DBT] total completed frames, for diagnostics
 };
 
 } // namespace engine

@@ -8,7 +8,9 @@
   "thread_pool": {
     "thread_count": 4,
     "request_queue_size": 1024,
-    "response_queue_size": 1024
+    "response_queue_size": 1024,
+    "target_fps": 120,
+    "max_requests_per_frame": 0
   },
   "connection_pool": {
     "max_pool_size": 16,

@@ -95,6 +95,116 @@ int l_db_get_pool(lua_State* L) {
     return 1;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// db_get_thread_info — expose DBThread basic info to Lua
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Returns a table: { index = <int>, running = <bool>, healthy = <bool> }
+// Useful for Lua scripts that need to identify which thread they're running on
+// or check the thread's health status for diagnostic purposes.
+//
+// Captures DBScriptVM* as upvalue(1), reads DBThread* from CustomPtr slot.
+
+int l_db_get_thread_info(lua_State* L) {
+    auto& vm = *static_cast<DBScriptVM*>(lua_touserdata(L, lua_upvalueindex(1)));
+    auto* thread = vm.GetDBThread();
+    if (!thread) {
+        lua_pushnil(L);
+        lua_pushstring(L, "DBThread not available");
+        return 2;
+    }
+
+    lua_newtable(L);
+    lua_pushinteger(L, thread->Index());
+    lua_setfield(L, -2, "index");
+    lua_pushboolean(L, thread->IsRunning() ? 1 : 0);
+    lua_setfield(L, -2, "running");
+    lua_pushboolean(L, thread->IsHealthy() ? 1 : 0);
+    lua_setfield(L, -2, "healthy");
+    return 1;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// l_push_kv — helper: push key + value and set into table at -3
+// ══════════════════════════════════════════════════════════════════════════════
+
+inline void l_push_kv(lua_State* L, const char* key, const char* val) {
+    lua_pushstring(L, key);
+    lua_pushstring(L, val);
+    lua_settable(L, -3);
+}
+inline void l_push_kv(lua_State* L, const char* key, int val) {
+    lua_pushstring(L, key);
+    lua_pushinteger(L, val);
+    lua_settable(L, -3);
+}
+inline void l_push_kv(lua_State* L, const char* key, bool val) {
+    lua_pushstring(L, key);
+    lua_pushboolean(L, val ? 1 : 0);
+    lua_settable(L, -3);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// db_get_config — expose DbServiceConfig to Lua as a nested table
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Returns a nested table with the full DbServiceConfig tree:
+//   {
+//     log = { dir, level, rotation_size_mb, max_backup_files },
+//     thread_pool = { thread_count, request_queue_size, response_queue_size,
+//                     target_fps, max_requests_per_frame },
+//     connection_pool = { max_pool_size, wait_queue_timeout_ms },
+//     script = { runtime_scripts_dir, db_scripts_dir, auto_load }
+//   }
+//
+// Captures DBScriptVM* as upvalue(1), reads DBThread* → GetConfig().
+// The config is immutable after Start(), so no thread-safety concern.
+
+int l_db_get_config(lua_State* L) {
+    auto& vm = *static_cast<DBScriptVM*>(lua_touserdata(L, lua_upvalueindex(1)));
+    auto* thread = vm.GetDBThread();
+    if (!thread) {
+        lua_pushnil(L);
+        lua_pushstring(L, "DBThread not available");
+        return 2;
+    }
+    const auto& cfg = thread->GetConfig();
+
+    lua_newtable(L);  // root table
+
+    // cfg.log
+    lua_newtable(L);
+    l_push_kv(L, "dir", cfg.log.dir.c_str());
+    l_push_kv(L, "level", cfg.log.level.c_str());
+    l_push_kv(L, "rotation_size_mb", cfg.log.rotation_size_mb);
+    l_push_kv(L, "max_backup_files", cfg.log.max_backup_files);
+    lua_setfield(L, -2, "log");
+
+    // cfg.thread_pool
+    lua_newtable(L);
+    l_push_kv(L, "thread_count", cfg.thread_pool.thread_count);
+    l_push_kv(L, "request_queue_size", cfg.thread_pool.request_queue_size);
+    l_push_kv(L, "response_queue_size", cfg.thread_pool.response_queue_size);
+    l_push_kv(L, "target_fps", cfg.thread_pool.target_fps);
+    l_push_kv(L, "max_requests_per_frame", cfg.thread_pool.max_requests_per_frame);
+    lua_setfield(L, -2, "thread_pool");
+
+    // cfg.connection_pool
+    lua_newtable(L);
+    l_push_kv(L, "max_pool_size", cfg.connection_pool.max_pool_size);
+    l_push_kv(L, "wait_queue_timeout_ms", cfg.connection_pool.wait_queue_timeout_ms);
+    lua_setfield(L, -2, "connection_pool");
+
+    // cfg.script
+    lua_newtable(L);
+    l_push_kv(L, "runtime_scripts_dir", cfg.script.runtime_scripts_dir.c_str());
+    l_push_kv(L, "db_scripts_dir", cfg.script.db_scripts_dir.c_str());
+    l_push_kv(L, "auto_load", cfg.script.auto_load);
+    lua_setfield(L, -2, "script");
+
+    return 1;
+}
+
 } // namespace
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -127,14 +237,18 @@ void ExportDbLog(ScriptVM& vm, quill::Logger* logger) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ExportDbRuntime — register db_get_client / db_get_pool globals
+// ExportDbRuntime — register db_* runtime globals
 // ══════════════════════════════════════════════════════════════════════════════
 //
-// Registers two global functions that Lua scripts use to obtain the current
-// DBThread's MongoClient* and the shared MongoClientPool*. Both capture
-// the DBScriptVM* as their upvalue so they can read from the CustomPtrStore
-// at call time (no stale pointer issue — the store is re-populated every
-// EventLoop restart).
+// Registers global functions that Lua scripts use to obtain:
+//   db_get_client()      — MongoClient* (lightuserdata, for mongoc.* APIs)
+//   db_get_pool()        — MongoClientPool* (lightuserdata, for pool access)
+//   db_get_thread_info() — {index, running, healthy} table
+//   db_get_config()      — {log, thread_pool, connection_pool, script} nested table
+//
+// All four capture the DBScriptVM* as an upvalue so they can read from the
+// CustomPtrStore at call time. The store is re-populated every EventLoop
+// restart, so pointers are always fresh.
 //
 // Called after ExportMongo and before InitScript in the EventLoop init sequence.
 
@@ -147,6 +261,12 @@ void ExportDbRuntime(ScriptVM& vm) {
 
     lua_pushvalue(L, -1); lua_pushcclosure(L, l_db_get_pool, 1);
     lua_setglobal(L, "db_get_pool");
+
+    lua_pushvalue(L, -1); lua_pushcclosure(L, l_db_get_thread_info, 1);
+    lua_setglobal(L, "db_get_thread_info");
+
+    lua_pushvalue(L, -1); lua_pushcclosure(L, l_db_get_config, 1);
+    lua_setglobal(L, "db_get_config");
 
     lua_pop(L, 1);
 }
