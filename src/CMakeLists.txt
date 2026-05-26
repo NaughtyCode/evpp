@@ -8,7 +8,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(ENGINE_PHYSICS_ENABLED "Enable the JoltPhysics engine subsystem" ON)
 option(BUILD_EXAMPLES "Build example programs (requires NOT EVPP_VCPKG_BUILD)" OFF)
 option(BUILD_BENCHMARKS "Build benchmark programs (requires NOT EVPP_VCPKG_BUILD)" OFF)
-option(BUILD_CLIENT "Build GameClient library" ON)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
@@ -86,9 +85,7 @@ message (STATUS "THRIFT_LIBRARY " ${THRIFT_LIBRARY})
 add_subdirectory (runtime)
 add_subdirectory (tests)
 add_subdirectory (server)
-if(BUILD_CLIENT)
-    add_subdirectory (client)
-endif()
+add_subdirectory (client)
 
 set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT server)
 

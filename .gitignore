@@ -127,3 +127,6 @@ build_server/*
 
 build_test*/*
 
+*/CMakeFiles/*
+build_t*/*
+
