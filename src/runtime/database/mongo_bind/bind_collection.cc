@@ -7,9 +7,13 @@
 #include <vector>
 
 #include "runtime/database/mongo/mongo_bson.h"
+#include "runtime/database/mongo/mongo_bulk.h"
+#include "runtime/database/mongo/mongo_change_stream.h"
 #include "runtime/database/mongo/mongo_client.h"
 #include "runtime/database/mongo/mongo_cursor.h"
 #include "runtime/database/mongo/mongo_error.h"
+#include "runtime/database/mongo/mongo_find_and_modify_opts.h"
+#include "runtime/database/mongo/mongo_settings.h"
 
 namespace engine {
 namespace script {
@@ -176,6 +180,100 @@ int l_set_write_concern(lua_State* L) {
     return 0;
 }
 
+int l_set_read_concern(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    auto* concern = GetUserdata<mongo::MongoReadConcern>(L, 2, "mongoc.read_concern");
+    if (coll && concern) coll->SetReadConcern(*concern);
+    return 0;
+}
+
+int l_watch(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    auto* pipeline = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr
+                 : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    if (!coll || !pipeline) { lua_pushnil(L); return 1; }
+    auto* stream = coll->Watch(*pipeline, opts);
+    if (!stream) { lua_pushnil(L); return 1; }
+    auto** ud = NewUserdata<mongo::MongoChangeStream>(L, "mongoc.change_stream");
+    *ud = stream;
+    return 1;
+}
+
+int l_find_and_modify(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    auto* query = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr
+                  : GetUserdata<mongo::MongoFindAndModifyOpts>(L, 3, "mongoc.find_and_modify_opts");
+    if (!coll || !query) { lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::BsonDocument reply;
+    mongo::MongoError error;
+    bool ok = coll->FindAndModify(*query, opts, &reply, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) { lua_pushstring(L, error.Message()); lua_pushnil(L); }
+    else {
+        auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+        if (!doc) { lua_pushnil(L); lua_pushnil(L); return 3; }
+        lua_pushnil(L);
+        auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+        *ud = doc;
+    }
+    return 3;
+}
+
+int l_create_index(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    auto* keys = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr
+                  : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    if (!coll || !keys) { lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::BsonDocument reply;
+    mongo::MongoError error;
+    bool ok = coll->CreateIndex(*keys, opts, &reply, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) { lua_pushstring(L, error.Message()); lua_pushnil(L); }
+    else {
+        auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+        if (!doc) { lua_pushnil(L); lua_pushnil(L); return 3; }
+        lua_pushnil(L);
+        auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+        *ud = doc;
+    }
+    return 3;
+}
+
+int l_drop_index(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    const char* name = luaL_checkstring(L, 2);
+    if (!coll) { lua_pushboolean(L, false); return 1; }
+    mongo::MongoError error;
+    lua_pushboolean(L, coll->DropIndex(name, &error));
+    return 1;
+}
+
+int l_find_indexes(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    auto* opts = lua_isnoneornil(L, 2) ? nullptr
+                  : GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    if (!coll) { lua_pushnil(L); return 1; }
+    auto* cursor = coll->FindIndexes(opts);
+    if (!cursor) { lua_pushnil(L); return 1; }
+    auto** ud = NewUserdata<mongo::MongoCursor>(L, "mongoc.cursor");
+    *ud = cursor;
+    return 1;
+}
+
+int l_create_bulk_operation(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    bool ordered = lua_toboolean(L, 2) != 0;
+    if (!coll) { lua_pushnil(L); return 1; }
+    auto* bulk = coll->CreateBulkOperation(ordered, nullptr);
+    if (!bulk) { lua_pushnil(L); return 1; }
+    auto** ud = NewUserdata<mongo::MongoBulkOperation>(L, "mongoc.bulk_operation");
+    *ud = bulk;
+    return 1;
+}
+
 int l_replace_one(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* selector = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
@@ -248,6 +346,13 @@ const luaL_Reg kLib[] = {
     {"coll_get_name", l_get_name},
     {"coll_set_read_prefs", l_set_read_prefs},
     {"coll_set_write_concern", l_set_write_concern},
+    {"coll_set_read_concern", l_set_read_concern},
+    {"coll_watch", l_watch},
+    {"coll_find_and_modify", l_find_and_modify},
+    {"coll_create_index", l_create_index},
+    {"coll_drop_index", l_drop_index},
+    {"coll_find_indexes", l_find_indexes},
+    {"coll_create_bulk_operation", l_create_bulk_operation},
     {nullptr, nullptr},
 };
 

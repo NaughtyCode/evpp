@@ -5,9 +5,13 @@
 
 #include <new>
 
+#include <bson/bson.h>
+
 #include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_client.h"
+#include "runtime/database/mongo/mongo_change_stream.h"
 #include "runtime/database/mongo/mongo_error.h"
+#include "runtime/database/mongo/mongo_server_api.h"
 #include "runtime/database/mongo/mongo_session.h"
 
 namespace engine {
@@ -148,6 +152,44 @@ int l_set_read_concern(lua_State* L) {
     return 0;
 }
 
+int l_set_server_api(lua_State* L) {
+    auto* client = GetUserdata<mongo::MongoClient>(L, 1, kMetaName);
+    auto* api = GetUserdata<mongo::MongoServerApi>(L, 2, "mongoc.server_api");
+    if (!client || !api) { lua_pushboolean(L, false); return 1; }
+    mongo::MongoError error;
+    lua_pushboolean(L, client->SetServerApi(*api, &error));
+    return 1;
+}
+
+int l_watch(lua_State* L) {
+    auto* client = GetUserdata<mongo::MongoClient>(L, 1, kMetaName);
+    auto* pipeline = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr
+                 : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    if (!client || !pipeline) { lua_pushnil(L); return 1; }
+    auto* stream = client->Watch(*pipeline, opts);
+    if (!stream) { lua_pushnil(L); return 1; }
+    auto** ud = NewUserdata<mongo::MongoChangeStream>(L, "mongoc.change_stream");
+    *ud = stream;
+    return 1;
+}
+
+int l_get_database_names(lua_State* L) {
+    auto* client = GetUserdata<mongo::MongoClient>(L, 1, kMetaName);
+    if (!client) { lua_pushnil(L); return 1; }
+    mongo::MongoError error;
+    char** names = client->GetDatabaseNames(&error);
+    if (!names) { lua_pushnil(L); lua_pushstring(L, error.Message()); return 2; }
+    lua_newtable(L);
+    int i = 1;
+    for (char** p = names; *p; ++p) {
+        lua_pushstring(L, *p);
+        lua_rawseti(L, -2, i++);
+    }
+    bson_strfreev(names);
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"client_new", l_new},
     {"client_destroy", l_destroy},
@@ -161,6 +203,9 @@ const luaL_Reg kLib[] = {
     {"client_set_read_prefs", l_set_read_prefs},
     {"client_set_write_concern", l_set_write_concern},
     {"client_set_read_concern", l_set_read_concern},
+    {"client_set_server_api", l_set_server_api},
+    {"client_watch", l_watch},
+    {"client_get_database_names", l_get_database_names},
     {nullptr, nullptr},
 };
 

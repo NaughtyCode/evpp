@@ -5,6 +5,7 @@
 
 #include <new>
 
+#include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_error.h"
 #include "runtime/database/mongo/mongo_session.h"
 
@@ -80,6 +81,15 @@ int l_get_transaction_state(lua_State* L) {
     return 1;
 }
 
+int l_append_to_opts(lua_State* L) {
+    auto* session = GetUserdata<mongo::MongoSession>(L, 1, kMetaName);
+    auto* opts = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    if (!session || !opts) { lua_pushboolean(L, false); return 1; }
+    mongo::MongoError error;
+    lua_pushboolean(L, session->AppendToOpts(opts, &error));
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"session_destroy", l_destroy},
     {"session_start_transaction", l_start_transaction},
@@ -89,6 +99,7 @@ const luaL_Reg kLib[] = {
     {"session_get_server_id", l_get_server_id},
     {"session_get_dirty", l_get_dirty},
     {"session_get_transaction_state", l_get_transaction_state},
+    {"session_append_to_opts", l_append_to_opts},
     {nullptr, nullptr},
 };
 

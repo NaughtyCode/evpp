@@ -87,6 +87,71 @@ int l_is_default(lua_State* L) {
     return 1;
 }
 
+int l_copy(lua_State* L) {
+    auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 1, kMetaName);
+    if (!concern) { lua_pushnil(L); return 1; }
+    auto* copy = new (std::nothrow) mongo::MongoWriteConcern(concern->Copy());
+    if (!copy) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::MongoWriteConcern>(L, kMetaName);
+    *ud = copy;
+    return 1;
+}
+
+int l_journal_is_set(lua_State* L) {
+    auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 1, kMetaName);
+    lua_pushboolean(L, concern && concern->JournalIsSet());
+    return 1;
+}
+
+int l_get_w_timeout_int64(lua_State* L) {
+    auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 1, kMetaName);
+    lua_pushinteger(L, concern ? concern->GetWTimeoutInt64() : 0);
+    return 1;
+}
+
+int l_set_w_timeout_int64(lua_State* L) {
+    auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 1, kMetaName);
+    auto timeout = static_cast<int64_t>(luaL_checkinteger(L, 2));
+    if (concern) concern->SetWTimeoutInt64(timeout);
+    return 0;
+}
+
+int l_get_w_majority(lua_State* L) {
+    auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 1, kMetaName);
+    lua_pushboolean(L, concern && concern->GetWMajority());
+    return 1;
+}
+
+int l_set_w_majority(lua_State* L) {
+    auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 1, kMetaName);
+    auto timeout = static_cast<int32_t>(luaL_checkinteger(L, 2));
+    if (concern) concern->SetWMajority(timeout);
+    return 0;
+}
+
+int l_get_w_tag(lua_State* L) {
+    auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 1, kMetaName);
+    const char* tag = concern ? concern->GetWTag() : nullptr;
+    if (tag) lua_pushstring(L, tag);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_set_w_tag(lua_State* L) {
+    auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 1, kMetaName);
+    const char* tag = luaL_checkstring(L, 2);
+    lua_pushinteger(L, concern ? concern->SetWTag(tag) : 0);
+    return 1;
+}
+
+int l_append_to_opts(lua_State* L) {
+    auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 1, kMetaName);
+    auto* opts = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    if (!concern || !opts) { lua_pushboolean(L, false); return 1; }
+    lua_pushboolean(L, concern->AppendToOpts(*opts));
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"write_concern_new", l_new},
     {"write_concern_destroy", l_destroy},
@@ -99,6 +164,15 @@ const luaL_Reg kLib[] = {
     {"write_concern_is_acknowledged", l_is_acknowledged},
     {"write_concern_is_valid", l_is_valid},
     {"write_concern_is_default", l_is_default},
+    {"write_concern_copy", l_copy},
+    {"write_concern_journal_is_set", l_journal_is_set},
+    {"write_concern_get_w_timeout_int64", l_get_w_timeout_int64},
+    {"write_concern_set_w_timeout_int64", l_set_w_timeout_int64},
+    {"write_concern_get_w_majority", l_get_w_majority},
+    {"write_concern_set_w_majority", l_set_w_majority},
+    {"write_concern_get_w_tag", l_get_w_tag},
+    {"write_concern_set_w_tag", l_set_w_tag},
+    {"write_concern_append_to_opts", l_append_to_opts},
     {nullptr, nullptr},
 };
 

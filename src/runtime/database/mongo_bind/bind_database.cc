@@ -5,10 +5,14 @@
 
 #include <new>
 
+#include <bson/bson.h>
+
 #include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_client.h"
+#include "runtime/database/mongo/mongo_change_stream.h"
 #include "runtime/database/mongo/mongo_cursor.h"
 #include "runtime/database/mongo/mongo_error.h"
+#include "runtime/database/mongo/mongo_settings.h"
 
 namespace engine {
 namespace script {
@@ -91,6 +95,74 @@ int l_set_write_concern(lua_State* L) {
     return 0;
 }
 
+int l_set_read_concern(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    auto* concern = GetUserdata<mongo::MongoReadConcern>(L, 2, "mongoc.read_concern");
+    if (db && concern) db->SetReadConcern(*concern);
+    return 0;
+}
+
+int l_watch(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    auto* pipeline = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr
+                 : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    if (!db || !pipeline) { lua_pushnil(L); return 1; }
+    auto* stream = db->Watch(*pipeline, opts);
+    if (!stream) { lua_pushnil(L); return 1; }
+    auto** ud = NewUserdata<mongo::MongoChangeStream>(L, "mongoc.change_stream");
+    *ud = stream;
+    return 1;
+}
+
+int l_get_collection_names(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    if (!db) { lua_pushnil(L); return 1; }
+    mongo::MongoError error;
+    char** names = db->GetCollectionNames(&error);
+    if (!names) { lua_pushnil(L); lua_pushstring(L, error.Message()); return 2; }
+    lua_newtable(L);
+    int i = 1;
+    for (char** p = names; *p; ++p) {
+        lua_pushstring(L, *p);
+        lua_rawseti(L, -2, i++);
+    }
+    bson_strfreev(names);
+    return 1;
+}
+
+int l_has_collection(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    const char* name = luaL_checkstring(L, 2);
+    if (!db) { lua_pushboolean(L, false); return 1; }
+    mongo::MongoError error;
+    lua_pushboolean(L, db->HasCollection(name, &error));
+    return 1;
+}
+
+int l_command_with_opts(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    auto* cmd = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* prefs = lua_isnoneornil(L, 3) ? nullptr
+                   : GetUserdata<mongo::MongoReadPrefs>(L, 3, "mongoc.read_prefs");
+    auto* opts = lua_isnoneornil(L, 4) ? nullptr
+                  : GetUserdata<mongo::BsonDocument>(L, 4, "bson.doc");
+    if (!db || !cmd) { lua_pushnil(L); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::BsonDocument reply;
+    mongo::MongoError error;
+    bool ok = db->CommandWithOpts(*cmd, prefs, opts, &reply, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) { lua_pushstring(L, error.Message()); lua_pushnil(L); }
+    else {
+        auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+        if (!doc) { lua_pushnil(L); lua_pushnil(L); return 3; }
+        lua_pushnil(L);
+        auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+        *ud = doc;
+    }
+    return 3;
+}
+
 int l_create_collection(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     const char* name = luaL_checkstring(L, 2);
@@ -132,6 +204,11 @@ const luaL_Reg kLib[] = {
     {"db_command_simple", l_command_simple},
     {"db_set_read_prefs", l_set_read_prefs},
     {"db_set_write_concern", l_set_write_concern},
+    {"db_set_read_concern", l_set_read_concern},
+    {"db_watch", l_watch},
+    {"db_get_collection_names", l_get_collection_names},
+    {"db_has_collection", l_has_collection},
+    {"db_command_with_opts", l_command_with_opts},
     {nullptr, nullptr},
 };
 

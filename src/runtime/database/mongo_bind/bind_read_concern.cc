@@ -46,6 +46,16 @@ int l_set_level(lua_State* L) {
     return 1;
 }
 
+int l_copy(lua_State* L) {
+    auto* concern = GetUserdata<mongo::MongoReadConcern>(L, 1, kMetaName);
+    if (!concern) { lua_pushnil(L); return 1; }
+    auto* copy = new (std::nothrow) mongo::MongoReadConcern(concern->Copy());
+    if (!copy) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::MongoReadConcern>(L, kMetaName);
+    *ud = copy;
+    return 1;
+}
+
 int l_is_default(lua_State* L) {
     auto* concern = GetUserdata<mongo::MongoReadConcern>(L, 1, kMetaName);
     lua_pushboolean(L, concern && concern->IsDefault());
@@ -63,6 +73,7 @@ int l_append_to_opts(lua_State* L) {
 const luaL_Reg kLib[] = {
     {"read_concern_new", l_new},
     {"read_concern_destroy", l_destroy},
+    {"read_concern_copy", l_copy},
     {"read_concern_get_level", l_get_level},
     {"read_concern_set_level", l_set_level},
     {"read_concern_is_default", l_is_default},

@@ -57,12 +57,54 @@ int l_is_valid(lua_State* L) {
     return 1;
 }
 
+int l_copy(lua_State* L) {
+    auto* prefs = GetUserdata<mongo::MongoReadPrefs>(L, 1, kMetaName);
+    if (!prefs) { lua_pushnil(L); return 1; }
+    auto* copy = new (std::nothrow) mongo::MongoReadPrefs(prefs->Copy());
+    if (!copy) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::MongoReadPrefs>(L, kMetaName);
+    *ud = copy;
+    return 1;
+}
+
+int l_get_max_staleness(lua_State* L) {
+    auto* prefs = GetUserdata<mongo::MongoReadPrefs>(L, 1, kMetaName);
+    lua_pushinteger(L, prefs ? prefs->GetMaxStalenessSeconds() : 0);
+    return 1;
+}
+
+int l_set_tags(lua_State* L) {
+    auto* prefs = GetUserdata<mongo::MongoReadPrefs>(L, 1, kMetaName);
+    auto* tags = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    if (prefs && tags) prefs->SetTags(*tags);
+    return 0;
+}
+
+int l_add_tag(lua_State* L) {
+    auto* prefs = GetUserdata<mongo::MongoReadPrefs>(L, 1, kMetaName);
+    auto* tag = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    if (prefs && tag) prefs->AddTag(*tag);
+    return 0;
+}
+
+int l_set_hedge(lua_State* L) {
+    auto* prefs = GetUserdata<mongo::MongoReadPrefs>(L, 1, kMetaName);
+    auto* hedge = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    if (prefs && hedge) prefs->SetHedge(*hedge);
+    return 0;
+}
+
 const luaL_Reg kLib[] = {
     {"read_prefs_new", l_new},
     {"read_prefs_destroy", l_destroy},
     {"read_prefs_get_mode", l_get_mode},
     {"read_prefs_set_mode", l_set_mode},
     {"read_prefs_set_max_staleness_seconds", l_set_max_staleness_seconds},
+    {"read_prefs_get_max_staleness_seconds", l_get_max_staleness},
+    {"read_prefs_set_tags", l_set_tags},
+    {"read_prefs_add_tag", l_add_tag},
+    {"read_prefs_set_hedge", l_set_hedge},
+    {"read_prefs_copy", l_copy},
     {"read_prefs_is_valid", l_is_valid},
     {nullptr, nullptr},
 };
