@@ -26,6 +26,9 @@
 #include "runtime/core/timer/timer_manager.h"
 #if defined(ENGINE_MONGODB_ENABLED)
 #include "runtime/database/mongo/mongo_system.h"
+#include "runtime/database/mongo/mongo_uri.h"
+#include "runtime/database/data_service/database_service.h"
+#include "runtime/database/data_service/db_service_config.h"
 #endif
 #include "runtime/physics/physics_engine_bridge.h"
 #include "runtime/profiler/profiler_core.h"
@@ -110,6 +113,32 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
     {
         bool mongo_ok = mongo::MongoSystem::Instance().Initialize();
         ENGINE_LOG_INFO(logger, "mongo system initialized, ok=[{}]", mongo_ok);
+    }
+
+    // ── Database service initialization ───────────────────────────────
+    {
+        auto server_cfg = ConfigManager::Instance().GetServerConfig();
+        DbServiceConfig db_svc_config;
+        if (!server_cfg.db_service.empty()) {
+            ConfigManager::LoadDbServiceConfigFromFile(
+                server_cfg.db_service, db_svc_config);
+        }
+
+#ifndef NDEBUG
+        auto& mongo_cfg = ConfigManager::Instance().GetMongoDbDevConfig();
+#else
+        auto& mongo_cfg = ConfigManager::Instance().GetMongoDbPublicConfig();
+#endif
+        auto uri = mongo::MongoUri::New(mongo_cfg.connection.uri.c_str());
+
+        if (db_svc_config.connection_pool.wait_queue_timeout_ms > 0) {
+            uri.SetOptionAsInt32("waitQueueTimeoutMS",
+                static_cast<int32_t>(db_svc_config.connection_pool.wait_queue_timeout_ms));
+        }
+
+        bool ok = DatabaseService::Instance().Initialize(db_svc_config, uri);
+        ENGINE_LOG_INFO(logger, "database service initialized, ok=[{}]", ok);
+
     }
 #endif
 
@@ -216,6 +245,39 @@ void Engine::Start() {
     running_ = true;
     last_frame_time_ = std::chrono::steady_clock::now();
     last_work_time_ = last_frame_time_;
+
+#if defined(ENGINE_MONGODB_ENABLED) && !defined(NDEBUG)
+    // ── DB Service smoke test: SendRequest → PollResponse ──────────
+    // Validates the end-to-end SPSC pipeline.  Uses kExecuteScript to
+    // avoid MongoDB network I/O (kCommand on a background thread breaks
+    // libevent frame timers on Windows when no server is running).
+    {
+        DbRequest req;
+        req.request_id = 100;
+        req.operation = DbOperation::kExecuteScript;
+        req.script = "return 'hello from db vm'";
+        DatabaseService::Instance().SendRequest(std::move(req));
+    }
+    {
+        auto done = std::make_shared<bool>(false);
+        auto poll_timer = std::make_shared<evpp::InvokeTimerPtr>();
+        *poll_timer = Engine::Instance().GetEventLoop()->RunEvery(
+            evpp::Duration(evpp::Duration::kMillisecond * 250),
+            [done, poll_timer]() {
+                if (*done) return;
+                auto resp = DatabaseService::Instance().PollResponse();
+                if (resp) {
+                    *done = true;
+                    std::fprintf(stderr, "[db-smoke] response: id=%llu ok=%d\n",
+                                 (unsigned long long)resp->request_id,
+                                 resp->success ? 1 : 0);
+                    fflush(stderr);
+                    (*poll_timer)->Cancel();
+                }
+            });
+    }
+#endif
+
     std::fprintf(stderr, "[engine] Start() complete, running_=true\n");
 }
 
@@ -281,8 +343,9 @@ void Engine::Cleanup() {
     // Shutdown physics (stops thread + destroys physics VM) — before engine VM
     PhysicsEngineBridge::Instance().Shutdown();
 
-    // Shutdown mongo driver
+    // Shutdown database service (before mongo driver cleanup)
 #if defined(ENGINE_MONGODB_ENABLED)
+    DatabaseService::Instance().Shutdown();
     mongo::MongoSystem::Instance().Shutdown();
 #endif
 

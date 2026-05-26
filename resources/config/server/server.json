@@ -7,5 +7,6 @@
   },
   "mongodb_dev":"resources/config/server/mongodb_dev.json",
   "mongodb_public":"resources/config/server/mongodb_public.json",
+  "db_service": "resources/config/server/db_service.json",
   "scripts_dir": "resources/script/server"
 }

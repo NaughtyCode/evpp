@@ -10,6 +10,9 @@
 
 namespace engine {
 
+// Forward declaration for database service config
+struct DbServiceConfig;
+
 //============================================================================
 // Config structs — aggregates for glaze auto-reflection (C++23).
 // JSON key names match struct member names (snake_case).
@@ -168,6 +171,9 @@ struct ServerConfig {
     // These are separate JSON files with full cluster topology details.
     std::string mongodb_dev;     // development / local cluster
     std::string mongodb_public;  // public / production cluster
+
+    // Database service config file path (relative to working dir).
+    std::string db_service = "resources/config/server/db_service.json";
 };
 
 //============================================================================
@@ -245,6 +251,10 @@ public:
     // Returns false on failure; out is untouched on failure.
     static bool LoadMongoDbConfigFromFile(const std::string& path,
                                           MongoDbConfig& out);
+
+    // Load a DbServiceConfig from a JSON file path.
+    static bool LoadDbServiceConfigFromFile(const std::string& path,
+                                             DbServiceConfig& out);
 
     // Load the dev/public cluster config using the currently configured
     // path from server.json.

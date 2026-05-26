@@ -1,0 +1,22 @@
+{
+  "log": {
+    "dir": "logs/db_service",
+    "level": "info",
+    "rotation_size_mb": 100,
+    "max_backup_files": 10
+  },
+  "thread_pool": {
+    "thread_count": 4,
+    "request_queue_size": 1024,
+    "response_queue_size": 1024
+  },
+  "connection_pool": {
+    "max_pool_size": 16,
+    "wait_queue_timeout_ms": 5000
+  },
+  "script": {
+    "runtime_scripts_dir": "resources/script/runtime",
+    "db_scripts_dir": "resources/script/db_service",
+    "auto_load": true
+  }
+}

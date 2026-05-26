@@ -48,4 +48,10 @@ inline constexpr int kDefaultSlowThresholdMultiplier = 2;
 inline constexpr double kDefaultHttpTimeoutSec       = 10.0;
 inline constexpr int    kDefaultMsgpackMaxNestingDepth = 16;
 
+//============================================================================
+// Database service defaults
+//============================================================================
+
+inline constexpr const char* kDbServiceConfigFile = "/server/db_service.json";
+
 } // namespace engine::config

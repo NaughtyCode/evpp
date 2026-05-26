@@ -215,6 +215,17 @@ set(MONGO_BIND_SOURCES
 )
 source_group("database\\mongo_bind" FILES ${MONGO_BIND_SOURCES})
 
+# ── Database service (database/data_service/) ──────────────────────────
+set(DB_SERVICE_SOURCES
+    ${RUNTIME_DIR}/database/data_service/database_service.cc ${RUNTIME_DIR}/database/data_service/database_service.h
+    ${RUNTIME_DIR}/database/data_service/db_thread.cc ${RUNTIME_DIR}/database/data_service/db_thread.h
+    ${RUNTIME_DIR}/database/data_service/db_script_vm.cc ${RUNTIME_DIR}/database/data_service/db_script_vm.h
+    ${RUNTIME_DIR}/database/data_service/db_request.h
+    ${RUNTIME_DIR}/database/data_service/db_service_config.h
+    ${RUNTIME_DIR}/database/data_service/module_access.h
+)
+source_group("database\\data_service" FILES ${DB_SERVICE_SOURCES})
+
 # ═══════════════════════════════════════════════════════════════════════
 # Combined sources
 # ═══════════════════════════════════════════════════════════════════════
@@ -236,7 +247,7 @@ set(SERVERENGINE_SOURCES
 )
 
 if(ENGINE_MONGODB_ENABLED)
-    list(APPEND SERVERENGINE_SOURCES ${MONGO_SOURCES} ${MONGO_BIND_SOURCES})
+    list(APPEND SERVERENGINE_SOURCES ${MONGO_SOURCES} ${MONGO_BIND_SOURCES} ${DB_SERVICE_SOURCES})
 endif()
 
 if(ENGINE_PHYSICS_ENABLED)

@@ -7,6 +7,7 @@
 #include <glaze/glaze.hpp>
 
 #include "runtime/core/log/log.h"
+#include "runtime/database/data_service/db_service_config.h"
 
 namespace engine {
 
@@ -229,6 +230,18 @@ bool ConfigManager::LoadMongoDbConfigFromFile(const std::string& path,
     auto ec = glz::read_file_json(out, path, buf);
     if (ec) {
         std::fprintf(stderr, "ConfigManager: failed to load mongodb config [%s]: %s\n",
+                     path.c_str(), glz::format_error(ec, buf).c_str());
+        return false;
+    }
+    return true;
+}
+
+bool ConfigManager::LoadDbServiceConfigFromFile(const std::string& path,
+                                                  DbServiceConfig& out) {
+    std::string buf;
+    auto ec = glz::read_file_json(out, path, buf);
+    if (ec) {
+        std::fprintf(stderr, "ConfigManager: failed to load db_service config [%s]: %s\n",
                      path.c_str(), glz::format_error(ec, buf).c_str());
         return false;
     }
