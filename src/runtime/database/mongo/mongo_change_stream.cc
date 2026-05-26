@@ -60,7 +60,8 @@ bool MongoChangeStream::ErrorDocument(MongoError* error, const void** doc) const
 }
 
 void MongoChangeStream::SetRawStream(void* stream) {
-    if (impl_ && impl_->stream) mongoc_change_stream_destroy(impl_->stream);
+    if (!impl_) return;
+    if (impl_->stream) mongoc_change_stream_destroy(impl_->stream);
     impl_->stream = static_cast<mongoc_change_stream_t*>(stream);
 }
 

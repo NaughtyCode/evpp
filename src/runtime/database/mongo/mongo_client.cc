@@ -95,7 +95,7 @@ void MongoClient::ReleaseFromPool() {
 MongoClient* MongoClient::FromPooled(void* raw_client) {
     auto* c = new MongoClient();
     c->impl_->client = static_cast<mongoc_client_t*>(raw_client);
-    c->impl_->owned = true;
+    c->impl_->owned = false; // pooled clients must be returned to the pool, not destroyed
     return c;
 }
 

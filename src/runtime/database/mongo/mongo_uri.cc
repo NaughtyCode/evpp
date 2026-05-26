@@ -127,7 +127,8 @@ const void* MongoUri::RawUri() const {
 }
 
 void MongoUri::SetRawUri(void* uri) {
-    if (impl_ && impl_->uri) mongoc_uri_destroy(impl_->uri);
+    if (!impl_) return;
+    if (impl_->uri) mongoc_uri_destroy(impl_->uri);
     impl_->uri = static_cast<mongoc_uri_t*>(uri);
 }
 

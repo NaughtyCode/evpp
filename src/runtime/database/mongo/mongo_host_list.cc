@@ -19,14 +19,16 @@ MongoHostList::MongoHostList() : impl_(std::make_unique<Impl>()) {
 }
 
 MongoHostList::~MongoHostList() {
-    delete impl_->next;
+    if (impl_) delete impl_->next;
 }
 
 MongoHostList::MongoHostList(MongoHostList&&) noexcept = default;
 MongoHostList& MongoHostList::operator=(MongoHostList&& other) noexcept {
     if (this != &other) {
-        delete impl_->next;
-        impl_->next = nullptr;
+        if (impl_) {
+            delete impl_->next;
+            impl_->next = nullptr;
+        }
         impl_ = std::move(other.impl_);
     }
     return *this;

@@ -47,9 +47,9 @@ bool MongoCursor::Next(BsonDocument* out) {
 }
 
 bool MongoCursor::HasError(MongoError* error) const {
-    if (!impl_ || !impl_->cursor || !error) return false;
+    if (!impl_ || !impl_->cursor) return false;
     return mongoc_cursor_error(impl_->cursor,
-        static_cast<bson_error_t*>(error->RawError()));
+        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 }
 
 void MongoCursor::SetBatchSize(uint32_t batch_size) {
@@ -59,7 +59,8 @@ void MongoCursor::SetBatchSize(uint32_t batch_size) {
 }
 
 void MongoCursor::SetCursor(void* cursor) {
-    if (impl_ && impl_->cursor) {
+    if (!impl_) return;
+    if (impl_->cursor) {
         mongoc_cursor_destroy(impl_->cursor);
     }
     impl_->cursor = static_cast<mongoc_cursor_t*>(cursor);
