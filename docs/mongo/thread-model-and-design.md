@@ -16,7 +16,7 @@ mongoc_client_t        → 非线程安全 (单线程独占)
 mongoc_client_pool_t   → 线程安全 (除 destroy)
 ```
 
-**`mongoc_client_t` 不是线程安全的**, 不可多线程共享。其内部 `mongoc_cluster_t` 管理 socket 连接池，所有读写操作直接访问 cluster 而**没有任何互斥锁保护**。因此每个线程必须独占一个 `mongoc_client_t`。
+**`mongoc_client_t` 不是线程安全的**, 不可多线程共享。其内部 `mongoc_cluster_t` 维护到各 MongoDB server 的 socket 连接集合（`mongoc_set_t *nodes`，每个已知 server 一个 `mongoc_cluster_node_t`，含 `mongoc_stream_t *stream`），所有读写操作直接访问这些 stream 而**没有任何互斥锁保护**（`mongoc_cluster_t` 结构体中无 mutex/condvar/atomic 成员）。因此每个线程必须独占一个 `mongoc_client_t`。
 
 ### 1.2 线程原语层
 
@@ -70,7 +70,12 @@ struct _mongoc_client_pool_t {
 **关键点**:
 
 1. 所有 pool 中的 client 共享同一个 `mongoc_topology_t`，其中包含 SDAM (Server Discovery and Monitoring) 状态、后台监控线程等。
-2. `client_initialized` 标志位在首次 `pop()` 成功后设置为 true，之后 `set_server_api`、`set_structured_log_opts`、`set_oidc_callback` 等 API 将被阻止。
+2. `client_initialized` 标志位在首次 `pop()` 成功创建新 client 后（`_initialize_new_client()` 内）设置为 true。之后以下 API 被阻止调用（返回 false 或 assert）：
+   - `set_server_api` — 返回 false + error
+   - `set_structured_log_opts` — 返回 false
+   - `set_oidc_callback` — 返回 false
+   - `set_error_api` — 由独立的 `error_api_set` 标志位阻止（同样只在首次 pop 前有效）
+   - `set_apm_callbacks` — 特殊：允许调用但输出警告（历史遗留，向后兼容）
 3. `last_known_serverids` 是一个已排序的 `uint32_t` 数组，在 `push()` 归还 client 时，pool 将其与当前 topology 中已知的 server id 集合对比，清理不属于当前集群拓扑的连接。
 4. **`min_pool_size` 不存在**——该参数已被 mongo-c-driver 弃用并移除 (CDRIVER-2390)。Pool 始终从空队列开始，按需创建 client。
 
@@ -80,8 +85,14 @@ struct _mongoc_client_pool_t {
 ```
 1. lock(pool->mutex)
 2. if queue 非空 → pop LIFO 队列 (pop_head) → 返回 client
-3. if size < max_pool_size → 创建新 mongoc_client_t (继承 pool 的 SSL/APM/error_api 等配置)
-   → size++ → 返回
+3. if size < max_pool_size → 创建新 client (_mongoc_client_new_from_topology) →
+   _initialize_new_client() 逐项复制 pool 配置到 client:
+   - error_api_version (int32_t 直接赋值)
+   - server_api (mongoc_server_api_copy 深拷贝)
+   - SSL opts (条件编译, 仅在 MONGOC_ENABLE_SSL 且 ssl_opts_set 时)
+   - stream_initiator (测试用)
+   (注: APM callbacks 和 appname 存储在 topology 层级, 所有 client 自动共享, 无需复制)
+   → size++ → client_initialized = true → 返回
 4. otherwise → cond_wait(&pool->cond, &pool->mutex)  // 阻塞等待
    - 若设置了 waitQueueTimeoutMS > 0 → cond_timedwait (计算剩余时间) → 超时返回 NULL
    - waitQueueTimeoutMS 默认值: -1 (无限等待), 设为 0 也等同于无限等待
@@ -106,7 +117,8 @@ struct _mongoc_client_pool_t {
 ```
 
 **`mongoc_client_pool_try_pop()` (非阻塞获取)**:
-- 与 pop 类似，但 queue 为空且 at capacity 时直接返回 NULL，不阻塞。
+- 与 pop 类似，但 queue 为空且 size >= max_pool_size 时直接返回 NULL，不阻塞。
+- 成功获取 client 后同样调用 `_start_scanner_if_needed()` 启动后台监控。
 
 ### 1.5 后台线程
 
@@ -114,10 +126,9 @@ Pool 首次 `pop()` 成功后调用 `_start_scanner_if_needed()` → `_mongoc_to
 
 | 线程 | 数量 | 启动方式 | 功能 |
 |------|------|---------|------|
-| Server monitor threads | 每 server 一个 | `mongoc_server_monitor_run()` 创建 | 心跳检测 (SDAM)，周期性向各 server 发送 `hello` 命令 |
+| Server monitor threads | 每 server 一个 | `mongoc_server_monitor_run()` 创建 | 心跳检测 (SDAM)，周期性向各 server 发送 `hello` 命令，同时扫描连接健康状态 |
 | RTT monitor threads | 每 server 一个 | `mongoc_server_monitor_run_as_rtt()` 创建 | 往返时间测量，用于驱动 nearest 读偏好 |
 | SRV polling thread | 1 个 | `mcommon_thread_create(srv_polling_run)` 创建 | 周期性重新解析 SRV DNS 记录 (仅 `mongodb+srv://`) |
-| Connection scanner | 1 个 (逻辑上) | 与上述线程同一 CAS 保护 | 扫描空闲连接健康状态 |
 
 所有后台线程的启停由 `mongoc_topology_t` 内的 `scanner_state` 原子变量统一管理（状态机: OFF → BG_RUNNING → OFF）。这些线程对调用者完全透明，无需应用层管理。
 
@@ -233,11 +244,11 @@ MongoUri                 (mongo_uri.h/.cc) — 值类型，支持移动语义
 
 ### 2.2 现有封装的特点
 
-- Pimpl 惯用法 (`std::unique_ptr<Impl>`)
-- 禁止拷贝/移动 (大部分类)
-- `MongoUri` 是值类型，支持移动语义（唯一的例外）
-- `MongoSystem` 是 singleton，管理 `mongoc_init()` / `mongoc_cleanup()` 的全局生命周期
-- `MongoClient::owned` 标志位区分独立 client 和 pool client (析构时 pool client 不调用 `mongoc_client_destroy`)
+- Pimpl 惯用法 (`std::unique_ptr<Impl>`) — 大多数类采用此模式
+- 禁止拷贝，允许移动 (move-only) — 多数类的默认设计
+- 值类型（无 Pimpl，栈分配）: `BsonDocument` (128B inline), `BsonIter` (160B inline), `MongoError` (512B inline), `MongoOid` (12B), `MongoDecimal128` (16B), `MongoUri` (Pimpl + move), `MongoOptional` (copyable)
+- `MongoSystem` 是 singleton，`MongoInit` 是静态工具类——两者都管理 `mongoc_init()` / `mongoc_cleanup()` 的全局生命周期
+- `MongoClient::owned` 标志位 + `ReleaseFromPool()` 区分独立 client 和 pool 借出的 client (析构时 pool client 不调用 `mongoc_client_destroy`)
 - 所有 MongoDB 操作都是**同步阻塞**的（这正是用户需要的行为）
 
 ### 2.3 现有封装存在的不足
