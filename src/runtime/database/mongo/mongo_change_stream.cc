@@ -56,9 +56,12 @@ const void* MongoChangeStream::GetResumeToken() const {
 
 bool MongoChangeStream::ErrorDocument(MongoError* error, const void** doc) const {
     if (!impl_ || !impl_->stream) return false;
-    return mongoc_change_stream_error_document(impl_->stream,
+    const bson_t* bson_doc = nullptr;
+    bool ok = mongoc_change_stream_error_document(impl_->stream,
         error ? static_cast<bson_error_t*>(error->RawError()) : nullptr,
-        reinterpret_cast<const bson_t**>(doc));
+        &bson_doc);
+    if (doc) *doc = bson_doc;
+    return ok;
 }
 
 void MongoChangeStream::SetRawStream(void* stream) {

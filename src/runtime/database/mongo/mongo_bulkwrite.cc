@@ -587,6 +587,8 @@ MongoBulkWriteReturn MongoBulkWrite::Execute(const MongoBulkWriteOpts* opts) {
         if (result) {
             result->SetRaw(raw_ret.res);
             ret.result = result;
+        } else {
+            mongoc_bulkwriteresult_destroy(raw_ret.res);
         }
     }
     if (raw_ret.exc) {
@@ -594,6 +596,8 @@ MongoBulkWriteReturn MongoBulkWrite::Execute(const MongoBulkWriteOpts* opts) {
         if (exc) {
             exc->SetRaw(raw_ret.exc);
             ret.exception = exc;
+        } else {
+            mongoc_bulkwriteexception_destroy(raw_ret.exc);
         }
     }
     return ret;

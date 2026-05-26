@@ -5,6 +5,7 @@
 // mongo-c-driver headers — only included in .cc files, never in .h
 #include <bson/bson.h>
 
+#include <cstdint>
 #include <cstring>
 
 #include "runtime/database/mongo/mongo_error.h"
@@ -104,7 +105,9 @@ bool BsonDocument::AppendUtf8(const char* key, const char* value) {
 }
 
 bool BsonDocument::AppendUtf8(const char* key, std::string_view value) {
-    return bson_append_utf8(static_cast<bson_t*>(RawBson()), key, -1, value.data(), static_cast<int>(value.size()));
+    auto len = value.size();
+    if (len > static_cast<size_t>(INT32_MAX)) return false;
+    return bson_append_utf8(static_cast<bson_t*>(RawBson()), key, -1, value.data(), static_cast<int32_t>(len));
 }
 
 bool BsonDocument::AppendDocument(const char* key, const BsonDocument& subdoc) {
@@ -544,7 +547,7 @@ void BsonIter::AsCodeWithScope(uint32_t* code_length, const char** code, BsonDoc
     const uint8_t* scope_data;
     bson_iter_codewscope(static_cast<const bson_iter_t*>(RawIter()), code_length, &scope_len, &scope_data);
     if (code && code_length && scope_data) {
-        *code = reinterpret_cast<const char*>(scope_data) - (*code_length);
+        *code = reinterpret_cast<const char*>(scope_data) - (*code_length) - 1;
     }
     if (scope && scope_data) {
         bson_destroy(static_cast<bson_t*>(scope->RawBson()));

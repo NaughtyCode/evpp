@@ -4,6 +4,8 @@
 
 #include <mongoc/mongoc.h>
 
+#include <cstdint>
+
 #include "runtime/database/mongo/mongo_client.h"
 #include "runtime/database/mongo/mongo_error.h"
 #include "runtime/database/mongo/mongo_server_api.h"
@@ -94,6 +96,7 @@ bool MongoClientPool::SetApmCallbacks(void* callbacks, void* context) {
 }
 
 bool MongoClientPool::SetErrorApi(uint32_t version) {
+    if (version > static_cast<uint32_t>(INT32_MAX)) return false;
     return impl_ && impl_->pool && mongoc_client_pool_set_error_api(
         impl_->pool, static_cast<int32_t>(version));
 }

@@ -145,6 +145,10 @@ int l_bson_append_oid(lua_State* L) {
     const char* key = luaL_checkstring(L, 2);
     const char* oid_str = luaL_checkstring(L, 3);
     mongo::MongoOid oid;
+    if (!oid.IsValid(oid_str, strlen(oid_str))) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
     oid.InitFromString(oid_str);
     lua_pushboolean(L, doc && doc->AppendOid(key, oid));
     return 1;

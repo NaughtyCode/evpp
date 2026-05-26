@@ -70,8 +70,11 @@ int MongoSocket::GetError() const {
 }
 
 int MongoSocket::GetSockName(struct sockaddr* addr, int* addrlen) const {
-    return impl_ && impl_->sock ? mongoc_socket_getsockname(impl_->sock, addr,
-        reinterpret_cast<mongoc_socklen_t*>(addrlen)) : -1;
+    if (!impl_ || !impl_->sock) return -1;
+    mongoc_socklen_t local_len = addrlen ? static_cast<mongoc_socklen_t>(*addrlen) : 0;
+    int ret = mongoc_socket_getsockname(impl_->sock, addr, &local_len);
+    if (addrlen) *addrlen = static_cast<int>(local_len);
+    return ret;
 }
 
 int MongoSocket::Listen(unsigned int backlog) {
