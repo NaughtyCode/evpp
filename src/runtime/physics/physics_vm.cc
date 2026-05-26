@@ -1,5 +1,6 @@
 #ifdef ENGINE_PHYSICS_ENABLED
 
+#define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/physics_vm.h"
 
 #include "runtime/physics/physics_log.h"

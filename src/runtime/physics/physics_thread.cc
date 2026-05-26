@@ -1,7 +1,9 @@
 #ifdef ENGINE_PHYSICS_ENABLED
 
+#define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/physics_thread.h"
 
+#include <cassert>
 #include <chrono>
 #include <cstdio>
 #include <thread>
@@ -221,10 +223,29 @@ std::unique_ptr<PhysicsFrameResult> PhysicsThread::TryDequeueResult() {
 }
 
 //============================================================================
+// VerifyIsPhysicsThread — runtime guard for PT-only code
+//============================================================================
+
+void PhysicsThread::VerifyIsPhysicsThread() const {
+    // Skip check if physics_thread_id_ hasn't been captured yet
+    // (default-constructed thread::id means "not a thread").
+    if (physics_thread_id_ != std::thread::id{}) {
+        assert(physics_thread_id_ == std::this_thread::get_id()
+            && "PhysicsThread: PT-only code called from wrong thread. "
+               "This code must only execute on the dedicated physics thread.");
+    }
+}
+
+//============================================================================
 // EventLoop — runs on the dedicated physics thread
 //============================================================================
 
 void PhysicsThread::EventLoop() {
+    // Capture the physics thread ID once, at the start of the event loop.
+    // Used by VerifyIsPhysicsThread() to assert that PT-only code (e.g.
+    // PhysicsSystem::UpdateScript) is actually executing on this thread.
+    physics_thread_id_ = std::this_thread::get_id();
+
     PHYSICS_LOG_INFO(logger_,"PhysicsThread: event loop started");
 
     // Initialize PhysicsWorld with configs captured at Start()

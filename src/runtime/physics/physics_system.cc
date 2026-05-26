@@ -1,5 +1,6 @@
 #ifdef ENGINE_PHYSICS_ENABLED
 
+#define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/physics_system.h"
 
 #include <cstdio>
@@ -369,9 +370,17 @@ bool PhysicsSystem::Recover(const std::string& saved_state) {
 
 //============================================================================
 // UpdateScript — call Lua collision callbacks [D17.6]
+//
+// PT-only. Verified at entry by physics_thread_.VerifyIsPhysicsThread().
 //============================================================================
 
 void PhysicsSystem::UpdateScript(const std::vector<CollisionEvent>& collision_events) {
+    // This method must only execute on the physics thread. It is invoked
+    // via the PostStepCallback inside PhysicsThread::EventLoop(). Calling
+    // it from any other thread (e.g. the main thread) would race with the
+    // physics thread's exclusive access to script_vm_'s Lua state.
+    physics_thread_.VerifyIsPhysicsThread();
+
     if (!script_vm_) return;
 
     // Drive Lua coroutines

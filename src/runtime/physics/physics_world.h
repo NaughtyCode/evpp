@@ -1,5 +1,18 @@
 #pragma once
 
+//==============================================================================
+// PHYSICS_INTERNAL_ACCESS — internal header guard macro
+//
+// See physics_system.h for full documentation.
+// Including this header without the macro will cause a compile-time #error.
+//==============================================================================
+#ifndef PHYSICS_INTERNAL_ACCESS
+#error "physics_world.h is internal to the physics subsystem. \
+Use physics_engine_bridge.h instead. \
+If you are writing physics-internal code, #define PHYSICS_INTERNAL_ACCESS \
+before including this header."
+#endif
+
 #ifdef ENGINE_PHYSICS_ENABLED
 
 #include <atomic>
@@ -35,9 +48,9 @@ namespace engine {
 //============================================================================
 // ContactListenerImpl — thread-safe contact event collector [J8]
 //
-// Jolt callbacks run on its own job threads. Events are appended to a
-// mutex-protected buffer and collected by the main physics thread after
-// each Step() completes.
+// Jolt callbacks run on its own job threads (JT). Events are appended to a
+// mutex-protected buffer and collected by the physics thread after each
+// Step() completes.
 //============================================================================
 
 class ContactListenerImpl final : public JPH::ContactListener {
@@ -98,6 +111,38 @@ private:
 
 //============================================================================
 // PhysicsWorld — wraps JPH::PhysicsSystem with full lifecycle management
+//
+// [Thread Model]
+//
+//   Wraps the complete lifecycle of the Jolt Physics engine. Its execution
+//   environment involves multiple threads:
+//
+//     - Physics thread (PT):  Exclusive writer. EventLoop advances the
+//       simulation via Step(), which internally uses Jolt's JobSystem for
+//       parallel computation.
+//     - Jolt Job threads (JT): Managed by JPH::JobSystem. Execute parallel
+//       tasks (collision detection, constraint solving, etc.) during Step().
+//       ContactListener and BodyActivationListener callbacks fire on JT
+//       (see mutex notes below).
+//     - Main thread (MT):    Read-only queries. GetTransform(), GetVelocity(),
+//       RayCast(), etc. use Jolt's BodyLockInterface for cross-thread safety.
+//
+//   Internal locks:
+//     - ContactListenerImpl::mutex_: JT writes -> PT reads via Drain()
+//       (Drain() is only called after Step() completes and JT jobs have
+//       finished, so there is no real contention; the mutex is defensive.)
+//     - BodyActivationListenerImpl::mutex_: same pattern
+//
+//   Critical constraint:
+//     - All write operations (CreateBody, DestroyBody, ApplyForce,
+//       SetVelocity, Step) MUST execute on the PT.
+//     - Main thread read operations are safe via Jolt BodyLockInterface.
+//
+// [External Access Constraint]
+//
+//   This class is a physics subsystem implementation detail. External modules
+//   MUST NOT use PhysicsWorld directly. Compile-time protection is provided
+//   by the PHYSICS_INTERNAL_ACCESS macro.
 //============================================================================
 
 class PhysicsWorld {
@@ -109,7 +154,8 @@ public:
     PhysicsWorld& operator=(const PhysicsWorld&) = delete;
 
     // ── Initialization (strict 10-step order per [J2]) ──────────────────
-    // Returns false on failure. Caller provides config + thresholds + logger + asset path.
+    // Returns false on failure. Caller provides config + thresholds + logger
+    // + asset path.
     bool Initialize(const PhysicsConfig& config,
                     const ThreadingConfig& threading,
                     const ThresholdsConfig& thresholds,
@@ -192,10 +238,10 @@ private:
 
     quill::Logger* logger_ = nullptr;
 
-    // Prototype pool: proto_id → PrototypeEntry
+    // Prototype pool: proto_id -> PrototypeEntry
     std::unordered_map<std::string, PrototypeEntry> prototype_pool_;
 
-    // Object registry: body_id → asset name
+    // Object registry: body_id -> asset name
     ObjectRegistry object_registry_;
 
     // Per-body state snapshots (for diff generation)
