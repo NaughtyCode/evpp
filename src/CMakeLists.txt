@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Directory-scoped so all subprojects (runtime, tests, server, client)
 # inherit these definitions.
 if(MSVC)
-    add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN _WIN32)
+    add_compile_definitions(NOMINMAX _WIN32)
 endif()
 
 # ── Output paths ──────────────────────────────────────────────────────

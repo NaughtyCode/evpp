@@ -95,8 +95,9 @@ int main(int argc, char** argv) {
     }
 
     /* 3. Create a periodic timer */
+    static char timer_tag[] = "periodic";
     int timer_id = 0;
-    err = game_timer_interval(cli, 1000, on_timer, "periodic", &timer_id);
+    err = game_timer_interval(cli, 1000, on_timer, timer_tag, &timer_id);
     if (err == GAME_OK) {
         printf("timer created, id=%d\n", timer_id);
     }
