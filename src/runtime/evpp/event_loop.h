@@ -111,7 +111,7 @@ private:
     size_t GetPendingQueueSize();
     bool IsPendingQueueEmpty();
 private:
-    struct event_base* evbase_;
+    struct event_base* evbase_ = nullptr;
     bool create_evbase_myself_;
     std::thread::id tid_;
     enum { kContextCount = 16, };
@@ -124,11 +124,11 @@ private:
     // we need to notify the thread to execute it. But we don't want to notify repeatedly.
     std::atomic<bool> notified_;
 #ifdef H_HAVE_BOOST
-    boost::lockfree::queue<Functor*>* pending_functors_;
+    boost::lockfree::queue<Functor*>* pending_functors_ = nullptr;
 #elif defined(H_HAVE_CAMERON314_CONCURRENTQUEUE)
-    moodycamel::ConcurrentQueue<Functor>* pending_functors_;
+    moodycamel::ConcurrentQueue<Functor>* pending_functors_ = nullptr;
 #else
-    std::vector<Functor>* pending_functors_; // @Guarded By mutex_
+    std::vector<Functor>* pending_functors_ = nullptr; // @Guarded By mutex_
 #endif
 
     std::atomic<int> pending_functor_count_;

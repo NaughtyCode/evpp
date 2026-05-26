@@ -2,6 +2,7 @@
 
 #include "runtime/database/mongo/mongo_session.h"
 
+#include <cstdio>
 #include <mongoc/mongoc.h>
 
 #include "runtime/database/mongo/mongo_bson.h"
@@ -293,7 +294,13 @@ bool with_transaction_trampoline(mongoc_client_session_t* session,
     bool ok = false;
     try {
         ok = txn_ctx->cb(tmp_session, &reply_doc, &mongo_err);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "[mongo_session] exception in txn callback: %s\n", e.what());
+        tmp_session->ReleaseSession();
+        MongoSession::Destroy(tmp_session);
+        return false;
     } catch (...) {
+        std::fprintf(stderr, "[mongo_session] unknown exception in txn callback\n");
         tmp_session->ReleaseSession();
         MongoSession::Destroy(tmp_session);
         return false;

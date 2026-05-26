@@ -32,9 +32,9 @@ private:
     void OnResolved();
     static void OnResolved(int errcode, struct addrinfo* addr, void* arg);
 private:
-    EventLoop* loop_;
-    struct evdns_base* dnsbase_;
-    struct evdns_getaddrinfo_request* dns_req_;
+    EventLoop* loop_ = nullptr;
+    struct evdns_base* dnsbase_ = nullptr;
+    struct evdns_getaddrinfo_request* dns_req_ = nullptr;
     std::string host_;
     Duration timeout_;
     Functor functor_;

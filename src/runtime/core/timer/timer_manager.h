@@ -293,7 +293,12 @@ private:
 
         TimerEntry(const TimerEntry&) = delete;
         TimerEntry& operator=(const TimerEntry&) = delete;
-        TimerEntry(TimerEntry&& other) noexcept : kind(other.kind), hrtimer(other.hrtimer) {
+        TimerEntry(TimerEntry&& other) noexcept : kind(other.kind) {
+            switch (other.kind) {
+                case Kind::kHrTimer:   hrtimer    = other.hrtimer;    break;
+                case Kind::kWheelTimer: wheel_timer = other.wheel_timer; break;
+                case Kind::kAlarm:     alarm      = other.alarm;      break;
+            }
             other.hrtimer = nullptr;
             other.kind = Kind::kHrTimer;
         }

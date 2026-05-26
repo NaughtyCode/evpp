@@ -2,6 +2,7 @@
 
 #include "runtime/database/mongo/mongo_oidc.h"
 
+#include <cstdio>
 #include <mongoc/mongoc.h>
 
 namespace engine {
@@ -116,8 +117,13 @@ mongoc_oidc_credential_t* oidc_trampoline(mongoc_oidc_callback_params_t* params)
     MongoOidcCredential* cred = nullptr;
     try {
         cred = ctx->fn(wrapper);
+    } catch (const std::exception& e) {
+        // Do not let exceptions unwind through C stack frames
+        std::fprintf(stderr, "[mongo_oidc] exception in OIDC callback: %s\n", e.what());
+        return nullptr;
     } catch (...) {
         // Do not let exceptions unwind through C stack frames
+        std::fprintf(stderr, "[mongo_oidc] unknown exception in OIDC callback\n");
         return nullptr;
     }
     if (!cred) return nullptr;

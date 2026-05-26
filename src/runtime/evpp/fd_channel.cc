@@ -150,7 +150,7 @@ std::string FdChannel::EventsToString() const {
 }
 
 void FdChannel::HandleEvent(evpp_socket_t sockfd, short which, void* v) {
-    FdChannel* c = (FdChannel*)v;
+    FdChannel* c = static_cast<FdChannel*>(v);
     c->HandleEvent(sockfd, which);
 }
 

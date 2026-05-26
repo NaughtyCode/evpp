@@ -8,6 +8,7 @@
 #include "runtime/evpp/sockets.h"
 
 #include <algorithm>
+#include <cstdint>
 
 namespace evpp {
 class EVPP_EXPORT Buffer {
@@ -435,7 +436,15 @@ private:
     void grow(size_t len) {
         if (WritableBytes() + PrependableBytes() < len + reserved_prepend_size_) {
             //grow the capacity
-            size_t n = (capacity_ << 1) + len;
+            // Guard against overflow: when capacity_ passes SIZE_MAX/2,
+            // (capacity_ << 1) wraps.  Fall back to linear growth instead.
+            size_t n;
+            if (capacity_ > SIZE_MAX / 2) {
+                n = capacity_ + len;
+                if (n < capacity_) n = SIZE_MAX; // overflow clamp
+            } else {
+                n = (capacity_ << 1) + len;
+            }
             size_t m = length();
             char* d = new char[n];
             memcpy(d + reserved_prepend_size_, begin() + read_index_, m);

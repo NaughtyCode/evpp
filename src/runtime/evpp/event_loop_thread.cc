@@ -21,7 +21,15 @@ bool EventLoopThread::Start(bool wait_thread_started, Functor pre, Functor post)
     status_ = kStarting;
 
     assert(thread_.get() == nullptr);
-    thread_.reset(new std::thread(std::bind(&EventLoopThread::Run, this, pre, post)));
+    try {
+        thread_.reset(new std::thread(std::bind(&EventLoopThread::Run, this, pre, post)));
+    } catch (const std::system_error& e) {
+        ENGINE_LOG_ERROR(engine::GetLogger(),
+                         "EventLoopThread::Start failed to create thread: {} code={}",
+                         e.what(), e.code().value());
+        status_ = kStopped;
+        return false;
+    }
 
     if (wait_thread_started) {
         while (status_ < kRunning) {

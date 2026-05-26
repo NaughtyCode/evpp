@@ -29,6 +29,9 @@ InvokeTimerPtr InvokeTimer::Create(EventLoop* evloop, Duration timeout, Functor&
 
 InvokeTimer::~InvokeTimer() {
     ENGINE_LOG_TRACE(engine::GetLogger(), "this={} loop={}", (void*)this, (void*)loop_);
+    // Defensive: break any lingering self-reference cycle.  If Cancel() was
+    // already called, self_ is already reset so this is a no-op.
+    self_.reset();
 }
 
 void InvokeTimer::Start() {

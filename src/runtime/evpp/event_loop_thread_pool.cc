@@ -42,8 +42,12 @@ bool EventLoopThreadPool::Start(bool wait_thread_started) {
 
         EventLoopThreadPtr t(new EventLoopThread());
         if (!t->Start(wait_thread_started, prefn, postfn)) {
-            //FIXME error process
-            ENGINE_LOG_ERROR(engine::GetLogger(), "start thread failed!");
+            ENGINE_LOG_ERROR(engine::GetLogger(),
+                             "EventLoopThreadPool: start thread {}/{} failed!",
+                             i + 1, thread_num_);
+            for (auto& started : threads_) {
+                started->Stop(true);
+            }
             return false;
         }
 

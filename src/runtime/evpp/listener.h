@@ -34,7 +34,7 @@ private:
 
 private:
     evpp_socket_t fd_ = -1;// The listening socket fd
-    EventLoop* loop_;
+    EventLoop* loop_ = nullptr;
     std::string addr_;
     std::unique_ptr<FdChannel> chan_;
     NewConnectionCallback new_conn_fn_;

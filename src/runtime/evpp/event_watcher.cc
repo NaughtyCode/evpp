@@ -128,8 +128,21 @@ bool PipeEventWatcher::DoInit() {
     // may not reliably detect events on AF_UNIX sockets. Use AF_INET loopback
     // instead to ensure the wakeup pipe works correctly with IOCP.
     {
-        evutil_socket_t listener = ::socket(AF_INET, SOCK_STREAM, 0);
-        if (listener < 0) {
+        // RAII socket guard — automatically closes on scope exit unless
+        // released.  Eliminates manual EVUTIL_CLOSESOCKET at each goto site.
+        struct ScopedSocket {
+            evpp_socket_t fd;
+            explicit ScopedSocket(evpp_socket_t f = INVALID_SOCKET) : fd(f) {}
+            ~ScopedSocket() { if (fd != INVALID_SOCKET) EVUTIL_CLOSESOCKET(fd); }
+            ScopedSocket(const ScopedSocket&) = delete;
+            ScopedSocket& operator=(const ScopedSocket&) = delete;
+            evpp_socket_t release() {
+                evpp_socket_t f = fd; fd = INVALID_SOCKET; return f;
+            }
+        };
+
+        ScopedSocket listener(::socket(AF_INET, SOCK_STREAM, 0));
+        if (listener.fd == INVALID_SOCKET) {
             std::fprintf(stderr, "[PipeEventWatcher] socket() failed, WSA err=%d\n",
                          ::WSAGetLastError());
             goto failed;
@@ -141,52 +154,47 @@ bool PipeEventWatcher::DoInit() {
         addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         addr.sin_port = 0;
 
-        if (::bind(listener, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        if (::bind(listener.fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
             std::fprintf(stderr, "[PipeEventWatcher] bind() failed, WSA err=%d\n",
                          ::WSAGetLastError());
-            EVUTIL_CLOSESOCKET(listener);
             goto failed;
         }
-        if (::listen(listener, 1) < 0) {
+        if (::listen(listener.fd, 1) < 0) {
             std::fprintf(stderr, "[PipeEventWatcher] listen() failed, WSA err=%d\n",
                          ::WSAGetLastError());
-            EVUTIL_CLOSESOCKET(listener);
             goto failed;
         }
 
         socklen_t addrlen = sizeof(addr);
-        if (::getsockname(listener, (struct sockaddr*)&addr, &addrlen) < 0) {
+        if (::getsockname(listener.fd, reinterpret_cast<struct sockaddr*>(&addr), &addrlen) < 0) {
             std::fprintf(stderr, "[PipeEventWatcher] getsockname() failed, WSA err=%d\n",
                          ::WSAGetLastError());
-            EVUTIL_CLOSESOCKET(listener);
             goto failed;
         }
 
-        pipe_[0] = ::socket(AF_INET, SOCK_STREAM, 0); // writer side
-        if (pipe_[0] < 0) {
+        ScopedSocket writer(::socket(AF_INET, SOCK_STREAM, 0));
+        if (writer.fd == INVALID_SOCKET) {
             std::fprintf(stderr, "[PipeEventWatcher] socket(writer) failed, WSA err=%d\n",
                          ::WSAGetLastError());
-            EVUTIL_CLOSESOCKET(listener);
             goto failed;
         }
-        if (::connect(pipe_[0], (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        if (::connect(writer.fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
             std::fprintf(stderr, "[PipeEventWatcher] connect() failed, WSA err=%d\n",
                          ::WSAGetLastError());
-            EVUTIL_CLOSESOCKET(listener);
-            EVUTIL_CLOSESOCKET(pipe_[0]);
-            pipe_[0] = INVALID_SOCKET;
             goto failed;
         }
 
-        pipe_[1] = ::accept(listener, NULL, NULL); // reader side
-        EVUTIL_CLOSESOCKET(listener);
-        if (pipe_[1] < 0) {
+        ScopedSocket reader(::accept(listener.fd, NULL, NULL));
+        if (reader.fd == INVALID_SOCKET) {
             std::fprintf(stderr, "[PipeEventWatcher] accept() failed, WSA err=%d\n",
                          ::WSAGetLastError());
-            EVUTIL_CLOSESOCKET(pipe_[0]);
-            pipe_[0] = INVALID_SOCKET;
             goto failed;
         }
+
+        // All sockets created successfully — release from RAII guards.
+        // listener is auto-closed by ScopedSocket destructor (needed only for accept).
+        pipe_[0] = writer.release();
+        pipe_[1] = reader.release();
     }
 #else
     if (evutil_socketpair(AF_UNIX, SOCK_STREAM, 0, pipe_) < 0) {
@@ -213,18 +221,19 @@ failed:
 }
 
 void PipeEventWatcher::DoClose() {
-    if (pipe_[0] > 0) {
+    if (pipe_[0] != INVALID_SOCKET) {
         EVUTIL_CLOSESOCKET(pipe_[0]);
+        pipe_[0] = INVALID_SOCKET;
     }
-    if (pipe_[1] > 0) {
+    if (pipe_[1] != INVALID_SOCKET) {
         EVUTIL_CLOSESOCKET(pipe_[1]);
+        pipe_[1] = INVALID_SOCKET;
     }
-    memset(pipe_, 0, sizeof(pipe_[0]) * 2);
 }
 
 void PipeEventWatcher::HandlerFn(evpp_socket_t fd, short /*which*/, void* v) {
     ENGINE_LOG_INFO(engine::GetLogger(), "PipeEventWatcher::HandlerFn fd={} v={}", fd, v);
-    PipeEventWatcher* e = (PipeEventWatcher*)v;
+    PipeEventWatcher* e = static_cast<PipeEventWatcher*>(v);
 #ifdef H_BENCHMARK_TESTING
     // Every time we only read 1 byte for testing the IO event performance.
     // We use it in the benchmark test program
@@ -302,7 +311,7 @@ bool TimerEventWatcher::DoInit() {
 }
 
 void TimerEventWatcher::HandlerFn(evpp_socket_t /*fd*/, short /*which*/, void* v) {
-    TimerEventWatcher* h = (TimerEventWatcher*)v;
+    TimerEventWatcher* h = static_cast<TimerEventWatcher*>(v);
     h->handler_();
 }
 
@@ -335,7 +344,7 @@ bool SignalEventWatcher::DoInit() {
 }
 
 void SignalEventWatcher::HandlerFn(signal_number_t /*sn*/, short /*which*/, void* v) {
-    SignalEventWatcher* h = (SignalEventWatcher*)v;
+    SignalEventWatcher* h = static_cast<SignalEventWatcher*>(v);
     h->handler_();
 }
 

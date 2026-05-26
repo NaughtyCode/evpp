@@ -89,7 +89,7 @@ evpp_socket_t CreateUDPServer(int port) {
 
     std::string addr = std::string("0.0.0.0:") + std::to_string(port);
     struct sockaddr_storage local = ParseFromIPPort(addr.c_str());
-    if (::bind(fd, (struct sockaddr*)&local, sizeof(local))) {
+    if (::bind(fd, reinterpret_cast<struct sockaddr*>(&local), sizeof(local))) {
         int serrno = EVPP_ERRNO;
         ENGINE_LOG_ERROR(engine::GetLogger(), "socket bind error={} {}", serrno, strerror(serrno));
         EVUTIL_CLOSESOCKET(fd);
@@ -207,7 +207,7 @@ std::string ToIPPort(const struct sockaddr_storage* ss) {
     int port = 0;
 
     if (ss->ss_family == AF_INET) {
-        struct sockaddr_in* addr4 = const_cast<struct sockaddr_in*>(sockaddr_in_cast(ss));
+        const struct sockaddr_in* addr4 = sockaddr_in_cast(ss);
         char buf[INET_ADDRSTRLEN] = {};
         const char* addr = ::evutil_inet_ntop(ss->ss_family, &addr4->sin_addr, buf, INET_ADDRSTRLEN);
 
@@ -217,7 +217,7 @@ std::string ToIPPort(const struct sockaddr_storage* ss) {
 
         port = ntohs(addr4->sin_port);
     } else if (ss->ss_family == AF_INET6) {
-        struct sockaddr_in6* addr6 = const_cast<struct sockaddr_in6*>(sockaddr_in6_cast(ss));
+        const struct sockaddr_in6* addr6 = sockaddr_in6_cast(ss);
         char buf[INET6_ADDRSTRLEN] = {};
         const char* addr = ::evutil_inet_ntop(ss->ss_family, &addr6->sin6_addr, buf, INET6_ADDRSTRLEN);
 
@@ -249,14 +249,14 @@ std::string ToIPPort(const struct sockaddr_in* ss) {
 std::string ToIP(const struct sockaddr* s) {
     auto ss = sockaddr_storage_cast(s);
     if (ss->ss_family == AF_INET) {
-        struct sockaddr_in* addr4 = const_cast<struct sockaddr_in*>(sockaddr_in_cast(ss));
+        const struct sockaddr_in* addr4 = sockaddr_in_cast(ss);
         char buf[INET_ADDRSTRLEN] = {};
         const char* addr = ::evutil_inet_ntop(ss->ss_family, &addr4->sin_addr, buf, INET_ADDRSTRLEN);
         if (addr) {
             return std::string(addr);
         }
     } else if (ss->ss_family == AF_INET6) {
-        struct sockaddr_in6* addr6 = const_cast<struct sockaddr_in6*>(sockaddr_in6_cast(ss));
+        const struct sockaddr_in6* addr6 = sockaddr_in6_cast(ss);
         char buf[INET6_ADDRSTRLEN] = {};
         const char* addr = ::evutil_inet_ntop(ss->ss_family, &addr6->sin6_addr, buf, INET6_ADDRSTRLEN);
         if (addr) {

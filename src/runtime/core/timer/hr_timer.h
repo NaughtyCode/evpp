@@ -389,8 +389,12 @@ public:
             TimerMode captured_mode = timer->mode_;
             bool was_repeating = mode_is_repeating(captured_mode);
 
-            // Unlock during callback to avoid deadlocks, re-lock afterwards
-            // so that the unique_lock destructor always unlocks a locked mutex.
+            // Unlock during callback to avoid deadlocks when the callback
+            // re-enters the timer system.  Re-lock afterwards so the next
+            // iteration of the while loop starts with the lock held.
+            // Exception safety: if the callback throws, unique_lock::owns()
+            // was set to false by unlock(), so the destructor will NOT
+            // unlock the already-unlocked mutex.
             TimerResult result;
             int64_t latency = time_delta_ns(now, timer->expires());
             stats_.record_expire(latency);

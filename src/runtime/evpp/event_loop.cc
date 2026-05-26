@@ -54,8 +54,9 @@ EventLoop::EventLoop(struct event_base* base)
         if (auto* l = engine::GetLogger()) {
             ENGINE_LOG_CRITICAL(l, "PipeEventWatcher init failed.");
         }
+        status_.store(kStopped);
+        return;
     }
-    assert(rc);
     status_.store(kRunning);
 }
 

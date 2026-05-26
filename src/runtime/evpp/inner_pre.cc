@@ -73,7 +73,8 @@ int EventDel(struct event* ev) {
 
 int GetActiveEventCount() {
 #ifdef H_DEBUG_MODE
-    return evmap.size();
+    std::lock_guard<std::mutex> guard(mutex);
+    return static_cast<int>(evmap.size());
 #else
     return 0;
 #endif
