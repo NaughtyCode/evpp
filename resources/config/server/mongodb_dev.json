@@ -1,0 +1,110 @@
+{
+  "_description": "MongoDB Development Cluster Configuration — 3-Node Replica Set",
+  "_updated": "2026-05-26",
+
+  "cluster": {
+    "type": "replica_set",
+    "name": "rs0",
+    "version": "8.3.2",
+    "shell": "2.8.3"
+  },
+
+  "connection": {
+    "uri": "mongodb://127.0.0.1:27017,127.0.0.1:27018,127.0.0.1:27019/?replicaSet=rs0",
+    "hosts": ["127.0.0.1:27017", "127.0.0.1:27018", "127.0.0.1:27019"],
+    "replicaSet": "rs0",
+    "directConnection": false,
+    "options": {
+      "readPreference": "primaryPreferred",
+      "maxPoolSize": 10,
+      "connectTimeoutMS": 5000,
+      "serverSelectionTimeoutMS": 5000,
+      "socketTimeoutMS": 30000
+    }
+  },
+
+  "nodes": [
+    {
+      "id": 0,
+      "name": "node1",
+      "host": "127.0.0.1",
+      "port": 27017,
+      "priority": 10,
+      "role": "primary",
+      "config": "config/node1.conf",
+      "dbPath": "data/node1",
+      "logPath": "log/node1.log",
+      "pidFile": "pid/node1.pid"
+    },
+    {
+      "id": 1,
+      "name": "node2",
+      "host": "127.0.0.1",
+      "port": 27018,
+      "priority": 5,
+      "role": "secondary",
+      "config": "config/node2.conf",
+      "dbPath": "data/node2",
+      "logPath": "log/node2.log",
+      "pidFile": "pid/node2.pid"
+    },
+    {
+      "id": 2,
+      "name": "node3",
+      "host": "127.0.0.1",
+      "port": 27019,
+      "priority": 1,
+      "role": "secondary",
+      "config": "config/node3.conf",
+      "dbPath": "data/node3",
+      "logPath": "log/node3.log",
+      "pidFile": "pid/node3.pid"
+    }
+  ],
+
+  "security": {
+    "authentication": false,
+    "tls": false,
+    "bindIp": "127.0.0.1",
+    "note": "Development only — no auth, localhost only"
+  },
+
+  "storage": {
+    "engine": "wiredTiger",
+    "directoryPerDB": true,
+    "compression": "snappy",
+    "journal": true
+  },
+
+  "scripts": {
+    "start": "start_cluster.ps1",
+    "stop": "stop_cluster.ps1",
+    "status": "status_cluster.ps1",
+    "init": "init_replicaset.ps1",
+    "shell": "mongosh.ps1"
+  },
+
+  "drivers": {
+    "cpp": {
+      "package": "mongo-cxx-driver",
+      "version": "4.3.0",
+      "testProgram": "test/build/Release/cluster_test.exe"
+    },
+    "python": {
+      "package": "pymongo",
+      "example": "MongoClient('mongodb://127.0.0.1:27017,127.0.0.1:27018,127.0.0.1:27019/?replicaSet=rs0')"
+    },
+    "nodejs": {
+      "package": "mongodb",
+      "example": "new MongoClient('mongodb://127.0.0.1:27017,127.0.0.1:27018,127.0.0.1:27019/?replicaSet=rs0')"
+    },
+    "go": {
+      "package": "go.mongodb.org/mongo-driver",
+      "example": "mongo.Connect(ctx, options.Client().ApplyURI('mongodb://127.0.0.1:27017,127.0.0.1:27018,127.0.0.1:27019/?replicaSet=rs0'))"
+    },
+    "java": {
+      "package": "mongo-java-driver",
+      "example": "mongodb://127.0.0.1:27017,127.0.0.1:27018,127.0.0.1:27019/?replicaSet=rs0"
+    }
+  }
+}

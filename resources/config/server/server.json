@@ -5,5 +5,7 @@
   "msgpack": {
     "max_nesting_depth": 16
   },
+  "mongodb_dev":"resources/config/server/mongodb_dev.json",
+  "mongodb_public":"resources/config/server/mongodb_public.json",
   "scripts_dir": "resources/script/server"
 }
