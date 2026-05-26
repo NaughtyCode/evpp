@@ -1,7 +1,13 @@
 cmake_minimum_required(VERSION 4.0)
 
+project(CloudEngine C CXX)
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# ENGINE_ROOT always points to the shared src/ directory regardless of whether
+# this file is the top-level project or included via add_subdirectory.
+get_filename_component(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}" DIRECTORY)
 
 # ENGINE_BUILD triggers dllexport in engine_api.h.
 # Consumers who link against this library do NOT define this
@@ -9,22 +15,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_definitions(-DENGINE_BUILD)
 
 option(ENGINE_PROFILER_ENABLED "Enable perfetto profiler" ON)
-
-# ── Global include directories ───────────────────────────────────────
-# All project includes are src/-relative.
-include_directories(${PROJECT_SOURCE_DIR})
-include_directories(${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include)
-include_directories(${PROJECT_SOURCE_DIR}/thirdparty/lua/src)
-include_directories(${PROJECT_SOURCE_DIR}/thirdparty/glaze/glaze/include)
-include_directories(${PROJECT_SOURCE_DIR}/thirdparty/concurrentqueue/concurrentqueue)
-if(TARGET bson_static)
-    include_directories(${PROJECT_SOURCE_DIR}/thirdparty/mongo-c-driver/src/libbson/src)
-    include_directories(${PROJECT_BINARY_DIR}/mongo-c-driver/src/libbson/src)
-endif()
-if(TARGET mongoc_static)
-    include_directories(${PROJECT_SOURCE_DIR}/thirdparty/mongo-c-driver/src/libmongoc/src)
-    include_directories(${PROJECT_BINARY_DIR}/mongo-c-driver/src/libmongoc/src)
-endif()
+option(ENGINE_MONGODB_ENABLED "Enable MongoDB driver support" ON)
 
 # ── Platform settings ────────────────────────────────────────────────
 if(MSVC)
@@ -46,50 +37,139 @@ else()
 endif()
 
 # ═══════════════════════════════════════════════════════════════════════
+# Third-party dependencies
+# ═══════════════════════════════════════════════════════════════════════
+
+# ── libevent (built from source) ──────────────────────────────────────
+set(EVENT__DISABLE_TESTS ON CACHE BOOL "Disable libevent tests")
+set(EVENT__DISABLE_REGRESS ON CACHE BOOL "Disable libevent regression tests")
+set(EVENT__DISABLE_SAMPLES ON CACHE BOOL "Disable libevent samples")
+set(EVENT__DISABLE_BENCHMARK ON CACHE BOOL "Disable libevent benchmarks")
+set(EVENT__DISABLE_OPENSSL ON CACHE STRING "Disable OpenSSL support")
+set(EVENT__DISABLE_MBEDTLS ON CACHE STRING "Disable MbedTLS support")
+set(EVENT__LIBRARY_TYPE STATIC CACHE STRING "Build libevent as static library")
+set(EVENT__HAVE_WEPOLL OFF CACHE BOOL "Disable wepoll backend")
+add_subdirectory(${ENGINE_ROOT}/thirdparty/libevent ${CMAKE_BINARY_DIR}/libevent)
+include_directories(${CMAKE_BINARY_DIR}/libevent/include)
+set_property(TARGET event_core_static event_extra_static event_static PROPERTY FOLDER "thirdparty")
+set_property(TARGET event_core event_extra event PROPERTY FOLDER "thirdparty")
+
+# ── mongo-c-driver (static, bundled deps) ─────────────────────────────
+if(ENGINE_MONGODB_ENABLED)
+    set(ENABLE_MONGOC ON CACHE BOOL "" FORCE)
+    set(ENABLE_STATIC ON CACHE BOOL "" FORCE)
+    set(ENABLE_SHARED OFF CACHE BOOL "" FORCE)
+    set(ENABLE_ZLIB BUNDLED CACHE STRING "" FORCE)
+    set(ENABLE_ZSTD OFF CACHE STRING "" FORCE)
+    set(ENABLE_SNAPPY OFF CACHE STRING "" FORCE)
+    set(ENABLE_SRV ON CACHE BOOL "" FORCE)
+    set(ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+    set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(ENABLE_CLIENT_SIDE_ENCRYPTION OFF CACHE BOOL "" FORCE)
+    set(ENABLE_MONGODB_AWS_AUTH OFF CACHE BOOL "" FORCE)
+    set(ENABLE_UNINSTALL OFF CACHE BOOL "" FORCE)
+    set(ENABLE_MAN_PAGES OFF CACHE BOOL "" FORCE)
+    set(ENABLE_HTML_DOCS OFF CACHE BOOL "" FORCE)
+    set(ENABLE_TRACING OFF CACHE BOOL "" FORCE)
+    if (WIN32)
+        set(ENABLE_SSL WINDOWS CACHE STRING "" FORCE)
+        set(ENABLE_SASL SSPI CACHE STRING "" FORCE)
+    else ()
+        set(ENABLE_SSL AUTO CACHE STRING "" FORCE)
+        set(ENABLE_SASL AUTO CACHE STRING "" FORCE)
+    endif ()
+    add_subdirectory(${ENGINE_ROOT}/thirdparty/mongo-c-driver
+                     ${CMAKE_BINARY_DIR}/mongo-c-driver)
+    # mongo-c-driver sources are UTF-8; MSVC needs this to parse string literals
+    if(MSVC)
+        target_compile_options(bson_static PRIVATE /utf-8)
+        if(TARGET zlib_obj)
+            target_compile_options(zlib_obj PRIVATE /utf-8)
+        endif()
+        if(TARGET utf8proc_obj)
+            target_compile_options(utf8proc_obj PRIVATE /utf-8)
+        endif()
+        if(TARGET mongoc_static)
+            target_compile_options(mongoc_static PRIVATE /utf-8)
+        endif()
+    endif()
+    set_property(TARGET bson_static PROPERTY FOLDER "thirdparty")
+    if(TARGET zlib_obj)
+        set_property(TARGET zlib_obj PROPERTY FOLDER "thirdparty")
+    endif()
+    if(TARGET utf8proc_obj)
+        set_property(TARGET utf8proc_obj PROPERTY FOLDER "thirdparty")
+    endif()
+    if(TARGET mongoc_static)
+        set_property(TARGET mongoc_static PROPERTY FOLDER "thirdparty")
+    endif()
+    if(TARGET kms_message_static)
+        set_property(TARGET kms_message_static PROPERTY FOLDER "thirdparty")
+    endif()
+endif()
+
+# ── Global include directories ───────────────────────────────────────
+# All project includes are src/-relative.
+include_directories(${ENGINE_ROOT})
+include_directories(${ENGINE_ROOT}/thirdparty/libevent/include)
+include_directories(${ENGINE_ROOT}/thirdparty/quill/quill/include)
+include_directories(${ENGINE_ROOT}/thirdparty/lua/src)
+include_directories(${ENGINE_ROOT}/thirdparty/glaze/glaze/include)
+include_directories(${ENGINE_ROOT}/thirdparty/concurrentqueue/concurrentqueue)
+if(TARGET bson_static)
+    include_directories(${ENGINE_ROOT}/thirdparty/mongo-c-driver/src/libbson/src)
+    include_directories(${CMAKE_BINARY_DIR}/mongo-c-driver/src/libbson/src)
+endif()
+if(TARGET mongoc_static)
+    include_directories(${ENGINE_ROOT}/thirdparty/mongo-c-driver/src/libmongoc/src)
+    include_directories(${CMAKE_BINARY_DIR}/mongo-c-driver/src/libmongoc/src)
+endif()
+
+# ═══════════════════════════════════════════════════════════════════════
 # Third-party sources
 # ═══════════════════════════════════════════════════════════════════════
 
 # ── Lua 5.5.0 (source-form integration) ─────────────────────────────
 # Core VM (each #defines LUA_CORE)
 set(LUA_CORE_SOURCES
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lapi.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lcode.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lctype.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ldebug.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ldo.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ldump.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lfunc.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lgc.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/llex.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lmem.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lobject.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lopcodes.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lparser.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lstate.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lstring.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ltable.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ltm.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lundump.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lvm.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lzio.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lapi.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lcode.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lctype.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ldebug.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ldo.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ldump.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lfunc.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lgc.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/llex.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lmem.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lobject.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lopcodes.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lparser.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lstate.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lstring.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ltable.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ltm.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lundump.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lvm.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lzio.c
     # evpp custom: dynamic void* array attached to global_State
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lstate_custom_ptr.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lstate_custom_ptr.c
 )
 
 # Standard libraries (each #defines LUA_LIB)
 set(LUA_LIB_SOURCES
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lauxlib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lbaselib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lcorolib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ldblib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/liolib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lmathlib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/loadlib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/loslib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lstrlib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ltablib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lutf8lib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/linit.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lauxlib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lbaselib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lcorolib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ldblib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/liolib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lmathlib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/loadlib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/loslib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lstrlib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ltablib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lutf8lib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/linit.c
 )
 
 set(LUA_SOURCES ${LUA_CORE_SOURCES} ${LUA_LIB_SOURCES})
@@ -98,7 +178,7 @@ source_group("thirdparty\\lua" FILES ${LUA_SOURCES})
 # ── Perfetto ───────────────────────────────────────────────────────
 if(ENGINE_PROFILER_ENABLED)
     set(PERFETTO_SOURCES
-        ${PROJECT_SOURCE_DIR}/thirdparty/perfetto/perfetto.cc
+        ${ENGINE_ROOT}/thirdparty/perfetto/perfetto.cc
     )
     source_group("thirdparty\\perfetto" FILES ${PERFETTO_SOURCES})
 else()
@@ -107,7 +187,7 @@ endif()
 
 # ── KCP ──────────────────────────────────────────────────────────
 set(KCP_SOURCES
-    ${PROJECT_SOURCE_DIR}/thirdparty/kcp/ikcp.c
+    ${ENGINE_ROOT}/thirdparty/kcp/ikcp.c
 )
 source_group("thirdparty\\kcp" FILES ${KCP_SOURCES})
 
@@ -283,9 +363,13 @@ endif()
 add_library(CloudEngine SHARED ${SERVERENGINE_SOURCES})
 
 target_include_directories(CloudEngine PUBLIC
-    ${PROJECT_SOURCE_DIR}
-    ${PROJECT_SOURCE_DIR}/thirdparty/quill/quill/include
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src
+    ${ENGINE_ROOT}
+    ${ENGINE_ROOT}/thirdparty/libevent/include
+    ${CMAKE_BINARY_DIR}/libevent/include
+    ${ENGINE_ROOT}/thirdparty/quill/quill/include
+    ${ENGINE_ROOT}/thirdparty/lua/src
+    ${ENGINE_ROOT}/thirdparty/glaze/glaze/include
+    ${ENGINE_ROOT}/thirdparty/concurrentqueue/concurrentqueue
 )
 
 # ── Compile definitions ───────────────────────────────────────────────
@@ -301,13 +385,13 @@ endif()
 if(ENGINE_PHYSICS_ENABLED)
     # JoltPhysics v5.5.1 (https://github.com/jrouwe/JoltPhysics, MIT License)
     # Jolt.cmake sets CMAKE_CXX_STANDARD to 17 globally — restore C++23.
-    add_subdirectory(${PROJECT_SOURCE_DIR}/thirdparty/JoltPhysics/JoltPhysics/Build jolt)
+    add_subdirectory(${ENGINE_ROOT}/thirdparty/JoltPhysics/JoltPhysics/Build jolt)
     set_target_properties(Jolt PROPERTIES FOLDER "thirdparty")
     set(CMAKE_CXX_STANDARD 23)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
     target_include_directories(CloudEngine PUBLIC
-        ${PROJECT_SOURCE_DIR}/thirdparty/JoltPhysics/JoltPhysics
+        ${ENGINE_ROOT}/thirdparty/JoltPhysics/JoltPhysics
     )
     target_link_libraries(CloudEngine PUBLIC Jolt)
 endif()
@@ -324,13 +408,13 @@ if(TARGET mongoc_static)
 endif()
 
 # ── Link system libraries ─────────────────────────────────────────────
-target_link_directories(CloudEngine PUBLIC "${PROJECT_BINARY_DIR}/libevent/lib/$<CONFIG>")
+target_link_directories(CloudEngine PUBLIC "${CMAKE_BINARY_DIR}/libevent/lib/$<CONFIG>")
 target_link_libraries(CloudEngine PUBLIC ${LIBRARIES})
 
 # ── Post-build: copy DLL to bin/ ──────────────────────────────────────
 add_custom_command(TARGET CloudEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "$<TARGET_FILE:CloudEngine>"
-    "${PROJECT_SOURCE_DIR}/../artifacts/bin/$<CONFIG>/$<TARGET_FILE_NAME:CloudEngine>"
+    "${ENGINE_ROOT}/../artifacts/bin/$<CONFIG>/$<TARGET_FILE_NAME:CloudEngine>"
     COMMENT "Copying CloudEngine.dll to bin/"
 )

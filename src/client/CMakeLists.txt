@@ -1,42 +1,62 @@
+cmake_minimum_required(VERSION 4.0)
+
+project(GameClient C CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# ENGINE_ROOT always points to the shared src/ directory.
+get_filename_component(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}" DIRECTORY)
+
+# Import CloudEngine target from the runtime project (skipped if already
+# available, e.g. when building via the combined top-level CMakeLists.txt).
+if(NOT TARGET CloudEngine)
+    add_subdirectory(${ENGINE_ROOT}/runtime ${CMAKE_BINARY_DIR}/runtime)
+endif()
+
+# ═══════════════════════════════════════════════════════════════════════
+# GameClient library
+# ═══════════════════════════════════════════════════════════════════════
+
 # ── Lua 5.5.0 (source-form integration) ─────────────────────────────
 # Core VM
 set(GAMECLIENT_LUA_CORE
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lapi.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lcode.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lctype.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ldebug.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ldo.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ldump.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lfunc.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lgc.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/llex.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lmem.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lobject.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lopcodes.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lparser.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lstate.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lstring.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ltable.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ltm.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lundump.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lvm.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lzio.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lstate_custom_ptr.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lapi.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lcode.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lctype.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ldebug.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ldo.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ldump.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lfunc.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lgc.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/llex.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lmem.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lobject.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lopcodes.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lparser.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lstate.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lstring.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ltable.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ltm.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lundump.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lvm.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lzio.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lstate_custom_ptr.c
 )
 # Standard libraries
 set(GAMECLIENT_LUA_LIB
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lauxlib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lbaselib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lcorolib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ldblib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/liolib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lmathlib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/loadlib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/loslib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lstrlib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/ltablib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/lutf8lib.c
-    ${PROJECT_SOURCE_DIR}/thirdparty/lua/src/linit.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lauxlib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lbaselib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lcorolib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ldblib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/liolib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lmathlib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/loadlib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/loslib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lstrlib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ltablib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lutf8lib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/linit.c
 )
 
 add_library(GameClient SHARED
@@ -54,8 +74,8 @@ target_include_directories(GameClient
     PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}"
     PRIVATE
-        "${PROJECT_SOURCE_DIR}"
-        "${PROJECT_SOURCE_DIR}/thirdparty/lua/src"
+        "${ENGINE_ROOT}"
+        "${ENGINE_ROOT}/thirdparty/lua/src"
 )
 
 target_compile_definitions(GameClient PRIVATE CLIENT_BUILD)
@@ -69,7 +89,7 @@ endif()
 add_custom_command(TARGET GameClient POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "$<TARGET_FILE:GameClient>"
-    "${PROJECT_SOURCE_DIR}/../artifacts/bin/$<CONFIG>/$<TARGET_FILE_NAME:GameClient>"
+    "${ENGINE_ROOT}/../artifacts/bin/$<CONFIG>/$<TARGET_FILE_NAME:GameClient>"
     COMMENT "Copying GameClient.dll to bin/"
 )
 
@@ -77,8 +97,8 @@ add_custom_command(TARGET GameClient POST_BUILD
 
 option(CLIENT_BUILD_EXAMPLES "Build GameClient example programs" ON)
 if(CLIENT_BUILD_EXAMPLES)
-    add_executable(client_example ${PROJECT_SOURCE_DIR}/tests/game_client/basic_demo.c)
-    set_source_files_properties(${PROJECT_SOURCE_DIR}/tests/game_client/basic_demo.c
+    add_executable(client_example ${ENGINE_ROOT}/tests/game_client/basic_demo.c)
+    set_source_files_properties(${ENGINE_ROOT}/tests/game_client/basic_demo.c
         PROPERTIES LANGUAGE CXX)
     target_include_directories(client_example PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(client_example GameClient)
