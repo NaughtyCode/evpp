@@ -202,6 +202,7 @@ if(NOT TARGET CloudEngine)
 
     # ── CloudEngine library target ───────────────────────────────────
     add_library(CloudEngine SHARED ${SERVERENGINE_SOURCES})
+    add_dependencies(CloudEngine copy_resources)
 
     target_include_directories(CloudEngine PUBLIC
         ${ENGINE_ROOT}
@@ -315,6 +316,8 @@ add_executable(GameServer
     ${GAMESERVER_LUA_CORE}
     ${GAMESERVER_LUA_LIB}
 )
+
+add_dependencies(GameServer copy_resources)
 
 set_target_properties(GameServer PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
 

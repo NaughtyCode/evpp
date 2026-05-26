@@ -207,6 +207,8 @@ add_library(GameClient SHARED
     ${SERVERENGINE_SOURCES}
 )
 
+add_dependencies(GameClient copy_resources)
+
 target_include_directories(GameClient
     PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}"

@@ -23,6 +23,14 @@ set(CMAKE_MACOSX_RPATH 0)
 message(STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})
 message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
 
+# ── Copy resources to output ──────────────────────────────────────────
+add_custom_target(copy_resources ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_CURRENT_SOURCE_DIR}/../resources"
+    "${EXECUTABLE_OUTPUT_PATH}/$<CONFIG>/resources"
+    COMMENT "Copying resources/ to bin/$<CONFIG>/"
+)
+
 # ── Sub-projects ──────────────────────────────────────────────────────
 # Platform flags, third-party setup, and options are owned by each
 # sub-project.  This file is a thin wrapper for building all projects
