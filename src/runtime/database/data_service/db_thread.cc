@@ -402,7 +402,6 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 
     // ── CRUD path — obtain handles and dispatch ────────────────────────
 
-    mongo::MongoDatabase*   db   = nullptr;
     mongo::MongoCollection* coll = nullptr;
 
     try {
@@ -428,7 +427,6 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             resp.success = false;
             resp.error_message = "bson_data (filter) required for this operation";
             if (coll) coll->Destroy();
-            if (db) db->Destroy();
             EnqueueResponse(std::move(resp));
             return;
         }
@@ -442,7 +440,6 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             resp.success = false;
             resp.error_message = "bson_data2 (update descriptor) required for update operations";
             if (coll) coll->Destroy();
-            if (db) db->Destroy();
             EnqueueResponse(std::move(resp));
             return;
         }
@@ -648,18 +645,15 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             break;
         }
 
-        // ── kAggregate: pipeline from bson_data2 (preferred) or bson_data ─
+        // ── kAggregate: pipeline from bson_data (preferred) or bson_data2 ─
         //
         // Accepts a JSON array of pipeline stages [{$match:...},{$group:...}].
         // BSON arrays are documents with integer keys ("0","1",...), so
         // NewFromJson on a JSON array produces the correct BSON representation
         // that mongoc_collection_aggregate expects.
-        //
-        // Also accepts a single stage as a JSON object for convenience
-        // (single-stage pipelines like [{$count: "total"}]).
         case DbOperation::kAggregate: {
-            const std::string& pipe_json = req.bson_data2.empty()
-                ? req.bson_data : req.bson_data2;
+            const std::string& pipe_json = req.bson_data.empty()
+                ? req.bson_data2 : req.bson_data;
             if (pipe_json.empty()) {
                 resp.success = false;
                 resp.error_message = "bson_data or bson_data2 (pipeline) required for aggregate";
@@ -713,7 +707,6 @@ void DBThread::ProcessRequest(const DbRequest& req) {
     // RAII cleanup: destroy handles if they were obtained.
     // nullptr checks are safe — Destroy() on null is a no-op per mongo wrapper.
     if (coll) coll->Destroy();
-    if (db)   db->Destroy();
 
     EnqueueResponse(std::move(resp));
 }
