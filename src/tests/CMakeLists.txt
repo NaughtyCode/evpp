@@ -8,6 +8,9 @@ include_directories(${PROJECT_SOURCE_DIR}/thirdparty
 include(CTest)
 add_test(NAME evpp_unittest COMMAND evpp_unittest)
 
+option(BUILD_EXAMPLES "Build example programs" OFF)
+option(BUILD_BENCHMARKS "Build benchmark programs" OFF)
+
 add_subdirectory(unit)
 add_subdirectory(smoke)
 add_subdirectory(apps)

@@ -73,9 +73,63 @@ endif()
 # GameServer executable
 # ═══════════════════════════════════════════════════════════════════════
 
-add_executable(GameServer server.cc)
+# ── Lua 5.5.0 (source-form integration) ─────────────────────────────
+# Core VM
+set(GAMESERVER_LUA_CORE
+    ${ENGINE_ROOT}/thirdparty/lua/src/lapi.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lcode.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lctype.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ldebug.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ldo.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ldump.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lfunc.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lgc.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/llex.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lmem.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lobject.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lopcodes.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lparser.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lstate.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lstring.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ltable.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ltm.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lundump.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lvm.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lzio.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lstate_custom_ptr.c
+)
+# Standard libraries
+set(GAMESERVER_LUA_LIB
+    ${ENGINE_ROOT}/thirdparty/lua/src/lauxlib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lbaselib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lcorolib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ldblib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/liolib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lmathlib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/loadlib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/loslib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lstrlib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/ltablib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/lutf8lib.c
+    ${ENGINE_ROOT}/thirdparty/lua/src/linit.c
+)
+
+add_executable(GameServer
+    server.cc
+    ${GAMESERVER_LUA_CORE}
+    ${GAMESERVER_LUA_LIB}
+)
+
 set_target_properties(GameServer PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
+
+target_include_directories(GameServer
+    PRIVATE
+        "${ENGINE_ROOT}"
+        "${ENGINE_ROOT}/thirdparty/lua/src"
+)
+
 target_link_libraries(GameServer CloudEngine)
+
 if(WIN32)
     target_link_libraries(GameServer ws2_32)
 endif()

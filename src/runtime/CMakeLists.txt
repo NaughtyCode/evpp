@@ -36,6 +36,14 @@ else()
     set(LIBRARIES event_core_static event_extra_static)
 endif()
 
+# ── Output paths ──────────────────────────────────────────────────────
+set(LIBRARY_OUTPUT_PATH ${ENGINE_ROOT}/../artifacts/lib)
+set(CMAKE_MACOSX_RPATH 0)
+
+# ── Status ────────────────────────────────────────────────────────────
+message(STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})
+message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
+
 # ═══════════════════════════════════════════════════════════════════════
 # Third-party dependencies
 # ═══════════════════════════════════════════════════════════════════════

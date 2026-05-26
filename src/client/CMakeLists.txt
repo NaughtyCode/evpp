@@ -5,6 +5,8 @@ project(GameClient C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(ENGINE_MONGODB_ENABLED "Enable MongoDB driver support" OFF)
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # ENGINE_ROOT always points to the shared src/ directory.
