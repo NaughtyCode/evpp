@@ -89,7 +89,7 @@ struct _mongoc_client_pool_t {
 **`mongoc_client_pool_pop()` (阻塞获取)**:
 ```
 1. lock(pool->mutex)
-2. if queue 非空 → pop LIFO 队列 (pop_head) → 返回 client
+2. if queue 非空 → pop LIFO 队列 (pop_head) → goto step 5
 3. if size < max_pool_size → 创建新 client (_mongoc_client_new_from_topology) →
    _initialize_new_client() 逐项复制 pool 配置到 client:
    - error_api_version (int32_t 直接赋值)
@@ -97,13 +97,15 @@ struct _mongoc_client_pool_t {
    - SSL opts (条件编译, 仅在 MONGOC_ENABLE_SSL 且 ssl_opts_set 时)
    - stream_initiator (测试用)
    (注: APM callbacks 和 appname 存储在 topology 层级, 所有 client 自动共享, 无需复制)
-   → size++ → client_initialized = true → 返回
-4. otherwise → cond_wait(&pool->cond, &pool->mutex)  // 阻塞等待
+   → size++ → client_initialized = true → goto step 5
+4. otherwise → cond_wait(&pool->cond, &pool->mutex)  // 阻塞等待, 被唤醒后 goto step 2
    - 若设置了 waitQueueTimeoutMS > 0 → cond_timedwait (计算剩余时间) → 超时返回 NULL
    - waitQueueTimeoutMS 默认值: -1 (无限等待), 设为 0 也等同于无限等待
-5. unlock(pool->mutex)
-6. [成功获取后] _start_scanner_if_needed(pool):
-   → 原子 CAS topology->scanner_state (OFF → BG_RUNNING), 仅首个线程启动后台监控
+5. [持锁] _start_scanner_if_needed(pool):
+   - 若 pool->topology->single_threaded 为 true → 跳过（单线程模式不需要后台监控）
+   - 否则 → _mongoc_topology_background_monitoring_start()
+     → 原子 CAS topology->scanner_state (OFF → BG_RUNNING), 仅首个线程启动后台监控
+6. unlock(pool->mutex) → 返回 client
 ```
 
 **`mongoc_client_pool_push()` (归还)**:
@@ -135,7 +137,7 @@ Pool 首次 `pop()` 成功后调用 `_start_scanner_if_needed()` → `_mongoc_to
 | RTT monitor threads | 每 server 一个 | `mongoc_server_monitor_run_as_rtt()` 创建 | 往返时间测量，用于驱动 nearest 读偏好 |
 | SRV polling thread | 1 个 | `mcommon_thread_create(srv_polling_run)` 创建 | 周期性重新解析 SRV DNS 记录 (仅 `mongodb+srv://`) |
 
-所有后台线程的启停由 `mongoc_topology_t` 内的 `scanner_state` 原子变量统一管理（状态机: OFF → BG_RUNNING → OFF）。这些线程对调用者完全透明，无需应用层管理。
+所有后台线程的启停由 `mongoc_topology_t` 内的 `scanner_state` 原子变量统一管理（三态状态机: `OFF` → `BG_RUNNING` → `SHUTTING_DOWN` → `OFF`）。启动通过 CAS 原子转换（OFF→BG_RUNNING），关闭通过 atomic exchange（BG_RUNNING→SHUTTING_DOWN），待所有 monitor 线程退出后再切回 OFF。这些线程对调用者完全透明，无需应用层管理。
 
 ### 1.6 生命周期契约
 
