@@ -41,6 +41,16 @@ int l_db_get_collection(lua_State* L) {
     return 1;
 }
 
+int l_db_copy(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    if (!db) { lua_pushnil(L); return 1; }
+    auto* copy = db->Copy();
+    if (!copy) { lua_pushnil(L); return 1; }
+    auto** ud = NewUserdata<mongo::MongoDatabase>(L, kMetaName);
+    *ud = copy;
+    return 1;
+}
+
 int l_db_get_name(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     const char* name = db ? db->GetName() : nullptr;
@@ -199,6 +209,7 @@ const luaL_Reg kLib[] = {
     {"db_get_collection", l_db_get_collection},
     {"db_create_collection", l_db_create_collection},
     {"db_aggregate", l_db_aggregate},
+    {"db_copy", l_db_copy},
     {"db_get_name", l_db_get_name},
     {"db_drop", l_db_drop},
     {"db_command_simple", l_db_command_simple},

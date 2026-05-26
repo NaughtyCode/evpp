@@ -5,6 +5,8 @@
 
 #include <new>
 
+#include <bson/bson.h>
+
 #include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_change_stream.h"
 #include "runtime/database/mongo/mongo_error.h"
@@ -46,12 +48,10 @@ int l_change_stream_next(lua_State* L) {
 int l_change_stream_get_resume_token(lua_State* L) {
     auto* stream = GetUserdata<mongo::MongoChangeStream>(L, 1, kMetaName);
     if (!stream) { lua_pushnil(L); return 1; }
-    const void* raw = stream->GetResumeToken();
+    auto* raw = static_cast<const bson_t*>(stream->GetResumeToken());
     if (!raw) { lua_pushnil(L); return 1; }
     auto* doc = new (std::nothrow) mongo::BsonDocument(
-        mongo::BsonDocument::NewFromData(static_cast<const uint8_t*>(static_cast<const bson_t*>(raw) ?
-            bson_get_data(static_cast<const bson_t*>(raw)) : nullptr),
-            raw ? static_cast<const bson_t*>(raw)->len : 0));
+        mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
     if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
     auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
     *ud = doc;
@@ -73,6 +73,7 @@ int l_change_stream_error_document(lua_State* L) {
 const luaL_Reg kLib[] = {
     {"change_stream_destroy", l_change_stream_destroy},
     {"change_stream_next", l_change_stream_next},
+    {"change_stream_get_resume_token", l_change_stream_get_resume_token},
     {"change_stream_error_document", l_change_stream_error_document},
     {nullptr, nullptr},
 };

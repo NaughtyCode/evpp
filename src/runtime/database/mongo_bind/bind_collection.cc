@@ -158,6 +158,16 @@ int l_coll_drop(lua_State* L) {
     return 2;
 }
 
+int l_coll_copy(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    if (!coll) { lua_pushnil(L); return 1; }
+    auto* copy = coll->Copy();
+    if (!copy) { lua_pushnil(L); return 1; }
+    auto** ud = NewUserdata<mongo::MongoCollection>(L, kMetaName);
+    *ud = copy;
+    return 1;
+}
+
 int l_coll_get_name(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     const char* name = coll ? coll->GetName() : nullptr;
@@ -390,6 +400,7 @@ const luaL_Reg kLib[] = {
     {"coll_aggregate", l_coll_aggregate},
     {"coll_count", l_coll_count},
     {"coll_drop", l_coll_drop},
+    {"coll_copy", l_coll_copy},
     {"coll_get_name", l_coll_get_name},
     {"coll_set_read_prefs", l_coll_set_read_prefs},
     {"coll_set_write_concern", l_coll_set_write_concern},

@@ -87,6 +87,35 @@ int l_oid_get_time(lua_State* L) {
     return 1;
 }
 
+int l_oid_init_from_data(lua_State* L) {
+    size_t len;
+    const char* data = luaL_checklstring(L, 1, &len);
+    if (len != 12) {
+        lua_pushnil(L);
+        lua_pushstring(L, "OID data must be exactly 12 bytes");
+        return 2;
+    }
+    mongo::MongoOid oid;
+    oid.InitFromData(reinterpret_cast<const uint8_t*>(data));
+    std::string s = oid.ToString();
+    lua_pushlstring(L, s.data(), s.size());
+    return 1;
+}
+
+int l_oid_get_bytes(lua_State* L) {
+    const char* str = luaL_checkstring(L, 1);
+    mongo::MongoOid oid;
+    if (!oid.IsValid(str, strlen(str))) {
+        lua_pushnil(L);
+        lua_pushstring(L, "invalid OID string");
+        return 2;
+    }
+    oid.InitFromString(str);
+    const uint8_t* bytes = oid.GetBytes();
+    lua_pushlstring(L, reinterpret_cast<const char*>(bytes), 12);
+    return 1;
+}
+
 int l_oid_equal(lua_State* L) {
     const char* a_str = luaL_checkstring(L, 1);
     const char* b_str = luaL_checkstring(L, 2);
@@ -110,6 +139,8 @@ const luaL_Reg kLib[] = {
     {"oid_hash", l_oid_hash},
     {"oid_get_time", l_oid_get_time},
     {"oid_equal", l_oid_equal},
+    {"oid_init_from_data", l_oid_init_from_data},
+    {"oid_get_bytes", l_oid_get_bytes},
     {nullptr, nullptr},
 };
 

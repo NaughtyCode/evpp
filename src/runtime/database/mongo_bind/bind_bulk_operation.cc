@@ -121,6 +121,108 @@ int l_bulk_set_let(lua_State* L) {
     return 0;
 }
 
+int l_bulk_insert_with_opts(lua_State* L) {
+    auto* bulk = GetUserdata<mongo::MongoBulkOperation>(L, 1, kMetaName);
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    if (!bulk || !doc) { lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::MongoError error;
+    lua_pushboolean(L, bulk->InsertWithOpts(*doc, opts, &error));
+    if (!lua_toboolean(L, -1)) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
+int l_bulk_remove_one_with_opts(lua_State* L) {
+    auto* bulk = GetUserdata<mongo::MongoBulkOperation>(L, 1, kMetaName);
+    auto* selector = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    if (!bulk || !selector) { lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::MongoError error;
+    lua_pushboolean(L, bulk->RemoveOneWithOpts(*selector, opts, &error));
+    if (!lua_toboolean(L, -1)) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
+int l_bulk_remove_many_with_opts(lua_State* L) {
+    auto* bulk = GetUserdata<mongo::MongoBulkOperation>(L, 1, kMetaName);
+    auto* selector = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    if (!bulk || !selector) { lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::MongoError error;
+    lua_pushboolean(L, bulk->RemoveManyWithOpts(*selector, opts, &error));
+    if (!lua_toboolean(L, -1)) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
+int l_bulk_replace_one_with_opts(lua_State* L) {
+    auto* bulk = GetUserdata<mongo::MongoBulkOperation>(L, 1, kMetaName);
+    auto* selector = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 4) ? nullptr : GetUserdata<mongo::BsonDocument>(L, 4, "bson.doc");
+    if (!bulk || !selector || !doc) { lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::MongoError error;
+    lua_pushboolean(L, bulk->ReplaceOneWithOpts(*selector, *doc, opts, &error));
+    if (!lua_toboolean(L, -1)) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
+int l_bulk_update_one_with_opts(lua_State* L) {
+    auto* bulk = GetUserdata<mongo::MongoBulkOperation>(L, 1, kMetaName);
+    auto* selector = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 4) ? nullptr : GetUserdata<mongo::BsonDocument>(L, 4, "bson.doc");
+    if (!bulk || !selector || !doc) { lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::MongoError error;
+    lua_pushboolean(L, bulk->UpdateOneWithOpts(*selector, *doc, opts, &error));
+    if (!lua_toboolean(L, -1)) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
+int l_bulk_update_many_with_opts(lua_State* L) {
+    auto* bulk = GetUserdata<mongo::MongoBulkOperation>(L, 1, kMetaName);
+    auto* selector = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 4) ? nullptr : GetUserdata<mongo::BsonDocument>(L, 4, "bson.doc");
+    if (!bulk || !selector || !doc) { lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::MongoError error;
+    lua_pushboolean(L, bulk->UpdateManyWithOpts(*selector, *doc, opts, &error));
+    if (!lua_toboolean(L, -1)) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
+int l_bulk_set_server_id(lua_State* L) {
+    auto* bulk = GetUserdata<mongo::MongoBulkOperation>(L, 1, kMetaName);
+    auto server_id = static_cast<uint32_t>(luaL_checkinteger(L, 2));
+    if (bulk) bulk->SetServerId(server_id);
+    return 0;
+}
+
+int l_bulk_get_server_id(lua_State* L) {
+    auto* bulk = GetUserdata<mongo::MongoBulkOperation>(L, 1, kMetaName);
+    lua_pushinteger(L, bulk ? bulk->GetServerId() : 0);
+    return 1;
+}
+
+int l_bulk_set_database(lua_State* L) {
+    auto* bulk = GetUserdata<mongo::MongoBulkOperation>(L, 1, kMetaName);
+    const char* db_name = luaL_checkstring(L, 2);
+    if (bulk) bulk->SetDatabase(db_name);
+    return 0;
+}
+
+int l_bulk_set_collection(lua_State* L) {
+    auto* bulk = GetUserdata<mongo::MongoBulkOperation>(L, 1, kMetaName);
+    const char* coll_name = luaL_checkstring(L, 2);
+    if (bulk) bulk->SetCollection(coll_name);
+    return 0;
+}
+
 const luaL_Reg kLib[] = {
     {"bulk_new", l_bulk_new},
     {"bulk_destroy", l_bulk_destroy},
@@ -134,6 +236,16 @@ const luaL_Reg kLib[] = {
     {"bulk_set_write_concern", l_bulk_set_write_concern},
     {"bulk_set_bypass_document_validation", l_bulk_set_bypass_document_validation},
     {"bulk_set_let", l_bulk_set_let},
+    {"bulk_insert_with_opts", l_bulk_insert_with_opts},
+    {"bulk_remove_one_with_opts", l_bulk_remove_one_with_opts},
+    {"bulk_remove_many_with_opts", l_bulk_remove_many_with_opts},
+    {"bulk_replace_one_with_opts", l_bulk_replace_one_with_opts},
+    {"bulk_update_one_with_opts", l_bulk_update_one_with_opts},
+    {"bulk_update_many_with_opts", l_bulk_update_many_with_opts},
+    {"bulk_set_server_id", l_bulk_set_server_id},
+    {"bulk_get_server_id", l_bulk_get_server_id},
+    {"bulk_set_database", l_bulk_set_database},
+    {"bulk_set_collection", l_bulk_set_collection},
     {nullptr, nullptr},
 };
 

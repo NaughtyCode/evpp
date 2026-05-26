@@ -109,6 +109,26 @@ int l_cursor_get_max_await_time_ms(lua_State* L) {
     return 1;
 }
 
+int l_cursor_has_error(lua_State* L) {
+    auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
+    if (!cursor) { lua_pushboolean(L, false); return 1; }
+    mongo::MongoError error;
+    lua_pushboolean(L, cursor->HasError(&error));
+    return 1;
+}
+
+int l_cursor_error_document(lua_State* L) {
+    auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
+    if (!cursor) { lua_pushboolean(L, false); return 1; }
+    mongo::MongoError error;
+    const void* raw_doc = nullptr;
+    bool has_err = cursor->ErrorDocument(&error, &raw_doc);
+    lua_pushboolean(L, has_err);
+    if (has_err) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
 int l_cursor_clone(lua_State* L) {
     auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
     if (!cursor) { lua_pushnil(L); return 1; }
@@ -132,6 +152,8 @@ const luaL_Reg kLib[] = {
     {"cursor_set_max_await_time_ms", l_cursor_set_max_await_time_ms},
     {"cursor_get_max_await_time_ms", l_cursor_get_max_await_time_ms},
     {"cursor_clone", l_cursor_clone},
+    {"cursor_has_error", l_cursor_has_error},
+    {"cursor_error_document", l_cursor_error_document},
     {nullptr, nullptr},
 };
 

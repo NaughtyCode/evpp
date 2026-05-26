@@ -207,6 +207,15 @@ int l_bson_iter_as_regex(lua_State* L) {
     return 2;
 }
 
+int l_bson_iter_as_symbol(lua_State* L) {
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
+    if (!iter) { lua_pushnil(L); return 1; }
+    const char* sym = iter->AsSymbol();
+    if (sym) lua_pushstring(L, sym);
+    else lua_pushnil(L);
+    return 1;
+}
+
 int l_bson_iter_as_decimal128(lua_State* L) {
     auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
     if (!iter) { lua_pushnil(L); return 1; }
@@ -240,6 +249,7 @@ const luaL_Reg kLib[] = {
     {"iter_as_double_coerce", l_bson_iter_as_double_coerce},
     {"iter_as_code", l_bson_iter_as_code},
     {"iter_as_regex", l_bson_iter_as_regex},
+    {"iter_as_symbol", l_bson_iter_as_symbol},
     {"iter_as_decimal128", l_bson_iter_as_decimal128},
     {nullptr, nullptr},
 };

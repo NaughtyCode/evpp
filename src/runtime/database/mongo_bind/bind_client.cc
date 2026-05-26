@@ -13,6 +13,7 @@
 #include "runtime/database/mongo/mongo_error.h"
 #include "runtime/database/mongo/mongo_server_api.h"
 #include "runtime/database/mongo/mongo_session.h"
+#include "runtime/database/mongo/mongo_uri.h"
 
 namespace engine {
 namespace script {
@@ -152,6 +153,16 @@ int l_client_set_read_concern(lua_State* L) {
     return 0;
 }
 
+int l_client_get_uri(lua_State* L) {
+    auto* client = GetUserdata<mongo::MongoClient>(L, 1, kMetaName);
+    if (!client) { lua_pushnil(L); return 1; }
+    auto* uri = new (std::nothrow) mongo::MongoUri(client->GetUri());
+    if (!uri) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::MongoUri>(L, "mongoc.uri");
+    *ud = uri;
+    return 1;
+}
+
 int l_client_set_server_api(lua_State* L) {
     auto* client = GetUserdata<mongo::MongoClient>(L, 1, kMetaName);
     auto* api = GetUserdata<mongo::MongoServerApi>(L, 2, "mongoc.server_api");
@@ -227,6 +238,7 @@ const luaL_Reg kLib[] = {
     {"client_set_read_prefs", l_client_set_read_prefs},
     {"client_set_write_concern", l_client_set_write_concern},
     {"client_set_read_concern", l_client_set_read_concern},
+    {"client_get_uri", l_client_get_uri},
     {"client_set_server_api", l_client_set_server_api},
     {"client_watch", l_client_watch},
     {"client_get_database_names", l_client_get_database_names},
