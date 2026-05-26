@@ -306,6 +306,7 @@ bool BsonReader::Read(BsonDocument* out, MongoError* error) {
     bool eof = false;
     const bson_t* raw = bson_reader_read(impl_->reader, &eof);
     if (!raw) return false;
+    bson_destroy(static_cast<bson_t*>(out->RawBson()));
     bson_copy_to_excluding_noinit(raw, static_cast<bson_t*>(out->RawBson()), "", nullptr);
     return true;
 }

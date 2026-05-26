@@ -147,6 +147,7 @@ main():
     创建线程:
         client = mongoc_client_pool_pop(pool)   // 线程安全
         // 使用 client (阻塞操作: find/insert/update...)
+        // 隐式使用 topology 内嵌的 server_session_pool 获取/归还 session
         mongoc_client_pool_push(pool, client)   // 线程安全
     
     join 所有线程
@@ -155,6 +156,19 @@ main():
     mongoc_cleanup()                  // 全局一次
     // C++ wrapper: MongoSystem::Instance().Shutdown()
 ```
+
+**`mongoc_client_pool_destroy()` 内部清理顺序**:
+```
+1. 若 session_pool 非空 → pop 一个 client (复用或新建)
+   → _mongoc_client_end_sessions(client)  // 向服务器发送 endSessions 命令
+   → push client 回队列
+2. 循环 pop_head 销毁队列中所有 client (mongoc_client_destroy)
+3. mongoc_topology_destroy(pool->topology)  // 停止后台线程, 销毁 session_pool
+4. 清理 uri, mutex, condvar, server_api, SSL opts, last_known_serverids
+5. bson_free(pool)
+```
+
+**关键约束**: `destroy` 不是线程安全的——调用者必须确保所有线程已 `join`，所有借出的 client 已 `push` 归还。
 
 ### 1.7 组件线程安全速查表
 
@@ -225,6 +239,7 @@ struct mongoc_ts_pool {
     pool_node *head;               // LIFO 空闲 session 链表头
     int32_t size;                  // 原子读取, 无需锁
     bson_mutex_t mtx;              // 保护 head 链表操作
+    int32_t outstanding_items;     // 借出未归还计数 (仅 audit_pool_enabled=1 时使用, 默认关闭)
 };
 ```
 
@@ -236,8 +251,9 @@ struct mongoc_ts_pool {
 **Prune 条件** (`_server_session_should_prune`):
 - `dirty` session（遇到过网络错误）→ 丢弃
 - 从未使用过的 session（`last_used_usec == SESSION_NEVER_USED`）→ 丢弃
+- `session_timeout_minutes == MONGOC_NO_SESSIONS`（未连接时）→ 保留
 - Load-balanced topology 中永不 prune
-- 其他: `last_used + topology.session_timeout_minutes × 60s < now - 1min` → 超时丢弃
+- 其他: `(last_used + session_timeout_minutes × 60s) - now < 1min` → 距过期不足 1 分钟，提前丢弃
 
 **线程安全**: pool 的 `bson_mutex_t` 保护 push/pop，`size` 字段支持原子无锁读取（`mongoc_ts_pool_size()` / `mongoc_ts_pool_is_empty()`）。
 

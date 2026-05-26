@@ -33,7 +33,8 @@ BsonDocument::BsonDocument() {
 
 BsonDocument::BsonDocument(const uint8_t* data, size_t length) {
     auto* b = static_cast<bson_t*>(RawBson());
-    bson_init_static(b, data, length);
+    if (!bson_init_static(b, data, length))
+        bson_init(b);
 }
 
 BsonDocument::~BsonDocument() {
@@ -542,7 +543,9 @@ void BsonIter::AsCodeWithScope(uint32_t* code_length, const char** code, BsonDoc
     uint32_t scope_len;
     const uint8_t* scope_data;
     bson_iter_codewscope(static_cast<const bson_iter_t*>(RawIter()), code_length, &scope_len, &scope_data);
-    *code = bson_iter_code(static_cast<const bson_iter_t*>(RawIter()), code_length);
+    if (code && code_length && scope_data) {
+        *code = reinterpret_cast<const char*>(scope_data) - (*code_length);
+    }
     if (scope && scope_data) {
         bson_destroy(static_cast<bson_t*>(scope->RawBson()));
         bson_t tmp;

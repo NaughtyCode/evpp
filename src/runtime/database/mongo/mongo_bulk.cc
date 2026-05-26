@@ -192,7 +192,9 @@ void* MongoBulkOperation::RawBulkOperation() {
 }
 
 void MongoBulkOperation::SetRawBulkOperation(void* bulk) {
-    if (impl_ && impl_->bulk) mongoc_bulk_operation_destroy(impl_->bulk);
+    if (!impl_) return;
+    if (impl_->bulk == static_cast<mongoc_bulk_operation_t*>(bulk)) return;
+    if (impl_->bulk) mongoc_bulk_operation_destroy(impl_->bulk);
     impl_->bulk = static_cast<mongoc_bulk_operation_t*>(bulk);
 }
 

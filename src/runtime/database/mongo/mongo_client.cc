@@ -4,6 +4,7 @@
 
 #include <mongoc/mongoc.h>
 
+#include <cstdint>
 #include <vector>
 
 #include "runtime/database/mongo/mongo_bson.h"
@@ -214,7 +215,7 @@ const void* MongoClient::GetReadConcern() const {
 }
 
 void MongoClient::SetErrorApi(uint32_t version) {
-    if (impl_ && impl_->client)
+    if (impl_ && impl_->client && version <= static_cast<uint32_t>(INT32_MAX))
         mongoc_client_set_error_api(impl_->client, static_cast<int32_t>(version));
 }
 
@@ -940,8 +941,10 @@ bool MongoCollection::InsertMany(const BsonDocument* documents[], size_t count,
                                   const BsonDocument* opts, BsonDocument* reply, MongoError* error) {
     if (!impl_ || !impl_->coll) return false;
     std::vector<const bson_t*> docs(count);
-    for (size_t i = 0; i < count; ++i)
+    for (size_t i = 0; i < count; ++i) {
+        if (!documents[i]) return false;
         docs[i] = static_cast<const bson_t*>(documents[i]->RawBson());
+    }
     return mongoc_collection_insert_many(impl_->coll, docs.data(), count,
         opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr,
         reply ? static_cast<bson_t*>(reply->RawBson()) : nullptr,

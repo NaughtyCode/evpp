@@ -125,9 +125,10 @@ const char* MongoApmCommandFailedEvent::GetDatabaseName() const {
         static_cast<const mongoc_apm_command_failed_t*>(event_));
 }
 void MongoApmCommandFailedEvent::GetError(MongoError* error) const {
+    if (!error) return;
     mongoc_apm_command_failed_get_error(
         static_cast<const mongoc_apm_command_failed_t*>(event_),
-        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+        static_cast<bson_error_t*>(error->RawError()));
 }
 const void* MongoApmCommandFailedEvent::GetReply() const {
     return mongoc_apm_command_failed_get_reply(
@@ -334,9 +335,10 @@ int64_t MongoApmServerHeartbeatFailedEvent::GetDuration() const {
         static_cast<const mongoc_apm_server_heartbeat_failed_t*>(event_));
 }
 void MongoApmServerHeartbeatFailedEvent::GetError(MongoError* error) const {
+    if (!error) return;
     mongoc_apm_server_heartbeat_failed_get_error(
         static_cast<const mongoc_apm_server_heartbeat_failed_t*>(event_),
-        error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
+        static_cast<bson_error_t*>(error->RawError()));
 }
 const void* MongoApmServerHeartbeatFailedEvent::GetHost() const {
     return mongoc_apm_server_heartbeat_failed_get_host(

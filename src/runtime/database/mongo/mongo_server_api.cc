@@ -25,8 +25,10 @@ const char* MongoServerApi::VersionToString(Version version) {
 
 bool MongoServerApi::VersionFromString(const char* str, Version* out) {
     if (!out) return false;
-    return mongoc_server_api_version_from_string(
-        str, reinterpret_cast<mongoc_server_api_version_t*>(out));
+    mongoc_server_api_version_t raw;
+    bool ok = mongoc_server_api_version_from_string(str, &raw);
+    if (ok) *out = static_cast<Version>(raw);
+    return ok;
 }
 
 MongoServerApi::MongoServerApi() : impl_(std::make_unique<Impl>()) {}

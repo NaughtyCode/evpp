@@ -4,6 +4,8 @@
 
 #include <mongoc/mongoc.h>
 
+#include <new>
+
 #include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_error.h"
 #include "runtime/database/mongo/mongo_settings.h"
@@ -581,14 +583,18 @@ MongoBulkWriteReturn MongoBulkWrite::Execute(const MongoBulkWriteOpts* opts) {
         opts ? static_cast<const mongoc_bulkwriteopts_t*>(opts->Raw()) : nullptr);
 
     if (raw_ret.res) {
-        auto* result = new MongoBulkWriteResult();
-        result->SetRaw(raw_ret.res);
-        ret.result = result;
+        auto* result = new (std::nothrow) MongoBulkWriteResult();
+        if (result) {
+            result->SetRaw(raw_ret.res);
+            ret.result = result;
+        }
     }
     if (raw_ret.exc) {
-        auto* exc = new MongoBulkWriteException();
-        exc->SetRaw(raw_ret.exc);
-        ret.exception = exc;
+        auto* exc = new (std::nothrow) MongoBulkWriteException();
+        if (exc) {
+            exc->SetRaw(raw_ret.exc);
+            ret.exception = exc;
+        }
     }
     return ret;
 }
