@@ -314,6 +314,42 @@ int l_db_read_write_command_with_opts(lua_State* L) {
     return 3;
 }
 
+// ── User management ────────────────────────────────────────────────────
+
+int l_db_add_user(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    const char* username = luaL_checkstring(L, 2);
+    const char* password = luaL_checkstring(L, 3);
+    auto* roles = lua_isnoneornil(L, 4) ? nullptr
+                  : GetUserdata<mongo::BsonDocument>(L, 4, "bson.doc");
+    auto* custom_data = lua_isnoneornil(L, 5) ? nullptr
+                         : GetUserdata<mongo::BsonDocument>(L, 5, "bson.doc");
+    if (!db || !username || !password) { lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::MongoError error;
+    bool ok = db->AddUser(username, password, roles, custom_data, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
+int l_db_remove_user(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    const char* username = luaL_checkstring(L, 2);
+    if (!db) { lua_pushboolean(L, false); return 1; }
+    mongo::MongoError error;
+    lua_pushboolean(L, db->RemoveUser(username, &error));
+    return 1;
+}
+
+int l_db_remove_all_users(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    if (!db) { lua_pushboolean(L, false); return 1; }
+    mongo::MongoError error;
+    lua_pushboolean(L, db->RemoveAllUsers(&error));
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"db_destroy", l_db_destroy},
     {"db_get_collection", l_db_get_collection},
@@ -336,6 +372,9 @@ const luaL_Reg kLib[] = {
     {"db_read_write_command_with_opts", l_db_read_write_command_with_opts},
     {"db_get_collection_names_with_opts", l_db_get_collection_names_with_opts},
     {"db_find_collections_with_opts", l_db_find_collections_with_opts},
+    {"db_add_user", l_db_add_user},
+    {"db_remove_user", l_db_remove_user},
+    {"db_remove_all_users", l_db_remove_all_users},
     {nullptr, nullptr},
 };
 

@@ -30,6 +30,8 @@
 #include "runtime/database/mongo_bind/bind_find_and_modify_opts.h"
 #include "runtime/database/mongo_bind/bind_error.h"
 #include "runtime/database/mongo_bind/bind_host_list.h"
+#include "runtime/database/mongo_bind/bind_ssl.h"
+#include "runtime/database/mongo_bind/bind_gridfs.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {
@@ -65,6 +67,12 @@ void ExportMongo(ScriptVM& vm) {
     RegisterMongoFindAndModifyOptsMeta(L);
     RegisterMongoErrorMeta(L);
     RegisterMongoHostListMeta(L);
+    RegisterMongoSslOptsMeta(L);
+    RegisterMongoGridFsFileOptsMeta(L);
+    RegisterMongoGridFsFileMeta(L);
+    RegisterMongoGridFsFileListMeta(L);
+    RegisterMongoGridFsMeta(L);
+    RegisterMongoGridFsBucketMeta(L);
 
     // ── Build "bson" module ───────────────────────────────────────────
     BeginModule(L);
@@ -98,9 +106,15 @@ void ExportMongo(ScriptVM& vm) {
     AddToModule(L, GetMongoFindAndModifyOptsLib());
     AddToModule(L, GetMongoErrorLib());
     AddToModule(L, GetMongoHostListLib());
+    AddToModule(L, GetMongoSslOptsLib());
+    AddToModule(L, GetMongoGridFsFileOptsLib());
+    AddToModule(L, GetMongoGridFsFileLib());
+    AddToModule(L, GetMongoGridFsFileListLib());
+    AddToModule(L, GetMongoGridFsLib());
+    AddToModule(L, GetMongoGridFsBucketLib());
     EndModule(L, "mongoc");
 
-    ENGINE_LOG_INFO(GetLogger(), "[mongo] Lua bindings registered ({} types)", 26);
+    ENGINE_LOG_INFO(GetLogger(), "[mongo] Lua bindings registered ({} types)", 33);
 }
 
 } // namespace script

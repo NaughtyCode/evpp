@@ -151,6 +151,30 @@ int l_cursor_current(lua_State* L) {
     return 1;
 }
 
+int l_cursor_get_host(lua_State* L) {
+    auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
+    if (!cursor) { lua_pushnil(L); return 1; }
+    void* host_out = nullptr;
+    cursor->GetHost(&host_out);
+    if (host_out) lua_pushlightuserdata(L, host_out);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_cursor_new_from_command_reply(lua_State* L) {
+    // Requires a client lightuserdata + reply BsonDocument
+    void* client = lua_touserdata(L, 1);
+    auto* reply = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr
+                 : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    if (!client || !reply) { lua_pushnil(L); return 1; }
+    auto* cursor = mongo::MongoCursor::NewFromCommandReplyWithOpts(client, *reply, opts);
+    if (!cursor) { lua_pushnil(L); return 1; }
+    auto** ud = NewUserdata<mongo::MongoCursor>(L, kMetaName);
+    *ud = cursor;
+    return 1;
+}
+
 int l_cursor_clone(lua_State* L) {
     auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
     if (!cursor) { lua_pushnil(L); return 1; }
@@ -163,6 +187,7 @@ int l_cursor_clone(lua_State* L) {
 
 const luaL_Reg kLib[] = {
     {"cursor_destroy", l_cursor_destroy},
+    {"cursor_new_from_command_reply", l_cursor_new_from_command_reply},
     {"cursor_next", l_cursor_next},
     {"cursor_more", l_cursor_more},
     {"cursor_set_batch_size", l_cursor_set_batch_size},

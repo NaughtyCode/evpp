@@ -526,6 +526,37 @@ int l_coll_drop_with_opts(lua_State* L) {
     return 2;
 }
 
+int l_coll_create_indexes_with_opts(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    if (!coll || !lua_istable(L, 2)) { lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2; }
+    int n = static_cast<int>(lua_rawlen(L, 2));
+    if (n <= 0) { lua_pushboolean(L, false); lua_pushstring(L, "empty models table"); return 2; }
+    // models[] are raw mongoc_index_model_t* pointers passed as lightuserdata
+    // Lua table of lightuserdata for index models
+    std::vector<const void*> models(n);
+    for (int i = 1; i <= n; ++i) {
+        lua_rawgeti(L, 2, i);
+        models[i-1] = lua_touserdata(L, -1);
+        lua_pop(L, 1);
+        if (!models[i-1]) { lua_pushboolean(L, false); lua_pushstring(L, "invalid index model"); return 2; }
+    }
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr
+                  : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    mongo::BsonDocument reply;
+    mongo::MongoError error;
+    bool ok = coll->CreateIndexesWithOpts(models.data(), n, opts, &reply, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) { lua_pushstring(L, error.Message()); lua_pushnil(L); }
+    else {
+        auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+        if (!doc) { lua_pushnil(L); lua_pushnil(L); return 3; }
+        lua_pushnil(L);
+        auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+        *ud = doc;
+    }
+    return 3;
+}
+
 int l_coll_keys_to_index_string(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* keys = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
@@ -557,6 +588,7 @@ const luaL_Reg kLib[] = {
     {"coll_watch", l_coll_watch},
     {"coll_find_and_modify", l_coll_find_and_modify},
     {"coll_create_index", l_coll_create_index},
+    {"coll_create_indexes_with_opts", l_coll_create_indexes_with_opts},
     {"coll_drop_index", l_coll_drop_index},
     {"coll_find_indexes", l_coll_find_indexes},
     {"coll_create_bulk_operation", l_coll_create_bulk_operation},

@@ -238,6 +238,8 @@ set(MONGO_BIND_SOURCES
     ${RUNTIME_DIR}/database/mongo_bind/bind_find_and_modify_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_find_and_modify_opts.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_error.cc ${RUNTIME_DIR}/database/mongo_bind/bind_error.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_host_list.cc ${RUNTIME_DIR}/database/mongo_bind/bind_host_list.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_ssl.cc ${RUNTIME_DIR}/database/mongo_bind/bind_ssl.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_gridfs.cc ${RUNTIME_DIR}/database/mongo_bind/bind_gridfs.h
     ${RUNTIME_DIR}/database/mongo_bind/mongo_bind.cc ${RUNTIME_DIR}/database/mongo_bind/mongo_bind.h
 )
 source_group("database\\mongo_bind" FILES ${MONGO_BIND_SOURCES})

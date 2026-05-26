@@ -134,6 +134,15 @@ int l_session_get_session_id_raw(lua_State* L) {
     return 1;
 }
 
+int l_session_get_transaction_opts_raw(lua_State* L) {
+    auto* session = GetUserdata<mongo::MongoSession>(L, 1, kMetaName);
+    if (!session) { lua_pushnil(L); return 1; }
+    const void* raw = session->GetTransactionOptsRaw();
+    if (raw) lua_pushlightuserdata(L, const_cast<void*>(raw));
+    else lua_pushnil(L);
+    return 1;
+}
+
 int l_session_append_to_opts(lua_State* L) {
     auto* session = GetUserdata<mongo::MongoSession>(L, 1, kMetaName);
     auto* opts = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
@@ -158,6 +167,7 @@ const luaL_Reg kLib[] = {
     {"session_append_to_opts", l_session_append_to_opts},
     {"session_get_cluster_time_raw", l_session_get_cluster_time_raw},
     {"session_get_session_id_raw", l_session_get_session_id_raw},
+    {"session_get_transaction_opts_raw", l_session_get_transaction_opts_raw},
     {nullptr, nullptr},
 };
 

@@ -7,6 +7,7 @@
 
 #include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_uri.h"
+#include "runtime/database/mongo/mongo_error.h"
 #include "runtime/database/mongo/mongo_settings.h"
 
 namespace engine {
@@ -326,6 +327,79 @@ int l_uri_get_mechanism_properties(lua_State* L) {
     return 1;
 }
 
+int l_uri_new_with_error(lua_State* L) {
+    const char* uri_str = luaL_checkstring(L, 1);
+    mongo::MongoError error;
+    auto uri = mongo::MongoUri::NewWithError(uri_str, &error);
+    auto* uri_ptr = new (std::nothrow) mongo::MongoUri(std::move(uri));
+    if (!uri_ptr) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::MongoUri>(L, kMetaName);
+    *ud = uri_ptr;
+    lua_pushboolean(L, error.Code() == 0);
+    if (error.Code() != 0) lua_pushstring(L, error.Message());
+    else lua_pushnil(L);
+    return 2;
+}
+
+int l_uri_new_for_host_port(lua_State* L) {
+    const char* hostname = luaL_checkstring(L, 1);
+    auto port = static_cast<uint16_t>(luaL_checkinteger(L, 2));
+    auto* uri = new (std::nothrow) mongo::MongoUri(mongo::MongoUri::NewForHostPort(hostname, port));
+    if (!uri) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::MongoUri>(L, kMetaName);
+    *ud = uri;
+    return 1;
+}
+
+int l_uri_get_compressors(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    // GetCompressors returns const void* (mongoc_compressors_t*)
+    const void* comp = uri->GetCompressors();
+    if (comp) lua_pushlightuserdata(L, const_cast<void*>(comp));
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_uri_get_read_prefs(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    const void* raw = uri->GetReadPrefs();
+    if (raw) lua_pushlightuserdata(L, const_cast<void*>(raw));
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_uri_get_write_concern(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    const void* raw = uri->GetWriteConcern();
+    if (raw) lua_pushlightuserdata(L, const_cast<void*>(raw));
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_uri_get_read_concern(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    const void* raw = uri->GetReadConcern();
+    if (raw) lua_pushlightuserdata(L, const_cast<void*>(raw));
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_uri_option_is_int32(lua_State* L) {
+    const char* key = luaL_checkstring(L, 1);
+    lua_pushboolean(L, mongo::MongoUri::OptionIsInt32(key));
+    return 1;
+}
+
+int l_uri_option_is_bool(lua_State* L) {
+    const char* key = luaL_checkstring(L, 1);
+    lua_pushboolean(L, mongo::MongoUri::OptionIsBool(key));
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"uri_new", l_uri_new},
     {"uri_destroy", l_uri_destroy},
@@ -364,6 +438,14 @@ const luaL_Reg kLib[] = {
     {"uri_get_srv_service_name", l_uri_get_srv_service_name},
     {"uri_get_server_monitoring_mode", l_uri_get_server_monitoring_mode},
     {"uri_get_mechanism_properties", l_uri_get_mechanism_properties},
+    {"uri_new_with_error", l_uri_new_with_error},
+    {"uri_new_for_host_port", l_uri_new_for_host_port},
+    {"uri_get_compressors", l_uri_get_compressors},
+    {"uri_get_read_prefs", l_uri_get_read_prefs},
+    {"uri_get_write_concern", l_uri_get_write_concern},
+    {"uri_get_read_concern", l_uri_get_read_concern},
+    {"uri_option_is_int32", l_uri_option_is_int32},
+    {"uri_option_is_bool", l_uri_option_is_bool},
     {nullptr, nullptr},
 };
 

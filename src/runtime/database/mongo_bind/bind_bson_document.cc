@@ -319,6 +319,257 @@ int l_bson_doc_validate(lua_State* L) {
     return 2;
 }
 
+// ── Sub-document building ──────────────────────────────────────────────
+
+int l_bson_doc_append_document_begin(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    auto* subdoc = new (std::nothrow) mongo::BsonDocument();
+    if (!subdoc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    if (!doc || !doc->AppendDocumentBegin(key, subdoc)) {
+        delete subdoc;
+        lua_pushboolean(L, false);
+        return 1;
+    }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, kMetaName);
+    *ud = subdoc;
+    return 1;
+}
+
+int l_bson_doc_append_document_end(lua_State* L) {
+    auto* parent = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    auto* subdoc = GetUserdata<mongo::BsonDocument>(L, 2, kMetaName);
+    lua_pushboolean(L, parent && subdoc && mongo::BsonDocument::AppendDocumentEnd(parent, subdoc));
+    return 1;
+}
+
+int l_bson_doc_append_array_begin(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    auto* array = new (std::nothrow) mongo::BsonDocument();
+    if (!array) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    if (!doc || !doc->AppendArrayBegin(key, array)) {
+        delete array;
+        lua_pushboolean(L, false);
+        return 1;
+    }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, kMetaName);
+    *ud = array;
+    return 1;
+}
+
+int l_bson_doc_append_array_end(lua_State* L) {
+    auto* parent = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    auto* array = GetUserdata<mongo::BsonDocument>(L, 2, kMetaName);
+    lua_pushboolean(L, parent && array && mongo::BsonDocument::AppendArrayEnd(parent, array));
+    return 1;
+}
+
+// ── Additional append methods ──────────────────────────────────────────
+
+int l_bson_doc_append_code_with_scope(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    const char* code = luaL_checkstring(L, 3);
+    auto* scope = GetUserdata<mongo::BsonDocument>(L, 4, kMetaName);
+    lua_pushboolean(L, doc && scope && doc->AppendCodeWithScope(key, code, *scope));
+    return 1;
+}
+
+int l_bson_doc_append_dbref(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    const char* collection = luaL_checkstring(L, 3);
+    const char* oid_str = luaL_checkstring(L, 4);
+    mongo::MongoOid oid;
+    if (!oid.IsValid(oid_str, strlen(oid_str))) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
+    oid.InitFromString(oid_str);
+    lua_pushboolean(L, doc && doc->AppendDBPointer(key, collection, oid));
+    return 1;
+}
+
+int l_bson_doc_append_timet(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    auto val = static_cast<time_t>(luaL_checkinteger(L, 3));
+    lua_pushboolean(L, doc && doc->AppendTimeT(key, val));
+    return 1;
+}
+
+int l_bson_doc_append_regex_wlen(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    auto keylen = static_cast<int>(luaL_checkinteger(L, 3));
+    const char* regex = luaL_checkstring(L, 4);
+    const char* options = luaL_checkstring(L, 5);
+    lua_pushboolean(L, doc && doc->AppendRegexWLen(key, keylen, regex, options));
+    return 1;
+}
+
+int l_bson_doc_append_value(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    // raw bson_value_t passed as opaque userdata pointer
+    const void* value = lua_touserdata(L, 3);
+    lua_pushboolean(L, doc && value && doc->AppendValue(key, value));
+    return 1;
+}
+
+int l_bson_doc_append_iter(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 3, "bson.iter");
+    lua_pushboolean(L, doc && iter && doc->AppendIter(key, *iter));
+    return 1;
+}
+
+int l_bson_doc_append_binary_uninit(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    auto subtype = static_cast<int>(luaL_checkinteger(L, 3));
+    auto len = static_cast<uint32_t>(luaL_checkinteger(L, 4));
+    uint8_t* data_out = nullptr;
+    bool ok = doc && doc->AppendBinaryUninit(key, subtype, &data_out, len);
+    lua_pushboolean(L, ok);
+    if (ok && data_out) lua_pushlightuserdata(L, data_out);
+    else lua_pushnil(L);
+    return 2;
+}
+
+int l_bson_doc_append_array_from_vector(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 3, "bson.iter");
+    lua_pushboolean(L, doc && iter && doc->AppendArrayFromVector(key, *iter));
+    return 1;
+}
+
+// ── Copy / utility additions ────────────────────────────────────────────
+
+int l_bson_doc_copy_to(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    auto* dst = GetUserdata<mongo::BsonDocument>(L, 2, kMetaName);
+    lua_pushboolean(L, doc && dst && doc->CopyTo(*dst));
+    return 1;
+}
+
+int l_bson_doc_reserve_buffer(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    auto size = static_cast<uint32_t>(luaL_checkinteger(L, 2));
+    lua_pushboolean(L, doc && doc->ReserveBuffer(size));
+    return 1;
+}
+
+// ── Additional JSON output methods ─────────────────────────────────────
+
+int l_bson_doc_as_legacy_extended_json(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    if (!doc) { lua_pushnil(L); return 1; }
+    size_t len = 0;
+    char* str = doc->AsLegacyExtendedJson(&len);
+    if (str) {
+        lua_pushlstring(L, str, len);
+        bson_free(str);
+    } else {
+        lua_pushnil(L);
+    }
+    return 1;
+}
+
+int l_bson_doc_as_json_with_opts(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    if (!doc) { lua_pushnil(L); return 1; }
+    // opts passed as opaque pointer (bson_json_opts_t*) via lightuserdata
+    const void* opts = lua_touserdata(L, 2);
+    size_t len = 0;
+    char* str = doc->AsJsonWithOpts(&len, opts);
+    if (str) {
+        lua_pushlstring(L, str, len);
+        bson_free(str);
+    } else {
+        lua_pushnil(L);
+    }
+    return 1;
+}
+
+int l_bson_doc_array_as_canonical_extended_json(lua_State* L) {
+    auto* array = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    if (!array) { lua_pushnil(L); return 1; }
+    size_t len = 0;
+    char* str = mongo::BsonDocument::ArrayAsCanonicalExtendedJson(*array, &len);
+    if (str) {
+        lua_pushlstring(L, str, len);
+        bson_free(str);
+    } else {
+        lua_pushnil(L);
+    }
+    return 1;
+}
+
+int l_bson_doc_array_as_relaxed_extended_json(lua_State* L) {
+    auto* array = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    if (!array) { lua_pushnil(L); return 1; }
+    size_t len = 0;
+    char* str = mongo::BsonDocument::ArrayAsRelaxedExtendedJson(*array, &len);
+    if (str) {
+        lua_pushlstring(L, str, len);
+        bson_free(str);
+    } else {
+        lua_pushnil(L);
+    }
+    return 1;
+}
+
+int l_bson_doc_array_as_legacy_extended_json(lua_State* L) {
+    auto* array = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    if (!array) { lua_pushnil(L); return 1; }
+    size_t len = 0;
+    char* str = mongo::BsonDocument::ArrayAsLegacyExtendedJson(*array, &len);
+    if (str) {
+        lua_pushlstring(L, str, len);
+        bson_free(str);
+    } else {
+        lua_pushnil(L);
+    }
+    return 1;
+}
+
+// ── Additional static initializers ─────────────────────────────────────
+
+int l_bson_doc_new_from_buffer(lua_State* L) {
+    // Takes existing data + realloc func as lightuserdata; advanced use.
+    lua_pushnil(L);
+    lua_pushstring(L, "new_from_buffer requires buffer and realloc — use from_data");
+    return 2;
+}
+
+int l_bson_doc_sized_new(lua_State* L) {
+    auto size = static_cast<size_t>(luaL_checkinteger(L, 1));
+    auto* doc = new (std::nothrow) mongo::BsonDocument(mongo::BsonDocument::SizedNew(size));
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, kMetaName);
+    *ud = doc;
+    return 1;
+}
+
+int l_bson_doc_validate_with_error_and_offset(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    if (!doc) { lua_pushboolean(L, false); lua_pushnil(L); lua_pushinteger(L, 0); return 3; }
+    mongo::MongoError error;
+    size_t offset = 0;
+    bool ok = doc->ValidateWithErrorAndOffset(&error, &offset);
+    lua_pushboolean(L, ok);
+    if (ok) { lua_pushnil(L); lua_pushinteger(L, 0); }
+    else {
+        lua_pushstring(L, error.Message() ? error.Message() : "unknown error");
+        lua_pushinteger(L, static_cast<lua_Integer>(offset));
+    }
+    return 3;
+}
+
 // ── Query / access ────────────────────────────────────────────────────
 
 int l_bson_doc_count_keys(lua_State* L) {
@@ -385,6 +636,7 @@ const luaL_Reg kLib[] = {
     {"destroy", l_bson_doc_destroy},
     {"from_json", l_bson_doc_from_json},
     {"from_data", l_bson_doc_from_data},
+    {"sized_new", l_bson_doc_sized_new},
     {"as_json", l_bson_doc_as_json},
     {"get_data", l_bson_doc_get_data},
     {"append_int32", l_bson_doc_append_int32},
@@ -398,6 +650,27 @@ const luaL_Reg kLib[] = {
     {"append_timestamp", l_bson_doc_append_timestamp},
     {"append_datetime", l_bson_doc_append_datetime},
     {"append_binary", l_bson_doc_append_binary},
+    {"append_array", l_bson_doc_append_array},
+    {"append_regex", l_bson_doc_append_regex},
+    {"append_code", l_bson_doc_append_code},
+    {"append_code_with_scope", l_bson_doc_append_code_with_scope},
+    {"append_symbol", l_bson_doc_append_symbol},
+    {"append_minkey", l_bson_doc_append_minkey},
+    {"append_maxkey", l_bson_doc_append_maxkey},
+    {"append_undefined", l_bson_doc_append_undefined},
+    {"append_now_utc", l_bson_doc_append_now_utc},
+    {"append_decimal128", l_bson_doc_append_decimal128},
+    {"append_dbref", l_bson_doc_append_dbref},
+    {"append_timet", l_bson_doc_append_timet},
+    {"append_regex_wlen", l_bson_doc_append_regex_wlen},
+    {"append_value", l_bson_doc_append_value},
+    {"append_iter", l_bson_doc_append_iter},
+    {"append_binary_uninit", l_bson_doc_append_binary_uninit},
+    {"append_array_from_vector", l_bson_doc_append_array_from_vector},
+    {"append_document_begin", l_bson_doc_append_document_begin},
+    {"append_document_end", l_bson_doc_append_document_end},
+    {"append_array_begin", l_bson_doc_append_array_begin},
+    {"append_array_end", l_bson_doc_append_array_end},
     {"count_keys", l_bson_doc_count_keys},
     {"has_field", l_bson_doc_has_field},
     {"empty", l_bson_doc_empty},
@@ -405,22 +678,21 @@ const luaL_Reg kLib[] = {
     {"reinit", l_bson_doc_reinit},
     {"as_canonical_extended_json", l_bson_doc_as_canonical_extended_json},
     {"as_relaxed_extended_json", l_bson_doc_as_relaxed_extended_json},
-    {"append_array", l_bson_doc_append_array},
-    {"append_regex", l_bson_doc_append_regex},
-    {"append_code", l_bson_doc_append_code},
-    {"append_symbol", l_bson_doc_append_symbol},
-    {"append_minkey", l_bson_doc_append_minkey},
-    {"append_maxkey", l_bson_doc_append_maxkey},
-    {"append_undefined", l_bson_doc_append_undefined},
-    {"append_now_utc", l_bson_doc_append_now_utc},
-    {"append_decimal128", l_bson_doc_append_decimal128},
+    {"as_legacy_extended_json", l_bson_doc_as_legacy_extended_json},
+    {"as_json_with_opts", l_bson_doc_as_json_with_opts},
+    {"array_as_canonical_extended_json", l_bson_doc_array_as_canonical_extended_json},
+    {"array_as_relaxed_extended_json", l_bson_doc_array_as_relaxed_extended_json},
+    {"array_as_legacy_extended_json", l_bson_doc_array_as_legacy_extended_json},
     {"copy", l_bson_doc_copy},
     {"clear", l_bson_doc_clear},
+    {"copy_to", l_bson_doc_copy_to},
+    {"reserve_buffer", l_bson_doc_reserve_buffer},
     {"equal", l_bson_doc_equal},
     {"concat", l_bson_doc_concat},
     {"compare", l_bson_doc_compare},
     {"init_from_json", l_bson_doc_init_from_json},
     {"validate", l_bson_doc_validate},
+    {"validate_with_error_and_offset", l_bson_doc_validate_with_error_and_offset},
     {nullptr, nullptr},
 };
 
