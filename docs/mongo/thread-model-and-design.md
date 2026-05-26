@@ -30,6 +30,8 @@ mongo-c-driver 在 `src/common/src/common-thread-private.h` 提供了跨平台�
 | `bson_once_t` | `pthread_once_t` | `INIT_ONCE` | 一次性初始化 |
 | `mongoc_cond_t` | `pthread_cond_t` | `CONDITION_VARIABLE` | 条件变量 |
 
+**注意**: `bson_shared_mutex_t` 存在于原语层，但仅用于 `mongoc-scram.c`、`mongoc-oidc-cache.c` 和 `mongoc-shared.c` 的共享指针实现中。**Topology 不使用读写锁**——其内部状态保护使用两个独立的 `bson_mutex_t`（`srv_polling_mtx` + `tpld_modification_mtx`），而 topology description 的跨线程共享通过引用计数原子指针 (`mc_shared_tpld`) 实现无锁读取。
+
 线程创建使用 `mcommon_thread_create()` / `mcommon_thread_join()`。
 
 ### 1.3 mongoc_client_pool_t 内部结构
@@ -40,19 +42,33 @@ src/libmongoc/src/mongoc/mongoc-client-pool.c
 
 ```c
 struct _mongoc_client_pool_t {
-    bson_mutex_t    mutex;          // 保护所有 pool 状态
+    bson_mutex_t    mutex;          // 保护所有 pool 状态 (pop/push/set_*)
     mongoc_cond_t   cond;           // 当 client 归还时唤醒等待者
-    mongoc_queue_t  queue;          // LIFO 空闲 client 队列
+    mongoc_queue_t  queue;          // LIFO 空闲 client 队列 (单链表: head/tail/length)
     mongoc_topology_t *topology;    // 所有 client 共享的拓扑(集群状态)
-    mongoc_uri_t    *uri;
+    mongoc_uri_t    *uri;           // 连接 URI
     uint32_t        max_pool_size;  // 默认 100
     uint32_t        size;           // 当前已创建的 client 数量
-    bool            client_initialized; // 首次 pop 后不可再配置
-    ...
+#ifdef MONGOC_ENABLE_SSL
+    mongoc_ssl_opt_t ssl_opts;      // SSL 配置 (仅当 SSL 编译启用)
+    bool            ssl_opts_set;
+#endif
+    bool            apm_callbacks_set;       // 是否设置了 APM 回调
+    bool            error_api_set;           // 是否设置了错误 API 版本
+    bool            structured_log_opts_set; // 是否设置了结构化日志
+    bool            client_initialized;      // 首次 pop 后锁定配置 (阻止 set_server_api 等)
+    int32_t         error_api_version;       // 错误 API 版本号
+    mongoc_server_api_t *api;               // 服务端 API 版本约束
+    mongoc_array_t  last_known_serverids;   // 已排序的 uint32_t 数组, push 时用于清理过期连接
 };
 ```
 
-**关键点**: 所有 pool 中的 client 共享同一个 `mongoc_topology_t`，其中包含 SDAM (Server Discovery and Monitoring) 状态、后台监控线程等。
+**关键点**:
+
+1. 所有 pool 中的 client 共享同一个 `mongoc_topology_t`，其中包含 SDAM (Server Discovery and Monitoring) 状态、后台监控线程等。
+2. `client_initialized` 标志位在首次 `pop()` 成功后设置为 true，之后 `set_server_api`、`set_structured_log_opts`、`set_oidc_callback` 等 API 将被阻止。
+3. `last_known_serverids` 是一个已排序的 `uint32_t` 数组，在 `push()` 归还 client 时，pool 将其与当前 topology 中已知的 server id 集合对比，清理不属于当前集群拓扑的连接。
+4. **`min_pool_size` 不存在**——该参数已被 mongo-c-driver 弃用并移除 (CDRIVER-2390)。Pool 始终从空队列开始，按需创建 client。
 
 ### 1.4 Pool 操作流程
 
@@ -62,7 +78,8 @@ struct _mongoc_client_pool_t {
 2. if queue 非空 → pop LIFO 队列 → 返回 client
 3. if size < max_pool_size → 创建新 client → size++ → 返回
 4. otherwise → cond_wait(&pool->cond, &pool->mutex)  // 阻塞等待
-   - 若设置了 waitQueueTimeoutMS → cond_timedwait → 超时返回 NULL
+   - 若设置了 waitQueueTimeoutMS > 0 → cond_timedwait → 超时返回 NULL
+   - waitQueueTimeoutMS 默认值: -1 (无限等待)
 5. unlock(pool->mutex)
 ```
 
@@ -70,7 +87,8 @@ struct _mongoc_client_pool_t {
 ```
 1. lock(pool->mutex)
 2. 重置 client 的 socket 超时状态
-3. 对比 last_known_serverids, 清理过期连接
+3. 对比 last_known_serverids: 遍历 client 内部连接, 清理不在当前
+   集群拓扑中的 server 连接 (防止连接到已移除的 replica set 成员)
 4. push client 到 queue 头部 (LIFO)
 5. cond_signal() 唤醒一个等待线程
 6. unlock(pool->mutex)
@@ -81,20 +99,22 @@ struct _mongoc_client_pool_t {
 
 ### 1.5 后台线程
 
-Pool 首次 `pop()` 时会启动后台线程:
+Pool 首次 `pop()` 时会通过原子 CAS 确保只启动一次 scanner 线程:
 
-| 线程 | 功能 |
-|------|------|
-| SRV polling thread | 周期性重新解析 SRV DNS 记录 |
-| Server monitor threads | 每个 server 一个，心跳检测 (SDAM) |
+| 线程 | 启动方式 | 功能 |
+|------|---------|------|
+| SRV polling thread | topology 初始化时按需创建 | 周期性重新解析 SRV DNS 记录 |
+| Server monitor threads | topology 连接每个 server 时创建 | 每个 server 一个，心跳检测 (SDAM) |
+| Connection scanner | 首次 pop 时原子 CAS 确保只启动一次 | 扫描空闲连接、执行健康检查 |
 
-这些后台线程由 topology 管理，对调用者透明。
+这些后台线程由 pool/topology 管理，对调用者透明。其中 server monitor 和 SRV polling 线程在 `mongoc_topology_t` 中创建和管理。
 
 ### 1.6 生命周期契约
 
 ```
 main():
-    mongoc_init()          // 全局一次 (线程安全，内部用 bson_once)
+    mongoc_init()          // 全局一次 (C 层: 线程安全，内部用 bson_once)
+    // C++ wrapper: MongoSystem::Instance().Initialize()
     
     创建线程:
         client = mongoc_client_pool_pop(pool)   // 线程安全
@@ -103,7 +123,9 @@ main():
     
     join 所有线程
     mongoc_client_pool_destroy(pool)  // 非线程安全！必须在 join 之后
+    // C++ wrapper: pool->Destroy(); delete pool;
     mongoc_cleanup()                  // 全局一次
+    // C++ wrapper: MongoSystem::Instance().Shutdown()
 ```
 
 ### 1.7 组件线程安全速查表
@@ -120,7 +142,39 @@ main():
 | `mongoc_collection_t` | **否** | 派生自 client |
 | `mongoc_gridfs_*` | **否** | 文档明确标注 |
 | `mongoc_client_encryption_t` | **否** | 文档明确标注 |
-| Topology / SDAM 内部 | 是 | `bson_shared_mutex_t` + 原子操作 |
+| Topology 状态修改 | 是 | `bson_mutex_t` (srv_polling_mtx + tpld_modification_mtx) |
+| Topology Description 读取 | 是 (无锁) | `mc_shared_tpld` 原子引用计数共享指针 |
+
+### 1.8 Topology Description 共享指针机制
+
+Topology 的线程安全设计分两层:
+
+**修改层** (`tpld_modification_mtx` + `srv_polling_mtx`):
+- `mongoc_topology_t` 使用两个独立的 `bson_mutex_t`（**不是** `bson_shared_mutex_t` / 读写锁）保护内部可变状态
+- `tpld_modification_mtx`: 保护 topology description 的修改 (server 发现、状态变更等)
+- `srv_polling_mtx`: 保护 SRV DNS 轮询相关的状态
+
+**读取层** (`mc_shared_tpld` 无锁共享):
+- `mc_shared_tpld` 是一个引用计数原子共享指针，包裹 `mongoc_topology_description_t`
+- 读操作通过 `mongoc_atomic_shared_ptr_load()` 获取当前 description 的快照，**无需获取任何锁**
+- 修改操作在 `tpld_modification_mtx` 保护下创建新的 description，然后通过原子 store 替换旧指针
+- `mongoc_cond_t cond_client` 条件变量通知等待者 topology 变更
+
+```
+读取路径 (无锁):
+  mc_tpld_take_ref(&topology)           // 原子 load + incref
+  → 使用 description 快照
+  → mc_tpld_drop_ref(&topology)         // 原子 decref
+
+修改路径 (持锁):
+  lock(tpld_modification_mtx)
+  → 创建新 description (copy-on-write)
+  → 原子 store 新指针
+  → cond_broadcast(&cond_client)        // 通知等待者
+  → unlock(tpld_modification_mtx)
+```
+
+这种设计的优势: 高频的 topology 读取 (每个 client 操作都需要查询 server 地址) 不会与低频的 topology 修改 (SDAM 心跳更新) 产生锁竞争。
 
 ---
 
@@ -131,6 +185,10 @@ main():
 ### 2.1 现有架构
 
 ```
+MongoSystem               (mongo_system.h/.cc)
+  └─ Singleton: 管理 mongoc_init() / mongoc_cleanup() 全局生命周期
+  └─ 必须在所有 mongo 操作之前初始化, 之后关闭
+
 MongoClientPool          (mongo_client_pool.h/.cc)
   └─ 封装 mongoc_client_pool_t
   └─ Pop() / Push() / TryPop() — 标准 pool 操作
@@ -145,12 +203,15 @@ MongoClient              (mongo_client.h/.cc)
 MongoDatabase            (内嵌于 mongo_client.h/.cc)
 MongoCollection          (内嵌于 mongo_client.h/.cc)
 MongoCursor, MongoSession, MongoBulkOperation, MongoChangeStream ...
+MongoUri                 (mongo_uri.h/.cc) — 值类型，支持移动语义
 ```
 
 ### 2.2 现有封装的特点
 
 - Pimpl 惯用法 (`std::unique_ptr<Impl>`)
-- 禁止拷贝/移动
+- 禁止拷贝/移动 (大部分类)
+- `MongoUri` 是值类型，支持移动语义（唯一的例外）
+- `MongoSystem` 是 singleton，管理 `mongoc_init()` / `mongoc_cleanup()` 的全局生命周期
 - `MongoClient::owned` 标志位区分独立 client 和 pool client (析构时 pool client 不调用 `mongoc_client_destroy`)
 - 所有 MongoDB 操作都是**同步阻塞**的（这正是用户需要的行为）
 
@@ -220,7 +281,7 @@ private:
 ```cpp
 #include "runtime/database/mongo/mongo_client_guard.h"
 #include "runtime/database/mongo/mongo_client_pool.h"
-#include "runtime/database/mongo/mongo_init.h"
+#include "runtime/database/mongo/mongo_system.h"
 
 #include <thread>
 #include <vector>
@@ -253,7 +314,7 @@ void worker_thread(engine::mongo::MongoClientPool& pool, int thread_id) {
 }
 
 int main() {
-    engine::mongo::MongoInit init;  // RAII init/cleanup
+    engine::mongo::MongoSystem::Instance().Initialize();
 
     engine::mongo::MongoUri uri("mongodb://localhost:27017");
     auto* pool = engine::mongo::MongoClientPool::New(uri);
@@ -267,6 +328,8 @@ int main() {
 
     pool->Destroy();
     delete pool;
+
+    engine::mongo::MongoSystem::Instance().Shutdown();
     return 0;
 }
 ```
@@ -283,7 +346,7 @@ engine::mongo::MongoClient* get_thread_client(
     engine::mongo::MongoClientPool& pool)
 {
     if (tls_client == nullptr) {
-        tls_client = pool.Pop();
+        tls_client = pool.Pop();  // blocks per waitQueueTimeoutMS
     }
     return tls_client;
 }
@@ -315,10 +378,11 @@ void high_freq_worker(engine::mongo::MongoClientPool& pool) {
 | 参数 | 推荐值 | 说明 |
 |------|--------|------|
 | `maxPoolSize` | `std::thread::hardware_concurrency() * 2` | 略大于线程数, 允许一定弹性 |
-| `minPoolSize` | 不设置 (默认 0) | 避免闲置连接占资源 |
-| `waitQueueTimeoutMS` | `5000` (5秒) | 阻塞 Pop 的超时, 防止死等 |
+| `waitQueueTimeoutMS` | `5000` (5秒) | 阻塞 Pop 的超时, 防止死等。**注意**: mongo-c-driver 默认值为 `-1` (无限等待), 建议显式设置 |
 | `maxIdleTimeMS` | `60000` (60秒) | 闲置连接回收, 需 MongoDB 4.0+ |
 | `socketTimeoutMS` | `0` (无限) | 阻塞模式下推荐无限, 由业务层控制超时 |
+
+**关于 `minPoolSize`**: mongo-c-driver 已弃用并移除该参数 (CDRIVER-2390)。Pool 始终从空队列开始，按需创建 client，因此不应在 URI 中设置 `minPoolSize`。
 
 URI 示例:
 ```
@@ -329,9 +393,10 @@ mongodb://localhost:27017/?maxPoolSize=16&waitQueueTimeoutMS=5000&maxIdleTimeMS=
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  1. mongoc_init()          (程序启动, 全局一次)       │
+│  1. MongoSystem::Instance().Initialize()             │
+│     (调用 mongoc_init(), 程序启动全局一次)             │
 ├─────────────────────────────────────────────────────┤
-│  2. MongoClientPool::New() (创建 pool, 配置各项参数)  │
+│  2. MongoClientPool::New()   (创建 pool, 配置各项参数)│
 │     ├─ SetMaxSize()                                 │
 │     ├─ SetAppname()                                 │
 │     └─ SetApmCallbacks()  (必须在首次 Pop 之前!)     │
@@ -347,8 +412,10 @@ mongodb://localhost:27017/?maxPoolSize=16&waitQueueTimeoutMS=5000&maxIdleTimeMS=
 │  4. join 所有线程 (必须!)                            │
 ├─────────────────────────────────────────────────────┤
 │  5. pool->Destroy()       (单线程调用)               │
+│  6. delete pool            (释放 C++ wrapper)        │
 ├─────────────────────────────────────────────────────┤
-│  6. mongoc_cleanup()       (程序退出, 全局一次)       │
+│  7. MongoSystem::Instance().Shutdown()               │
+│     (调用 mongoc_cleanup(), 程序退出全局一次)          │
 └─────────────────────────────────────────────────────┘
 ```
 
