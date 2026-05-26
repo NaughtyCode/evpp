@@ -164,7 +164,12 @@ int l_udp_server_listen(lua_State* L) {
     bool ok = false;
     // Number → single port; string → pass through (handles "5353" and "53,5353")
     if (arg1_type == LUA_TNUMBER) {
-        int port = static_cast<int>(luaL_checkinteger(L, 1));
+        lua_Integer port64 = luaL_checkinteger(L, 1);
+        if (port64 <= 0 || port64 > 65535) {
+            delete ctx;
+            return luaL_error(L, "port out of range");
+        }
+        int port = static_cast<int>(port64);
         ok = ctx->server->Init(port);
     } else {
         const char* ports_str = luaL_checkstring(L, 1);

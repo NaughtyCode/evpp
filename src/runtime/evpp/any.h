@@ -132,12 +132,9 @@ const ValueType* any_cast(const Any* any) {
 template<typename ValueType>
 ValueType any_cast(const Any& any) {
     const ValueType* result = any_cast<ValueType>(&any);
-    assert(result);
-
     if (!result) {
         return ValueType();
     }
-
     return *result;
 }
 }//namespace evpp

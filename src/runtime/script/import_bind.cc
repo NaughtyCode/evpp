@@ -65,6 +65,16 @@ int l_import_loaded(lua_State* L) {
     lua_getglobal(L, "package");
     lua_getfield(L, -1, "loaded");
     lua_remove(L, -2);
+    // Return a shallow copy so scripts can inspect what's loaded without
+    // accidentally mutating the real package.loaded table.
+    lua_newtable(L);                         // orig, copy
+    lua_pushnil(L);                          // orig, copy, nil
+    while (lua_next(L, -3)) {                // orig, copy, k, v
+        lua_pushvalue(L, -2);                // orig, copy, k, v, k
+        lua_pushvalue(L, -2);                // orig, copy, k, v, k, v
+        lua_rawset(L, -5);                   // orig, copy, k
+    }
+    lua_remove(L, -2);                       // copy
     return 1;
 }
 

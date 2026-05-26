@@ -26,25 +26,25 @@ public:
         , u(hr.u) {}
     HttpRequest(const HttpRequest & hr) = delete;
     int Parse(evpp::Buffer * buf);
-    std::string url_path() {
+    std::string url_path() const {
         if ((u.field_set & (1 << UF_PATH)) != 0) {
             return std::string(url, u.field_data[3].off,  u.field_data[3].len);
         }
         return "";
     }
-    std::string url_query() {
+    std::string url_query() const {
         if ((u.field_set & (1 << UF_QUERY)) != 0) {
             return std::string(url, u.field_data[4].off,  u.field_data[4].len);
         }
         return "";
     }
-    std::string url_fragment() {
+    std::string url_fragment() const {
         if ((u.field_set & (1 << UF_FRAGMENT)) != 0) {
             return std::string(url, u.field_data[5].off,  u.field_data[5].len);
         }
         return "";
     }
-    std::string url_userinfo() {
+    std::string url_userinfo() const {
         if ((u.field_set & (1 << UF_USERINFO)) != 0) {
             return std::string(url, u.field_data[6].off,  u.field_data[6].len);
         }

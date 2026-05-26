@@ -7,7 +7,7 @@
 #include <cctype>
 namespace evpp {
 namespace evpphttp {
-static std::map<int, std::string> http_status_code = {
+inline const std::map<int, std::string> http_status_code = {
     {100, "Continue"},
     {101, "Switching Protocols"},
     {200, "OK"},

@@ -348,9 +348,9 @@ public:
     }
 
     // Next expiry excluding a specific timer
-    TimePoint next_expiry_without(const HrTimerNode* exclude) const {
+    TimePoint next_expiry_without(HrTimerNode* exclude) const {
         std::lock_guard<std::recursive_mutex> lock(mutex_);
-        auto* next = queue_.next_expiring(TimePoint::min(), const_cast<HrTimerNode*>(exclude));
+        auto* next = queue_.next_expiring(TimePoint::min(), exclude);
         return next ? next->expires() : kTimeMax;
     }
 

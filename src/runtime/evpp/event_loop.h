@@ -77,7 +77,7 @@ public:
 
     // Getter and Setter
 public:
-    struct event_base* event_base() {
+    struct event_base* event_base() const {
         return evbase_;
     }
     bool IsInLoopThread() const {

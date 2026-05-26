@@ -17,6 +17,7 @@ void* VMCustomPtrStore::Get(int index) const {
 }
 
 void* VMCustomPtrStore::operator[](int index) const {
+    if (index < 0) return nullptr;
     return lua_getcustomptr(L_, index + 1);
 }
 

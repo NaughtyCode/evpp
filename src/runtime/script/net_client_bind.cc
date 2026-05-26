@@ -296,6 +296,9 @@ int l_client_set_on_connect(lua_State* L) {
     if (!ctx) return luaL_error(L, "client: invalid context");
     if (ctx->disposed) return luaL_error(L, "client: closed");
     lua_settop(L, 2);
+    if (!lua_isnil(L, 2) && !lua_isfunction(L, 2)) {
+        return luaL_error(L, "expected function or nil");
+    }
     lua_setfield(L, 1, "on_connect");
     return 0;
 }
@@ -306,6 +309,9 @@ int l_client_set_on_message(lua_State* L) {
     if (!ctx) return luaL_error(L, "client: invalid context");
     if (ctx->disposed) return luaL_error(L, "client: closed");
     lua_settop(L, 2);
+    if (!lua_isnil(L, 2) && !lua_isfunction(L, 2)) {
+        return luaL_error(L, "expected function or nil");
+    }
     lua_setfield(L, 1, "on_message");
     return 0;
 }
@@ -316,6 +322,9 @@ int l_client_set_on_close(lua_State* L) {
     if (!ctx) return luaL_error(L, "client: invalid context");
     if (ctx->disposed) return luaL_error(L, "client: closed");
     lua_settop(L, 2);
+    if (!lua_isnil(L, 2) && !lua_isfunction(L, 2)) {
+        return luaL_error(L, "expected function or nil");
+    }
     lua_setfield(L, 1, "on_close");
     return 0;
 }

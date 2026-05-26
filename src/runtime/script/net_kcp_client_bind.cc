@@ -78,13 +78,14 @@ int l_kcp_client_new(lua_State* L) {
 // ── net.kcp_client.connect(host, port[, conv]) → instance_table ────
 int l_kcp_client_connect_static(lua_State* L) {
     const char* host = luaL_checkstring(L, 1);
-    int port = static_cast<int>(luaL_checkinteger(L, 2));
     if (!*host) {
         return luaL_error(L, "host must not be empty");
     }
-    if (port <= 0 || port > 65535) {
+    lua_Integer port64 = luaL_checkinteger(L, 2);
+    if (port64 <= 0 || port64 > 65535) {
         return luaL_error(L, "port out of range");
     }
+    int port = static_cast<int>(port64);
 
     uint32_t conv = 0x11223344;
     if (lua_gettop(L) >= 3) {
@@ -142,13 +143,14 @@ int l_kcp_client_connect(lua_State* L) {
     }
 
     const char* host = luaL_checkstring(L, 2);
-    int port = static_cast<int>(luaL_checkinteger(L, 3));
+    lua_Integer port64 = luaL_checkinteger(L, 3);
     if (!*host) {
         return luaL_error(L, "host must not be empty");
     }
-    if (port <= 0 || port > 65535) {
+    if (port64 <= 0 || port64 > 65535) {
         return luaL_error(L, "port out of range");
     }
+    int port = static_cast<int>(port64);
 
     if (!ctx->client) {
         ctx->client = std::make_unique<evpp::kcp::sync::Client>();
@@ -306,10 +308,11 @@ int l_kcp_client_do_request_static(lua_State* L) {
     if (!*host) {
         return luaL_error(L, "host must not be empty");
     }
-    int port = static_cast<int>(luaL_checkinteger(L, 2));
-    if (port <= 0 || port > 65535) {
+    lua_Integer port64 = luaL_checkinteger(L, 2);
+    if (port64 <= 0 || port64 > 65535) {
         return luaL_error(L, "port out of range");
     }
+    int port = static_cast<int>(port64);
     size_t len = 0;
     const char* data = luaL_checklstring(L, 3, &len);
     lua_Integer t = luaL_optinteger(L, 4, 3000);

@@ -149,7 +149,15 @@ int l_kcp_server_listen(lua_State* L) {
 
     bool ok = false;
     if (arg1_type == LUA_TNUMBER) {
-        int port = static_cast<int>(luaL_checkinteger(L, 1));
+        lua_Integer port64 = luaL_checkinteger(L, 1);
+        if (port64 <= 0 || port64 > 65535) {
+            if (ctx->on_message_ref != LUA_NOREF) {
+                luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
+            }
+            delete ctx;
+            return luaL_error(L, "port out of range");
+        }
+        int port = static_cast<int>(port64);
         ok = ctx->server->Init(port);
     } else {
         const char* ports_str = luaL_checkstring(L, 1);

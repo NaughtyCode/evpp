@@ -49,13 +49,14 @@ UdpClientCtx* GetUdpClientCtxFromTable(lua_State* L, int idx) {
 // ── l_udp_client_connect(host, port) → instance_table ──
 int l_udp_client_connect(lua_State* L) {
     const char* host = luaL_checkstring(L, 1);
-    int port = static_cast<int>(luaL_checkinteger(L, 2));
+    lua_Integer port64 = luaL_checkinteger(L, 2);
     if (!*host) {
         return luaL_error(L, "host must not be empty");
     }
-    if (port <= 0 || port > 65535) {
+    if (port64 <= 0 || port64 > 65535) {
         return luaL_error(L, "port out of range");
     }
+    int port = static_cast<int>(port64);
 
     auto* ctx = new UdpClientCtx();
 
@@ -183,10 +184,11 @@ int l_udp_client_do_request_static(lua_State* L) {
     if (!*host) {
         return luaL_error(L, "host must not be empty");
     }
-    int port = static_cast<int>(luaL_checkinteger(L, 2));
-    if (port <= 0 || port > 65535) {
+    lua_Integer port64 = luaL_checkinteger(L, 2);
+    if (port64 <= 0 || port64 > 65535) {
         return luaL_error(L, "port out of range");
     }
+    int port = static_cast<int>(port64);
     size_t len = 0;
     const char* data = luaL_checklstring(L, 3, &len);
     lua_Integer t = luaL_optinteger(L, 4, 3000);
@@ -210,10 +212,11 @@ int l_udp_client_send_to(lua_State* L) {
     if (!*host) {
         return luaL_error(L, "host must not be empty");
     }
-    int port = static_cast<int>(luaL_checkinteger(L, 2));
-    if (port <= 0 || port > 65535) {
+    lua_Integer port64 = luaL_checkinteger(L, 2);
+    if (port64 <= 0 || port64 > 65535) {
         return luaL_error(L, "port out of range");
     }
+    int port = static_cast<int>(port64);
     size_t len = 0;
     const char* data = luaL_checklstring(L, 3, &len);
 

@@ -84,8 +84,8 @@ extern "C" game_error_t game_client_init(game_client_t* client,
     }
     client->owns_loop = true;
 
-    auto& runtime_cfg = cfg_mgr.GetRuntimeConfig();
-    auto& client_cfg = cfg_mgr.GetClientConfig();
+    const auto& runtime_cfg = cfg_mgr.GetRuntimeConfig();
+    const auto& client_cfg = cfg_mgr.GetClientConfig();
     engine.Init(runtime_cfg, client_cfg.scripts_dir, loop);
 
     client->initialized = true;
