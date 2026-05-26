@@ -20,11 +20,20 @@
 
 namespace engine {
 
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
 // Internal helpers
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
 
 namespace {
+
+// SerializeCursor — iterate a MongoCursor and build a JSON array string.
+//
+// Traverses the cursor, optionally skipping the first `skip` documents,
+// and concatenates each document's JSON representation into a "[...]" array.
+// Returns "[]" for an empty cursor.
+//
+// The cursor must have been obtained from a FindWithOpts / Aggregate call.
+// Caller is responsible for cursor->Destroy() after this returns.
 
 std::string SerializeCursor(mongo::MongoCursor* cursor, int32_t skip) {
     std::string result = "[";
@@ -43,9 +52,9 @@ std::string SerializeCursor(mongo::MongoCursor* cursor, int32_t skip) {
 
 } // namespace
 
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
 // Construction / Destruction
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
 
 DBThread::DBThread(int index, const DbServiceConfig& config)
     : index_(index), config_(config) {}
@@ -54,9 +63,13 @@ DBThread::~DBThread() {
     Stop();
 }
 
-// ============================================================================
-// Logger
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
+// Logger (R9)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Maps DbLogConfig fields to engine::LogConfig and delegates to CreateLogger().
+// The resulting logger writes to logs/db_service/db_vm_{N}_<timestamp>.log.
+// Rotation is purely size-based (rotation_frequency = "").
 
 quill::Logger* DBThread::CreateDbLogger() {
     LogConfig mapped;
@@ -72,9 +85,9 @@ quill::Logger* DBThread::CreateDbLogger() {
     return CreateLogger(mapped);
 }
 
-// ============================================================================
-// Lifecycle
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
+// Lifecycle (MT-callable)
+// ══════════════════════════════════════════════════════════════════════════════
 
 bool DBThread::Start(mongo::MongoClientPool& pool) {
     logger_ = CreateDbLogger();
@@ -102,7 +115,12 @@ void DBThread::Stop() {
 
     running_.store(false, std::memory_order_release);
 
-    // Wakeup sentinel — unblocks EventLoop from sleep or Pop
+    // Wakeup sentinel: enqueue a kNoOp so EventLoop breaks out of sleep.
+    // If the thread is still blocked in pool_->Pop() (init phase), the
+    // sentinel sits in the queue until the thread enters the main loop.
+    // In that case Shutdown latency is bounded by waitQueueTimeoutMS —
+    // Pop() will return nullptr on timeout, the thread exits init, finds
+    // running_==false, and the sentinel is drained during the next cycle.
     DbRequest wakeup;
     wakeup.operation = DbOperation::kNoOp;
     request_queue_.enqueue(std::move(wakeup));
@@ -113,13 +131,17 @@ void DBThread::Stop() {
     thread_.reset();
 }
 
-// ============================================================================
-// SPSC Queue operations
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
+// SPSC queue operations (MT-callable, lock-free)
+// ══════════════════════════════════════════════════════════════════════════════
 
 bool DBThread::EnqueueRequest(DbRequest&& req) {
     if (!running_.load(std::memory_order_acquire)) return false;
 
+    // Back-pressure: reject if approximate queue size >= configured max.
+    // size_approx() is a O(1) best-effort snapshot — moodycamel docs say
+    // it may undercount but never overcount beyond a small epsilon.
+    // This is acceptable; the alternative (exact count) requires a mutex.
     size_t sz = request_queue_.size_approx();
     if (static_cast<int>(sz) >= config_.thread_pool.request_queue_size) {
         ENGINE_LOG_WARN(logger_, "DBThread[{}]: request queue full (approx={}, max={})",
@@ -137,6 +159,15 @@ std::unique_ptr<DbResponse> DBThread::DequeueResponse() {
     return nullptr;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// EnqueueResponse — DBT → MT, with capacity check (§6.3)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// If the response queue is full, the oldest response is silently dropped.
+// This is a deliberate trade-off: blocking the DBThread to wait for MT to
+// drain responses would stall all DB processing for this thread. The dropped
+// response's request_id is logged at WARN level for diagnostics.
+
 void DBThread::EnqueueResponse(DbResponse&& resp) {
     while (response_queue_.size_approx() >=
            static_cast<size_t>(config_.thread_pool.response_queue_size)) {
@@ -148,11 +179,50 @@ void DBThread::EnqueueResponse(DbResponse&& resp) {
     response_queue_.enqueue(std::move(resp));
 }
 
-// ============================================================================
-// EventLoop
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
+// EventLoop — the DBThread's main function (§6.1)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Lifecycle phases (matching design §6.1):
+//
+//   1. Pop client from pool (blocking, bounded by waitQueueTimeoutMS).
+//      On timeout: log error, set running_=false, return (healthy_ stays false).
+//
+//   2. Init phase (try block, caught by outer catch):
+//      a. RegisterSubsystemObjects — store DBThread/MongoClient/MongoClientPool
+//         pointers in the VM's CustomPtrStore (DbCustomPtr slots 1-4).
+//      b. ExportDbLog — register log_* globals bound to this thread's logger (R9).
+//      c. script::ExportMongo — create mongoc / bson global module tables (R10).
+//      d. Register modules in package.loaded so require() works:
+//           package.loaded.mongoc = mongoc
+//           package.loaded.bson   = bson
+//      e. ExportDbRuntime — register db_get_client / db_get_pool globals.
+//      f. SetImportPath — configure require() search order (R12):
+//           db_scripts_dir first, then runtime_scripts_dir.
+//      g. If auto_load: DoDirectory(runtime) → DoDirectory(db_scripts).
+//      h. InitScript().
+//      i. Set healthy_ = true.
+//
+//   3. Main loop (while running_):
+//      - try_dequeue a request (non-blocking).
+//      - kNoOp → discard (wakeup sentinel, already filtered above).
+//      - Other → ProcessRequest(req).
+//      - Empty queue → sleep 50ms (prevents busy-wait, matches PhysicsThread).
+//      - Catch std::exception / ... → log, mark unhealthy, break to cleanup.
+//
+//   4. Cleanup (always executed, regardless of exit path):
+//      - healthy_ = false.
+//      - DestroyScript().     (ScriptVM cleanup: GC, close Lua state)
+//      - Push client to pool. (must balance the Pop from phase 1)
+//      - running_ = false.    (signals MT that thread has fully exited)
+//
+// Exception safety: the outer try/catch for init-phase errors and the inner
+// try/catch for loop errors both funnel into the same cleanup block. The
+// Pop'd client is always returned to the pool (or was never obtained on
+// init-phase failure).
 
 void DBThread::EventLoop() {
+    // ── Phase 1: Acquire MongoClient from shared pool ──────────────────
     client_ = pool_->Pop();
     if (!client_) {
         ENGINE_LOG_ERROR(logger_, "DBThread[{}]: pool Pop failed (timeout or pool closed)", index_);
@@ -161,32 +231,42 @@ void DBThread::EventLoop() {
     }
 
     try {
-        // Register custom ptrs
+        // ── Phase 2: Init — register bindings and load scripts ─────────
+
+        // 2a. Register subsystem object pointers (CustomPtrStore slots 1-4)
         script_vm_.RegisterSubsystemObjects(this, client_, pool_);
 
-        // Export API bindings
+        // 2b. Per-thread log functions bound to this thread's Quill logger (R9)
         ExportDbLog(script_vm_, logger_);
+
+        // 2c. MongoDB API bindings — mongoc.* / bson.* global tables (R10)
         script::ExportMongo(script_vm_);
+
+        // 2d. Wire global tables into the module system so require() works
         script_vm_.DoString(
             "package.loaded.mongoc = mongoc; "
             "package.loaded.bson   = bson");
+
+        // 2e. db_get_client / db_get_pool — access CustomPtr slots from Lua
         ExportDbRuntime(script_vm_);
 
-        // Set import paths
+        // 2f. Configure import path — db_scripts_dir searched first (R12)
         script_vm_.SetImportPath(
             config_.script.db_scripts_dir + ";" +
             config_.script.runtime_scripts_dir);
 
-        // Load scripts
+        // 2g. Load scripts: runtime first (shared), then db_service (can override) (R12)
         if (config_.script.auto_load) {
             script_vm_.DoDirectory(config_.script.runtime_scripts_dir);
             script_vm_.DoDirectory(config_.script.db_scripts_dir);
         }
+        // 2h. Call user-defined init hooks
         script_vm_.InitScript();
 
+        // 2i. Signal readiness to MT
         healthy_.store(true, std::memory_order_release);
 
-        // Main loop
+        // ── Phase 3: Main loop ─────────────────────────────────────────
         while (running_.load(std::memory_order_acquire)) {
             try {
                 DbRequest req;
@@ -194,7 +274,11 @@ void DBThread::EventLoop() {
                     if (req.operation != DbOperation::kNoOp) {
                         ProcessRequest(req);
                     }
+                    // kNoOp is silently discarded — it's the wakeup sentinel
                 } else {
+                    // Idle: sleep to avoid busy-wait.
+                    // 50ms matches PhysicsThread convention — responsive enough
+                    // for interactive use, loose enough to keep CPU low.
                     std::this_thread::sleep_for(std::chrono::microseconds(50000));
                 }
             } catch (const std::exception& e) {
@@ -219,7 +303,7 @@ void DBThread::EventLoop() {
                          index_);
     }
 
-    // Cleanup
+    // ── Phase 4: Cleanup (always reached) ──────────────────────────────
     healthy_.store(false, std::memory_order_release);
     script_vm_.DestroyScript();
     if (client_) {
@@ -229,17 +313,56 @@ void DBThread::EventLoop() {
     running_.store(false, std::memory_order_release);
 }
 
-// ============================================================================
-// ProcessRequest
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
+// ProcessRequest — dispatch DbOperation to the appropriate handler (§6.4)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Two code paths:
+//
+//   kExecuteScript:
+//     Runs the Lua script inside this thread's DBScriptVM (via DoString).
+//     No database/collection handles are created — the script uses the
+//     exported mongoc.* / db_get_client() API to access MongoDB directly.
+//     DoString returns false on Lua error; the error message is captured
+//     in resp.error_message.
+//
+//   CRUD (all other operations):
+//     Executes synchronously via C++ direct calls to mongo-c-driver.
+//     Database/collection handles are obtained from client_ on demand
+//     and destroyed before the response is enqueued (RAII-by-manual-cleanup).
+//
+// Input validation (applied before dispatch):
+//   - CRUD operations (non-kCommand, non-kExecuteScript): database and
+//     collection must be non-empty.
+//   - Operations requiring a filter (kFind, kFindOne, kUpdate*, kDelete*,
+//     kCount): bson_data must be non-empty.
+//   - Update operations (kUpdateOne, kUpdateMany): bson_data2 (the update
+//     descriptor) must be non-empty.
+//   - kInsertMany: bson_data must be non-empty.
+//   - kCommand: database and bson_data must be non-empty.
+//   - kAggregate: bson_data or bson_data2 (pipeline) must be non-empty.
+//
+// Error handling:
+//   - MongoError is checked after every CRUD call. On failure, error_code
+//     and error_message are extracted to the response.
+//   - std::exception is caught at the top-level try/catch. In that case the
+//     response carries exception.what() but no error_code.
+//   - Database/collection handle cleanup happens outside the try block —
+//     nullptr checks ensure safety even if handles were never obtained.
 
 void DBThread::ProcessRequest(const DbRequest& req) {
     DbResponse resp;
     resp.request_id = req.request_id;
 
+    // kNoOp should have been filtered by EventLoop; defensive early-return.
     if (req.operation == DbOperation::kNoOp) return;
 
-    // Input validation for CRUD operations
+    // ── Common input validation ────────────────────────────────────────
+    //
+    // CRUD operations (all except kCommand and kExecuteScript) need both
+    // database and collection. kCommand needs database only.
+    // kExecuteScript needs none — the script accesses the DB via exported APIs.
+
     if (req.operation != DbOperation::kExecuteScript &&
         req.operation != DbOperation::kCommand) {
         if (req.database.empty() || req.collection.empty()) {
@@ -249,6 +372,8 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             return;
         }
     }
+
+    // ── kExecuteScript path (no db/coll handles needed) ────────────────
 
     if (req.operation == DbOperation::kExecuteScript) {
         try {
@@ -262,10 +387,13 @@ void DBThread::ProcessRequest(const DbRequest& req) {
         return;
     }
 
+    // ── CRUD path — obtain handles and dispatch ────────────────────────
+
     mongo::MongoDatabase*   db   = nullptr;
     mongo::MongoCollection* coll = nullptr;
 
     try {
+        // kCommand only needs a database handle; all other CRUD needs a collection.
         bool need_db   = (req.operation == DbOperation::kCommand);
         bool need_coll = (req.operation != DbOperation::kCommand &&
                           req.operation != DbOperation::kExecuteScript);
@@ -277,7 +405,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             coll = client_->GetCollection(req.database.c_str(), req.collection.c_str());
         }
 
-        // Validate bson_data for operations that require it
+        // Validate bson_data (filter) for operations that require it
         bool need_filter = (req.operation == DbOperation::kFind ||
                             req.operation == DbOperation::kFindOne ||
                             req.operation == DbOperation::kUpdateOne ||
@@ -294,7 +422,22 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             return;
         }
 
+        // Validate bson_data2 (update descriptor) for update operations.
+        // The update descriptor (e.g. {"$set": {"field": "value"}}) is mandatory
+        // for kUpdateOne / kUpdateMany.
+        bool need_update_doc = (req.operation == DbOperation::kUpdateOne ||
+                                req.operation == DbOperation::kUpdateMany);
+        if (need_update_doc && req.bson_data2.empty()) {
+            resp.success = false;
+            resp.error_message = "bson_data2 (update descriptor) required for update operations";
+            if (coll) coll->Destroy();
+            if (db) db->Destroy();
+            EnqueueResponse(std::move(resp));
+            return;
+        }
+
         switch (req.operation) {
+        // ── kFind: cursor-based query with optional limit/skip ──────────
         case DbOperation::kFind: {
             auto filter = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
@@ -305,6 +448,8 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             resp.success = true;
             break;
         }
+
+        // ── kFindOne: cursor with limit 1, returns single doc or "" ─────
         case DbOperation::kFindOne: {
             auto filter = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
@@ -316,6 +461,8 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             resp.success = true;
             break;
         }
+
+        // ── kInsertOne: single document insert ──────────────────────────
         case DbOperation::kInsertOne: {
             auto doc = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
@@ -330,9 +477,16 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             }
             break;
         }
+
+        // ── kInsertMany: batch insert from JSON array ───────────────────
+        // bson_data must be a JSON array [{...}, {...}, ...].
+        // BSON represents arrays as documents with integer keys ("0","1",...).
         case DbOperation::kInsertMany: {
-            // Parse bson_data as a BSON array, then iterate elements.
-            // BSON arrays are documents with integer keys ("0", "1", ...).
+            if (req.bson_data.empty()) {
+                resp.success = false;
+                resp.error_message = "bson_data (JSON array of documents) required for InsertMany";
+                break;
+            }
             std::vector<mongo::BsonDocument> docs;
             std::vector<const mongo::BsonDocument*> doc_ptrs;
 
@@ -365,6 +519,9 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             }
             break;
         }
+
+        // ── kUpdateOne: filter in bson_data, update descriptor in bson_data2
+        // affected_count extracted from reply.nModified via BsonIter.
         case DbOperation::kUpdateOne: {
             auto filter = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
@@ -384,6 +541,8 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             }
             break;
         }
+
+        // ── kUpdateMany: same pattern as kUpdateOne ─────────────────────
         case DbOperation::kUpdateMany: {
             auto filter = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
@@ -403,6 +562,8 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             }
             break;
         }
+
+        // ── kDeleteOne: filter in bson_data, affected_count from reply.n ─
         case DbOperation::kDeleteOne: {
             auto selector = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
@@ -420,6 +581,15 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             }
             break;
         }
+
+        // ── kDeleteMany: same pattern as kDeleteOne ─────────────────────
+        //
+        // SAFETY NOTE: An empty filter "{}" matches ALL documents in the
+        // collection. The input validation above ensures bson_data is
+        // non-empty, but a caller could still pass "{}" as a valid JSON
+        // filter. This is accepted as intentional — the caller is
+        // responsible for providing a restrictive filter unless a
+        // full-collection delete is genuinely intended.
         case DbOperation::kDeleteMany: {
             auto selector = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
@@ -437,6 +607,9 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             }
             break;
         }
+
+        // ── kCount: count documents matching filter ─────────────────────
+        // CountDocuments returns -1 on error (checked via err param).
         case DbOperation::kCount: {
             auto filter = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
@@ -453,16 +626,45 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             }
             break;
         }
+
+        // ── kAggregate: pipeline from bson_data2 (preferred) or bson_data ─
+        //
+        // Accepts a JSON array of pipeline stages [{$match:...},{$group:...}].
+        // BSON arrays are documents with integer keys ("0","1",...), so
+        // NewFromJson on a JSON array produces the correct BSON representation
+        // that mongoc_collection_aggregate expects.
+        //
+        // Also accepts a single stage as a JSON object for convenience
+        // (single-stage pipelines like [{$count: "total"}]).
         case DbOperation::kAggregate: {
+            const std::string& pipe_json = req.bson_data2.empty()
+                ? req.bson_data : req.bson_data2;
+            if (pipe_json.empty()) {
+                resp.success = false;
+                resp.error_message = "bson_data or bson_data2 (pipeline) required for aggregate";
+                break;
+            }
             auto pipeline = mongo::BsonDocument::NewFromJson(
-                req.bson_data.c_str(), req.bson_data.size());
+                pipe_json.c_str(), pipe_json.size());
             auto* cursor = coll->Aggregate(pipeline, nullptr, nullptr);
             resp.result_data = SerializeCursor(cursor, 0);
             cursor->Destroy();
             resp.success = true;
             break;
         }
+
+        // ── kCommand: raw MongoDB command on the database ───────────────
+        //
+        // Executed via client_->CommandSimple which sends the command on
+        // the 'admin' database by default. The target database is specified
+        // in req.database. bson_data is the command document (e.g.
+        // {"ping": 1}, {"buildInfo": 1}).
         case DbOperation::kCommand: {
+            if (req.database.empty() || req.bson_data.empty()) {
+                resp.success = false;
+                resp.error_message = "database and bson_data (command) required for Command";
+                break;
+            }
             auto command = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
             mongo::BsonDocument reply;
@@ -477,6 +679,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             }
             break;
         }
+
         default:
             resp.success = false;
             resp.error_message = "unsupported operation";
@@ -487,6 +690,8 @@ void DBThread::ProcessRequest(const DbRequest& req) {
         resp.error_message = e.what();
     }
 
+    // RAII cleanup: destroy handles if they were obtained.
+    // nullptr checks are safe — Destroy() on null is a no-op per mongo wrapper.
     if (coll) coll->Destroy();
     if (db)   db->Destroy();
 

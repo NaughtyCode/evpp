@@ -12,9 +12,16 @@
 
 namespace engine {
 
-// ============================================================================
-// Internal helpers (anonymous namespace)
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
+// Internal log helpers (anonymous namespace)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Each l_db_log_* function is a Lua C closure with one upvalue: the DBThread's
+// Quill logger pointer (lightuserdata). Lua calls like log_info("msg") route
+// through these to write to logs/db_service/db_vm_{N}.log.
+//
+// The [lua] prefix in the format string distinguishes Lua-originated log lines
+// from native C++ log output.
 
 namespace {
 
@@ -60,6 +67,15 @@ int l_db_log_fatal(lua_State* L) {
     return 0;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// db_get_client / db_get_pool helpers
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Both closures capture the DBScriptVM* as an upvalue (lightuserdata) and
+// read the corresponding CustomPtr slot. The C++ pointer is returned to Lua
+// as lightuserdata — the mongoc.* bindings (mongo_bind.cc) know how to
+// unwrap it and construct collection/database handles.
+
 int l_db_get_client(lua_State* L) {
     auto& vm = *static_cast<DBScriptVM*>(lua_touserdata(L, lua_upvalueindex(1)));
     auto* client = vm.GetMongoClient();
@@ -81,9 +97,21 @@ int l_db_get_pool(lua_State* L) {
 
 } // namespace
 
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
 // ExportDbLog — register per-thread log functions bound to a Quill logger
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Implementation note (upvalue reuse pattern):
+//   Push the logger pointer once, then use lua_pushvalue to copy it for each
+//   closure. This avoids duplicating the lightuserdata on the stack. The last
+//   lua_pushcclosure consumes the original — no manual pop needed.
+//
+// After this call, Lua scripts inside this DBThread's DBScriptVM can write:
+//   log_info("player login: uid=" .. uid)
+//   log_error("query failed: " .. err)
+//
+// Output lands in logs/db_service/db_vm_{N}_<timestamp>.log via the per-thread
+// Quill logger (R9).
 
 void ExportDbLog(ScriptVM& vm, quill::Logger* logger) {
     auto L = vm.GetState();
@@ -98,9 +126,17 @@ void ExportDbLog(ScriptVM& vm, quill::Logger* logger) {
     lua_pushcclosure(L, l_db_log_fatal, 1);                     lua_setglobal(L, "log_fatal");
 }
 
-// ============================================================================
-// ExportDbRuntime — register db_get_client / db_get_pool
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
+// ExportDbRuntime — register db_get_client / db_get_pool globals
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Registers two global functions that Lua scripts use to obtain the current
+// DBThread's MongoClient* and the shared MongoClientPool*. Both capture
+// the DBScriptVM* as their upvalue so they can read from the CustomPtrStore
+// at call time (no stale pointer issue — the store is re-populated every
+// EventLoop restart).
+//
+// Called after ExportMongo and before InitScript in the EventLoop init sequence.
 
 void ExportDbRuntime(ScriptVM& vm) {
     auto L = vm.GetState();
@@ -115,9 +151,9 @@ void ExportDbRuntime(ScriptVM& vm) {
     lua_pop(L, 1);
 }
 
-// ============================================================================
-// DBScriptVM
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
+// DBScriptVM member functions
+// ══════════════════════════════════════════════════════════════════════════════
 
 DBScriptVM::DBScriptVM() = default;
 
@@ -128,6 +164,8 @@ void DBScriptVM::RegisterSubsystemObjects(DBThread* thread,
                                           mongo::MongoClientPool* pool) {
     VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
 
+    // Reserve slots 1..4 in the CustomPtrStore.
+    // Must match the maximum value in DbCustomPtr enum.
     store.Reserve(kDbPtrPool);
 
     store.Set(kDbPtrDBThread,  thread);

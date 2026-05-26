@@ -14,9 +14,9 @@
 
 namespace engine {
 
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
 // Singleton
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
 
 DatabaseService::DatabaseService() = default;
 
@@ -27,9 +27,26 @@ DatabaseService& DatabaseService::Instance() {
 
 DatabaseService::~DatabaseService() = default;
 
-// ============================================================================
-// Initialize / Shutdown
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
+// Initialize (MT exclusive, design §4)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Creates the MongoClientPool and N DBThreads.
+//
+// URI note: the caller is expected to inject "waitQueueTimeoutMS" into the
+// URI before calling Initialize (matching design §13):
+//
+//   auto& mongo_cfg = ConfigManager::Instance().GetMongoDbDevConfig();
+//   auto uri = MongoUri::New(mongo_cfg.connection.uri.c_str());
+//   if (db_svc_config.connection_pool.wait_queue_timeout_ms > 0) {
+//       uri.SetOptionAsInt32("waitQueueTimeoutMS",
+//           static_cast<int32_t>(db_svc_config.connection_pool.wait_queue_timeout_ms));
+//   }
+//   DatabaseService::Instance().Initialize(db_svc_config, uri);
+//
+// The timeout value controls how long each DBThread blocks in pool_->Pop()
+// before giving up. Without it, Pop() blocks indefinitely and Stop() can
+// hang during Shutdown.
 
 bool DatabaseService::Initialize(const DbServiceConfig& config,
                                   const mongo::MongoUri& uri) {
@@ -38,6 +55,7 @@ bool DatabaseService::Initialize(const DbServiceConfig& config,
         return false;
     }
 
+    // ── Validation (design §4: Initialize preconditions) ───────────────
     if (config.thread_pool.thread_count < 1) {
         std::fprintf(stderr, "DatabaseService: thread_count must be >= 1 (got %d)\n",
                      config.thread_pool.thread_count);
@@ -53,7 +71,9 @@ bool DatabaseService::Initialize(const DbServiceConfig& config,
 
     config_ = config;
 
-    // Create pool
+    // ── Create MongoClientPool ─────────────────────────────────────────
+    // pool_ uses unique_ptr with custom deleter (MongoClientPool::Destroy).
+    // SetMaxSize must be called BEFORE any Pop() — design §3.5 constraint.
     pool_.reset(mongo::MongoClientPool::New(uri));
     if (!pool_) {
         std::fprintf(stderr, "DatabaseService: failed to create MongoClientPool\n");
@@ -61,14 +81,14 @@ bool DatabaseService::Initialize(const DbServiceConfig& config,
     }
     pool_->SetMaxSize(static_cast<uint32_t>(config_.connection_pool.max_pool_size));
 
-    // Create and start DBThreads
+    // ── Create and start DBThreads ─────────────────────────────────────
     int n = config_.thread_pool.thread_count;
     threads_.reserve(n);
     for (int i = 0; i < n; ++i) {
         auto thread = std::make_unique<DBThread>(i, config_);
         if (!thread->Start(*pool_)) {
             std::fprintf(stderr, "DatabaseService: failed to start DBThread[%d]\n", i);
-            // Stop already-started threads
+            // Rollback: stop already-started threads, destroy pool.
             for (int j = 0; j < i; ++j) {
                 threads_[j]->Stop();
             }
@@ -85,22 +105,37 @@ bool DatabaseService::Initialize(const DbServiceConfig& config,
     return true;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Shutdown (MT exclusive, design §4)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Order matters (matching design §10):
+//   1. Set running_ = false (prevents new SendRequest).
+//   2. Stop all DBThreads (running_=false, kNoOp wakeup, join).
+//   3. Drain remaining responses from all queues.
+//   4. Destroy pool (non-thread-safe — must happen after all joins).
+//   5. Clear thread vector.
+
 void DatabaseService::Shutdown() {
     if (!running_.load(std::memory_order_acquire)) return;
 
     running_.store(false, std::memory_order_release);
 
-    // Stop all threads
+    // Stop all threads — each Stop() sets running_=false on the thread,
+    // enqueues a kNoOp wakeup, and joins.
     for (auto& t : threads_) {
         t->Stop();
     }
 
-    // Drain remaining responses
+    // Drain remaining responses. After all threads are joined, no new
+    // responses can be produced. Any queued responses are discarded —
+    // the module provides at-most-once semantics.
     for (auto& t : threads_) {
         while (t->DequeueResponse()) {}
     }
 
-    // Destroy pool after all threads have joined
+    // Destroy pool. pool_->Destroy() calls mongoc_client_pool_destroy()
+    // which is NOT thread-safe — all threads must be joined first.
     if (pool_) {
         pool_->Destroy();
         pool_.reset();
@@ -111,9 +146,17 @@ void DatabaseService::Shutdown() {
     ENGINE_LOG_INFO(GetLogger(), "DatabaseService: shutdown complete");
 }
 
-// ============================================================================
-// SendRequest / PollResponse
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
+// SendRequest — round-robin dispatch (design §11)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Each request is routed to exactly one DBThread via atomic round-robin.
+// The request is moved into the thread's SPSC queue. If the queue is full
+// (back-pressure), the request is rejected and the caller should retry.
+//
+// Round-robin provides uniform load distribution for the common case of
+// homogeneous requests. Future extension: hash-based routing by database/
+// collection for cache locality.
 
 int DatabaseService::NextThreadIndex() {
     return next_thread_.fetch_add(1, std::memory_order_relaxed) %
@@ -127,6 +170,17 @@ bool DatabaseService::SendRequest(DbRequest&& request) {
     int idx = NextThreadIndex();
     return threads_[idx]->EnqueueRequest(std::move(request));
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PollResponse — round-robin scan of all response queues (design §4.1)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Scans threads in round-robin order starting from poll_cursor_, returns
+// the first non-empty response. After a successful dequeue, poll_cursor_
+// advances to the next thread (fairness — no thread is starved).
+//
+// MT is the sole consumer of all response queues — SPSC per thread,
+// no mutex needed.
 
 std::unique_ptr<DbResponse> DatabaseService::PollResponse() {
     int n = static_cast<int>(threads_.size());
@@ -143,9 +197,9 @@ std::unique_ptr<DbResponse> DatabaseService::PollResponse() {
     return nullptr;
 }
 
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
 // Status queries
-// ============================================================================
+// ══════════════════════════════════════════════════════════════════════════════
 
 bool DatabaseService::IsHealthy() const {
     for (const auto& t : threads_) {

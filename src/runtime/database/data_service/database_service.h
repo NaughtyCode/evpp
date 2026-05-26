@@ -18,6 +18,43 @@ class MongoUri;
 
 class DBThread;
 
+// ══════════════════════════════════════════════════════════════════════════════
+// DatabaseService — singleton entry point for async DB operations (R1, R2)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// DatabaseService is the ONLY public interface of the data_service module.
+// All other classes (DBThread, DBScriptVM) are access-controlled via the
+// DATABASE_SERVICE_INTERNAL_ACCESS compile-time guard (R6).
+//
+// Architecture (matching design §2):
+//
+//   Main Thread (MT)                DBThread × N (one per core)
+//   ┌──────────────────┐           ┌──────────────────────────────┐
+//   │ SendRequest()    │──SPSC──→  │ EventLoop()                  │
+//   │ PollResponse()   │←──SPSC──  │   Pop client from pool (once)│
+//   │                  │           │   ProcessRequest() — blocking │
+//   │ (no direct access │          │   EnqueueResponse()           │
+//   │  to DBThread/VM) │           │   Push client to pool (once)  │
+//   └──────────────────┘           └──────────────────────────────┘
+//                                           │
+//                               Pop/Push (mutex, once per thread lifetime)
+//                                           │
+//                               ┌───────────▼──────────────┐
+//                               │   MongoClientPool         │
+//                               │   (shared, thread-safe)   │
+//                               └──────────────────────────┘
+//
+// MT ↔ DBThread communication via lock-free SPSC queues (moodycamel::ConcurrentQueue).
+// Round-robin request distribution via std::atomic counter.
+// PollResponse scans all threads' response queues once per call.
+//
+// Lifecycle (matching design §10):
+//   1. MongoSystem::Instance().Initialize()     — mongoc_init, global once
+//   2. DatabaseService::Instance().Initialize() — create pool + threads
+//   3. Running: SendRequest() / PollResponse()  — MT submits, DBTs process
+//   4. DatabaseService::Instance().Shutdown()   — stop threads, drain, destroy pool
+//   5. MongoSystem::Instance().Shutdown()       — mongoc_cleanup, global once
+
 class ENGINE_API DatabaseService {
 public:
     static DatabaseService& Instance();
@@ -27,11 +64,52 @@ public:
     DatabaseService(const DatabaseService&) = delete;
     DatabaseService& operator=(const DatabaseService&) = delete;
 
+    // ── Lifecycle (MT exclusive) ───────────────────────────────────────
+    //
+    // Initialize:
+    //   Creates a MongoClientPool from the given URI, then creates and
+    //   starts N DBThreads (config.thread_pool.thread_count).
+    //
+    //   Preconditions:
+    //     - MongoSystem::Instance().Initialize() must have been called.
+    //     - config.thread_pool.thread_count >= 1.
+    //     - uri should have "waitQueueTimeoutMS" set (caller responsibility).
+    //       See DbConnectionPoolConfig::wait_queue_timeout_ms.
+    //
+    //   Validation:
+    //     - thread_count < 1 → returns false.
+    //     - max_pool_size < thread_count → warns (Pop may timeout).
+    //
+    //   Returns false on: validation failure, pool creation failure, or
+    //   any thread Start() failure (already-started threads are stopped).
+    //
+    // Shutdown:
+    //   Gracefully stops all DBThreads (running_=false, wakeup, join),
+    //   drains remaining responses from all queues, destroys the pool.
+    //   Idempotent — safe to call multiple times.
+    //
+    //   Postcondition: all borrowed MongoClient* have been returned to pool.
+    //   Must be called before MongoSystem::Instance().Shutdown().
+
     bool Initialize(const DbServiceConfig& config, const mongo::MongoUri& uri);
     void Shutdown();
 
+    // ── Request / Response (thread-safe) ───────────────────────────────
+    //
+    // SendRequest:
+    //   Routes a request to the next DBThread via round-robin (NextThreadIndex).
+    //   Returns false if the service is not running, no threads exist, or
+    //   the target thread's request queue is full (back-pressure, §6.3).
+    //
+    // PollResponse:
+    //   Scans all DBThread response queues in round-robin order, returning
+    //   the first available DbResponse. Returns nullptr if all queues are
+    //   empty (non-blocking). Each call scans at most one full circle.
+
     bool SendRequest(DbRequest&& request);
     std::unique_ptr<DbResponse> PollResponse();
+
+    // ── Status queries (thread-safe) ───────────────────────────────────
 
     bool IsRunning() const { return running_.load(std::memory_order_acquire); }
     bool IsHealthy() const;
@@ -41,18 +119,25 @@ public:
 private:
     DatabaseService();
 
+    // Round-robin thread selection: atomic fetch_add modulo thread count.
+    // Thread-safe — MT may call SendRequest from multiple threads, though
+    // the common case is a single MT caller.
     int NextThreadIndex();
 
     std::atomic<uint64_t> next_thread_{0};
 
-    // pool_ must be declared BEFORE threads_ so it is destroyed AFTER threads_
-    // in reverse declaration order (C++ member destruction is LIFO).
+    // pool_ MUST be declared BEFORE threads_ (LIFO destruction order:
+    // threads destroyed first → each ~DBThread calls Stop() → client
+    // pushed back to pool → pool destroyed last, cleanly).
     std::unique_ptr<mongo::MongoClientPool> pool_;
     std::vector<std::unique_ptr<DBThread>> threads_;
 
     DbServiceConfig config_;
     std::atomic<bool> running_{false};
 
+    // PollResponse round-robin cursor. Not atomic — only the MT calls
+    // PollResponse, so no concurrent access. Restarts from 0 on each scan
+    // to avoid bias toward low-index threads.
     int poll_cursor_ = 0;
 };
 
