@@ -338,9 +338,11 @@ void DBThread::EventLoop() {
 //     kCount): bson_data must be non-empty.
 //   - Update operations (kUpdateOne, kUpdateMany): bson_data2 (the update
 //     descriptor) must be non-empty.
+//   - kInsertOne: bson_data must be non-empty.
 //   - kInsertMany: bson_data must be non-empty.
 //   - kCommand: database and bson_data must be non-empty.
 //   - kAggregate: bson_data or bson_data2 (pipeline) must be non-empty.
+//   - kExecuteScript: script must be non-empty.
 //
 // Error handling:
 //   - MongoError is checked after every CRUD call. On failure, error_code
@@ -376,6 +378,12 @@ void DBThread::ProcessRequest(const DbRequest& req) {
     // ── kExecuteScript path (no db/coll handles needed) ────────────────
 
     if (req.operation == DbOperation::kExecuteScript) {
+        if (req.script.empty()) {
+            resp.success = false;
+            resp.error_message = "script content required for kExecuteScript";
+            EnqueueResponse(std::move(resp));
+            return;
+        }
         try {
             resp.success = script_vm_.DoString(req.script, "db_request",
                                                &resp.error_message);
@@ -464,6 +472,11 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 
         // ── kInsertOne: single document insert ──────────────────────────
         case DbOperation::kInsertOne: {
+            if (req.bson_data.empty()) {
+                resp.success = false;
+                resp.error_message = "bson_data (JSON document) required for InsertOne";
+                break;
+            }
             auto doc = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
             mongo::BsonDocument reply;

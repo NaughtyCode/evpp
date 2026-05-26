@@ -31,22 +31,12 @@ DatabaseService::~DatabaseService() = default;
 // Initialize (MT exclusive, design §4)
 // ══════════════════════════════════════════════════════════════════════════════
 //
-// Creates the MongoClientPool and N DBThreads.
+// Copies the URI, injects waitQueueTimeoutMS from config, creates the
+// MongoClientPool, then starts N DBThreads.
 //
-// URI note: the caller is expected to inject "waitQueueTimeoutMS" into the
-// URI before calling Initialize (matching design §13):
-//
-//   auto& mongo_cfg = ConfigManager::Instance().GetMongoDbDevConfig();
-//   auto uri = MongoUri::New(mongo_cfg.connection.uri.c_str());
-//   if (db_svc_config.connection_pool.wait_queue_timeout_ms > 0) {
-//       uri.SetOptionAsInt32("waitQueueTimeoutMS",
-//           static_cast<int32_t>(db_svc_config.connection_pool.wait_queue_timeout_ms));
-//   }
-//   DatabaseService::Instance().Initialize(db_svc_config, uri);
-//
-// The timeout value controls how long each DBThread blocks in pool_->Pop()
-// before giving up. Without it, Pop() blocks indefinitely and Stop() can
-// hang during Shutdown.
+// waitQueueTimeoutMS is injected internally via uri.Copy() + SetOptionAsInt32
+// BEFORE pool creation (design §13). This bounds DBThread Pop() blocking time
+// and prevents Stop() from hanging during Shutdown.
 
 bool DatabaseService::Initialize(const DbServiceConfig& config,
                                   const mongo::MongoUri& uri) {
@@ -71,10 +61,26 @@ bool DatabaseService::Initialize(const DbServiceConfig& config,
 
     config_ = config;
 
+    // ── Prepare URI with waitQueueTimeoutMS (design §13) ───────────────
+    //
+    // Copy the caller-provided URI and inject waitQueueTimeoutMS from config.
+    // This bounds how long each DBThread blocks in pool_->Pop() — without it,
+    // Pop() waits indefinitely and Stop() can hang during Shutdown.
+    //
+    // Must be done BEFORE pool creation because SetOptionAsInt32 has no
+    // effect once the pool's internal client_initialized flag is set.
+    auto pooled_uri = uri.Copy();
+    if (config_.connection_pool.wait_queue_timeout_ms > 0) {
+        pooled_uri.SetOptionAsInt32(
+            "waitQueueTimeoutMS",
+            static_cast<int32_t>(config_.connection_pool.wait_queue_timeout_ms));
+    }
+
     // ── Create MongoClientPool ─────────────────────────────────────────
-    // pool_ uses unique_ptr with custom deleter (MongoClientPool::Destroy).
+    // pool_ uses unique_ptr; explicit Destroy() before reset() in Shutdown
+    // ensures mongoc_client_pool_destroy() runs before the C++ wrapper is freed.
     // SetMaxSize must be called BEFORE any Pop() — design §3.5 constraint.
-    pool_.reset(mongo::MongoClientPool::New(uri));
+    pool_.reset(mongo::MongoClientPool::New(pooled_uri));
     if (!pool_) {
         std::fprintf(stderr, "DatabaseService: failed to create MongoClientPool\n");
         return false;

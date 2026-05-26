@@ -67,14 +67,16 @@ public:
     // ── Lifecycle (MT exclusive) ───────────────────────────────────────
     //
     // Initialize:
-    //   Creates a MongoClientPool from the given URI, then creates and
-    //   starts N DBThreads (config.thread_pool.thread_count).
+    //   Copies the URI, injects waitQueueTimeoutMS from config, creates a
+    //   MongoClientPool, then creates and starts N DBThreads.
     //
     //   Preconditions:
     //     - MongoSystem::Instance().Initialize() must have been called.
     //     - config.thread_pool.thread_count >= 1.
-    //     - uri should have "waitQueueTimeoutMS" set (caller responsibility).
-    //       See DbConnectionPoolConfig::wait_queue_timeout_ms.
+    //
+    //   The caller does NOT need to pre-set waitQueueTimeoutMS on the URI
+    //   — Initialize handles this internally via uri.Copy() + SetOptionAsInt32
+    //   (design §13).
     //
     //   Validation:
     //     - thread_count < 1 → returns false.
