@@ -20,15 +20,28 @@ struct MongoGridFsFileOpts::Impl {
     mongoc_gridfs_file_opt_t opts;
     std::string filename;
     std::string content_type;
+    bson_t* aliases_owned = nullptr;
+    bson_t* metadata_owned = nullptr;
 };
 
 MongoGridFsFileOpts::MongoGridFsFileOpts() : impl_(std::make_unique<Impl>()) {
     memset(&impl_->opts, 0, sizeof(impl_->opts));
 }
 
-MongoGridFsFileOpts::~MongoGridFsFileOpts() = default;
-MongoGridFsFileOpts::MongoGridFsFileOpts(MongoGridFsFileOpts&&) noexcept = default;
-MongoGridFsFileOpts& MongoGridFsFileOpts::operator=(MongoGridFsFileOpts&&) noexcept = default;
+MongoGridFsFileOpts::~MongoGridFsFileOpts() {
+    if (impl_->aliases_owned) bson_destroy(impl_->aliases_owned);
+    if (impl_->metadata_owned) bson_destroy(impl_->metadata_owned);
+}
+
+MongoGridFsFileOpts::MongoGridFsFileOpts(MongoGridFsFileOpts&& other) noexcept
+    : impl_(std::move(other.impl_)) {}
+
+MongoGridFsFileOpts& MongoGridFsFileOpts::operator=(MongoGridFsFileOpts&& other) noexcept {
+    if (this != &other) {
+        impl_ = std::move(other.impl_);
+    }
+    return *this;
+}
 
 void MongoGridFsFileOpts::SetFilename(const char* f) {
     impl_->filename = f;
@@ -45,11 +58,15 @@ void MongoGridFsFileOpts::SetChunkSize(uint32_t cs) {
 }
 
 void MongoGridFsFileOpts::SetAliases(const BsonDocument& aliases) {
-    impl_->opts.aliases = static_cast<const bson_t*>(aliases.RawBson());
+    if (impl_->aliases_owned) bson_destroy(impl_->aliases_owned);
+    impl_->aliases_owned = bson_copy(static_cast<const bson_t*>(aliases.RawBson()));
+    impl_->opts.aliases = impl_->aliases_owned;
 }
 
 void MongoGridFsFileOpts::SetMetadata(const BsonDocument& metadata) {
-    impl_->opts.metadata = static_cast<const bson_t*>(metadata.RawBson());
+    if (impl_->metadata_owned) bson_destroy(impl_->metadata_owned);
+    impl_->metadata_owned = bson_copy(static_cast<const bson_t*>(metadata.RawBson()));
+    impl_->opts.metadata = impl_->metadata_owned;
 }
 
 const char* MongoGridFsFileOpts::GetFilename() const { return impl_->opts.filename; }
@@ -67,14 +84,14 @@ struct MongoGridFsFile::Impl {
 };
 
 MongoGridFsFile::MongoGridFsFile() : impl_(std::make_unique<Impl>()) {}
-MongoGridFsFile::~MongoGridFsFile() { Destroy(); }
-
-void MongoGridFsFile::Destroy() {
+MongoGridFsFile::~MongoGridFsFile() {
     if (impl_ && impl_->file) {
         mongoc_gridfs_file_destroy(impl_->file);
         impl_->file = nullptr;
     }
 }
+
+void MongoGridFsFile::Destroy() { delete this; }
 
 const char* MongoGridFsFile::GetFilename() const {
     return impl_ && impl_->file ? mongoc_gridfs_file_get_filename(impl_->file) : nullptr;
@@ -207,14 +224,14 @@ struct MongoGridFsFileList::Impl {
 };
 
 MongoGridFsFileList::MongoGridFsFileList() : impl_(std::make_unique<Impl>()) {}
-MongoGridFsFileList::~MongoGridFsFileList() { Destroy(); }
-
-void MongoGridFsFileList::Destroy() {
+MongoGridFsFileList::~MongoGridFsFileList() {
     if (impl_ && impl_->list) {
         mongoc_gridfs_file_list_destroy(impl_->list);
         impl_->list = nullptr;
     }
 }
+
+void MongoGridFsFileList::Destroy() { delete this; }
 
 MongoGridFsFile* MongoGridFsFileList::Next(MongoError* error) {
     if (!impl_ || !impl_->list) return nullptr;
@@ -247,14 +264,14 @@ struct MongoGridFs::Impl {
 };
 
 MongoGridFs::MongoGridFs() : impl_(std::make_unique<Impl>()) {}
-MongoGridFs::~MongoGridFs() { Destroy(); }
-
-void MongoGridFs::Destroy() {
+MongoGridFs::~MongoGridFs() {
     if (impl_ && impl_->gridfs) {
         mongoc_gridfs_destroy(impl_->gridfs);
         impl_->gridfs = nullptr;
     }
 }
+
+void MongoGridFs::Destroy() { delete this; }
 
 MongoGridFsFile* MongoGridFs::NewFile(MongoGridFsFileOpts* opts) {
     if (!impl_ || !impl_->gridfs) return nullptr;
@@ -343,7 +360,12 @@ struct MongoGridFsBucket::Impl {
 };
 
 MongoGridFsBucket::MongoGridFsBucket() : impl_(std::make_unique<Impl>()) {}
-MongoGridFsBucket::~MongoGridFsBucket() { Destroy(); }
+MongoGridFsBucket::~MongoGridFsBucket() {
+    if (impl_ && impl_->bucket) {
+        mongoc_gridfs_bucket_destroy(impl_->bucket);
+        impl_->bucket = nullptr;
+    }
+}
 
 MongoGridFsBucket* MongoGridFsBucket::New(void* raw_database, const BsonDocument* opts,
                                             const MongoReadPrefs* read_prefs, MongoError* error) {
@@ -358,12 +380,7 @@ MongoGridFsBucket* MongoGridFsBucket::New(void* raw_database, const BsonDocument
     return result;
 }
 
-void MongoGridFsBucket::Destroy() {
-    if (impl_ && impl_->bucket) {
-        mongoc_gridfs_bucket_destroy(impl_->bucket);
-        impl_->bucket = nullptr;
-    }
-}
+void MongoGridFsBucket::Destroy() { delete this; }
 
 void* MongoGridFsBucket::OpenUploadStream(const char* filename, const BsonDocument* opts,
                                             void* file_id_out, MongoError* error) {

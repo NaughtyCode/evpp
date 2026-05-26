@@ -47,6 +47,7 @@ MongoHostList* MongoHostList::GetNext() const {
         auto* self = const_cast<MongoHostList*>(this);
         self->impl_->next = new MongoHostList();
         memcpy(&self->impl_->next->impl_->entry, impl_->entry.next, sizeof(mongoc_host_list_t));
+        self->impl_->next->impl_->entry.next = nullptr;
     });
     return impl_->next;
 }

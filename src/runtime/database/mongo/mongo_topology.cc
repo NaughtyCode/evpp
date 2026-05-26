@@ -3,6 +3,7 @@
 #include "runtime/database/mongo/mongo_topology.h"
 
 #include <mongoc/mongoc.h>
+#include <new>
 
 #include "runtime/database/mongo/mongo_host_list.h"
 #include "runtime/database/mongo/mongo_settings.h"
@@ -72,7 +73,11 @@ MongoServerDescription* MongoServerDescription::NewCopy(const MongoServerDescrip
     auto* raw_copy = mongoc_server_description_new_copy(
         static_cast<const mongoc_server_description_t*>(other->sd_));
     if (!raw_copy) return nullptr;
-    auto* result = new MongoServerDescription(raw_copy);
+    auto* result = new (std::nothrow) MongoServerDescription(raw_copy);
+    if (!result) {
+        mongoc_server_description_destroy(raw_copy);
+        return nullptr;
+    }
     result->owns_ = true;
     return result;
 }
@@ -127,9 +132,24 @@ MongoServerDescription** MongoTopologyDescription::GetServers(size_t* n) const {
     }
     auto** result = static_cast<MongoServerDescription**>(
         bson_malloc(count * sizeof(MongoServerDescription*)));
+    if (!result) {
+        bson_free(raw_servers);
+        if (n) *n = 0;
+        return nullptr;
+    }
     for (size_t i = 0; i < count; ++i) {
         MongoServerDescription tmp(raw_servers[i]);
         result[i] = MongoServerDescription::NewCopy(&tmp);
+        if (!result[i]) {
+            for (size_t j = 0; j < i; ++j) {
+                result[j]->DestroyCopy();
+                delete result[j];
+            }
+            bson_free(result);
+            bson_free(raw_servers);
+            if (n) *n = 0;
+            return nullptr;
+        }
     }
     bson_free(raw_servers);
     if (n) *n = count;
@@ -141,7 +161,11 @@ MongoTopologyDescription* MongoTopologyDescription::NewCopy(const MongoTopologyD
     auto* raw_copy = mongoc_topology_description_new_copy(
         static_cast<const mongoc_topology_description_t*>(other->td_));
     if (!raw_copy) return nullptr;
-    auto* result = new MongoTopologyDescription(raw_copy);
+    auto* result = new (std::nothrow) MongoTopologyDescription(raw_copy);
+    if (!result) {
+        mongoc_topology_description_destroy(raw_copy);
+        return nullptr;
+    }
     result->owns_ = true;
     return result;
 }

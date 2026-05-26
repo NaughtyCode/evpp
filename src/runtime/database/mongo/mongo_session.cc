@@ -172,14 +172,14 @@ struct MongoSession::Impl {
 };
 
 MongoSession::MongoSession() : impl_(std::make_unique<Impl>()) {}
-MongoSession::~MongoSession() { Destroy(); }
-
-void MongoSession::Destroy() {
+MongoSession::~MongoSession() {
     if (impl_ && impl_->session) {
         mongoc_client_session_destroy(impl_->session);
         impl_->session = nullptr;
     }
 }
+
+void MongoSession::Destroy() { delete this; }
 
 bool MongoSession::StartTransaction(const MongoTransactionOpts* opts, MongoError* error) {
     if (!impl_ || !impl_->session) return false;

@@ -31,11 +31,11 @@ MongoSslOpts::MongoSslOpts(const MongoSslOpts& other) : impl_(std::make_unique<I
     impl_->ca_dir = other.impl_->ca_dir;
     impl_->crl_file = other.impl_->crl_file;
     memcpy(&impl_->opts, &other.impl_->opts, sizeof(impl_->opts));
-    if (!impl_->pem_file.empty()) impl_->opts.pem_file = impl_->pem_file.c_str();
-    if (!impl_->pem_pwd.empty()) impl_->opts.pem_pwd = impl_->pem_pwd.c_str();
-    if (!impl_->ca_file.empty()) impl_->opts.ca_file = impl_->ca_file.c_str();
-    if (!impl_->ca_dir.empty()) impl_->opts.ca_dir = impl_->ca_dir.c_str();
-    if (!impl_->crl_file.empty()) impl_->opts.crl_file = impl_->crl_file.c_str();
+    impl_->opts.pem_file = impl_->pem_file.empty() ? nullptr : impl_->pem_file.c_str();
+    impl_->opts.pem_pwd = impl_->pem_pwd.empty() ? nullptr : impl_->pem_pwd.c_str();
+    impl_->opts.ca_file = impl_->ca_file.empty() ? nullptr : impl_->ca_file.c_str();
+    impl_->opts.ca_dir = impl_->ca_dir.empty() ? nullptr : impl_->ca_dir.c_str();
+    impl_->opts.crl_file = impl_->crl_file.empty() ? nullptr : impl_->crl_file.c_str();
 }
 
 MongoSslOpts& MongoSslOpts::operator=(const MongoSslOpts& other) {
@@ -46,11 +46,11 @@ MongoSslOpts& MongoSslOpts::operator=(const MongoSslOpts& other) {
         impl_->ca_dir = other.impl_->ca_dir;
         impl_->crl_file = other.impl_->crl_file;
         memcpy(&impl_->opts, &other.impl_->opts, sizeof(impl_->opts));
-        if (!impl_->pem_file.empty()) impl_->opts.pem_file = impl_->pem_file.c_str();
-        if (!impl_->pem_pwd.empty()) impl_->opts.pem_pwd = impl_->pem_pwd.c_str();
-        if (!impl_->ca_file.empty()) impl_->opts.ca_file = impl_->ca_file.c_str();
-        if (!impl_->ca_dir.empty()) impl_->opts.ca_dir = impl_->ca_dir.c_str();
-        if (!impl_->crl_file.empty()) impl_->opts.crl_file = impl_->crl_file.c_str();
+        impl_->opts.pem_file = impl_->pem_file.empty() ? nullptr : impl_->pem_file.c_str();
+        impl_->opts.pem_pwd = impl_->pem_pwd.empty() ? nullptr : impl_->pem_pwd.c_str();
+        impl_->opts.ca_file = impl_->ca_file.empty() ? nullptr : impl_->ca_file.c_str();
+        impl_->opts.ca_dir = impl_->ca_dir.empty() ? nullptr : impl_->ca_dir.c_str();
+        impl_->opts.crl_file = impl_->crl_file.empty() ? nullptr : impl_->crl_file.c_str();
     }
     return *this;
 }

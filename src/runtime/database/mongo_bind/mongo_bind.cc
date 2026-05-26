@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <new>
 #include <string>
 
 extern "C" {
@@ -63,8 +64,10 @@ int l_bson_gc(lua_State* L) {
 }
 
 int l_bson_new(lua_State* L) {
+    auto* doc = new (std::nothrow) mongo::BsonDocument();
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
     auto** ud = NewUserdata<mongo::BsonDocument>(L, kBsonMetaName);
-    *ud = new mongo::BsonDocument();
+    *ud = doc;
     return 1;
 }
 
@@ -76,9 +79,11 @@ int l_bson_destroy(lua_State* L) {
 int l_bson_from_json(lua_State* L) {
     size_t len;
     const char* json = luaL_checklstring(L, 1, &len);
-    auto** ud = NewUserdata<mongo::BsonDocument>(L, kBsonMetaName);
-    *ud = new mongo::BsonDocument(
+    auto* doc = new (std::nothrow) mongo::BsonDocument(
         mongo::BsonDocument::NewFromJson(reinterpret_cast<const uint8_t*>(json), len));
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, kBsonMetaName);
+    *ud = doc;
     return 1;
 }
 
@@ -93,8 +98,12 @@ int l_bson_as_json(lua_State* L) {
 int l_bson_append_int32(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kBsonMetaName);
     const char* key = luaL_checkstring(L, 2);
-    auto value = static_cast<int32_t>(luaL_checkinteger(L, 3));
-    lua_pushboolean(L, doc && doc->AppendInt32(key, value));
+    auto val = luaL_checkinteger(L, 3);
+    if (val > INT32_MAX || val < INT32_MIN) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
+    lua_pushboolean(L, doc && doc->AppendInt32(key, static_cast<int32_t>(val)));
     return 1;
 }
 
@@ -159,9 +168,13 @@ int l_bson_append_document(lua_State* L) {
 int l_bson_append_timestamp(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kBsonMetaName);
     const char* key = luaL_checkstring(L, 2);
-    auto timestamp = static_cast<uint32_t>(luaL_checkinteger(L, 3));
-    auto increment = static_cast<uint32_t>(luaL_checkinteger(L, 4));
-    lua_pushboolean(L, doc && doc->AppendTimestamp(key, timestamp, increment));
+    auto ts = luaL_checkinteger(L, 3);
+    auto inc = luaL_checkinteger(L, 4);
+    if (ts > UINT32_MAX || ts < 0 || inc > UINT32_MAX || inc < 0) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
+    lua_pushboolean(L, doc && doc->AppendTimestamp(key, static_cast<uint32_t>(ts), static_cast<uint32_t>(inc)));
     return 1;
 }
 
@@ -192,8 +205,10 @@ int l_bson_iter_gc(lua_State* L) {
 int l_bson_iter_new(lua_State* L) {
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kBsonMetaName);
     if (!doc) { lua_pushnil(L); return 1; }
+    auto* iter = new (std::nothrow) mongo::BsonIter(*doc);
+    if (!iter) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
     auto** ud = NewUserdata<mongo::BsonIter>(L, kBsonIterMetaName);
-    *ud = new mongo::BsonIter(*doc);
+    *ud = iter;
     return 1;
 }
 
@@ -260,8 +275,10 @@ int l_bson_iter_as_datetime(lua_State* L) {
 int l_bson_iter_recurse(lua_State* L) {
     auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kBsonIterMetaName);
     if (!iter) { lua_pushnil(L); return 1; }
+    auto* sub = new (std::nothrow) mongo::BsonIter(iter->Recurse());
+    if (!sub) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
     auto** ud = NewUserdata<mongo::BsonIter>(L, kBsonIterMetaName);
-    *ud = new mongo::BsonIter(iter->Recurse());
+    *ud = sub;
     return 1;
 }
 
@@ -358,9 +375,15 @@ int l_client_command_simple(lua_State* L) {
         lua_pushstring(L, error.Message());
         lua_pushnil(L); // no reply on error
     } else {
+        auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+        if (!doc) {
+            lua_pushnil(L); // no error
+            lua_pushnil(L); // no reply
+            return 3;
+        }
         lua_pushnil(L); // no error
         auto** ud = NewUserdata<mongo::BsonDocument>(L, kBsonMetaName);
-        *ud = new mongo::BsonDocument(std::move(reply));
+        *ud = doc;
     }
     return 3; // ok, err, reply
 }
@@ -495,10 +518,15 @@ int l_coll_count(lua_State* L) {
     auto* filter = GetUserdata<mongo::BsonDocument>(L, 2, kBsonMetaName);
     auto* opts = lua_isnoneornil(L, 3) ? nullptr
                  : GetUserdata<mongo::BsonDocument>(L, 3, kBsonMetaName);
-    if (!coll || !filter) { lua_pushinteger(L, -1); return 1; }
+    if (!coll || !filter) { lua_pushnil(L); lua_pushstring(L, "invalid args"); return 2; }
     mongo::BsonDocument reply;
     mongo::MongoError error;
     int64_t count = coll->CountDocuments(*filter, opts, nullptr, &reply, &error);
+    if (count < 0) {
+        lua_pushnil(L);
+        lua_pushstring(L, error.Message());
+        return 2;
+    }
     lua_pushinteger(L, static_cast<lua_Integer>(count));
     return 1;
 }
@@ -541,14 +569,15 @@ int l_cursor_destroy(lua_State* L) { l_cursor_gc(L); return 0; }
 int l_cursor_next(lua_State* L) {
     auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kCursorMetaName);
     if (!cursor) { lua_pushboolean(L, false); return 1; }
+    auto* doc = new (std::nothrow) mongo::BsonDocument();
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
     auto** ud = NewUserdata<mongo::BsonDocument>(L, kBsonMetaName);
-    *ud = new mongo::BsonDocument();
+    *ud = doc;
     bool ok = cursor->Next(*ud);
     if (!ok) {
         delete *ud;
         *ud = nullptr;
         lua_pop(L, 1);
-        // Check for error
         mongo::MongoError error;
         if (cursor->HasError(&error)) {
             lua_pushnil(L);
@@ -558,13 +587,14 @@ int l_cursor_next(lua_State* L) {
         lua_pushboolean(L, false);
         return 1;
     }
-    return 1; // returns the bson doc userdata
+    return 1;
 }
 
 int l_cursor_set_batch_size(lua_State* L) {
     auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kCursorMetaName);
-    auto batch_size = static_cast<uint32_t>(luaL_checkinteger(L, 2));
-    if (cursor) cursor->SetBatchSize(batch_size);
+    auto val = luaL_checkinteger(L, 2);
+    if (val < 0 || val > UINT32_MAX) return 0;
+    if (cursor) cursor->SetBatchSize(static_cast<uint32_t>(val));
     return 0;
 }
 

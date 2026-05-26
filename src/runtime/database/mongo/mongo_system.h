@@ -3,6 +3,8 @@
 #if defined(ENGINE_MONGODB_ENABLED)
 
 
+#include <atomic>
+
 #include "runtime/core/engine_api.h"
 #include "runtime/database/mongo/mongo_forward.h"
 
@@ -31,7 +33,7 @@ private:
     MongoSystem() = default;
     ~MongoSystem() = default;
 
-    bool initialized_ = false;
+    std::atomic<bool> initialized_{false};
 };
 
 } // namespace mongo

@@ -27,14 +27,14 @@ MongoSocket* MongoSocket::New(int domain, int type, int protocol) {
 }
 
 MongoSocket::MongoSocket() : impl_(std::make_unique<Impl>()) {}
-MongoSocket::~MongoSocket() { Destroy(); }
-
-void MongoSocket::Destroy() {
+MongoSocket::~MongoSocket() {
     if (impl_ && impl_->sock) {
         mongoc_socket_destroy(impl_->sock);
         impl_->sock = nullptr;
     }
 }
+
+void MongoSocket::Destroy() { delete this; }
 
 MongoSocket* MongoSocket::Accept(int64_t expire_at) {
     if (!impl_ || !impl_->sock) return nullptr;

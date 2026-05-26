@@ -20,12 +20,14 @@ void MongoOid::Init() {
 }
 
 void MongoOid::InitFromString(const char* str) {
+    if (!str) { std::memset(bytes_, 0, 12); return; }
     bson_oid_t oid;
     bson_oid_init_from_string(&oid, str);
     std::memcpy(bytes_, oid.bytes, 12);
 }
 
 void MongoOid::InitFromData(const uint8_t* data) {
+    if (!data) { std::memset(bytes_, 0, 12); return; }
     bson_oid_t oid;
     bson_oid_init_from_data(&oid, data);
     std::memcpy(bytes_, oid.bytes, 12);

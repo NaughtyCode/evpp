@@ -22,14 +22,14 @@ struct MongoStream::Impl {
 
 MongoStream::MongoStream() : impl_(std::make_unique<Impl>()) {}
 
-MongoStream::~MongoStream() { Destroy(); }
-
-void MongoStream::Destroy() {
+MongoStream::~MongoStream() {
     if (impl_ && impl_->stream && impl_->owned) {
         mongoc_stream_destroy(impl_->stream);
         impl_->stream = nullptr;
     }
 }
+
+void MongoStream::Destroy() { delete this; }
 
 void* MongoStream::ReleaseStream() {
     if (!impl_) return nullptr;
@@ -39,7 +39,8 @@ void* MongoStream::ReleaseStream() {
 }
 
 void MongoStream::SetRawStream(void* stream) {
-    if (impl_ && impl_->stream && impl_->owned)
+    if (!impl_) return;
+    if (impl_->stream && impl_->owned)
         mongoc_stream_destroy(impl_->stream);
     impl_->stream = static_cast<mongoc_stream_t*>(stream);
     impl_->owned = true;

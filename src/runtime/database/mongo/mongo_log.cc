@@ -4,6 +4,7 @@
 
 #include <mongoc/mongoc.h>
 
+#include <cstdarg>
 #include <memory>
 #include <mutex>
 

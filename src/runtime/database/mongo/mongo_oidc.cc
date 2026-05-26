@@ -154,14 +154,14 @@ MongoOidcCallback* MongoOidcCallback::NewWithUserData(MongoOidcCallbackFn fn, vo
 }
 
 MongoOidcCallback::MongoOidcCallback() : impl_(std::make_unique<Impl>()) {}
-MongoOidcCallback::~MongoOidcCallback() { Destroy(); }
-
-void MongoOidcCallback::Destroy() {
+MongoOidcCallback::~MongoOidcCallback() {
     if (impl_ && impl_->cb) {
         mongoc_oidc_callback_destroy(impl_->cb);
         impl_->cb = nullptr;
     }
 }
+
+void MongoOidcCallback::Destroy() { delete this; }
 
 void* MongoOidcCallback::GetUserData() const {
     return impl_->ctx ? impl_->ctx->user_data : nullptr;
