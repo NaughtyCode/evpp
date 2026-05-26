@@ -5,9 +5,9 @@ project(GameClient C CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(ENGINE_MONGODB_ENABLED "Enable MongoDB driver support" ON)
-option(ENGINE_PROFILER_ENABLED "Enable perfetto profiler" ON)
-option(ENGINE_PHYSICS_ENABLED "Enable Jolt Physics integration" ON)
+option(ENGINE_MONGODB_ENABLED "Enable MongoDB driver support" OFF)
+option(ENGINE_PROFILER_ENABLED "Enable perfetto profiler" OFF)
+option(ENGINE_PHYSICS_ENABLED "Enable Jolt Physics integration" OFF)
 option(HTTPS "Enable HTTPS/SSL support" OFF)
 option(CMAKE_BENCHMARK_TESTING "Enable benchmark testing" OFF)
 
