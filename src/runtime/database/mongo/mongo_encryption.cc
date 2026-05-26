@@ -617,6 +617,7 @@ void MongoClientEncryption::Destroy() {
         mongoc_client_encryption_destroy(impl_->enc);
         impl_->enc = nullptr;
     }
+    delete this;
 }
 
 bool MongoClientEncryption::CreateDatakey(const char* kms_provider,

@@ -33,6 +33,7 @@ void MongoBulkOperation::Destroy() {
         mongoc_bulk_operation_destroy(impl_->bulk);
         impl_->bulk = nullptr;
     }
+    delete this;
 }
 
 void MongoBulkOperation::Insert(const BsonDocument& document) {

@@ -501,7 +501,10 @@ int64_t BsonIter::AsInt64Coerce() const {
 }
 
 const char* BsonIter::AsUtf8(uint32_t* length) const {
-    return bson_iter_utf8(static_cast<const bson_iter_t*>(RawIter()), length);
+    uint32_t local_len = 0;
+    const char* str = bson_iter_utf8(static_cast<const bson_iter_t*>(RawIter()), &local_len);
+    if (length) *length = local_len;
+    return str;
 }
 
 bool BsonIter::AsBool() const {
@@ -527,15 +530,27 @@ int64_t BsonIter::AsDateTime() const {
 
 void BsonIter::AsBinary(int* subtype, uint32_t* length, const uint8_t** data) const {
     bson_subtype_t st;
-    bson_iter_binary(static_cast<const bson_iter_t*>(RawIter()), &st, length, data);
-    *subtype = static_cast<int>(st);
+    uint32_t local_len = 0;
+    const uint8_t* local_data = nullptr;
+    bson_iter_binary(static_cast<const bson_iter_t*>(RawIter()), &st, &local_len, &local_data);
+    if (subtype) *subtype = static_cast<int>(st);
+    if (length) *length = local_len;
+    if (data) *data = local_data;
 }
 
 void BsonIter::AsDocument(uint32_t* length, const uint8_t** data) const {
-    bson_iter_document(static_cast<const bson_iter_t*>(RawIter()), length, data);
+    uint32_t local_len = 0;
+    const uint8_t* local_data = nullptr;
+    bson_iter_document(static_cast<const bson_iter_t*>(RawIter()), &local_len, &local_data);
+    if (length) *length = local_len;
+    if (data) *data = local_data;
 }
 void BsonIter::AsArray(uint32_t* array_len, const uint8_t** array) const {
-    bson_iter_array(static_cast<const bson_iter_t*>(RawIter()), array_len, array);
+    uint32_t local_len = 0;
+    const uint8_t* local_data = nullptr;
+    bson_iter_array(static_cast<const bson_iter_t*>(RawIter()), &local_len, &local_data);
+    if (array_len) *array_len = local_len;
+    if (array) *array = local_data;
 }
 
 const char* BsonIter::AsCode(uint32_t* length) const {
@@ -543,10 +558,11 @@ const char* BsonIter::AsCode(uint32_t* length) const {
 }
 
 void BsonIter::AsCodeWithScope(uint32_t* code_length, const char** code, BsonDocument* scope) const {
+    if (!code_length) return;
     uint32_t scope_len;
     const uint8_t* scope_data;
     bson_iter_codewscope(static_cast<const bson_iter_t*>(RawIter()), code_length, &scope_len, &scope_data);
-    if (code && code_length && scope_data) {
+    if (code && scope_data) {
         *code = reinterpret_cast<const char*>(scope_data) - (*code_length) - 1;
     }
     if (scope && scope_data) {
@@ -559,7 +575,10 @@ void BsonIter::AsCodeWithScope(uint32_t* code_length, const char** code, BsonDoc
 }
 
 void BsonIter::AsRegex(const char** regex, const char** options) const {
-    *regex = bson_iter_regex(static_cast<const bson_iter_t*>(RawIter()), options);
+    if (!regex) return;
+    const char* opts = nullptr;
+    *regex = bson_iter_regex(static_cast<const bson_iter_t*>(RawIter()), &opts);
+    if (options) *options = opts;
 }
 
 const char* BsonIter::AsSymbol(uint32_t* length) const {
@@ -567,7 +586,10 @@ const char* BsonIter::AsSymbol(uint32_t* length) const {
 }
 
 void BsonIter::AsTimestamp(uint32_t* timestamp, uint32_t* increment) const {
-    bson_iter_timestamp(static_cast<const bson_iter_t*>(RawIter()), timestamp, increment);
+    uint32_t ts = 0, inc = 0;
+    bson_iter_timestamp(static_cast<const bson_iter_t*>(RawIter()), &ts, &inc);
+    if (timestamp) *timestamp = ts;
+    if (increment) *increment = inc;
 }
 
 time_t BsonIter::AsTimeT() const {
@@ -653,9 +675,13 @@ void BsonIter::AsTimeval(void* tv) const {
 }
 void BsonIter::AsDBPointer(uint32_t* collection_len, const char** collection,
                             const void** oid) const {
-    bson_iter_dbpointer(static_cast<const bson_iter_t*>(RawIter()),
-                         collection_len, collection,
-                         reinterpret_cast<const bson_oid_t**>(oid));
+    uint32_t clen = 0;
+    const char* col = nullptr;
+    const bson_oid_t* oid_ptr = nullptr;
+    bson_iter_dbpointer(static_cast<const bson_iter_t*>(RawIter()), &clen, &col, &oid_ptr);
+    if (collection_len) *collection_len = clen;
+    if (collection) *collection = col;
+    if (oid) *oid = oid_ptr;
 }
 
 bool BsonIter::VisitAll(const void* visitor, void* data) {

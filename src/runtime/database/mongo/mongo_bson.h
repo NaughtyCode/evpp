@@ -14,11 +14,11 @@ namespace engine {
 namespace mongo {
 
 // 16-byte IEEE 754 decimal128 floating-point value.
-// Binary-compatible with bson_decimal128_t.
+// Binary-compatible with bson_decimal128_t (low at offset 0, high at offset 8 on LE).
 class ENGINE_API MongoDecimal128 {
 public:
-    MongoDecimal128() : high_(0), low_(0) {}
-    explicit MongoDecimal128(uint64_t high, uint64_t low) : high_(high), low_(low) {}
+    MongoDecimal128() : low_(0), high_(0) {}
+    explicit MongoDecimal128(uint64_t high, uint64_t low) : low_(low), high_(high) {}
 
     uint64_t high() const { return high_; }
     uint64_t low()  const { return low_; }
@@ -28,8 +28,8 @@ public:
     std::string ToString() const;
 
 private:
-    uint64_t high_;
     uint64_t low_;
+    uint64_t high_;
 };
 static_assert(sizeof(MongoDecimal128) == 16, "MongoDecimal128 must be 16 bytes");
 

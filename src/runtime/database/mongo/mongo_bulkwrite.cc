@@ -513,6 +513,7 @@ void MongoBulkWrite::Destroy() {
         mongoc_bulkwrite_destroy(impl_->bw);
         impl_->bw = nullptr;
     }
+    delete this;
 }
 
 bool MongoBulkWrite::AppendInsertOne(const char* ns, const BsonDocument& document,

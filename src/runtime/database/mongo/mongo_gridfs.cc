@@ -29,8 +29,10 @@ MongoGridFsFileOpts::MongoGridFsFileOpts() : impl_(std::make_unique<Impl>()) {
 }
 
 MongoGridFsFileOpts::~MongoGridFsFileOpts() {
-    if (impl_->aliases_owned) bson_destroy(impl_->aliases_owned);
-    if (impl_->metadata_owned) bson_destroy(impl_->metadata_owned);
+    if (impl_) {
+        if (impl_->aliases_owned) bson_destroy(impl_->aliases_owned);
+        if (impl_->metadata_owned) bson_destroy(impl_->metadata_owned);
+    }
 }
 
 MongoGridFsFileOpts::MongoGridFsFileOpts(MongoGridFsFileOpts&& other) noexcept
@@ -38,6 +40,10 @@ MongoGridFsFileOpts::MongoGridFsFileOpts(MongoGridFsFileOpts&& other) noexcept
 
 MongoGridFsFileOpts& MongoGridFsFileOpts::operator=(MongoGridFsFileOpts&& other) noexcept {
     if (this != &other) {
+        if (impl_) {
+            if (impl_->aliases_owned) bson_destroy(impl_->aliases_owned);
+            if (impl_->metadata_owned) bson_destroy(impl_->metadata_owned);
+        }
         impl_ = std::move(other.impl_);
     }
     return *this;
