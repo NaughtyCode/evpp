@@ -54,7 +54,6 @@ public:
 
     bool Start();
     void Tick(uint64_t frame_id, float delta_time);
-    void UpdateScript();
 
     std::optional<PhysicsFrameResult> FetchResult(uint64_t frame_id,
                                                    int timeout_ms);
@@ -80,7 +79,6 @@ public:
     }
     bool Start() { return false; }
     void Tick(uint64_t, float) {}
-    void UpdateScript() {}
     std::optional<PhysicsFrameResult> FetchResult(uint64_t, int) {
         return std::nullopt;
     }

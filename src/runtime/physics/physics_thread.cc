@@ -278,6 +278,13 @@ void PhysicsThread::EventLoop() {
                 if (args.delta_time > 0.0f) {
                     PhysicsFrameResult result = world_.Step(
                         args.delta_time, args.frame_id);
+
+                    // Drive Lua collision callbacks on the physics thread
+                    // before enqueuing the result for the main thread.
+                    if (post_step_callback_) {
+                        post_step_callback_(result.collision_events);
+                    }
+
                     { ENGINE_PROFILE_PHYSICS_RESULT_ENQUEUE();
                     result_queue_.enqueue(std::move(result));
                     }  // ResultEnqueue slice ends

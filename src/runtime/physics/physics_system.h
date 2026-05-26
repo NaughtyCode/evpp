@@ -125,8 +125,8 @@ public:
     static PhysicsWorld*     GetWorldFromState(lua_State* L);
     static PhysicsScriptVM*  GetScriptVMFromState(lua_State* L);
 
-    // ── Lua script update (main thread, after FetchResult) ─────────────
-    void UpdateScript();
+    // ── Lua collision callbacks (called from physics thread after Step) ─
+    void UpdateScript(const std::vector<CollisionEvent>& collision_events);
 
     // ── Logger accessor ─────────────────────────────────────────────────
     // Returns the physics thread's logger, or nullptr before Start() / after Stop().
@@ -141,10 +141,6 @@ public:
 private:
     PhysicsSystem() = default;
     ~PhysicsSystem() = default;
-
-    // Cached collision events from most recent FetchResult, for UpdateScript
-    std::vector<CollisionEvent> last_collision_events_;
-    std::mutex collision_events_mutex_;
 
     std::unique_ptr<PhysicsConfigManager> config_manager_;
     std::unique_ptr<PhysicsScriptVM> script_vm_;

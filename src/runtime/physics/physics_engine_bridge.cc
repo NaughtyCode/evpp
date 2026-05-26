@@ -25,10 +25,6 @@ void PhysicsEngineBridge::Tick(uint64_t frame_id, float delta_time) {
     PhysicsSystem::Instance().Tick(frame_id, delta_time);
 }
 
-void PhysicsEngineBridge::UpdateScript() {
-    PhysicsSystem::Instance().UpdateScript();
-}
-
 std::optional<PhysicsFrameResult> PhysicsEngineBridge::FetchResult(
     uint64_t frame_id, int timeout_ms) {
     return PhysicsSystem::Instance().FetchResult(frame_id, timeout_ms);

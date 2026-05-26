@@ -3,9 +3,11 @@
 #ifdef ENGINE_PHYSICS_ENABLED
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <quill/Logger.h>
 
@@ -79,6 +81,12 @@ public:
         thresholds_config_ = thresholds;
     }
 
+    // Post-step callback — invoked on the physics thread after each
+    // successful world_.Step(), with the frame's collision events.
+    // Used by PhysicsSystem to drive Lua collision callbacks.
+    using PostStepCallback = std::function<void(const std::vector<CollisionEvent>&)>;
+    void SetPostStepCallback(PostStepCallback cb) { post_step_callback_ = std::move(cb); }
+
     // Recover after a crash. Stops the old thread (if still partially running),
     // restarts with the same config, and optionally restores state.
     // Returns false if recovery fails (config lost, world init failure).
@@ -112,6 +120,9 @@ private:
 
     // Independent logger (owned by physics thread)
     quill::Logger* logger_ = nullptr;
+
+    // Post-step callback (invoked on physics thread after world_.Step())
+    PostStepCallback post_step_callback_;
 };
 
 } // namespace engine

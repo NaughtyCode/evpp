@@ -369,10 +369,6 @@ void Engine::FrameLoop() {
     auto result = PhysicsEngineBridge::Instance().FetchResult(fc, 5);
     if (result) {
         // [D17.5] Game object state update from result->transforms would go here
-        // [D17.6] Physics VM collision callbacks — after FetchResult
-        { ENGINE_PROFILE_SCRIPT_CALLBACK();
-        PhysicsEngineBridge::Instance().UpdateScript();
-        }  // ScriptCallback slice ends
         // [D17.7] Network sync construction from result->diff_packets would go here
     }
     }  // PhysicsFetch slice ends

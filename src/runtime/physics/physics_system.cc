@@ -148,6 +148,12 @@ bool PhysicsSystem::Start() {
         return false;
     }
 
+    // Register post-step callback — drives Lua collision callbacks on the
+    // physics thread after each world_.Step().
+    physics_thread_.SetPostStepCallback([this](const std::vector<CollisionEvent>& events) {
+        this->UpdateScript(events);
+    });
+
     PHYSICS_LOG_INFO(physics_thread_.GetLogger(), "PhysicsSystem: physics thread started");
     return true;
 }
@@ -241,11 +247,6 @@ std::optional<PhysicsFrameResult> PhysicsSystem::FetchResult(
         if (result) {
             // Check frame_id match [D20]
             if (result->frame_id == frame_id) {
-                // Cache collision events for UpdateScript
-                {
-                    std::lock_guard<std::mutex> lock(collision_events_mutex_);
-                    last_collision_events_ = result->collision_events;
-                }
                 return std::move(*result);
             }
             // Mismatched frame — could be from a previous run; discard
@@ -370,20 +371,13 @@ bool PhysicsSystem::Recover(const std::string& saved_state) {
 // UpdateScript — call Lua collision callbacks [D17.6]
 //============================================================================
 
-void PhysicsSystem::UpdateScript() {
+void PhysicsSystem::UpdateScript(const std::vector<CollisionEvent>& collision_events) {
     if (!script_vm_) return;
 
     // Drive Lua coroutines
     script_vm_->UpdateScript();
 
-    // Fetch cached collision events
-    std::vector<CollisionEvent> events;
-    {
-        std::lock_guard<std::mutex> lock(collision_events_mutex_);
-        events = last_collision_events_;
-    }
-
-    if (events.empty()) return;
+    if (collision_events.empty()) return;
 
     lua_State* L = script_vm_->GetState();
     if (!L) return;
@@ -395,7 +389,7 @@ void PhysicsSystem::UpdateScript() {
         return;
     }
 
-    for (const auto& evt : events) {
+    for (const auto& evt : collision_events) {
         // Push event table for each collision
         lua_newtable(L);
 
