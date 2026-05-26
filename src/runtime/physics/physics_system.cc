@@ -55,7 +55,8 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
 
     // ── Create physics-dedicated ScriptVM with [physics_vm] log prefix ─
     script_vm_ = std::make_unique<PhysicsScriptVM>();
-    script_vm_->SetImportPath(scripts_dir);
+    script_vm_->SetImportPath(
+        std::filesystem::path(scripts_dir).parent_path().string());
 
     // Register subsystem objects in the VM's custom-pointer store so they
     // can be retrieved from any lua_State* via typed accessors.

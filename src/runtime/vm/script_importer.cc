@@ -66,8 +66,8 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
     std::string filepath = FindModule(name);
     if (filepath.empty()) {
         lua_pop(L, 2);  // pop loaded, package
-        return luaL_error(L, "module '%.*s' not found in import paths",
-                          static_cast<int>(name.size()), name.data());
+        return luaL_error(L, "module '%s' not found in import paths",
+                          name_str.c_str());
     }
 
     auto* logger = GetLogger();
@@ -80,8 +80,8 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
         std::string err_msg(lua_tostring(L, -1));
         lua_pop(L, 1);   // pop error message
         lua_pop(L, 2);   // pop loaded, package
-        return luaL_error(L, "error loading module '%.*s': %s",
-                          static_cast<int>(name.size()), name.data(),
+        return luaL_error(L, "error loading module '%s': %s",
+                          name_str.c_str(),
                           err_msg.c_str());
     }
 
@@ -91,8 +91,8 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
         std::string err_msg(lua_tostring(L, -1));
         lua_pop(L, 1);   // pop error message
         lua_pop(L, 2);   // pop loaded, package
-        return luaL_error(L, "error running module '%.*s': %s",
-                          static_cast<int>(name.size()), name.data(),
+        return luaL_error(L, "error running module '%s': %s",
+                          name_str.c_str(),
                           err_msg.c_str());
     }
 
@@ -112,9 +112,8 @@ int ScriptImporter::ImportAll(lua_State* L, std::string_view name) {
     std::string full_dir = FindDir(dir_name);
 
     if (full_dir.empty()) {
-        return luaL_error(L, "import '%.*s': directory '%.*s' not found in import paths",
-                          static_cast<int>(name.size()), name.data(),
-                          static_cast<int>(dir_path.size()), dir_path.data());
+        return luaL_error(L, "import '%s': directory '%s' not found in import paths",
+                          std::string(name).c_str(), dir_path.c_str());
     }
 
     auto* logger = GetLogger();
