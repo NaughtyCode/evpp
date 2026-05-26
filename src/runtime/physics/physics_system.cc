@@ -11,6 +11,7 @@
 
 #include "runtime/physics/physics_log.h"
 #include "runtime/physics/physics_vm.h"
+#include "runtime/script/import_bind.h"
 #include "runtime/vm/custom_ptr_store.h"
 #include "runtime/vm/vm.h"
 
@@ -64,6 +65,9 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
 
     // Register physics API bindings
     physics_bindings::Register(*script_vm_);
+
+    // Register import() — physics scripts use import("runtime.common.class")
+    ExportImport(*script_vm_);
 
     // Load physics scripts
     if (!scripts_dir.empty()) {
