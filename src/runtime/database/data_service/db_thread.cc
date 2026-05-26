@@ -328,8 +328,10 @@ void DBThread::EventLoop() {
 //
 //   CRUD (all other operations):
 //     Executes synchronously via C++ direct calls to mongo-c-driver.
-//     Database/collection handles are obtained from client_ on demand
-//     and destroyed before the response is enqueued (RAII-by-manual-cleanup).
+//     Collection handles are obtained from client_ on demand for operations
+//     that target a collection. kCommand calls client_->CommandSimple()
+//     directly without intermediate handles. All obtained handles are
+//     destroyed before the response is enqueued (RAII-by-manual-cleanup).
 //
 // Input validation (applied before dispatch):
 //   - CRUD operations (non-kCommand, non-kExecuteScript): database and
@@ -385,8 +387,11 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             return;
         }
         try {
+            std::string script_result;
             resp.success = script_vm_.DoString(req.script, "db_request",
-                                               &resp.error_message);
+                                               &resp.error_message,
+                                               &script_result);
+            if (!script_result.empty()) resp.result_data = script_result;
         } catch (const std::exception& e) {
             resp.success = false;
             resp.error_message = e.what();
@@ -401,14 +406,12 @@ void DBThread::ProcessRequest(const DbRequest& req) {
     mongo::MongoCollection* coll = nullptr;
 
     try {
-        // kCommand only needs a database handle; all other CRUD needs a collection.
-        bool need_db   = (req.operation == DbOperation::kCommand);
+        // kCommand uses client_->CommandSimple(db_name, ...) directly,
+        // so no standalone db handle is needed. All other CRUD ops need
+        // a collection handle obtained from the client.
         bool need_coll = (req.operation != DbOperation::kCommand &&
                           req.operation != DbOperation::kExecuteScript);
 
-        if (need_db && !req.database.empty()) {
-            db = client_->GetDatabase(req.database.c_str());
-        }
         if (need_coll && !req.collection.empty()) {
             coll = client_->GetCollection(req.database.c_str(), req.collection.c_str());
         }
@@ -520,8 +523,13 @@ void DBThread::ProcessRequest(const DbRequest& req) {
                 resp.success = coll->InsertMany(doc_ptrs.data(), doc_ptrs.size(),
                                                 nullptr, &reply, &err);
                 if (resp.success) {
+                    int64_t inserted = static_cast<int64_t>(doc_ptrs.size());
+                    mongo::BsonIter iter;
+                    if (iter.InitFind(reply, "n")) {
+                        inserted = iter.AsInt64();
+                    }
                     resp.result_data = "{\"inserted_count\":" +
-                                       std::to_string(doc_ptrs.size()) + "}";
+                                       std::to_string(inserted) + "}";
                 } else {
                     resp.error_code = err.Code();
                     resp.error_message = err.Message();
@@ -666,12 +674,11 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             break;
         }
 
-        // ── kCommand: raw MongoDB command on the database ───────────────
+        // ── kCommand: raw MongoDB command on a specific database ─────────
         //
-        // Executed via client_->CommandSimple which sends the command on
-        // the 'admin' database by default. The target database is specified
-        // in req.database. bson_data is the command document (e.g.
-        // {"ping": 1}, {"buildInfo": 1}).
+        // Executed via client_->CommandSimple(req.database, command, ...)
+        // which sends the command to the database named in the request.
+        // bson_data is the command document (e.g. {"ping": 1}, {"buildInfo": 1}).
         case DbOperation::kCommand: {
             if (req.database.empty() || req.bson_data.empty()) {
                 resp.success = false;

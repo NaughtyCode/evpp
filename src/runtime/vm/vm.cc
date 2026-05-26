@@ -111,7 +111,8 @@ void ScriptVM::DestroyScript() {
 
 bool ScriptVM::DoString(std::string_view script,
                   std::string_view chunk_name,
-                  std::string* error_out) {
+                  std::string* error_out,
+                  std::string* result_out) {
     ENGINE_PROFILE_SCOPE("engine.script", "DoString",
         "chunk", std::string(chunk_name).c_str());
 
@@ -131,7 +132,8 @@ bool ScriptVM::DoString(std::string_view script,
         return false;
     }
 
-    rc = lua_pcall(L_, 0, 0, 0);
+    int nresults = result_out ? 1 : 0;
+    rc = lua_pcall(L_, 0, nresults, 0);
     if (rc != LUA_OK) {
         const char* msg = lua_tostring(L_, -1);
         auto* logger = GetLogger();
@@ -139,6 +141,13 @@ bool ScriptVM::DoString(std::string_view script,
         if (error_out) *error_out = msg;
         lua_pop(L_, 1);
         return false;
+    }
+
+    if (result_out) {
+        if (lua_gettop(L_) > 0 && lua_isstring(L_, -1)) {
+            *result_out = lua_tostring(L_, -1);
+        }
+        lua_settop(L_, 0);
     }
 
     auto* logger = GetLogger();

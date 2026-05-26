@@ -63,9 +63,12 @@ public:
 
     // Execute a Lua string. Returns true on success.
     // On error the message is logged and returned via `error_out`.
+    // If result_out is non-null and the script returns a string,
+    // it is captured via lua_tostring(L, -1) after successful execution.
     bool DoString(std::string_view script,
                   std::string_view chunk_name = "string",
-                  std::string* error_out = nullptr);
+                  std::string* error_out = nullptr,
+                  std::string* result_out = nullptr);
 
     // Execute a Lua file. Returns true on success.
     bool DoFile(const std::string& filename,
