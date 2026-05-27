@@ -220,60 +220,9 @@ struct ConnCtx {
 
 ---
 
-### P0-4：单 Lua VM 架构瓶颈 — 多 VM 推广缺失
-
-#### 现状
-
-`Engine::Init()`（`engine.cc:151`）中仅创建一个业务 VM：
-
-```cpp
-script_vm_ = std::make_unique<ScriptVM>();  // 唯一一个业务 VM
-```
-
-所有业务逻辑在这个 VM 中串行执行。单线程单 VM，无任何并行能力。
-
-#### 但工程中已经有三类 VM 实例
-
-| VM 类型 | 位置 | 线程 | 数量 |
-|---------|------|------|------|
-| `ScriptVM` | `Engine::script_vm_` | 主事件循环线程 | 1 |
-| `PhysicsScriptVM` | `PhysicsSystem` 内 | 物理线程 | 1 |
-| `DBScriptVM` | 每个 `DBThread` 内 | DB 工作线程 | N (默认4) |
-
-`PhysicsScriptVM` 继承 `ScriptVM`，通过 `VMCustomPtrStore` 注册物理子系统对象指针，运行在独立物理线程上。`DBScriptVM` 继承 `ScriptVM`，每个 DBThread 持有一个。**多 VM 架构的技术基础已经存在**——`ScriptVM` 的移动语义（`vm.h:40-41`）、`VMCustomPtrStore` 的对象注册、`moodycamel::ConcurrentQueue` 的跨线程通信——这些零件都齐了。缺失的是**将这一模式推广到业务 VM 层的架构决策。**
-
-#### 根因
-
-当前架构中，业务 VM 的外部依赖通过**全局单例**隐式耦合：
-
-```
-Engine::Instance()            — 30+ 次调用
-ConfigManager::Instance()     — 10+ 次调用
-TimerManager::instance()      — engine.cc, timer_bind.cc
-DatabaseService::Instance()   — engine.cc, db_service_main_bind.cc
-PhysicsSystem::Instance()     — physics_bindings.cc
-MongoSystem::Instance()       — engine.cc, bind_misc.cc
-PhysicsEngineBridge::Instance() — engine.cc
-```
-
-**7 个单例类**，在 engine 代码中有 **80+ 次 `.Instance()` 调用**。如果要让多个业务 VM 独立运行，核心问题不是"创建多个 lua_State"，而是**依赖注入**。
-
-#### 影响
-
-1. **CPU 利用率上限 = 1 核**
-2. **业务隔离性差**（一个 Room 脚本错误影响其他 Room）
-3. **无法热更新部分模块**
-4. **单点阻塞**（任何一个耗时操作拖慢所有业务逻辑）
-
-在 2026 年，服务器 CPU 通常是 64-128 核，单核架构不可接受。
-
-#### 改进方向
-
-推荐 Space/Room-per-VM 模式，复用已有 DBScriptVM 的线程所有权模型作为参考模板。关键技术点：连接分发、VM 间消息队列、定时器隔离、依赖注入。
-
 ---
 
-### P0-5：luaL_error 异常安全问题 — C++ 析构函数被绕过
+### P0-4：luaL_error 异常安全问题 — C++ 析构函数被绕过
 
 #### 现状
 
@@ -302,7 +251,7 @@ int l_net_server_listen(lua_State* L) {
 
 ---
 
-### P0-6：无消息/负载大小限制 — 内存耗尽 DoS 向量
+### P0-5：无消息/负载大小限制 — 内存耗尽 DoS 向量
 
 #### 现状
 
@@ -334,7 +283,7 @@ conn->Send(data, len);  // len 无上限
 
 ---
 
-### P0-7：跨线程 RunInLoop 生命周期竞态条件 — lua_State 悬空指针
+### P0-6：跨线程 RunInLoop 生命周期竞态条件 — lua_State 悬空指针
 
 #### 现状
 
@@ -388,7 +337,7 @@ ctx->server->SetMessageHandler([ctx, main_loop](evpp::EventLoop*, evpp::kcp::Mes
 
 ---
 
-### P0-8：Lua 沙箱完全缺失 — `luaL_openlibs` 加载全部危险标准库
+### P0-7：Lua 沙箱完全缺失 — `luaL_openlibs` 加载全部危险标准库
 
 #### 现状
 
@@ -685,16 +634,16 @@ TCP 客户端没有全局注册表。`ClientCtx` 在 `l_client_connect()` 中通
 | send() 未检查返回值 | P3 | `tcp_conn.cc` 和 bind 文件中的 `conn->Send()` 忽略返回值 |
 | **TCP 客户端连接无显式 Shutdown** | **P1** | `ShutdownNetBindings()` 跳过 TCP 客户端 — 仅靠 Lua GC 的 `__gc` metamethod 清理。详见 2.10 |
 | **HTTP pending refs O(n) 线性移除** | P2 | `net_http_bind.cc:82` — `HandleHttpResponse` 用 `std::find` 在 pending refs vector 中查找。高并发 HTTP 下累积 O(n²) 开销 |
-| HTTP POST body 无大小限制 | P2 | `net_http_bind.cc:148` — `luaL_checklstring` 无长度上限，同 P0-6 模式但 HTTP 路径独立可攻击 |
+| HTTP POST body 无大小限制 | P2 | `net_http_bind.cc:148` — `luaL_checklstring` 无长度上限，同 P0-5 模式但 HTTP 路径独立可攻击 |
 
 ### 3.2 脚本系统
 
 | 缺陷 | 严重度 | 说明 |
 |------|--------|------|
-| **无沙箱** | **P0** | `vm.cc:23` — `luaL_openlibs(L_)` 加载全部标准库（含 `os.execute`、`io.open`、`debug`），详见 P0-8 |
+| **无沙箱** | **P0** | `vm.cc:23` — `luaL_openlibs(L_)` 加载全部标准库（含 `os.execute`、`io.open`、`debug`），详见 P0-7 |
 | 无协程集成 | P1 | Lua 5.5 内置协程但引擎提供零调度支持 |
 | 无错误恢复 | P2 | `UpdateScript` 出错仅日志 + pop（`vm.cc:73-85`），VM 栈可能不一致 |
-| luaL_error 异常不安全 | P1 | longjmp 跳过 C++ 析构函数（详见 P0-5） |
+| luaL_error 异常不安全 | P1 | longjmp 跳过 C++ 析构函数（详见 P0-4） |
 | 全局钩子脆弱 | P2 | `InitScript`/`UpdateScript`/`DestroyScript` 是全局函数 |
 | 无 Lua 性能分析 | P2 | Perfetto trace 仅在 C++ 层 |
 | import 无循环依赖检测 | P2 | `ScriptImporter::ImportSingle` 仅在加载后检查缓存 |
