@@ -13,12 +13,26 @@ namespace script {
 namespace {
 
 // ── String → DbOperation mapping (case-insensitive) ───────────────────────
+//
+// Lowercases the input string and matches against known operation names.
+// Returns false for unrecognized strings (no silent fallback to kNoOp).
 
-DbOperation ParseOperation(const char* s) {
-    if (!s) return DbOperation::kNoOp;
+bool ParseOperationName(const char* s, DbOperation* out) {
+    if (!s || !out) return false;
 
-#define OP_MATCH(name, op)                                \
-    if (std::strcmp(s, name) == 0) return DbOperation::op
+    // case-fold into buf
+    char buf[32];
+    int i = 0;
+    for (; s[i] && i < 31; ++i) {
+        char c = s[i];
+        buf[i] = (c >= 'A' && c <= 'Z') ? static_cast<char>(c + 32) : c;
+    }
+    buf[i] = '\0';
+
+#define OP_MATCH(name, op)                         \
+    if (std::strcmp(buf, name) == 0) {             \
+        *out = DbOperation::op; return true;       \
+    }
 
     OP_MATCH("find",            kFind);
     OP_MATCH("find_one",        kFindOne);
@@ -35,28 +49,7 @@ DbOperation ParseOperation(const char* s) {
     OP_MATCH("noop",            kNoOp);
 
 #undef OP_MATCH
-    return DbOperation::kNoOp;
-}
-
-// Handle both upper/lower-case first letter by checking both variants.
-// Lua scripts may pass "Find", "FIND", "find", etc.
-DbOperation ParseOperationCI(const char* s) {
-    if (!s) return DbOperation::kNoOp;
-
-    // Try exact match first (lowercase from ParseOperation)
-    auto op = ParseOperation(s);
-    if (op != DbOperation::kNoOp) return op;
-
-    // Build a case-folded copy and retry (only first char differs in practice,
-    // but do the full string for correctness)
-    char buf[32];
-    int i = 0;
-    for (; s[i] && i < 31; ++i) {
-        char c = s[i];
-        buf[i] = (c >= 'A' && c <= 'Z') ? static_cast<char>(c + 32) : c;
-    }
-    buf[i] = '\0';
-    return ParseOperation(buf);
+    return false;
 }
 
 // ── Status query helpers ──────────────────────────────────────────────────
@@ -100,7 +93,14 @@ int l_db_send_request(lua_State* L) {
         int op_int = static_cast<int>(lua_tointeger(L, -1));
         req.operation = static_cast<DbOperation>(op_int);
     } else if (lua_isstring(L, -1)) {
-        req.operation = ParseOperationCI(lua_tostring(L, -1));
+        DbOperation op;
+        if (!ParseOperationName(lua_tostring(L, -1), &op)) {
+            lua_pop(L, 1);
+            lua_pushboolean(L, 0);
+            lua_pushstring(L, "db_send_request: unknown operation name");
+            return 2;
+        }
+        req.operation = op;
     } else {
         lua_pop(L, 1);
         lua_pushboolean(L, 0);
