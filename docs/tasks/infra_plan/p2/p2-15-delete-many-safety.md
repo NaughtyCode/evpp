@@ -6,7 +6,7 @@ Add a safety mechanism to prevent accidental full-collection deletion via `kDele
 
 ## Current State
 
-`db_thread.cc:764-779` — `ProcessRequest` explicitly allows empty filters for `kDeleteMany`, with a SAFETY NOTE acknowledging the risk:
+`db_thread.cc:760-779` — `ProcessRequest` explicitly allows empty filters for `kDeleteMany`, with a SAFETY NOTE acknowledging the risk:
 
 ```cpp
 // SAFETY NOTE: An empty filter "{}" matches ALL documents in the

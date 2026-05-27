@@ -2,7 +2,7 @@
 
 ## Objective
 
-Implement the reconnection logic marked TODO in `connector.cc:132`.
+Implement the reconnection logic marked TODO in `connector.cc:149`.
 
 ## Current State
 
