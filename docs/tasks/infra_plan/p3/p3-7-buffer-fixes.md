@@ -6,8 +6,8 @@ Remove the stale TODO comment from `Buffer::Reserve()` (which is already functio
 
 ## Current State
 
-- `buffer.h:121`: `Reserve()` has a stale `// TODO add the implementation logic here` comment but actually calls `grow()` — functionally correct. The TODO comment should be removed; the grow strategy may benefit from a `realloc`-based optimization.
-- `buffer.h:141`: Byte order for `AppendInt16`/`AppendInt32`/`PrependInt16`/`PrependInt32` already uses `htons`/`htonl`/`ntohs`/`ntohl` correctly. Only `AppendInt64`/`PrependInt64` use a custom `evppbswap_64` macro — this should be replaced with standard `htonll`/`ntohll`.
+- `buffer.h:122`: `Reserve()` has a stale `// TODO add the implementation logic here` comment but actually calls `grow()` — functionally correct. The TODO comment should be removed; the grow strategy may benefit from a `realloc`-based optimization.
+- `buffer.h:142`: Byte order for `AppendInt16`/`AppendInt32`/`PrependInt16`/`PrependInt32` already uses `htons`/`htonl`/`ntohs`/`ntohl` correctly. Only `AppendInt64`/`PrependInt64` use a custom `evppbswap_64` macro (line 143) — this should be replaced with standard `htonll`/`ntohll`.
 
 ## Implementation Steps
 

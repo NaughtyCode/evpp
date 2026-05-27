@@ -66,7 +66,7 @@ Plans are organized by priority level matching the deficiency analysis:
 | P2-19 | [Eliminate 4 abort() Calls — Graceful Error Handling](p2/p2-19-abort-elimination.md) | Reliability | ~80 LOC |
 | P2-20 | [Connection-Level Encryption (Non-HTTP Paths)](p2/p2-20-connection-encryption.md) | Security | ~300 LOC |
 | P2-21 | [Connection Count Limit — Prevent FD Exhaustion](p2/p2-21-connection-limit.md) | Network | ~100 LOC |
-| P2-22 | [DNS Resolver shared_ptr Leak Fix](p2/p2-22-dns-leak-fix.md) | Network | ~30 LOC |
+| P2-22 | [DNS Resolver shared_ptr RAII Improvement](p2/p2-22-dns-leak-fix.md) | Network | ~30 LOC |
 | P2-23 | [DoString Script Source Restriction + Execution Limits](p2/p2-23-dostring-limits.md) | Security | ~100 LOC |
 
 ## P3 — Continuous Improvement (13 plans)

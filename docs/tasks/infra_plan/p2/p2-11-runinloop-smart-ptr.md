@@ -19,7 +19,7 @@ loop->RunInLoop([del_ctx] { delete del_ctx; });
 /* Problem: during Shutdown, loop might stop before lambda executes */
 ```
 
-This pattern appears ~15 times across 4 binding files.
+This explicit `delete del_ctx` pattern appears 6 times across 2 binding files (TCP server + client). The broader `RunInLoop`-with-raw-pointer-cleanup pattern appears ~10 times across 4 files when including KCP/UDP deferred unref+delete.
 
 ## Implementation Steps
 

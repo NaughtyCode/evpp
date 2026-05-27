@@ -10,14 +10,14 @@ Four different error dispatch patterns coexist:
 
 | Subsystem | Pattern | Behavior on error |
 |-----------|---------|-------------------|
-| HTTP | pcall-based safe callback | Error logged, execution continues |
+| HTTP | call_lua_http_handler wrapper | Error logged via lua_pcall, stack popped |
 | TCP | CallInstMethodStr wrapper | Error logged via lua_pcall, stack popped |
 | KCP | Direct lua_pcall | Error logged, stack popped |
-| Timer | CallLuaFunction single log | Error logged once per callback |
+| Timer | Direct lua_pcall (timer_bind.cc:67) | Error logged, stack popped |
 
 No unified policy exists for:
-- Error logging format (some include callstack, some don't)
-- Error propagation (some notify caller, some silently swallow)
+- Error logging format (none include Lua traceback — all just log the error string)
+- Error propagation (all silently swallow — no caller notification)
 - Stack cleanup (inconsistent lua_pop behavior after errors)
 
 ## Implementation Steps
@@ -96,10 +96,10 @@ LuaCallResult SafeCallLua(lua_State* L, LuaCallOptions opts) {
 ### Step 3: Migrate All Call Sites
 
 Replace all four patterns with `SafeCallLua` / `SafeCallLuaMethod`:
-- HTTP binding: replace manual pcall
+- HTTP binding: replace call_lua_http_handler
 - TCP binding: replace CallInstMethodStr
 - KCP binding: replace direct lua_pcall
-- Timer binding: replace CallLuaFunction
+- Timer binding: replace direct lua_pcall
 
 ### Step 4: Add Error Rate Limiting
 
