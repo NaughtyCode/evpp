@@ -2,8 +2,10 @@
 
 #include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
+#include "runtime/script/aoi_bind.h"
 #include "runtime/script/import_bind.h"
 #include "runtime/script/log_bind.h"
+#include "runtime/script/orm_bind.h"
 #include "runtime/script/entity_bind.h"
 #include "runtime/script/msgpack_bind.h"
 #include "runtime/script/net_bind.h"
@@ -45,6 +47,14 @@ void ExportAll(ScriptVM& vm) {
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("space");
 		ExportSpace(vm);
+	}
+	{
+		ENGINE_PROFILE_SCRIPT_EXPORT("aoi");
+		ExportAOI(vm);
+	}
+	{
+		ENGINE_PROFILE_SCRIPT_EXPORT("orm");
+		ExportOrm(vm);
 	}
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("import");

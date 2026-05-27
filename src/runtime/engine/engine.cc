@@ -1,4 +1,4 @@
-// NOMINMAX must be defined before any windows.h inclusion,
+﻿// NOMINMAX must be defined before any windows.h inclusion,
 // which can come via engine.h -> invoke_timer.h -> ...
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -71,7 +71,7 @@ Engine::~Engine() {
 ScriptVM& Engine::GetScriptVM() {
 	if (!script_vm_) {
 		std::fprintf(stderr, "FATAL: GetScriptVM() called before Engine::Init()\n");
-		abort();
+		std::exit(EXIT_FAILURE);
 	}
 	return *script_vm_;
 }
@@ -90,7 +90,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	auto* logger = GetLogger();
 	std::fprintf(stderr, "[engine] logger created\n");
 
-	// ── Profiler initialization ────────────────────────────────────────
+	// 鈹€鈹€ Profiler initialization 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	{
 		ProfilerConfig prof_cfg;
 		prof_cfg.buffer_size_kb = 32768;
@@ -132,14 +132,14 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		std::fprintf(stderr, "[engine] EventLoop created\n");
 	}
 
-	// ── MongoDB driver initialization ──────────────────────────────────
+	// 鈹€鈹€ MongoDB driver initialization 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 #if defined(ENGINE_MONGODB_ENABLED)
 	{
 		bool mongo_ok = mongo::MongoSystem::Instance().Initialize();
 		ENGINE_LOG_INFO(logger, "mongo system initialized, ok=[{}]", mongo_ok);
 	}
 
-	// ── Database service initialization ───────────────────────────────
+	// 鈹€鈹€ Database service initialization 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	{
 		auto server_cfg = ConfigManager::Instance().GetServerConfig();
 		DbServiceConfig db_svc_config;
@@ -182,7 +182,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	script_vm_ = std::make_unique<ScriptVM>(sandbox_level);
 	ENGINE_LOG_INFO(logger, "lua vm initialized, version=[{}], sandbox=[{}]", ScriptVM::LuaVersion(), runtime_cfg.sandbox_level);
 
-	// ── Physics system initialization ──────────────────────────────────
+	// 鈹€鈹€ Physics system initialization 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	{
 		std::fprintf(stderr, "[engine] initializing physics...\n");
 		auto phys_cfg = runtime_cfg.resource_dir + "/physics/configs";
@@ -251,7 +251,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 }
 
 //============================================================================
-// Start — standalone mode: arm frame timer and signal watchers
+// Start 鈥?standalone mode: arm frame timer and signal watchers
 //============================================================================
 
 void Engine::Start() {
@@ -261,12 +261,31 @@ void Engine::Start() {
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "engine starting, frame_interval=[{}ms]", frame_interval_.count());
 
-	// ── Start physics simulation ──────────────────────────────────────
+	// 鈹€鈹€ Start physics simulation 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	// Must be called after Initialize() and before the first Tick().
 	// If Initialize() failed, Start() is a safe no-op.
 	PhysicsEngineBridge::Instance().Start();
 
-#ifndef _WIN32
+#ifdef _WIN32
+	// Windows console control handler 鈥?graceful shutdown on Ctrl+C,
+	// console close, system shutdown, or user logoff.
+	{
+		static BOOL WINAPI ConsoleCtrlHandler(DWORD ctrl_type) {
+			switch (ctrl_type) {
+			case CTRL_C_EVENT:
+			case CTRL_CLOSE_EVENT:
+			case CTRL_SHUTDOWN_EVENT:
+			case CTRL_LOGOFF_EVENT:
+				Engine::Instance().Shutdown();
+				return TRUE;
+			default:
+				return FALSE;
+			}
+		}
+		SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
+		ENGINE_LOG_INFO(logger, "Windows console control handler installed");
+	}
+#else
 	sigint_watcher_ = std::make_unique<evpp::SignalEventWatcher>(SIGINT, loop_, [this]() {
 		auto* logger = GetLogger();
 		ENGINE_LOG_INFO(logger, "SIGINT received, shutting down...");
@@ -300,7 +319,7 @@ void Engine::Start() {
 	}
 
 #if defined(ENGINE_MONGODB_ENABLED) && !defined(NDEBUG)
-	// ── DB Service smoke test: SendRequest → PollResponse ──────────
+	// 鈹€鈹€ DB Service smoke test: SendRequest 鈫?PollResponse 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	// Validates the end-to-end SPSC pipeline.  Uses kExecuteScript to
 	// avoid MongoDB network I/O (kCommand on a background thread breaks
 	// libevent frame timers on Windows when no server is running).
@@ -335,7 +354,7 @@ void Engine::Start() {
 }
 
 //============================================================================
-// Run — standalone convenience: Start + dispatch + Cleanup
+// Run 鈥?standalone convenience: Start + dispatch + Cleanup
 //============================================================================
 
 void Engine::Run() {
@@ -353,7 +372,7 @@ void Engine::Run() {
 }
 
 //============================================================================
-// Tick — one frame of engine work
+// Tick 鈥?one frame of engine work
 //============================================================================
 
 void Engine::Tick() {
@@ -370,7 +389,7 @@ void Engine::Tick() {
 }
 
 //============================================================================
-// Shutdown — request graceful stop
+// Shutdown 鈥?request graceful stop
 //============================================================================
 
 void Engine::Shutdown() {
@@ -386,7 +405,7 @@ void Engine::Shutdown() {
 }
 
 //============================================================================
-// Cleanup — release all resources
+// Cleanup 鈥?release all resources
 //============================================================================
 
 void Engine::Cleanup() {
@@ -394,7 +413,7 @@ void Engine::Cleanup() {
 
 	if (cleaned_up_.exchange(true)) return;
 
-	// Shutdown physics (stops thread + destroys physics VM) — before engine VM
+	// Shutdown physics (stops thread + destroys physics VM) 鈥?before engine VM
 	PhysicsEngineBridge::Instance().Shutdown();
 
 	// Shutdown database service (before mongo driver cleanup)
@@ -441,7 +460,7 @@ void Engine::Cleanup() {
 	sigterm_watcher_.reset();
 #endif
 
-	// ── Profiler shutdown ──────────────────────────────────────────────
+	// 鈹€鈹€ Profiler shutdown 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 	// Must happen after all subsystems stop (physics, timers, VM)
 	// and before the logger is destroyed, so profiler can log its status.
 	{
@@ -458,7 +477,7 @@ void Engine::Cleanup() {
 }
 
 //============================================================================
-// FrameLoop — per-frame work (timer update + Lua update)
+// FrameLoop 鈥?per-frame work (timer update + Lua update)
 //============================================================================
 
 void Engine::FrameLoop() {

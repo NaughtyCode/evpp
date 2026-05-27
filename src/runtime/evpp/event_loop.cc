@@ -35,7 +35,7 @@ EventLoop::EventLoop()
 #endif
 	if (!evbase_) {
 		std::fprintf(stderr, "[EventLoop] FATAL: failed to create event_base\n");
-		std::abort();
+		std::exit(EXIT_FAILURE);
 	}
 	Init();
 }
@@ -191,7 +191,7 @@ void EventLoop::AfterFork() {
 
 	if (rc != 0) {
 		ENGINE_LOG_CRITICAL(engine::GetLogger(), "event_reinit failed!");
-		abort();
+		std::exit(EXIT_FAILURE);
 	}
 
 	// We create EventLoopThread and initialize it in father process,

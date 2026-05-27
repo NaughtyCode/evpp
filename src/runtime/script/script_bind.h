@@ -31,5 +31,8 @@ ENGINE_API void ShutdownEntityBindings();
 
 ENGINE_API void ExportSpace(ScriptVM& vm);
 
+ENGINE_API void ExportAOI(ScriptVM& vm);
+ENGINE_API void ExportOrm(ScriptVM& vm);
+
 }  // namespace script
 }  // namespace engine

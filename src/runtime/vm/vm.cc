@@ -17,7 +17,7 @@ ScriptVM::ScriptVM(LuaSandboxLevel level) {
 	L_ = luaL_newstate();
 	if (!L_) {
 		ENGINE_LOG_CRITICAL(logger, "ScriptVM: luaL_newstate() returned nullptr");
-		abort();
+		std::exit(EXIT_FAILURE);
 	}
 
 	luaL_openlibs_sandboxed(L_, level);
@@ -110,6 +110,19 @@ void ScriptVM::DestroyScript() {
 // Script execution
 //=================================================================
 
+// Maximum script size for DoString to prevent memory exhaustion (1 MB).
+static constexpr size_t kMaxDoStringSize = 1024 * 1024;
+
+// Source prefixes that are allowed for DoString (non-file sources).
+// Blocks bare user input from being executed directly.
+static bool IsAllowedDoStringSource(std::string_view chunk_name) {
+	// Allow internal loaders and explicit file/string markers
+	return chunk_name.starts_with("=") ||    // explicit =string
+		   chunk_name.starts_with("@") ||    // @file
+		   chunk_name.starts_with("load") || // load()
+		   chunk_name == "string";
+}
+
 bool ScriptVM::DoString(std::string_view script,
 						std::string_view chunk_name,
 						std::string* error_out,
@@ -118,6 +131,14 @@ bool ScriptVM::DoString(std::string_view script,
 
 	if (!L_) {
 		if (error_out) *error_out = "ScriptVM not initialized";
+		return false;
+	}
+
+	if (script.size() > kMaxDoStringSize) {
+		auto* logger = GetLogger();
+		ENGINE_LOG_ERROR(logger, "ScriptVM::DoString rejected: script size [{}] exceeds limit [{}]",
+						 script.size(), kMaxDoStringSize);
+		if (error_out) *error_out = "script exceeds maximum size";
 		return false;
 	}
 

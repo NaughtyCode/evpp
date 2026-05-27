@@ -36,10 +36,20 @@ namespace {
 // The cursor must have been obtained from a FindWithOpts / Aggregate call.
 // Caller is responsible for cursor->Destroy() after this returns.
 
-std::string SerializeCursor(mongo::MongoCursor* cursor, int32_t skip) {
+static constexpr uint32_t kMaxCursorDocuments = 1000;
+
+std::string SerializeCursor(mongo::MongoCursor* cursor, int32_t skip,
+							 uint32_t max_documents = kMaxCursorDocuments) {
 	std::string result = "[";
 	bool first = true;
+	uint32_t count = 0;
 	while (true) {
+		if (count >= max_documents) {
+			ENGINE_LOG_WARN(engine::GetLogger(),
+							"SerializeCursor: reached limit of {} documents, results truncated",
+							max_documents);
+			break;
+		}
 		mongo::BsonDocument doc;
 		if (!cursor->Next(&doc)) break;
 		if (skip > 0) {
@@ -49,6 +59,7 @@ std::string SerializeCursor(mongo::MongoCursor* cursor, int32_t skip) {
 		if (!first) result += ",";
 		result += doc.ToJson();
 		first = false;
+		++count;
 	}
 	result += "]";
 	return result;
@@ -737,9 +748,17 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 		}
 
 		// ── kDeleteOne: filter in bson_data, affected_count from reply.n ─
+		// Requires explicit allow_empty_filter=true for empty filter.
 		case DbOperation::kDeleteOne: {
 			mongo::BsonDocument selector;
 			if (!ParseJsonDoc(req.bson_data, "bson_data", &selector, &resp)) break;
+			if (selector.IsEmpty() && !req.allow_empty_filter) {
+				resp.success = false;
+				resp.error_message =
+					"Empty filter rejected: set allow_empty_filter=true to confirm";
+				EnqueueResponse(std::move(resp));
+				return false;
+			}
 			mongo::BsonDocument reply;
 			mongo::MongoError err;
 			resp.success = coll->DeleteOne(selector, nullptr, &reply, &err);
@@ -756,16 +775,18 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 		}
 
 		// ── kDeleteMany: same pattern as kDeleteOne ─────────────────────
-		//
-		// SAFETY NOTE: An empty filter "{}" matches ALL documents in the
-		// collection. The input validation above ensures bson_data is
-		// non-empty, but a caller could still pass "{}" as a valid JSON
-		// filter. This is accepted as intentional — the caller is
-		// responsible for providing a restrictive filter unless a
-		// full-collection delete is genuinely intended.
+		// Requires explicit allow_empty_filter=true to delete all documents.
 		case DbOperation::kDeleteMany: {
 			mongo::BsonDocument selector;
 			if (!ParseJsonDoc(req.bson_data, "bson_data", &selector, &resp)) break;
+			if (selector.IsEmpty() && !req.allow_empty_filter) {
+				resp.success = false;
+				resp.error_message =
+					"Empty filter rejected: set allow_empty_filter=true to confirm "
+					"intentional full-collection delete";
+				EnqueueResponse(std::move(resp));
+				return false;
+			}
 			mongo::BsonDocument reply;
 			mongo::MongoError err;
 			resp.success = coll->DeleteMany(selector, nullptr, &reply, &err);

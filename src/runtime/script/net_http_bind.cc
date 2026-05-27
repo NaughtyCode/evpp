@@ -57,7 +57,7 @@ std::atomic<bool> g_net_alive{true};
 // Track HTTP callback refs so they can be released during shutdown even
 // when the request hasn't completed yet. Without this, refs held by
 // in-flight HTTP requests would leak in the Lua registry.
-std::vector<int> g_http_pending_refs;
+std::unordered_set<int> g_http_pending_refs;
 std::mutex g_http_mutex;
 
 // Common HTTP response handling: dispatches to Lua callback, then cleans up
