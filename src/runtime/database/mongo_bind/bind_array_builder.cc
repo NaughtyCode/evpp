@@ -200,6 +200,57 @@ int l_array_builder_append_decimal128(lua_State* L) {
     return 1;
 }
 
+int l_array_builder_append_code_with_scope(lua_State* L) {
+    auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
+    const char* javascript = luaL_checkstring(L, 2);
+    auto* scope = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
+    lua_pushboolean(L, builder && scope && builder->AppendCodeWithScope(javascript, *scope));
+    return 1;
+}
+
+int l_array_builder_append_iter(lua_State* L) {
+    auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 2, "bson.iter");
+    lua_pushboolean(L, builder && iter && builder->AppendIter(*iter));
+    return 1;
+}
+
+int l_array_builder_append_db_pointer(lua_State* L) {
+    auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
+    const char* collection = luaL_checkstring(L, 2);
+    const char* oid_str = luaL_checkstring(L, 3);
+    mongo::MongoOid oid;
+    if (!oid.IsValid(oid_str, strlen(oid_str))) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
+    oid.InitFromString(oid_str);
+    lua_pushboolean(L, builder && builder->AppendDBPointer(collection, oid));
+    return 1;
+}
+
+int l_array_builder_append_time_t(lua_State* L) {
+    auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
+    time_t value = static_cast<time_t>(luaL_checkinteger(L, 2));
+    lua_pushboolean(L, builder && builder->AppendTimeT(value));
+    return 1;
+}
+
+int l_array_builder_append_document_begin(lua_State* L) {
+    auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
+    auto* subdoc = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    lua_pushboolean(L, builder && subdoc && builder->AppendDocumentBegin(subdoc));
+    return 1;
+}
+
+int l_array_builder_append_document_end(lua_State* L) {
+    auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
+    auto* subdoc = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    lua_pushboolean(L, builder && subdoc &&
+                    mongo::BsonArrayBuilder::AppendDocumentEnd(builder, subdoc));
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"array_builder_new", l_array_builder_new},
     {"array_builder_destroy", l_array_builder_destroy},
@@ -224,6 +275,12 @@ const luaL_Reg kLib[] = {
     {"array_builder_append_timestamp", l_array_builder_append_timestamp},
     {"array_builder_append_now_utc", l_array_builder_append_now_utc},
     {"array_builder_append_decimal128", l_array_builder_append_decimal128},
+    {"array_builder_append_code_with_scope", l_array_builder_append_code_with_scope},
+    {"array_builder_append_iter", l_array_builder_append_iter},
+    {"array_builder_append_db_pointer", l_array_builder_append_db_pointer},
+    {"array_builder_append_time_t", l_array_builder_append_time_t},
+    {"array_builder_append_document_begin", l_array_builder_append_document_begin},
+    {"array_builder_append_document_end", l_array_builder_append_document_end},
     {nullptr, nullptr},
 };
 

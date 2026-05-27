@@ -433,6 +433,39 @@ int l_bson_iter_as_decimal128(lua_State* L) {
     return 1;
 }
 
+int l_bson_iter_as_code_with_scope(lua_State* L) {
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
+    if (!iter) { lua_pushnil(L); return 1; }
+    uint32_t code_len = 0;
+    const char* code_cstr = nullptr;
+    auto* scope = new (std::nothrow) mongo::BsonDocument();
+    if (!scope) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    iter->AsCodeWithScope(&code_len, &code_cstr, scope);
+    if (!code_cstr) {
+        delete scope;
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushlstring(L, code_cstr, code_len);
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+    *ud = scope;
+    return 2;
+}
+
+int l_bson_iter_as_time_t(lua_State* L) {
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
+    lua_pushinteger(L, iter ? static_cast<lua_Integer>(iter->AsTimeT()) : 0);
+    return 1;
+}
+
+int l_bson_iter_binary_equal(lua_State* L) {
+    auto* a = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
+    auto* b = GetUserdata<mongo::BsonIter>(L, 2, kMetaName);
+    if (!a || !b) { lua_pushboolean(L, false); return 1; }
+    lua_pushboolean(L, mongo::BsonIter::BinaryEqual(*a, *b));
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"iter_new", l_bson_iter_new},
     {"iter_next", l_bson_iter_next},
@@ -452,9 +485,11 @@ const luaL_Reg kLib[] = {
     {"iter_as_document", l_bson_iter_as_document},
     {"iter_as_array", l_bson_iter_as_array},
     {"iter_as_timestamp", l_bson_iter_as_timestamp},
+    {"iter_as_time_t", l_bson_iter_as_time_t},
     {"iter_as_int64_coerce", l_bson_iter_as_int64_coerce},
     {"iter_as_double_coerce", l_bson_iter_as_double_coerce},
     {"iter_as_code", l_bson_iter_as_code},
+    {"iter_as_code_with_scope", l_bson_iter_as_code_with_scope},
     {"iter_as_regex", l_bson_iter_as_regex},
     {"iter_as_symbol", l_bson_iter_as_symbol},
     {"iter_as_decimal128", l_bson_iter_as_decimal128},
@@ -479,6 +514,7 @@ const luaL_Reg kLib[] = {
     {"iter_overwrite_oid", l_bson_iter_overwrite_oid},
     {"iter_overwrite_decimal128", l_bson_iter_overwrite_decimal128},
     {"iter_overwrite_binary", l_bson_iter_overwrite_binary},
+    {"iter_binary_equal", l_bson_iter_binary_equal},
     {nullptr, nullptr},
 };
 
