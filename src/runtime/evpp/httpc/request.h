@@ -5,6 +5,7 @@
 #include "runtime/evpp/event_loop.h"
 #include "runtime/evpp/httpc/conn.h"
 #include "runtime/evpp/inner_pre.h"
+#include "runtime/evpp/libevent.h"
 
 struct evhttp_connection;
 namespace evpp {

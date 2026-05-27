@@ -1,9 +1,10 @@
 #pragma once
 
-#include "runtime/evpp/inner_pre.h"
-#include "runtime/evpp/slice.h"
+#include <map>
 
-struct evhttp_request;
+#include "runtime/evpp/inner_pre.h"
+#include "runtime/evpp/libevent.h"
+#include "runtime/evpp/slice.h"
 namespace evpp {
 namespace httpc {
 class Request;

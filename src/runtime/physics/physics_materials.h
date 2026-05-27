@@ -6,8 +6,14 @@
 #include <unordered_map>
 #include <vector>
 
-#include <Jolt/Core/Color.h>
+// Windows SDK defines GetIntensity as a macro (from GDI+/display headers),
+// which conflicts with Jolt::Color::GetIntensity().
+#ifdef GetIntensity
+#undef GetIntensity
+#endif
+
 #include <Jolt/Jolt.h>
+#include <Jolt/Core/Color.h>
 #include <Jolt/Physics/Collision/PhysicsMaterial.h>
 
 #include "runtime/core/engine_api.h"

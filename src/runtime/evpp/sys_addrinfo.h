@@ -18,6 +18,7 @@
 #include "runtime/evpp/platform_config.h"
 
 #ifdef H_OS_WINDOWS
+#include <WinSock2.h>
 #include <ws2def.h>
 #include <ws2tcpip.h>
 #else
