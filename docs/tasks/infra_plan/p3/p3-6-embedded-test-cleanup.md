@@ -22,7 +22,7 @@ This is test logic in a production code path (`Engine::Start()`). It runs every 
 
 ### Step 1: Move Test to Test File
 
-**File**: `src/tests/integration/db_smoke_test.cc`
+**File**: `src/tests/integration/db_smoke_test.cc` (created by P0-3 test infrastructure)
 
 ```cpp
 TEST(DatabaseSmokeTest, BasicInsertAndFind) {
@@ -67,4 +67,4 @@ public:
 4. `#if !defined(NDEBUG)` test guard removed from engine.cc
 5. CI runs the new test
 
-## Dependencies: None | Estimated Effort: ~50 lines
+## Dependencies: P0-3 (Test Infrastructure — creates the test directory) | Estimated Effort: ~50 lines

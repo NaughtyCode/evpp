@@ -6,9 +6,9 @@ Establish a comprehensive test infrastructure covering ScriptVM, TimerManager, e
 
 ## Current State
 
-- **evpp layer**: ~15 test files in `src/tests/unit/` (buffer, event_loop, tcp, http, udp, timer, sockets, dns)
+- **evpp layer**: 0 C++ test files — `src/tests/` was removed (commit 1842bd07). The CMake test targets no longer exist.
 - **engine layer**: **0 test files** — no tests for engine.cc, vm.cc, config.cc, timer_manager, script bindings, database service, or physics
-- **Lua tests**: Only 2 files — `test_net_client_server.lua` (458 lines), `msgpack_test.lua`
+- **Lua tests**: Only 2 files in `resources/script/tests/` — `test_net_client_server.lua` and `msgpack_test.lua`
 - **No mock infrastructure**: No mock EventLoop, TimerManager, or database
 - **Development workflow**: 76+ `fprintf(stderr, ...)` calls suggest "add print → run manually → check output"
 

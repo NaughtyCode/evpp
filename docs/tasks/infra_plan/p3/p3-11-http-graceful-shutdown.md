@@ -2,7 +2,7 @@
 
 ## Objective
 
-Implement graceful shutdown for the HTTP server, addressing the TODO markers at `http_server.cc:294,307`.
+Implement graceful shutdown for the HTTP server, addressing the TODO markers at `src/runtime/evpp/http/http_server.cc:304,323`.
 
 ## Current State
 
@@ -12,7 +12,7 @@ Implement graceful shutdown for the HTTP server, addressing the TODO markers at 
 
 ### Step 1: Implement Drain Mode
 
-**File**: `src/runtime/evpp/http_server.h`
+**File**: `src/runtime/evpp/http/http_server.h`
 
 ```cpp
 class HTTPServer {
@@ -34,7 +34,7 @@ private:
 
 ### Step 2: Implement Draining Logic
 
-**File**: `src/runtime/evpp/http_server.cc`
+**File**: `src/runtime/evpp/http/http_server.cc`
 
 ```cpp
 void HTTPServer::GracefulShutdown(int timeout_ms) {
