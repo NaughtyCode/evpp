@@ -199,11 +199,11 @@
   <text x="635" y="664" text-anchor="middle" fill="#495057" font-size="9">Lua net 模块入口</text>
 
   <rect x="710" y="632" width="140" height="40" rx="4" fill="#d3f9d8" stroke="#40c057" stroke-width="0.5"/>
-  <text x="780" y="650" text-anchor="middle" fill="#495057" font-size="10" font-weight="bold">net_client_bind</text>
+  <text x="780" y="650" text-anchor="middle" fill="#495057" font-size="10" font-weight="bold">net_tcp_client_bind</text>
   <text x="780" y="664" text-anchor="middle" fill="#495057" font-size="9">TCP client (connect/send)</text>
 
   <rect x="860" y="632" width="140" height="40" rx="4" fill="#d3f9d8" stroke="#40c057" stroke-width="0.5"/>
-  <text x="930" y="650" text-anchor="middle" fill="#495057" font-size="10" font-weight="bold">net_server_bind</text>
+  <text x="930" y="650" text-anchor="middle" fill="#495057" font-size="10" font-weight="bold">net_tcp_server_bind</text>
   <text x="930" y="664" text-anchor="middle" fill="#495057" font-size="9">TCP server (listen/stop)</text>
 
   <rect x="1010" y="632" width="120" height="40" rx="4" fill="#d3f9d8" stroke="#40c057" stroke-width="0.5"/>

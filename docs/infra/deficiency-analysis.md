@@ -434,7 +434,7 @@ auto phys_data = runtime_cfg.resource_dir + "/physics/data/scene.json";
 
 ### 11.4 大文件的职责混杂
 
-**现状**：`net_server_bind.cc`（~22KB）同时包含：
+**现状**：`net_tcp_server_bind.cc`（~22KB）同时包含：
 - Server 创建/销毁/启停
 - Connection 的 send/close/remote_addr
 - Callback 分发（on_connect, on_message, on_close, on_error）

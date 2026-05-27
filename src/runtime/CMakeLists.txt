@@ -120,8 +120,8 @@ set(SCRIPT_SOURCES
     ${RUNTIME_DIR}/script/log_bind.cc ${RUNTIME_DIR}/script/log_bind.h
     ${RUNTIME_DIR}/script/timer_bind.cc ${RUNTIME_DIR}/script/timer_bind.h
     ${RUNTIME_DIR}/script/net_bind.cc ${RUNTIME_DIR}/script/net_bind.h
-    ${RUNTIME_DIR}/script/net_client_bind.cc ${RUNTIME_DIR}/script/net_client_bind.h
-    ${RUNTIME_DIR}/script/net_server_bind.cc ${RUNTIME_DIR}/script/net_server_bind.h
+    ${RUNTIME_DIR}/script/net_tcp_client_bind.cc ${RUNTIME_DIR}/script/net_tcp_client_bind.h
+    ${RUNTIME_DIR}/script/net_tcp_server_bind.cc ${RUNTIME_DIR}/script/net_tcp_server_bind.h
     ${RUNTIME_DIR}/script/net_http_bind.cc ${RUNTIME_DIR}/script/net_http_bind.h
     ${RUNTIME_DIR}/script/net_udp_client_bind.cc ${RUNTIME_DIR}/script/net_udp_client_bind.h
     ${RUNTIME_DIR}/script/net_udp_server_bind.cc ${RUNTIME_DIR}/script/net_udp_server_bind.h

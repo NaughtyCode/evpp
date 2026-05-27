@@ -1,6 +1,6 @@
 #include "runtime/script/net_bind.h"
-#include "runtime/script/net_client_bind.h"
-#include "runtime/script/net_server_bind.h"
+#include "runtime/script/net_tcp_client_bind.h"
+#include "runtime/script/net_tcp_server_bind.h"
 #include "runtime/script/net_http_bind.h"
 #include "runtime/script/net_udp_client_bind.h"
 #include "runtime/script/net_udp_server_bind.h"
