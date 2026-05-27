@@ -163,8 +163,22 @@ void TCPServer::HandleNewConn(evpp_socket_t sockfd,
 	}
 
 	assert(IsRunning());
+
+	if (connection_count_ >= max_connections_) {
+		ENGINE_LOG_WARN(engine::GetLogger(),
+						"TCPServer '{}': connection limit reached ({}/{}). "
+						"Rejecting new connection from {}.",
+						name_,
+						connection_count_.load(),
+						max_connections_,
+						remote_addr);
+		EVUTIL_CLOSESOCKET(sockfd);
+		return;
+	}
+
 	EventLoop* io_loop = GetNextLoop(raddr);
 	++next_conn_id_;
+	connection_count_++;
 #ifdef H_DEBUG_MODE
 	std::string n = name_ + "-" + remote_addr + "#" + std::to_string(next_conn_id_);
 #else
@@ -204,6 +218,7 @@ void TCPServer::RemoveConnection(const TCPConnPtr& conn) {
 						 connections_.size());
 		assert(this->loop_->IsInLoopThread());
 		this->connections_.erase(conn->id());
+		connection_count_--;
 		if (IsStopping() && this->connections_.empty()) {
 			// At last, we stop all the working threads
 			ENGINE_LOG_TRACE(engine::GetLogger(), "this={} stop thread pool", (void*) this);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <map>
 
 #include "runtime/evpp/event_loop.h"
@@ -98,6 +99,16 @@ class EVPP_EXPORT TCPServer : public ThreadDispatchPolicy, public ServerStatus {
 		return listen_addr_;
 	}
 
+	void SetMaxConnections(uint32_t max) {
+		max_connections_ = max;
+	}
+	uint32_t max_connections() const {
+		return max_connections_;
+	}
+	uint32_t connection_count() const {
+		return connection_count_.load();
+	}
+
 	private:
 	void StopThreadPool();
 	void StopInLoop(DoneCallback on_stopped_cb);
@@ -120,6 +131,8 @@ class EVPP_EXPORT TCPServer : public ThreadDispatchPolicy, public ServerStatus {
 
 	// These two member variables will always be modified in the listening loop thread
 	uint64_t next_conn_id_ = 0;
+	uint32_t max_connections_ = 10000;
+	std::atomic<uint32_t> connection_count_{0};
 	typedef std::map<uint64_t /*the id of the connection*/, TCPConnPtr> ConnectionMap;
 	ConnectionMap connections_;
 };
