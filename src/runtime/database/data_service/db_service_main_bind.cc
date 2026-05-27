@@ -1,6 +1,6 @@
 #if defined(ENGINE_MONGODB_ENABLED)
 
-#include "runtime/database/data_service/db_service_bind.h"
+#include "runtime/database/data_service/db_service_main_bind.h"
 
 #include <cstring>
 

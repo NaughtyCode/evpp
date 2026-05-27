@@ -9,7 +9,7 @@
 #include "runtime/script/import_bind.h"
 #if defined(ENGINE_MONGODB_ENABLED)
 #include "runtime/database/mongo_bind/mongo_bind.h"
-#include "runtime/database/data_service/db_service_bind.h"
+#include "runtime/database/data_service/db_service_main_bind.h"
 #endif
 #include "runtime/vm/vm.h"
 

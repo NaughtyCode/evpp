@@ -263,7 +263,7 @@ set(DB_SERVICE_SOURCES
     ${RUNTIME_DIR}/database/data_service/db_request.h
     ${RUNTIME_DIR}/database/data_service/db_service_config.h
     ${RUNTIME_DIR}/database/data_service/module_access.h
-    ${RUNTIME_DIR}/database/data_service/db_service_bind.cc ${RUNTIME_DIR}/database/data_service/db_service_bind.h
+    ${RUNTIME_DIR}/database/data_service/db_service_main_bind.cc ${RUNTIME_DIR}/database/data_service/db_service_main_bind.h
 )
 source_group("database\\data_service" FILES ${DB_SERVICE_SOURCES})
 
