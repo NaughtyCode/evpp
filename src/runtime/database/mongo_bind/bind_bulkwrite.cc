@@ -151,6 +151,60 @@ int l_bulkwrite_execute(lua_State* L) {
     return 6;
 }
 
+int l_bulk_write_new_from_client(lua_State* L) {
+    void* raw_client = lua_touserdata(L, 1);
+    if (!raw_client) { lua_pushnil(L); lua_pushstring(L, "raw client pointer required"); return 2; }
+    auto* bw = mongo::MongoBulkWrite::New(raw_client);
+    if (!bw) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::MongoBulkWrite>(L, kMetaName);
+    *ud = bw;
+    return 1;
+}
+
+int l_bulk_write_check_acknowledged(lua_State* L) {
+    auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
+    if (!bw) { lua_pushboolean(L, false); lua_pushstring(L, "invalid bulk write"); return 2; }
+    mongo::MongoError error;
+    auto ret = bw->CheckAcknowledged(&error);
+    if (!ret.is_ok) {
+        lua_pushboolean(L, false);
+        lua_pushstring(L, error.Message());
+        return 2;
+    }
+    lua_pushboolean(L, ret.is_acknowledged);
+    lua_pushnil(L);
+    return 2;
+}
+
+int l_bulk_write_server_id(lua_State* L) {
+    auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
+    if (!bw) { lua_pushnil(L); lua_pushstring(L, "invalid bulk write"); return 2; }
+    mongo::MongoError error;
+    auto ret = bw->ServerId(&error);
+    if (!ret.is_ok) {
+        lua_pushnil(L);
+        lua_pushstring(L, error.Message());
+        return 2;
+    }
+    lua_pushinteger(L, ret.server_id);
+    lua_pushnil(L);
+    return 2;
+}
+
+int l_bulk_write_set_session(lua_State* L) {
+    auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
+    void* session = lua_touserdata(L, 2);
+    if (bw && session) bw->SetSession(session);
+    return 0;
+}
+
+int l_bulk_write_set_client(lua_State* L) {
+    auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
+    void* client = lua_touserdata(L, 2);
+    lua_pushboolean(L, bw && client ? bw->SetClient(client) : false);
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"bulkwrite_new", l_bulkwrite_new},
     {"bulkwrite_destroy", l_bulkwrite_destroy},
@@ -161,6 +215,11 @@ const luaL_Reg kLib[] = {
     {"bulkwrite_append_delete_one", l_bulkwrite_append_delete_one},
     {"bulkwrite_append_delete_many", l_bulkwrite_append_delete_many},
     {"bulkwrite_execute", l_bulkwrite_execute},
+    {"bulk_write_new_from_client", l_bulk_write_new_from_client},
+    {"bulk_write_check_acknowledged", l_bulk_write_check_acknowledged},
+    {"bulk_write_server_id", l_bulk_write_server_id},
+    {"bulk_write_set_session", l_bulk_write_set_session},
+    {"bulk_write_set_client", l_bulk_write_set_client},
     {nullptr, nullptr},
 };
 

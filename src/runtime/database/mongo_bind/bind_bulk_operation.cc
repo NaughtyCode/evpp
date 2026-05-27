@@ -223,6 +223,15 @@ int l_bulk_set_collection(lua_State* L) {
     return 0;
 }
 
+int l_bulk_op_get_write_concern(lua_State* L) {
+    auto* bulk = GetUserdata<mongo::MongoBulkOperation>(L, 1, kMetaName);
+    if (!bulk) { lua_pushnil(L); return 1; }
+    const void* wc = bulk->GetWriteConcern();
+    if (!wc) { lua_pushnil(L); return 1; }
+    lua_pushlightuserdata(L, const_cast<void*>(wc));
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"bulk_new", l_bulk_new},
     {"bulk_destroy", l_bulk_destroy},
@@ -246,6 +255,7 @@ const luaL_Reg kLib[] = {
     {"bulk_get_server_id", l_bulk_get_server_id},
     {"bulk_set_database", l_bulk_set_database},
     {"bulk_set_collection", l_bulk_set_collection},
+    {"bulk_op_get_write_concern", l_bulk_op_get_write_concern},
     {nullptr, nullptr},
 };
 

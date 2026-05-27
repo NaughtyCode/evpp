@@ -5,6 +5,9 @@
 
 #include <new>
 
+#include <bson/bson.h>
+
+#include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_bulkwrite.h"
 #include "runtime/database/mongo/mongo_error.h"
 
@@ -42,10 +45,49 @@ int l_bulk_write_exc_error(lua_State* L) {
     return 2;
 }
 
+int l_bwe_write_errors(lua_State* L) {
+    auto* exc = GetUserdata<mongo::MongoBulkWriteException>(L, 1, kMetaName);
+    if (!exc) { lua_pushnil(L); return 1; }
+    auto* raw = static_cast<const bson_t*>(exc->WriteErrors());
+    if (!raw) { lua_pushnil(L); return 1; }
+    auto* doc = new (std::nothrow) mongo::BsonDocument(bson_get_data(raw), raw->len);
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+    *ud = doc;
+    return 1;
+}
+
+int l_bwe_write_concern_errors(lua_State* L) {
+    auto* exc = GetUserdata<mongo::MongoBulkWriteException>(L, 1, kMetaName);
+    if (!exc) { lua_pushnil(L); return 1; }
+    auto* raw = static_cast<const bson_t*>(exc->WriteConcernErrors());
+    if (!raw) { lua_pushnil(L); return 1; }
+    auto* doc = new (std::nothrow) mongo::BsonDocument(bson_get_data(raw), raw->len);
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+    *ud = doc;
+    return 1;
+}
+
+int l_bwe_error_reply(lua_State* L) {
+    auto* exc = GetUserdata<mongo::MongoBulkWriteException>(L, 1, kMetaName);
+    if (!exc) { lua_pushnil(L); return 1; }
+    auto* raw = static_cast<const bson_t*>(exc->ErrorReply());
+    if (!raw) { lua_pushnil(L); return 1; }
+    auto* doc = new (std::nothrow) mongo::BsonDocument(bson_get_data(raw), raw->len);
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+    *ud = doc;
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"bulk_write_exception_new", l_bulk_write_exc_new},
     {"bulk_write_exception_destroy", l_bulk_write_exc_destroy},
     {"bulk_write_exception_error", l_bulk_write_exc_error},
+    {"bulk_write_exception_write_errors", l_bwe_write_errors},
+    {"bulk_write_exception_write_concern_errors", l_bwe_write_concern_errors},
+    {"bulk_write_exception_error_reply", l_bwe_error_reply},
     {nullptr, nullptr},
 };
 
