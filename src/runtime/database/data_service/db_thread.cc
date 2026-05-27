@@ -50,17 +50,24 @@ std::string SerializeCursor(mongo::MongoCursor* cursor, int32_t skip) {
     return result;
 }
 
-// Returns true if the JSON was valid. On parse failure (non-empty input
-// producing an empty BSON document), sets the error on *resp and returns
-// false.  Empty input is treated as valid — callers validate emptiness
-// separately with more specific error messages.
-bool ValidateJsonParse(const std::string& json_str,
-                       const mongo::BsonDocument& doc,
-                       const char* field_name,
-                       DbResponse* resp) {
-    if (!json_str.empty() && doc.Empty()) {
+// Parse a JSON string into a BsonDocument, returning true on success.
+// On failure (invalid JSON), sets the error on *resp and returns false.
+// Empty input is treated as valid — callers validate emptiness separately
+// with more specific error messages.
+// Uses InitFromJson with a MongoError to reliably distinguish parse
+// failures from valid empty documents like "{}" or "[]".
+bool ParseJsonDoc(const std::string& json_str,
+                  const char* field_name,
+                  mongo::BsonDocument* out,
+                  DbResponse* resp) {
+    if (json_str.empty()) return true;
+    mongo::MongoError err;
+    if (!out->InitFromJson(json_str.c_str(),
+                           static_cast<int64_t>(json_str.size()),
+                           &err)) {
         resp->success = false;
-        resp->error_message = std::string("invalid JSON in ") + field_name;
+        resp->error_message = std::string("invalid JSON in ") + field_name +
+                              ": " + err.Message();
         return false;
     }
     return true;
@@ -501,6 +508,12 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 
         if (need_coll && !req.collection.empty()) {
             coll = client_->GetCollection(req.database.c_str(), req.collection.c_str());
+            if (!coll) {
+                resp.success = false;
+                resp.error_message = "failed to obtain collection handle";
+                EnqueueResponse(std::move(resp));
+                return;
+            }
         }
 
         // Validate bson_data (filter) for operations that require it
@@ -535,9 +548,8 @@ void DBThread::ProcessRequest(const DbRequest& req) {
         switch (req.operation) {
         // ── kFind: cursor-based query with optional limit/skip ──────────
         case DbOperation::kFind: {
-            auto filter = mongo::BsonDocument::NewFromJson(
-                req.bson_data.c_str(), req.bson_data.size());
-            if (!ValidateJsonParse(req.bson_data, filter, "bson_data", &resp)) break;
+            mongo::BsonDocument filter;
+            if (!ParseJsonDoc(req.bson_data, "bson_data", &filter, &resp)) break;
             auto* cursor = coll->FindWithOpts(filter, nullptr, nullptr);
             if (req.limit > 0) cursor->SetLimit(req.limit);
             resp.result_data = SerializeCursor(cursor, req.skip);
@@ -548,9 +560,8 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 
         // ── kFindOne: cursor with limit 1, returns single doc or "" ─────
         case DbOperation::kFindOne: {
-            auto filter = mongo::BsonDocument::NewFromJson(
-                req.bson_data.c_str(), req.bson_data.size());
-            if (!ValidateJsonParse(req.bson_data, filter, "bson_data", &resp)) break;
+            mongo::BsonDocument filter;
+            if (!ParseJsonDoc(req.bson_data, "bson_data", &filter, &resp)) break;
             auto* cursor = coll->FindWithOpts(filter, nullptr, nullptr);
             cursor->SetLimit(1);
             mongo::BsonDocument doc;
@@ -567,9 +578,8 @@ void DBThread::ProcessRequest(const DbRequest& req) {
                 resp.error_message = "bson_data (JSON document) required for InsertOne";
                 break;
             }
-            auto doc = mongo::BsonDocument::NewFromJson(
-                req.bson_data.c_str(), req.bson_data.size());
-            if (!ValidateJsonParse(req.bson_data, doc, "bson_data", &resp)) break;
+            mongo::BsonDocument doc;
+            if (!ParseJsonDoc(req.bson_data, "bson_data", &doc, &resp)) break;
             mongo::BsonDocument reply;
             mongo::MongoError err;
             resp.success = coll->InsertOne(doc, nullptr, &reply, &err);
@@ -594,9 +604,8 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             std::vector<mongo::BsonDocument> docs;
             std::vector<const mongo::BsonDocument*> doc_ptrs;
 
-            auto arr = mongo::BsonDocument::NewFromJson(
-                req.bson_data.c_str(), req.bson_data.size());
-            if (!ValidateJsonParse(req.bson_data, arr, "bson_data", &resp)) break;
+            mongo::BsonDocument arr;
+            if (!ParseJsonDoc(req.bson_data, "bson_data", &arr, &resp)) break;
             mongo::BsonIter iter(arr);
             while (iter.Next()) {
                 uint32_t len = 0;
@@ -639,12 +648,10 @@ void DBThread::ProcessRequest(const DbRequest& req) {
         // ── kUpdateOne: filter in bson_data, update descriptor in bson_data2
         // affected_count extracted from reply.nModified via BsonIter.
         case DbOperation::kUpdateOne: {
-            auto filter = mongo::BsonDocument::NewFromJson(
-                req.bson_data.c_str(), req.bson_data.size());
-            if (!ValidateJsonParse(req.bson_data, filter, "bson_data", &resp)) break;
-            auto update = mongo::BsonDocument::NewFromJson(
-                req.bson_data2.c_str(), req.bson_data2.size());
-            if (!ValidateJsonParse(req.bson_data2, update, "bson_data2", &resp)) break;
+            mongo::BsonDocument filter;
+            if (!ParseJsonDoc(req.bson_data, "bson_data", &filter, &resp)) break;
+            mongo::BsonDocument update;
+            if (!ParseJsonDoc(req.bson_data2, "bson_data2", &update, &resp)) break;
             mongo::BsonDocument reply;
             mongo::MongoError err;
             resp.success = coll->UpdateOne(filter, update, nullptr, &reply, &err);
@@ -662,12 +669,10 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 
         // ── kUpdateMany: same pattern as kUpdateOne ─────────────────────
         case DbOperation::kUpdateMany: {
-            auto filter = mongo::BsonDocument::NewFromJson(
-                req.bson_data.c_str(), req.bson_data.size());
-            if (!ValidateJsonParse(req.bson_data, filter, "bson_data", &resp)) break;
-            auto update = mongo::BsonDocument::NewFromJson(
-                req.bson_data2.c_str(), req.bson_data2.size());
-            if (!ValidateJsonParse(req.bson_data2, update, "bson_data2", &resp)) break;
+            mongo::BsonDocument filter;
+            if (!ParseJsonDoc(req.bson_data, "bson_data", &filter, &resp)) break;
+            mongo::BsonDocument update;
+            if (!ParseJsonDoc(req.bson_data2, "bson_data2", &update, &resp)) break;
             mongo::BsonDocument reply;
             mongo::MongoError err;
             resp.success = coll->UpdateMany(filter, update, nullptr, &reply, &err);
@@ -685,9 +690,8 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 
         // ── kDeleteOne: filter in bson_data, affected_count from reply.n ─
         case DbOperation::kDeleteOne: {
-            auto selector = mongo::BsonDocument::NewFromJson(
-                req.bson_data.c_str(), req.bson_data.size());
-            if (!ValidateJsonParse(req.bson_data, selector, "bson_data", &resp)) break;
+            mongo::BsonDocument selector;
+            if (!ParseJsonDoc(req.bson_data, "bson_data", &selector, &resp)) break;
             mongo::BsonDocument reply;
             mongo::MongoError err;
             resp.success = coll->DeleteOne(selector, nullptr, &reply, &err);
@@ -712,9 +716,8 @@ void DBThread::ProcessRequest(const DbRequest& req) {
         // responsible for providing a restrictive filter unless a
         // full-collection delete is genuinely intended.
         case DbOperation::kDeleteMany: {
-            auto selector = mongo::BsonDocument::NewFromJson(
-                req.bson_data.c_str(), req.bson_data.size());
-            if (!ValidateJsonParse(req.bson_data, selector, "bson_data", &resp)) break;
+            mongo::BsonDocument selector;
+            if (!ParseJsonDoc(req.bson_data, "bson_data", &selector, &resp)) break;
             mongo::BsonDocument reply;
             mongo::MongoError err;
             resp.success = coll->DeleteMany(selector, nullptr, &reply, &err);
@@ -733,9 +736,8 @@ void DBThread::ProcessRequest(const DbRequest& req) {
         // ── kCount: count documents matching filter ─────────────────────
         // CountDocuments returns -1 on error (checked via err param).
         case DbOperation::kCount: {
-            auto filter = mongo::BsonDocument::NewFromJson(
-                req.bson_data.c_str(), req.bson_data.size());
-            if (!ValidateJsonParse(req.bson_data, filter, "bson_data", &resp)) break;
+            mongo::BsonDocument filter;
+            if (!ParseJsonDoc(req.bson_data, "bson_data", &filter, &resp)) break;
             mongo::BsonDocument reply;
             mongo::MongoError err;
             int64_t count = coll->CountDocuments(filter, nullptr, nullptr,
@@ -757,6 +759,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
         // NewFromJson on a JSON array produces the correct BSON representation
         // that mongoc_collection_aggregate expects.
         case DbOperation::kAggregate: {
+            const char* pipe_field = req.bson_data.empty() ? "bson_data2" : "bson_data";
             const std::string& pipe_json = req.bson_data.empty()
                 ? req.bson_data2 : req.bson_data;
             if (pipe_json.empty()) {
@@ -764,9 +767,8 @@ void DBThread::ProcessRequest(const DbRequest& req) {
                 resp.error_message = "bson_data or bson_data2 (pipeline) required for aggregate";
                 break;
             }
-            auto pipeline = mongo::BsonDocument::NewFromJson(
-                pipe_json.c_str(), pipe_json.size());
-            if (!ValidateJsonParse(pipe_json, pipeline, "bson_data", &resp)) break;
+            mongo::BsonDocument pipeline;
+            if (!ParseJsonDoc(pipe_json, pipe_field, &pipeline, &resp)) break;
             auto* cursor = coll->Aggregate(pipeline, nullptr, nullptr);
             resp.result_data = SerializeCursor(cursor, 0);
             cursor->Destroy();
@@ -785,9 +787,8 @@ void DBThread::ProcessRequest(const DbRequest& req) {
                 resp.error_message = "database and bson_data (command) required for Command";
                 break;
             }
-            auto command = mongo::BsonDocument::NewFromJson(
-                req.bson_data.c_str(), req.bson_data.size());
-            if (!ValidateJsonParse(req.bson_data, command, "bson_data", &resp)) break;
+            mongo::BsonDocument command;
+            if (!ParseJsonDoc(req.bson_data, "bson_data", &command, &resp)) break;
             mongo::BsonDocument reply;
             mongo::MongoError err;
             resp.success = client_->CommandSimple(req.database.c_str(), command,
