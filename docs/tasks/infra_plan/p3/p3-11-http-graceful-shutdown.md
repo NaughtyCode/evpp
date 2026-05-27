@@ -6,7 +6,7 @@ Implement graceful shutdown for the HTTP server, addressing the TODO markers at 
 
 ## Current State
 
-`http_server.cc:294,307` mark graceful shutdown as not implemented. The HTTP server likely stops accepting connections abruptly when `Stop()` is called, potentially dropping in-flight requests.
+`http_server.cc:304,323` mark graceful shutdown as not implemented. The HTTP server likely stops accepting connections abruptly when `Stop()` is called, potentially dropping in-flight requests.
 
 ## Implementation Steps
 

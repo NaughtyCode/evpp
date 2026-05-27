@@ -67,13 +67,13 @@ void Connector::HandleWrite() {
 }
 ```
 
-### Step 2b: Handle EVUTIL_ERR_CONNECT_RETRIABLE
+### Step 3: Handle EVUTIL_ERR_CONNECT_RETRIABLE
 
 **File**: `src/runtime/evpp/connector.cc` (line ~149)
 
 The `// TODO how to do it` at line 149 is for `EVUTIL_ERR_CONNECT_RETRIABLE` errors during the initial `::connect()` call. These indicate a transient failure (e.g., server backlog full) where retrying is appropriate. Replace the TODO with a call to `HandleError()` so these errors also enter the retry path.
 
-### Step 3: Lua API
+### Step 4: Lua API
 
 ```lua
 local client = net.client.connect("example.com", 8080, {
@@ -89,7 +89,7 @@ local client = net.client.connect("example.com", 8080, {
 })
 ```
 
-### Step 4: Tests
+### Step 5: Tests
 
 After completing each step, add automated tests in the following categorized locations:
 

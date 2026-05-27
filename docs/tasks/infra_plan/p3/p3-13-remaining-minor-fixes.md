@@ -94,7 +94,7 @@ These items are noted for future reference but do not warrant dedicated plans:
 | Hardcoded FetchResult timeout (5ms) | Covered implicitly by P2-13 (condition_variable) |
 | Physics Recover() poll-sleep health check (100ms × 50) | Low impact; startup-only path |
 
-### Step 14: Tests
+### Step 5: Tests
 
 After completing each sub-item, add automated tests in the following categorized locations:
 
