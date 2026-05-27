@@ -685,7 +685,6 @@ int UnpackFull(lua_State* L, int limit, int offset) {
 		int next_offset = static_cast<int>(len - c.left);
 		luaL_checkstack(L, 1, "in function UnpackFull");
 		lua_pushinteger(L, c.left == 0 ? -1 : next_offset);
-		lua_insert(L, 2);
 		cnt += 1;
 	}
 

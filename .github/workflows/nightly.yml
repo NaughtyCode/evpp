@@ -1,0 +1,61 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: '37 2 * * 1'   # Monday 2:37am UTC
+  workflow_dispatch:
+
+jobs:
+  # ── Ubuntu GCC build with coverage ────────────────────────────────
+  coverage:
+    name: "Coverage (Ubuntu, GCC)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libevent-dev lcov
+      - name: Configure with coverage
+        run: |
+          cmake -S src -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DBUILD_TESTING=ON \
+            -DCMAKE_CXX_FLAGS="--coverage -fprofile-update=atomic" \
+            -DCMAKE_EXE_LINKER_FLAGS="--coverage"
+      - name: Build
+        run: cmake --build build -j $(nproc)
+      - name: Run tests
+        run: cd build && ctest --output-on-failure -j $(nproc)
+      - name: Generate coverage
+        run: |
+          lcov --capture --directory build --output-file coverage.info
+          lcov --remove coverage.info '/usr/*' '*/thirdparty/*' '*/tests/*' -o coverage_filtered.info
+          lcov --list coverage_filtered.info
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage_filtered.info
+        continue-on-error: true
+
+  # ── Ubuntu GCC build (without coverage, quick check) ──────────────
+  ubuntu-build:
+    name: "Build & Test (Ubuntu, GCC)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libevent-dev
+      - name: Configure
+        run: |
+          cmake -S src -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=ON
+      - name: Build
+        run: cmake --build build -j $(nproc)
+      - name: Run tests
+        run: cd build && ctest --output-on-failure -j $(nproc)

@@ -146,8 +146,13 @@ bool ScriptVM::DoString(std::string_view script,
 	}
 
 	if (result_out) {
-		if (lua_gettop(L_) > 0 && lua_isstring(L_, -1)) {
-			*result_out = lua_tostring(L_, -1);
+		if (lua_gettop(L_) > 0) {
+			size_t len;
+			const char* s = luaL_tolstring(L_, -1, &len);
+			if (s) {
+				result_out->assign(s, len);
+				lua_pop(L_, 1);
+			}
 		}
 		lua_settop(L_, 0);
 	}

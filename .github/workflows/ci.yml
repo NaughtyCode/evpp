@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+  # ── Smoke tests (fast, runs first) ─────────────────────────────────
+  smoke:
+    name: "Smoke (Windows, MSVC)"
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: |
+          cmake --preset windows-msvc `
+            -DBUILD_TESTING=ON `
+            -DCLOUDENGINE_BUILD_BENCHMARKS=OFF `
+            -S src -B build
+      - name: Build smoke tests
+        run: cmake --build build --config Release -j 4
+      - name: Run smoke tests
+        run: ctest -C Release -L smoke --output-on-failure
+
+  # ── Unit tests ─────────────────────────────────────────────────────
+  unit:
+    name: "Unit Tests (Windows, MSVC)"
+    runs-on: windows-latest
+    timeout-minutes: 20
+    needs: smoke
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: |
+          cmake --preset windows-msvc `
+            -DBUILD_TESTING=ON `
+            -DCLOUDENGINE_BUILD_BENCHMARKS=OFF `
+            -S src -B build
+      - name: Build tests
+        run: cmake --build build --config Release -j 4
+      - name: Run unit tests
+        run: ctest -C Release -L unit --output-on-failure -j 2
+
+  # ── Integration tests (real sockets, run sequentially) ────────────
+  integration:
+    name: "Integration Tests (Windows, MSVC)"
+    runs-on: windows-latest
+    timeout-minutes: 30
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: |
+          cmake --preset windows-msvc `
+            -DBUILD_TESTING=ON `
+            -DENGINE_PHYSICS_ENABLED=ON `
+            -DCLOUDENGINE_BUILD_BENCHMARKS=OFF `
+            -S src -B build
+      - name: Build integration tests
+        run: cmake --build build --config Release -j 4
+      - name: Run integration tests
+        run: ctest -C Release -L integration --output-on-failure -j 1
+
+  # ── Lua script tests ──────────────────────────────────────────────
+  lua:
+    name: "Lua Tests (Windows, MSVC)"
+    runs-on: windows-latest
+    timeout-minutes: 15
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: |
+          cmake --preset windows-msvc `
+            -DBUILD_TESTING=ON `
+            -DCLOUDENGINE_BUILD_BENCHMARKS=OFF `
+            -S src -B build
+      - name: Build Lua runner
+        run: cmake --build build --config Release -j 4
+      - name: Run Lua tests
+        run: ctest -C Release -L lua --output-on-failure -j 1
+
+  # ── Benchmarks (manual or PR body contains /benchmark) ────────────
+  benchmarks:
+    name: "Performance Benchmarks"
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.body, '/benchmark') }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: |
+          cmake --preset windows-msvc `
+            -DBUILD_TESTING=ON `
+            -DCLOUDENGINE_BUILD_BENCHMARKS=ON `
+            -S src -B build
+      - name: Build benchmarks
+        run: cmake --build build --config Release -j 4
+      - name: Run benchmarks
+        run: ctest -C Release -L performance --output-on-failure -j 1

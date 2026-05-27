@@ -69,8 +69,23 @@ void TimerManager::initialize() {
 void TimerManager::shutdown() {
 	if (!initialized_.exchange(false)) return;
 
-	std::lock_guard<std::mutex> lock(entries_mutex_);
-	entries_.clear();
+	{
+		std::lock_guard<std::mutex> lock(entries_mutex_);
+		for (auto& [id, entry] : entries_) {
+			switch (entry->kind) {
+			case TimerEntry::Kind::kHrTimer:
+				hrtimer_mgr_->cancel(entry->hrtimer);
+				break;
+			case TimerEntry::Kind::kWheelTimer:
+				wheel_->del_timer(entry->wheel_timer);
+				break;
+			case TimerEntry::Kind::kAlarm:
+				alarm_mgr_->cancel(entry->alarm);
+				break;
+			}
+		}
+		entries_.clear();
+	}
 }
 
 //=============================================================================
@@ -511,11 +526,12 @@ void TimerManager::restart_alarm(TimerId id) {
 TimerId TimerManager::create_repeating_timer(Duration interval,
 											 HrTimerNode::Callback callback,
 											 ClockId clock_id) {
-	auto hr_cb = [callback = std::move(callback),
+	auto hr_cb = [callback = std::move(callback), mgr = hrtimer_mgr_.get(),
 				  interval](HrTimerNode* timer) mutable -> TimerResult {
 		TimerResult result = callback(timer);
 		if (result == TimerResult::kRestart) {
 			timer->add_expires(interval);
+			mgr->start(timer, timer->expires(), timer->mode());
 		}
 		return result;
 	};
@@ -527,9 +543,12 @@ TimerId TimerManager::create_repeating_simple_timer(Duration interval,
 													std::function<void()> callback,
 													ClockId clock_id) {
 	auto cb = std::make_shared<std::function<void()>>(std::move(callback));
-	auto hr_cb = [cb, interval](HrTimerNode* timer) -> TimerResult {
+	auto hr_cb = [cb, interval, mgr = hrtimer_mgr_.get()](HrTimerNode* timer) -> TimerResult {
 		(*cb)();
-		timer->add_expires(interval);
+		if (timer->state() != TimerState::kCancelled) {
+			timer->add_expires(interval);
+			mgr->start(timer, timer->expires(), timer->mode());
+		}
 		return TimerResult::kRestart;
 	};
 

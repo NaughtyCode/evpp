@@ -203,6 +203,7 @@ if(NOT TARGET CloudEngine)
     # ── CloudEngine library target ───────────────────────────────────
     add_library(CloudEngine SHARED ${SERVERENGINE_SOURCES})
     add_dependencies(CloudEngine copy_resources)
+    set_target_properties(CloudEngine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
     target_include_directories(CloudEngine PUBLIC
         ${ENGINE_ROOT}

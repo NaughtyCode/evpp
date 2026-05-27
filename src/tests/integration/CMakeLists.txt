@@ -1,0 +1,41 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Integration tests — multi-component, real socket I/O
+# ═══════════════════════════════════════════════════════════════════════════
+
+set(INTEG_LIBS Catch2::Catch2WithMain CloudEngine)
+
+macro(add_integ_test name)
+    add_executable(${name} ${ARGN})
+    target_include_directories(${name} PRIVATE ${TEST_COMMON_INCLUDES})
+    target_link_libraries(${name} PRIVATE ${INTEG_LIBS})
+    set_target_properties(${name} PROPERTIES FOLDER "tests/integration")
+endmacro()
+
+# ── Network ──────────────────────────────────────────────────────────
+add_integ_test(test_integ_tcp network/test_tcp.cpp)
+add_test(NAME integration.network.tcp COMMAND test_integ_tcp)
+set_tests_properties(integration.network.tcp PROPERTIES
+    TIMEOUT 120 LABELS "integration;network"
+    RUN_SERIAL TRUE
+    WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
+add_integ_test(test_integ_udp network/test_udp.cpp)
+add_test(NAME integration.network.udp COMMAND test_integ_udp)
+set_tests_properties(integration.network.udp PROPERTIES
+    TIMEOUT 60 LABELS "integration;network"
+    WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
+# ── Physics (only if engine was built with physics) ──────────────────
+if(ENGINE_PHYSICS_ENABLED)
+    add_integ_test(test_integ_physics physics/test_physics.cpp)
+    add_test(NAME integration.physics COMMAND test_integ_physics)
+endif()
+
+# ── Client API (only if GameClient target exists) ────────────────────
+if(TARGET GameClient)
+    add_executable(test_integ_client_tcp client_api/test_client_tcp.cpp)
+    target_include_directories(test_integ_client_tcp PRIVATE ${TEST_COMMON_INCLUDES})
+    target_link_libraries(test_integ_client_tcp PRIVATE Catch2::Catch2WithMain GameClient)
+    set_target_properties(test_integ_client_tcp PROPERTIES FOLDER "tests/integration")
+    add_test(NAME integration.client_api.tcp COMMAND test_integ_client_tcp)
+endif()

@@ -102,7 +102,6 @@ void EventLoop::Init() {
 
 void EventLoop::InitNotifyPipeWatcher() {
 	// Initialized task queue notify pipe watcher
-	std::fprintf(stderr, "[EventLoop] InitNotifyPipeWatcher begin\n");
 	watcher_.reset(new PipeEventWatcher(this, std::bind(&EventLoop::DoPendingFunctors, this)));
 	int rc = watcher_->Init();
 	if (!rc) {
@@ -112,7 +111,6 @@ void EventLoop::InitNotifyPipeWatcher() {
 		}
 	}
 	assert(rc);
-	std::fprintf(stderr, "[EventLoop] InitNotifyPipeWatcher done\n");
 }
 
 void EventLoop::Run() {
@@ -213,12 +211,12 @@ void EventLoop::AfterFork() {
 
 InvokeTimerPtr EventLoop::RunAfter(double delay_ms, const Functor& f) {
 	EVPP_TRACE("this={}", (void*) this);
-	return RunAfter(Duration(delay_ms / 1000.0), f);
+	return RunAfter(Duration(static_cast<int64_t>(delay_ms * 1000000.0)), f);
 }
 
 InvokeTimerPtr EventLoop::RunAfter(double delay_ms, Functor&& f) {
 	EVPP_TRACE("this={}", (void*) this);
-	return RunAfter(Duration(delay_ms / 1000.0), std::move(f));
+	return RunAfter(Duration(static_cast<int64_t>(delay_ms * 1000000.0)), std::move(f));
 }
 
 InvokeTimerPtr EventLoop::RunAfter(Duration delay, const Functor& f) {

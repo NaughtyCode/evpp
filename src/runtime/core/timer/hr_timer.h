@@ -357,7 +357,12 @@ class HrTimerManager {
 		assert(timer);
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		if (!timer->is_queued()) return false;
+		auto st = timer->state_.load();
+		if (st == TimerState::kFiring) {
+			timer->state_ = TimerState::kCancelled;
+			return true;
+		}
+		if (st != TimerState::kArmed) return false;
 
 		remove_locked(timer);
 		timer->state_ = TimerState::kCancelled;

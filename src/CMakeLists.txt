@@ -40,3 +40,11 @@ add_subdirectory(server)
 add_subdirectory(client)
 
 set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT GameServer)
+
+# ── Tests ───────────────────────────────────────────────────────────
+option(BUILD_TESTING "Build tests and enable CTest" OFF)
+if(BUILD_TESTING)
+    enable_testing()
+    set(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+    add_subdirectory(tests)
+endif()
