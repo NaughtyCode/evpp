@@ -6,7 +6,7 @@ CloudEngine 的定位是"通用游戏服务器基础设施"——C++ 层实现�
 
 **分析方法约定**：每个条目按"现状 → 根因 → 影响 → 方向"四段式展开。P0 问题（第一部分）是阻塞性缺陷——不解决则无法承载实际游戏业务。P1-P3 问题（第二至第四部分）是完善性缺陷——影响开发效率、运维质量或安全性。
 
-**数据来源**：基于对 `src/runtime/` 下全部源代码的逐行审查，覆盖 engine、vm、script、config、database、physics、evpp 七个子系统及其绑定层，以及 `resources/script/` 下的全部 Lua 脚本。本轮新增：跨线程 RunInLoop 生命周期分析、Lua 全局命名空间审计、evpp 层线程安全检查、数据库背压路径、Engine Cleanup 顺序依赖分析。
+**数据来源**：基于对 `src/runtime/` 下全部源代码的逐行审查，覆盖 engine、vm、script、config、database、physics、evpp 七个子系统及其绑定层，以及 `resources/script/` 下的全部 Lua 脚本。本轮 (R6) 新增：Lua 沙箱逃逸漏洞详情 (P0-8)、物理线程轮询休眠延迟分析、PhysicsEngineBridge 单例发现、DatabaseService fprintf 审计、MongoDB 绑定返回值一致性审查、class.lua isinstanceof 性能分析、PhysicsThread Recover/Stop 竞态条件、CMakeLists C++23 编译器约束。
 
 ---
 
@@ -388,6 +388,54 @@ ctx->server->SetMessageHandler([ctx, main_loop](evpp::EventLoop*, evpp::kcp::Mes
 
 ---
 
+### P0-8：Lua 沙箱完全缺失 — `luaL_openlibs` 加载全部危险标准库
+
+#### 现状
+
+`ScriptVM` 构造函数（`vm.cc:23`）在创建 `lua_State` 后立即加载全部标准库：
+
+```cpp
+luaL_openlibs(L_);  // 加载全部：basic/coroutine/table/io/os/string/math/utf8/debug/package
+```
+
+这意味着任何 Lua 脚本（包括从网络接收后执行的脚本）可以：
+
+| 危险能力 | 对应库/函数 | 攻击示例 |
+|---------|-----------|---------|
+| 执行任意系统命令 | `os.execute()` | `os.execute("rm -rf /")` |
+| 读写任意文件 | `io.open()` | `io.open("/etc/passwd")` |
+| 修改/删除文件 | `os.remove()`, `os.rename()` | 删除配置文件、数据库文件 |
+| 读取环境变量 | `os.getenv()` | 获取数据库密码、API 密钥 |
+| 退出进程 | `os.exit()` | 直接终止服务器 |
+| 访问调试接口 | `debug.getregistry()`, `debug.getupvalue()` | 读取/修改其他模块的内部状态 |
+| 动态加载 C 库 | `package.loadlib()` | 加载任意 `.so`/`.dll` 执行 native code |
+
+#### 根因
+
+当前架构选择"方便优先"——`luaL_openlibs` 一行代码加载所有库，开发者无需按需加载。这在原型阶段很方便，但一旦服务器接收来自客户端的脚本（如通过 `DoString` 执行远程脚本），就是一个完整的沙箱逃逸向量。
+
+即使当前不直接执行客户端脚本，这个设计也意味着：
+1. 任何第三方 Lua 模块都可以执行系统命令
+2. 一个 Lua 脚本的 bug（如无限递归 `os.execute`）可以拖垮整个操作系统
+3. 配置文件中的脚本路径（`entry_scripts_dir`）如果被篡改，攻击者获得完整 shell 访问
+
+#### 代码证据
+
+`vm.cc:23` 明确记录了加载的库列表。没有任何代码随后移除或限制这些库中的危险函数。`ScriptVM::DoString`（`vm.cc:115-158`）允许从任意来源执行 Lua 代码，如果在运行时接收远程脚本，则直接暴露。
+
+#### 影响
+
+对于服务器基础设施，这不仅是"不安全的默认配置"——它意味着任何能写入 Lua 脚本文件或触发 `DoString` 执行的人都可以获得与服务器进程相同的操作系统权限。在多租户部署中，一个租户的脚本可以读取其他租户的数据。
+
+#### 改进方向
+
+1. **最小权限原则**：替换 `luaL_openlibs` 为按需加载白名单库（如仅加载 `table/string/math/coroutine`）
+2. **函数级沙箱**：保留 `os` 表但覆盖/移除 `os.execute`、`os.remove`、`os.rename`、`os.exit`；移除 `io` 表；移除 `debug` 表；移除 `package.loadlib`
+3. **可配置沙箱级别**：通过 `RuntimeConfig` 控制允许的库列表（"strict"/"server"/"full" 三级），让开发期和生产期使用不同的安全策略
+4. **审计日志**：对敏感操作（文件 IO、系统命令）添加日志记录，便于安全审计
+
+---
+
 ## 第二部分：架构层面的核心缺失（P1-P2）
 
 ### 2.1 子系统设计质量极端不均衡
@@ -602,7 +650,7 @@ Release 构建中，从错误线程调用 `event_add`/`event_del` 不会触发�
 
 | 缺陷 | 严重度 | 说明 |
 |------|--------|------|
-| **无沙箱** | **P1** | `vm.cc:23` — `luaL_openlibs(L_)` 加载全部标准库（含 `os.execute`、`io.open`、`debug`） |
+| **无沙箱** | **P0** | `vm.cc:23` — `luaL_openlibs(L_)` 加载全部标准库（含 `os.execute`、`io.open`、`debug`），详见 P0-8 |
 | 无协程集成 | P1 | Lua 5.5 内置协程但引擎提供零调度支持 |
 | 无错误恢复 | P2 | `UpdateScript` 出错仅日志 + pop（`vm.cc:73-85`），VM 栈可能不一致 |
 | luaL_error 异常不安全 | P1 | longjmp 跳过 C++ 析构函数（详见 P0-5） |
@@ -616,6 +664,8 @@ Release 构建中，从错误线程调用 `event_add`/`event_del` 不会触发�
 | **msgpack 编码无大小上限** | P2 | `l_msgpack_pack` 可编码任意深度和任意大小的 Lua 表，无 payload 限制 |
 | **RunInLoop 延迟 delete 竞争** | P2 | 绑定层普遍用 `RunInLoop([del_ctx]{delete del_ctx;})` 延迟释放 —— 假设 loop 仍在运行。Shutdown 期间 loop 停止后此假设不成立 |
 | **全局变量导出无追踪** | P2 | `ExportAll` 将数十个函数注册到 Lua 全局表。ClearCache 不清除全局变量，热更后残留旧状态 |
+| **class.lua isinstanceof O(depth)** | P3 | 沿 `__index` 链逐级遍历查找目标类，每调用一次走完整条链。深继承层级 + 高频调用（如每帧碰撞回调中检查实体类型）时累积开销不可忽视 |
+| **DoString 无脚本来源限制** | P2 | `ScriptVM::DoString` 可从任意来源执行 Lua 代码（网络、文件、数据库）。无调用者身份追踪、无最大执行时间限制、无内存配额 |
 
 ### 3.3 数据库层
 
@@ -625,8 +675,11 @@ Release 构建中，从错误线程调用 `event_add`/`event_del` 不会触发�
 | 无 ORM | P2 | 手动构造 BSON 文档 |
 | 无缓存层 | P2 | 每次请求都走 SPSC → DBThread → MongoDB 网络 IO |
 | cursor 泄漏风险 | P2 | `db_thread.cc:589,612,828` — catch(...) 中 cursor->Destroy() 后 rethrow |
+| **DatabaseService 使用 fprintf** | **P2** | `database_service.cc:5` 处 fprintf(stderr) 调用（Initialize 中有 5 处、Shutdown 0 处），加上 `db_thread.cc`、`mongo_oidc.cc`、`mongo_session.cc` 共 10 处 DB 层绕过 Quill 日志 |
 | ParseOperationName 缓冲区固定 32 字节 | P3 | `db_service_main_bind.cc:24` — 超长输入静默截断，可能生成意外的操作匹配 |
 | 请求队列满时静默丢弃 | P1 | `EnqueueRequest` 返回 false 时无日志、无重试、无降级通知 |
+| MongoDB 绑定返回值不一致 | P3 | `bind_collection.cc` 中部分操作返回 `(bool, err\|nil)` 共 2 值，部分返回 `(bool, err\|nil, doc\|nil)` 共 3 值。Lua 侧需记忆每个操作的返回值个数 |
+| cursor 预分配泄漏风险 | P3 | `bind_cursor.cc:40` — `l_cursor_next` 在调用 `cursor->Next()` 前预分配 `BsonDocument`，若 Next() 失败需手动清理。该模式在 collection.cc 中多次重复 |
 
 ### 3.4 配置系统
 
@@ -641,8 +694,12 @@ Release 构建中，从错误线程调用 `event_add`/`event_del` 不会触发�
 | 缺陷 | 严重度 | 说明 |
 |------|--------|------|
 | **结果未接入** | **P1** | `engine.cc:432-436` 中 FetchResult 结果被注释掉（"would go here"），物理计算完全丢弃 |
+| **EventLoop 50ms 轮询休眠** | **P1** | `physics_thread.cc:274` — 命令队列空时 `sleep_for(50ms)`。任何物理命令（Spawn、ApplyForce、Tick）的排队延迟为 0-50ms。对于 60fps（16.67ms/帧）的游戏，该延迟超过单帧时间，导致可感知的物理输入滞后。应使用 `condition_variable` 或信号量替代轮询休眠 |
+| FetchResult 忙等待 | P2 | `physics_system.cc:264` — `sleep_for(100µs)` 自旋等待物理结果。无 `condition_variable` 通知机制，占用 CPU 且增加延迟抖动 |
+| Stop() 通过假 Tick 唤醒 | P2 | `physics_thread.cc:131` — 发送 `MakeTick(TickArgs{0, 0.0f})` 来解除 EventLoop 阻塞。该命令进入正常 switch 分发，delta=0 时被跳过处理。但如果在真实 Tick 处理期间调用 Stop()，该假 Tick 可能与真实 Tick 产生竞态条件——真实 Tick 被假 Tick 替代消费 |
 | 场景路径硬编码 | P2 | `scene.json` 写死在 `engine.cc:159` |
 | FetchResult 超时硬编码 | P2 | timeout=5ms，超时后静默跳过 |
+| Recover 轮询健康检查 | P3 | `physics_thread.cc:167` — `sleep_for(100ms)` 循环最多 50 次等待 world 健康。总等待时间可达 5 秒，无提前退出的事件通知 |
 
 ### 3.6 定时器系统
 
@@ -664,7 +721,7 @@ Release 构建中，从错误线程调用 `event_add`/`event_del` 不会触发�
 | 通道 | 位置 | 数量 | 问题 |
 |------|------|------|------|
 | Quill 日志 | `ENGINE_LOG_*` 宏 | 全工程 | 正确的日志系统 — 时间戳、级别、轮转 |
-| fprintf(stderr) | 13 个文件 | 76 处 | 绕过 Quill — 无时间戳、无级别 |
+| fprintf(stderr) | 14 个文件（含 DB 层 4 个） | 76+ 处 | 绕过 Quill — 无时间戳、无级别 |
 | std::cout | `timer_manager.cc:664-682` | ~15 处 | 再一个通道 — 仅 TimerManager DumpStats |
 
 三个通道的输出在终端交错，无统一格式，无统一的级别控制。`fprintf` 输出在 stderr，`std::cout` 输出在 stdout，Quill 日志输出到文件——三位一体的诊断信息被分散在三个独立的目的地，排查问题时需要同时查看三个来源。
@@ -697,7 +754,9 @@ Release 构建中，从错误线程调用 `event_add`/`event_del` 不会触发�
 
 ### 4.4 单例滥用
 
-**7 个单例类**，**80+ 次 `.Instance()` 调用**。后果：无法同进程多 Engine 实例、无法隔离 Space/Room 配置、所有绑定硬依赖全局 Engine EventLoop。
+**8 个单例类**（PhysicsEngineBridge 是新发现的第 8 个单例），**80+ 次 `.Instance()` 调用**。后果：无法同进程多 Engine 实例、无法隔离 Space/Room 配置、所有绑定硬依赖全局 Engine EventLoop。
+
+`PhysicsEngineBridge` 的每一个方法都直接委托到 `PhysicsSystem::Instance()`——它是一个纯代理层，不包含任何业务逻辑。其存在理由是"隐藏 PhysicsSystem 头文件避免污染公开 API"。然而这一目标可以通过前向声明 + `std::unique_ptr`（PIMPL idiom）在 `Engine` 中实现，无需引入第 8 个全局单例。
 
 ### 4.5 编译器警告配置不一致
 
@@ -712,7 +771,7 @@ Windows 构建实际上是零警告模式——同一份代码在 Linux 上可�
 
 ### 4.7 生产代码中的测试代码
 
-`engine.cc:249-279`：DB Service smoke test 内嵌在 `Engine::Start()` 中，每次 Debug 构建启动时执行。
+`engine.cc:249-279`：DB Service smoke test 内嵌在 `Engine::Start()` 中。每次 Debug 构建启动时执行（`#if !defined(NDEBUG)` 守卫），通过 `shared_ptr` 自引用的 `InvokeTimerPtr` 模式轮询结果——若回调从未触发则该 shared_ptr 循环永远不会断开。生产代码路径（`Start()`）不应包含测试逻辑；测试应移至独立的测试文件中。
 
 ### 4.8 原始裸指针管理 — RAII 缺失
 
@@ -746,6 +805,7 @@ loop->RunInLoop([del_ctx] { delete del_ctx; });  // 延迟 delete
 - 16+ 个第三方库全部 vendored，无包管理器
 - 无 CI/CD 配置
 - `copy_resources` 每构建全量复制
+- **C++23 要求**（`CMakeLists.txt:5` — `CMAKE_CXX_STANDARD 23`）：当前仅 MSVC 2022 17.4+、GCC 14+、Clang 19+ 完整支持 C++23。该要求限制了 CI 编译器选择和部署平台
 
 ### 4.11 可观测性
 
@@ -796,12 +856,12 @@ loop->RunInLoop([del_ctx] { delete del_ctx; });  // 延迟 delete
 |--------|--------|---------|
 | 事件循环 / 网络 IO | ★★★★☆ | 消息分帧、加密、限流、连接数管理、payload 上限 |
 | 定时器 | ★★★★☆ | 层级过重、Lua 生命周期绑定 |
-| 日志 | ★★★★☆ | 76 处 fprintf + std::cout 绕过日志系统 |
-| 脚本 VM | ★★★☆☆ | 沙箱、协程、热更、错误恢复、循环依赖检测 |
+| 日志 | ★★★★☆ | 76+ 处 fprintf + std::cout 绕过日志系统 |
+| 脚本 VM | ★★☆☆☆ | 沙箱（P0）、协程、热更、错误恢复、循环依赖检测、脚本来源限制 |
 | 脚本绑定 | ★★★☆☆ | 覆盖核心 API，80% 重复样板，RunInLoop 跨线程生命周期安全 |
 | 配置管理 | ★★★☆☆ | 热通知缺失 — Reload 形同虚设 |
-| 数据库 | ★★★☆☆ | ORM、缓存、多后端、cursor 泄漏、队列满静默丢弃 |
-| 物理 | ★★☆☆☆ | 结果未接入游戏对象和网络同步 |
+| 数据库 | ★★★☆☆ | ORM、缓存、多后端、cursor 泄漏、队列满静默丢弃、返回值不一致 |
+| 物理 | ★★☆☆☆ | 结果未接入游戏对象和网络同步；50ms 轮询休眠延迟；FetchResult 忙等待 |
 | **实体模型** | ☆☆☆☆☆ | 无任何形式的实体存储或抽象 |
 | **消息分帧** | ★☆☆☆☆ | 无，原始字节流直传 Lua |
 | **多 VM 架构** | ★★☆☆☆ | 物理/DB 有独立 VM，业务层无 |
@@ -823,15 +883,15 @@ P0（现在就做 — 阻塞业务）：
   ┌──────────────────────────────────────────────────────────────┐
   │ 1. 消息分帧（Codec 层，~500 行 C++，先修 buffer.h 的两个 TODO）│
   │ 2. Entity 基类 + Component 模型（~1500 行 C++ + Lua）        │
-  │ 3. 消息/负载大小限制 — 防 DoS（~50 行，所有 bind 添加检查）  │
-  │ 4. 消除 4 个 abort() — 改为错误返回或异常                   │
-  │ 5. 核心模块测试（ScriptVM → TimerManager → 集成测试）        │
-  │ 6. 清理 76 处 fprintf(stderr) — 统一 Quill 日志              │
+  │ 3. Lua 沙箱加固 — 替换 luaL_openlibs 为白名单按需加载      │
+  │ 4. 消息/负载大小限制 — 防 DoS（~50 行，所有 bind 添加检查）  │
+  │ 5. 消除 4 个 abort() — 改为错误返回或异常                   │
+  │ 6. 核心模块测试（ScriptVM → TimerManager → 集成测试）        │
+  │ 7. 清理 76+ 处 fprintf(stderr) — 统一 Quill 日志             │
   └──────────────────────────────────────────────────────────────┘
 
 P1（第一个里程碑 — 提升开发效率与安全性）：
   ┌──────────────────────────────────────────────────────────────┐
-  │ 7. Lua 沙箱加固 — 移除 os/io/debug 或提供受限替代          │
   │ 8. luaL_error 异常安全 — 确保 C++ RAII 不被 longjmp 绕过    │
   │ 9. 多 VM 架构（Space-per-VM，复用 Physics 和 DBThread 模式）│
   │ 10. 协程集成（async/await 模式）                             │
@@ -839,33 +899,37 @@ P1（第一个里程碑 — 提升开发效率与安全性）：
   │ 12. RPC 框架（基于 msgpack）                                 │
   │ 13. 配置热通知机制（Reload → 子系统回调）                    │
   │ 14. 绑定样板消除 — 将 bind_util.h 模式推广到网络绑定层      │
+  │ 15. 物理线程 EventLoop 改为 condition_variable 唤醒         │
   └──────────────────────────────────────────────────────────────┘
 
 P2（生产就绪）：
   ┌──────────────────────────────────────────────────────────────┐
-  │ 15. AOI 系统                                                 │
-  │ 16. ORM + 缓存层                                             │
-  │ 17. 认证框架                                                 │
-  │ 18. 监控指标 + Admin HTTP 接口                               │
-  │ 19. Windows 信号处理补齐                                     │
-  │ 20. UNIX/MSVC 编译器警告配置统一                             │
-  │ 21. evpp Release 构建线程安全检查                             │
-  │ 22. 数据库队列背压通知 + 请求丢弃日志                        │
-  │ 23. msgpack 编码大小/深度限制                                 │
-  │ 24. Lua 错误派发策略统一                                     │
-  │ 25. RunInLoop 延迟 delete → weak_ptr/shared_ptr 迁移         │
-  │ 26. 全局变量归属追踪 → ClearCache 清理全局                    │
+  │ 16. AOI 系统                                                 │
+  │ 17. ORM + 缓存层                                             │
+  │ 18. 认证框架                                                 │
+  │ 19. 监控指标 + Admin HTTP 接口                               │
+  │ 20. Windows 信号处理补齐                                     │
+  │ 21. UNIX/MSVC 编译器警告配置统一                             │
+  │ 22. evpp Release 构建线程安全检查                             │
+  │ 23. 数据库队列背压通知 + 请求丢弃日志                        │
+  │ 24. msgpack 编码大小/深度限制                                 │
+  │ 25. Lua 错误派发策略统一                                     │
+  │ 26. RunInLoop 延迟 delete → weak_ptr/shared_ptr 迁移         │
+  │ 27. 全局变量归属追踪 → ClearCache 清理全局                    │
+  │ 28. PhysicsSystem::FetchResult 改为 condition_variable       │
   └──────────────────────────────────────────────────────────────┘
 
 P3（持续完善）：
   ┌──────────────────────────────────────────────────────────────┐
-  │ 27. 多数据库后端 + CI/CD                                     │
-  │ 28. 消息优先级/限流 + 断线重连                               │
-  │ 29. 代码重构（单例解耦、编译防火墙、TODO 清偿）              │
-  │ 30. 清理内嵌测试代码（engine.cc DB smoke test）              │
-  │ 31. Buffer 字节序问题修复                                    │
-  │ 32. DNS resolver shared_ptr 泄漏修复                          │
-  │ 33. Engine::Cleanup 生命周期顺序文档化 + 断言                 │
+  │ 29. 多数据库后端 + CI/CD                                     │
+  │ 30. 消息优先级/限流 + 断线重连                               │
+  │ 31. 代码重构（单例解耦、编译防火墙、TODO 清偿）              │
+  │ 32. 清理内嵌测试代码（engine.cc DB smoke test）              │
+  │ 33. Buffer 字节序问题修复                                    │
+  │ 34. DNS resolver shared_ptr 泄漏修复                          │
+  │ 35. Engine::Cleanup 生命周期顺序文档化 + 断言                 │
+  │ 36. MongoDB 绑定返回值统一化                                  │
+  │ 37. cursor 预分配模式安全化                                   │
   └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -896,14 +960,15 @@ P3（持续完善）：
 
 | 指标 | 数值 |
 |------|------|
-| `fprintf(stderr, ...)` 调用数 | 76（13 个文件） |
+| `fprintf(stderr, ...)` 调用数 | 76+（13 个文件，含 DB 层 10 处） |
 | `std::cout` 调用（绕过日志的第三通道） | ~15（timer_manager.cc） |
 | `abort()` / `std::abort()` 调用数 | 4 |
 | TODO/FIXME/HACK/XXX 标记数 | 18 |
-| 单例类数量 | 7 |
+| 单例类数量 | 8（含 PhysicsEngineBridge 代理单例） |
 | `.Instance()` 调用次数 | 80+ |
 | 协议绑定文件数 | 6 协议 × .cc + .h = 13 个文件 |
 | 绑定样板代码量 | ~2000 行（占绑定总代码 ~80%） |
+| 绑定层两种互不兼容模式 | 2（手动 lightuserdata 模式 vs GetUserdata<T> 模板模式） |
 | `luaL_ref`/`luaL_unref` 调用数 | 60（6 个文件） |
 | `disposed` 引用数 | 92（6 个文件） |
 | `__gc`/`__index = mt` 注册数 | 30（13 个文件） |
@@ -912,12 +977,14 @@ P3（持续完善）：
 | `RunInLoop` 捕获原始 lua_State* 的调用数 | 20+（4 个绑定文件） |
 | `luaL_checklstring` 调用点（14 处，全部无长度上限） | 14（6 个 bind 文件） |
 | MongoDB 绑定文件数 | 46 个 |
+| MongoDB 绑定返回值模式不一致 | 2 值模式 vs 3 值模式，约 10 处 |
 | Lua 脚本文件数 | 10 个 |
 | Lua 全局导出函数数 | ~20+（log_* × 5 + timer × 3 + net × 7 + cmsgpack × 8 + mongo + db × 5） |
 | evpp 层测试文件数 | ~15 个 |
 | engine 层测试文件数 | **0** |
 | 编译器警告禁用（MSVC） | 11 个 /wd flag |
 | 物理结果接入行 | 0（全部注释掉） |
+| 物理线程命令延迟（轮询休眠） | 0-50ms |
 | 裸 new + 手动 delete 出现次数 | ~15（网络绑定层） |
 | `reinterpret_cast` 调用数 | ~120（主要在 mongo 层 — C ABI 桥接） |
 | catch(...) 块数 | ~20（大部分在 mongo 回调中防止 C 栈帧异常泄露） |
