@@ -1,20 +1,19 @@
 #include "runtime/evpp/http/http_server.h"
 
+#include <future>
 
-#include "runtime/evpp/libevent.h"
-#include "runtime/evpp/event_watcher.h"
 #include "runtime/evpp/event_loop.h"
 #include "runtime/evpp/event_loop_thread.h"
 #include "runtime/evpp/event_loop_thread_pool.h"
+#include "runtime/evpp/event_watcher.h"
+#include "runtime/evpp/libevent.h"
 #include "runtime/evpp/utility.h"
-
-#include <future>
 
 namespace evpp {
 namespace http {
 
 Server::Server(uint32_t thread_num) {
-	ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
+	ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*) this);
 	tpool_.reset(new EventLoopThreadPool(nullptr, thread_num));
 #if defined(EVPP_HTTP_SERVER_SUPPORTS_SSL)
 	setPortSSLDefaultOption(false);
@@ -22,7 +21,7 @@ Server::Server(uint32_t thread_num) {
 }
 
 Server::~Server() {
-	ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*)this);
+	ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*) this);
 	if (!listen_threads_.empty()) {
 		for (auto& lt : listen_threads_) {
 			lt.thread->Join();
@@ -39,22 +38,18 @@ Server::~Server() {
 
 #if defined(EVPP_HTTP_SERVER_SUPPORTS_SSL)
 void Server::setPortSSLOption(int listen_port,
-			bool enable_ssl,
-			const char* certificate_chain_file,
-			const char* private_key_file)
-{
-	ssl_option_map_[listen_port] = PortSSLOption {
-		enable_ssl, certificate_chain_file, private_key_file};
+							  bool enable_ssl,
+							  const char* certificate_chain_file,
+							  const char* private_key_file) {
+	ssl_option_map_[listen_port] =
+		PortSSLOption{enable_ssl, certificate_chain_file, private_key_file};
 }
 
-void Server::setPortSSLDefaultOption(
-			bool enable_ssl,
-			const char* certificate_chain_file,
-			const char* private_key_file)
-{
+void Server::setPortSSLDefaultOption(bool enable_ssl,
+									 const char* certificate_chain_file,
+									 const char* private_key_file) {
 	/* Use 0 to represent default settings */
-	ssl_option_map_[0] = PortSSLOption {
-		enable_ssl, certificate_chain_file, private_key_file };
+	ssl_option_map_[0] = PortSSLOption{enable_ssl, certificate_chain_file, private_key_file};
 }
 #endif
 
@@ -66,17 +61,24 @@ bool Server::Init(int listen_port) {
 
 #if defined(EVPP_HTTP_SERVER_SUPPORTS_SSL)
 	PortSSLOption option = ssl_option_map_[0];
-	if(ssl_option_map_.find(listen_port) != ssl_option_map_.end()){
+	if (ssl_option_map_.find(listen_port) != ssl_option_map_.end()) {
 		option = ssl_option_map_[listen_port];
 	}
-	lt.hservice = std::make_shared<Service>(lt.thread->loop(), option.enable_ssl_,
-				option.certificate_chain_file_.c_str(),option.private_key_file_.c_str());
+	lt.hservice = std::make_shared<Service>(lt.thread->loop(),
+											option.enable_ssl_,
+											option.certificate_chain_file_.c_str(),
+											option.private_key_file_.c_str());
 #else
 	lt.hservice = std::make_shared<Service>(lt.thread->loop());
 #endif
 	if (!lt.hservice->Listen(listen_port)) {
 		int serrno = EVPP_ERRNO;
-		ENGINE_LOG_ERROR(engine::GetLogger(), "this={} http server listen at port {} failed. errno={} {}", (void*)this, listen_port, serrno, strerror(serrno));
+		ENGINE_LOG_ERROR(engine::GetLogger(),
+						 "this={} http server listen at port {} failed. errno={} {}",
+						 (void*) this,
+						 listen_port,
+						 serrno,
+						 strerror(serrno));
 		lt.hservice->Stop();
 		return false;
 	}
@@ -99,7 +101,7 @@ bool Server::Init(const std::vector<int>& listen_ports) {
 	return rc;
 }
 
-bool Server::Init(const std::string& listen_ports/*"80,8080,443"*/) {
+bool Server::Init(const std::string& listen_ports /*"80,8080,443"*/) {
 	status_.store(kInitializing);
 	std::vector<std::string> vec;
 	StringSplit(listen_ports, ",", 0, vec);
@@ -108,7 +110,11 @@ bool Server::Init(const std::string& listen_ports/*"80,8080,443"*/) {
 	for (auto& s : vec) {
 		int i = std::atoi(s.c_str());
 		if (i <= 0) {
-			ENGINE_LOG_ERROR(engine::GetLogger(), "this={} Cannot convert [{}] to a integer. 'listen_ports' format wrong.", (void*)this, s);
+			ENGINE_LOG_ERROR(
+				engine::GetLogger(),
+				"this={} Cannot convert [{}] to a integer. 'listen_ports' format wrong.",
+				(void*) this,
+				s);
 			return false;
 		}
 		v.push_back(i);
@@ -135,7 +141,7 @@ bool Server::Start() {
 	status_.store(kStarting);
 	bool rc = tpool_->Start(true);
 	if (!rc) {
-		ENGINE_LOG_ERROR(engine::GetLogger(), "this={} start thread pool failed.", (void*)this);
+		ENGINE_LOG_ERROR(engine::GetLogger(), "this={} start thread pool failed.", (void*) this);
 		return false;
 	}
 
@@ -144,14 +150,16 @@ bool Server::Start() {
 		auto& lthread = lt.thread;
 		auto http_close_fn = [hservice, this]() {
 			hservice->Stop();
-			ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http service at 0.0.0.0:{} has stopped.", (void*)this, hservice->port());
+			ENGINE_LOG_TRACE(engine::GetLogger(),
+							 "this={} http service at 0.0.0.0:{} has stopped.",
+							 (void*) this,
+							 hservice->port());
 			return EventLoopThread::kOK;
 		};
-		rc = lthread->Start(true,
-							EventLoopThread::Functor(),
-							http_close_fn);
+		rc = lthread->Start(true, EventLoopThread::Functor(), http_close_fn);
 		if (!rc) {
-			ENGINE_LOG_ERROR(engine::GetLogger(), "this={} start listening thread failed.", (void*)this);
+			ENGINE_LOG_ERROR(
+				engine::GetLogger(), "this={} start listening thread failed.", (void*) this);
 			return false;
 		}
 
@@ -191,14 +199,14 @@ bool Server::Start() {
 	while (!is_running()) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
-	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http server is running", (void*)this);
+	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http server is running", (void*) this);
 	status_.store(kRunning);
 	return true;
 }
 
 void Server::Stop() {
 	assert(IsRunning());
-	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http server is stopping", (void*)this);
+	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http server is stopping", (void*) this);
 
 	status_.store(kStopping);
 
@@ -245,29 +253,25 @@ void Server::Stop() {
 	}
 	listen_threads_.clear();
 
-	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http server stopped", (void*)this);
+	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http server stopped", (void*) this);
 }
 
 void Server::Pause() {
-	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http server pause", (void*)this);
+	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http server pause", (void*) this);
 	for (auto& lt : listen_threads_) {
 		EventLoop* loop = lt.thread->loop();
 		std::shared_ptr<Service>& hs = lt.hservice;
-		auto f = [hs]() {
-			hs->Pause();
-		};
+		auto f = [hs]() { hs->Pause(); };
 		loop->RunInLoop(f);
 	}
 }
 
 void Server::Continue() {
-	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http server continue", (void*)this);
+	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http server continue", (void*) this);
 	for (auto& lt : listen_threads_) {
 		EventLoop* loop = lt.thread->loop();
 		std::shared_ptr<Service>& hs = lt.hservice;
-		auto f = [hs]() {
-			hs->Continue();
-		};
+		auto f = [hs]() { hs->Continue(); };
 		loop->RunInLoop(f);
 	}
 }
@@ -288,9 +292,15 @@ void Server::Dispatch(EventLoop* listening_loop,
 					  const HTTPRequestCallback& user_callback) {
 	// Make sure it is running in the HTTP listening thread
 	assert(listening_loop->IsInLoopThread());
-	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} dispatch request {} url={} in main thread. status={}", (void*)this, (void*)ctx->req(), ctx->original_uri(), StatusToString());
+	ENGINE_LOG_TRACE(engine::GetLogger(),
+					 "this={} dispatch request {} url={} in main thread. status={}",
+					 (void*) this,
+					 (void*) ctx->req(),
+					 ctx->original_uri(),
+					 StatusToString());
 	if (!IsRunning()) {
-		ENGINE_LOG_WARN(engine::GetLogger(), "The listening thread is not running, may be it is stopping now.");
+		ENGINE_LOG_WARN(engine::GetLogger(),
+						"The listening thread is not running, may be it is stopping now.");
 		//TODO gracefully shutdown.
 		return;
 	}
@@ -300,10 +310,16 @@ void Server::Dispatch(EventLoop* listening_loop,
 
 	// Forward this HTTP request to a worker thread to process
 	auto f = [loop, ctx, response_callback, user_callback, this]() {
-		ENGINE_LOG_TRACE(engine::GetLogger(), "this={} process request {} url={} in working thread. status={}", (void*)this, (void*)ctx->req(), ctx->original_uri(), StatusToString());
+		ENGINE_LOG_TRACE(engine::GetLogger(),
+						 "this={} process request {} url={} in working thread. status={}",
+						 (void*) this,
+						 (void*) ctx->req(),
+						 ctx->original_uri(),
+						 StatusToString());
 
 		if (!IsRunning()) {
-			ENGINE_LOG_WARN(engine::GetLogger(), "The listening thread is not running, may be it is stopping now.");
+			ENGINE_LOG_WARN(engine::GetLogger(),
+							"The listening thread is not running, may be it is stopping now.");
 			//TODO gracefully shutdown.
 			return;
 		}
@@ -332,7 +348,7 @@ EventLoop* Server::GetNextLoop(EventLoop* default_loop, const ContextPtr& ctx) {
 	}
 
 #if LIBEVENT_VERSION_NUMBER >= 0x02010500
-	const sockaddr*  sa = evhttp_connection_get_addr(ctx->req()->evcon);
+	const sockaddr* sa = evhttp_connection_get_addr(ctx->req()->evcon);
 	if (sa) {
 		const sockaddr_in* r = sock::sockaddr_in_cast(sa);
 		ENGINE_LOG_INFO(engine::GetLogger(), "http remote address {}", sock::ToIPPort(r));

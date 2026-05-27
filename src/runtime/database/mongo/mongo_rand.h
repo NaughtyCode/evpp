@@ -12,13 +12,13 @@ namespace mongo {
 
 // Wraps mongoc-rand.h — cryptographically secure random utilities.
 class ENGINE_API MongoRand {
-public:
-    static void Seed(const void* buf, int num);
-    static void Add(const void* buf, int num, double entropy);
-    static int Status();
+	public:
+	static void Seed(const void* buf, int num);
+	static void Add(const void* buf, int num, double entropy);
+	static int Status();
 };
 
-} // namespace mongo
-} // namespace engine
+}  // namespace mongo
+}  // namespace engine
 
 #endif

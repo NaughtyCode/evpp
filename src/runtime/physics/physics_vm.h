@@ -7,7 +7,8 @@
 // Including this header without the macro will cause a compile-time #error.
 //==============================================================================
 #ifndef PHYSICS_INTERNAL_ACCESS
-#error "physics_vm.h is internal to the physics subsystem. \
+#error \
+	"physics_vm.h is internal to the physics subsystem. \
 Use physics_engine_bridge.h instead. \
 If you are writing physics-internal code, #define PHYSICS_INTERNAL_ACCESS \
 before including this header."
@@ -35,10 +36,10 @@ class PhysicsWorld;
 //=============================================================================
 
 enum PhysicsCustomPtr : int {
-    kPhysPtrSystem   = 1,  // PhysicsSystem*
-    kPhysPtrThread   = 2,  // PhysicsThread*
-    kPhysPtrWorld    = 3,  // PhysicsWorld*
-    kPhysPtrScriptVM = 4,  // PhysicsScriptVM*
+	kPhysPtrSystem = 1,	 // PhysicsSystem*
+	kPhysPtrThread = 2,	 // PhysicsThread*
+	kPhysPtrWorld = 3,	// PhysicsWorld*
+	kPhysPtrScriptVM = 4,  // PhysicsScriptVM*
 };
 
 //=============================================================================
@@ -76,51 +77,49 @@ enum PhysicsCustomPtr : int {
 //=============================================================================
 
 class PhysicsScriptVM : public ScriptVM {
-public:
-    PhysicsScriptVM();
-    ~PhysicsScriptVM() override;
+	public:
+	PhysicsScriptVM();
+	~PhysicsScriptVM() override;
 
-    PhysicsScriptVM(const PhysicsScriptVM&) = delete;
-    PhysicsScriptVM& operator=(const PhysicsScriptVM&) = delete;
-    PhysicsScriptVM(PhysicsScriptVM&&) noexcept = default;
-    PhysicsScriptVM& operator=(PhysicsScriptVM&&) noexcept = default;
+	PhysicsScriptVM(const PhysicsScriptVM&) = delete;
+	PhysicsScriptVM& operator=(const PhysicsScriptVM&) = delete;
+	PhysicsScriptVM(PhysicsScriptVM&&) noexcept = default;
+	PhysicsScriptVM& operator=(PhysicsScriptVM&&) noexcept = default;
 
-    // ── Custom pointer store — physics subsystem object registry ───────
-    //
-    // The generic custom-ptr API (SetCustomPtr, GetCustomPtr,
-    // PushCustomPtr, etc.) is inherited from ScriptVM. The methods
-    // below are physics-specific convenience wrappers.
-    //
-    // Registers the 4 core subsystem object pointers and stores this VM
-    // itself at kPhysPtrScriptVM. Reserves kPhysPtrScriptVM (4) slots
-    // before writing, preventing reallocation for the core set.
-    //
-    // Called once by PhysicsSystem::Initialize() (MT, one-shot, PT not
-    // yet started).
+	// ── Custom pointer store — physics subsystem object registry ───────
+	//
+	// The generic custom-ptr API (SetCustomPtr, GetCustomPtr,
+	// PushCustomPtr, etc.) is inherited from ScriptVM. The methods
+	// below are physics-specific convenience wrappers.
+	//
+	// Registers the 4 core subsystem object pointers and stores this VM
+	// itself at kPhysPtrScriptVM. Reserves kPhysPtrScriptVM (4) slots
+	// before writing, preventing reallocation for the core set.
+	//
+	// Called once by PhysicsSystem::Initialize() (MT, one-shot, PT not
+	// yet started).
 
-    void RegisterSubsystemObjects(PhysicsSystem* sys,
-                                  PhysicsThread* thread,
-                                  PhysicsWorld* world);
+	void RegisterSubsystemObjects(PhysicsSystem* sys, PhysicsThread* thread, PhysicsWorld* world);
 
-    // ── Typed subsystem accessors (PT-exclusive, no locks) ────────────
-    //
-    // Retrieve the 4 core subsystem objects from the underlying
-    // custom-pointer array. Returns nullptr if the slot has not been
-    // populated (i.e. RegisterSubsystemObjects was never called).
+	// ── Typed subsystem accessors (PT-exclusive, no locks) ────────────
+	//
+	// Retrieve the 4 core subsystem objects from the underlying
+	// custom-pointer array. Returns nullptr if the slot has not been
+	// populated (i.e. RegisterSubsystemObjects was never called).
 
-    PhysicsSystem*   GetPhysicsSystem() const;
-    PhysicsThread*   GetPhysicsThread() const;
-    PhysicsWorld*    GetPhysicsWorld() const;
+	PhysicsSystem* GetPhysicsSystem() const;
+	PhysicsThread* GetPhysicsThread() const;
+	PhysicsWorld* GetPhysicsWorld() const;
 
-    // Built-in convenience: verify all 4 core slots are populated.
-    // Returns true iff GetPhysicsSystem(), GetPhysicsThread(),
-    // GetPhysicsWorld(), and GetCustomPtr(kPhysPtrScriptVM) are all
-    // non-null.
-    bool AreCoreSlotsValid() const;
+	// Built-in convenience: verify all 4 core slots are populated.
+	// Returns true iff GetPhysicsSystem(), GetPhysicsThread(),
+	// GetPhysicsWorld(), and GetCustomPtr(kPhysPtrScriptVM) are all
+	// non-null.
+	bool AreCoreSlotsValid() const;
 
-private:
+	private:
 };
 
-} // namespace engine
+}  // namespace engine
 
-#endif // ENGINE_PHYSICS_ENABLED
+#endif	// ENGINE_PHYSICS_ENABLED

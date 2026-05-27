@@ -19,5 +19,5 @@ ENGINE_API void PushKcpServerLibrary(lua_State* L);
 // Called during engine shutdown before the Lua VM is destroyed.
 ENGINE_API void ShutdownKcpServerBindings();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine

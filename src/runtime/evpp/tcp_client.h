@@ -1,13 +1,13 @@
 #pragma once
 
-#include "runtime/evpp/inner_pre.h"
-#include "runtime/evpp/event_loop.h"
-#include "runtime/evpp/tcp_callbacks.h"
-#include "runtime/evpp/any.h"
-
-#include <map>
 #include <atomic>
+#include <map>
 #include <mutex>
+
+#include "runtime/evpp/any.h"
+#include "runtime/evpp/event_loop.h"
+#include "runtime/evpp/inner_pre.h"
+#include "runtime/evpp/tcp_callbacks.h"
 
 namespace evpp {
 class Connector;
@@ -22,107 +22,112 @@ class Connector;
 //      6. Call TCPClient::Disonnect() to disconnect from remote server
 //
 class EVPP_EXPORT TCPClient {
-public:
-    // @brief The constructor of the class
-    // @param[in] loop - The EventLoop runs this object
-    // @param[in] remote_addr - The remote server address with format "host:port"
-    //  If the host is not IP, it will automatically do the DNS resolving asynchronously
-    // @param[in] name -
-    TCPClient(EventLoop* loop,
-              const std::string& remote_addr/*host:port*/,
-              const std::string& name);
-    ~TCPClient();
+	public:
+	// @brief The constructor of the class
+	// @param[in] loop - The EventLoop runs this object
+	// @param[in] remote_addr - The remote server address with format "host:port"
+	//  If the host is not IP, it will automatically do the DNS resolving asynchronously
+	// @param[in] name -
+	TCPClient(EventLoop* loop,
+			  const std::string& remote_addr /*host:port*/,
+			  const std::string& name);
+	~TCPClient();
 
-    // @brief We can bind a local address. This is an optional operation.
-    //  If necessary, it should be called before doing Connect().
-    // @param[IN] local_addr -
-    void Bind(const std::string& local_addr/*host:port*/);
+	// @brief We can bind a local address. This is an optional operation.
+	//  If necessary, it should be called before doing Connect().
+	// @param[IN] local_addr -
+	void Bind(const std::string& local_addr /*host:port*/);
 
-    // @brief Try to establish a connection with remote server asynchronously
-    //  If the connection callback is set properly it will be invoked when
-    //  the connection is established successfully or timeout or cannot
-    //  establish a connection.
-    void Connect();
+	// @brief Try to establish a connection with remote server asynchronously
+	//  If the connection callback is set properly it will be invoked when
+	//  the connection is established successfully or timeout or cannot
+	//  establish a connection.
+	void Connect();
 
-    // @brief Disconnect from the remote server. When the connection is
-    //  broken down, the connection callback will be invoked.
-    void Disconnect();
-public:
-    // Set a connection event relative callback when the TCPClient
-    // establishes a connection or an exist connection breaks down or failed to establish a connection.
-    // When these three events happened, the value of the parameter in the callback is:
-    //      1. Successfully establish a connection : TCPConn::IsConnected() == true
-    //      2. An exist connection broken down : TCPConn::IsDisconnecting() == true
-    //      3. Failed to establish a connection : TCPConn::IsDisconnected() == true and TCPConn::fd() == -1
-    void SetConnectionCallback(const ConnectionCallback& cb);
+	// @brief Disconnect from the remote server. When the connection is
+	//  broken down, the connection callback will be invoked.
+	void Disconnect();
 
-    // Set the message callback to handle the messages from remote server
-    void SetMessageCallback(const MessageCallback& cb) {
-        msg_fn_ = cb;
-    }
+	public:
+	// Set a connection event relative callback when the TCPClient
+	// establishes a connection or an exist connection breaks down or failed to establish a connection.
+	// When these three events happened, the value of the parameter in the callback is:
+	//      1. Successfully establish a connection : TCPConn::IsConnected() == true
+	//      2. An exist connection broken down : TCPConn::IsDisconnecting() == true
+	//      3. Failed to establish a connection : TCPConn::IsDisconnected() == true and TCPConn::fd() == -1
+	void SetConnectionCallback(const ConnectionCallback& cb);
 
-public:
-    bool auto_reconnect() const {
-        return auto_reconnect_;
-    }
-    void set_auto_reconnect(bool v) {
-        auto_reconnect_.store(v);
-    }
-    Duration reconnect_interval() const {
-        return Duration(reconnect_interval_ns_.load(std::memory_order_acquire));
-    }
-    void set_reconnect_interval(Duration timeout) {
-        reconnect_interval_ns_.store(timeout.Nanoseconds(), std::memory_order_release);
-    }
-    Duration connecting_timeout() const {
-        return Duration(connecting_timeout_ns_.load(std::memory_order_acquire));
-    }
-    void set_connecting_timeout(Duration timeout) {
-        connecting_timeout_ns_.store(timeout.Nanoseconds(), std::memory_order_release);
-    }
-    void set_context(const Any& c) {
-        context_ = c;
-    }
-    const Any& context() const {
-        return context_;
-    }
-    TCPConnPtr conn() const;
+	// Set the message callback to handle the messages from remote server
+	void SetMessageCallback(const MessageCallback& cb) {
+		msg_fn_ = cb;
+	}
 
-    // Return the remote address with the format of 'host:port'
-    const std::string& remote_addr() const {
-        return remote_addr_;
-    }
-    const std::string& local_addr() const {
-        return local_addr_;
-    }
-    const std::string& name() const {
-        return name_;
-    }
-    EventLoop* loop() const {
-        return loop_;
-    }
-private:
-    void DisconnectInLoop();
-    void OnConnection(evpp_socket_t sockfd, const std::string& laddr);
-    void OnRemoveConnection(const TCPConnPtr& conn);
-    void Reconnect();
-private:
-    EventLoop* loop_;
-    std::string local_addr_; // If the local address is not empty, we will bind to this local address before doing connect()
-    std::string remote_addr_; // host:port
-    std::string name_;
-    std::atomic<bool> auto_reconnect_ = { true }; // The flag whether it reconnects automatically, Default : true
-    std::atomic<int64_t> reconnect_interval_ns_{3000000000}; // Default : 3 seconds (in ns)
+	public:
+	bool auto_reconnect() const {
+		return auto_reconnect_;
+	}
+	void set_auto_reconnect(bool v) {
+		auto_reconnect_.store(v);
+	}
+	Duration reconnect_interval() const {
+		return Duration(reconnect_interval_ns_.load(std::memory_order_acquire));
+	}
+	void set_reconnect_interval(Duration timeout) {
+		reconnect_interval_ns_.store(timeout.Nanoseconds(), std::memory_order_release);
+	}
+	Duration connecting_timeout() const {
+		return Duration(connecting_timeout_ns_.load(std::memory_order_acquire));
+	}
+	void set_connecting_timeout(Duration timeout) {
+		connecting_timeout_ns_.store(timeout.Nanoseconds(), std::memory_order_release);
+	}
+	void set_context(const Any& c) {
+		context_ = c;
+	}
+	const Any& context() const {
+		return context_;
+	}
+	TCPConnPtr conn() const;
 
-    Any context_;
+	// Return the remote address with the format of 'host:port'
+	const std::string& remote_addr() const {
+		return remote_addr_;
+	}
+	const std::string& local_addr() const {
+		return local_addr_;
+	}
+	const std::string& name() const {
+		return name_;
+	}
+	EventLoop* loop() const {
+		return loop_;
+	}
 
-    mutable std::mutex mutex_; // The guard of conn_
-    TCPConnPtr conn_;
+	private:
+	void DisconnectInLoop();
+	void OnConnection(evpp_socket_t sockfd, const std::string& laddr);
+	void OnRemoveConnection(const TCPConnPtr& conn);
+	void Reconnect();
 
-    std::shared_ptr<Connector> connector_;
-    std::atomic<int64_t> connecting_timeout_ns_{3000000000}; // Default : 3 seconds (in ns)
+	private:
+	EventLoop* loop_;
+	std::string
+		local_addr_;  // If the local address is not empty, we will bind to this local address before doing connect()
+	std::string remote_addr_;  // host:port
+	std::string name_;
+	std::atomic<bool> auto_reconnect_ = {
+		true};	// The flag whether it reconnects automatically, Default : true
+	std::atomic<int64_t> reconnect_interval_ns_{3000000000};  // Default : 3 seconds (in ns)
 
-    ConnectionCallback conn_fn_;
-    MessageCallback msg_fn_;
+	Any context_;
+
+	mutable std::mutex mutex_;	// The guard of conn_
+	TCPConnPtr conn_;
+
+	std::shared_ptr<Connector> connector_;
+	std::atomic<int64_t> connecting_timeout_ns_{3000000000};  // Default : 3 seconds (in ns)
+
+	ConnectionCallback conn_fn_;
+	MessageCallback msg_fn_;
 };
 }

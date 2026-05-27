@@ -24,7 +24,7 @@ const luaL_Reg* GetBsonVectorFloat32ViewLib();
 const luaL_Reg* GetBsonVectorPackedBitConstViewLib();
 const luaL_Reg* GetBsonVectorPackedBitViewLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

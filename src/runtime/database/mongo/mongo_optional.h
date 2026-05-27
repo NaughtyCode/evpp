@@ -10,27 +10,27 @@ namespace mongo {
 
 // Wraps mongoc-optional.h — a simple optional bool container.
 class ENGINE_API MongoOptional {
-public:
-    MongoOptional();
-    ~MongoOptional() = default;
+	public:
+	MongoOptional();
+	~MongoOptional() = default;
 
-    MongoOptional(const MongoOptional& other);
-    MongoOptional& operator=(const MongoOptional& other);
+	MongoOptional(const MongoOptional& other);
+	MongoOptional& operator=(const MongoOptional& other);
 
-    void Init();
-    bool IsSet() const;
-    bool Value() const;
-    void SetValue(bool val);
-    void Copy(const MongoOptional& source);
+	void Init();
+	bool IsSet() const;
+	bool Value() const;
+	void SetValue(bool val);
+	void Copy(const MongoOptional& source);
 
-    void* Raw(); // returns mongoc_optional_t*
+	void* Raw();  // returns mongoc_optional_t*
 
-private:
-    // Inline storage matching sizeof(mongoc_optional_t) = sizeof(bool)+sizeof(bool)+padding
-    alignas(8) char storage_[16];
+	private:
+	// Inline storage matching sizeof(mongoc_optional_t) = sizeof(bool)+sizeof(bool)+padding
+	alignas(8) char storage_[16];
 };
 
-} // namespace mongo
-} // namespace engine
+}  // namespace mongo
+}  // namespace engine
 
 #endif

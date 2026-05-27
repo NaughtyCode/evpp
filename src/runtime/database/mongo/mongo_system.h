@@ -19,24 +19,24 @@ namespace mongo {
 //   // ... use mongo wrappers ...
 //   MongoSystem::Instance().Shutdown();
 class ENGINE_API MongoSystem {
-public:
-    static MongoSystem& Instance();
+	public:
+	static MongoSystem& Instance();
 
-    bool Initialize();
-    void Shutdown();
-    bool IsInitialized() const;
+	bool Initialize();
+	void Shutdown();
+	bool IsInitialized() const;
 
-    MongoSystem(const MongoSystem&) = delete;
-    MongoSystem& operator=(const MongoSystem&) = delete;
+	MongoSystem(const MongoSystem&) = delete;
+	MongoSystem& operator=(const MongoSystem&) = delete;
 
-private:
-    MongoSystem() = default;
-    ~MongoSystem() = default;
+	private:
+	MongoSystem() = default;
+	~MongoSystem() = default;
 
-    std::atomic<bool> initialized_{false};
+	std::atomic<bool> initialized_{false};
 };
 
-} // namespace mongo
-} // namespace engine
+}  // namespace mongo
+}  // namespace engine
 
 #endif

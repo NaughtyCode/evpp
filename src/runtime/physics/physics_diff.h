@@ -7,7 +7,8 @@
 // Including this header without the macro will cause a compile-time #error.
 //==============================================================================
 #ifndef PHYSICS_INTERNAL_ACCESS
-#error "physics_diff.h is internal to the physics subsystem. \
+#error \
+	"physics_diff.h is internal to the physics subsystem. \
 Use physics_engine_bridge.h instead. \
 If you are writing physics-internal code, #define PHYSICS_INTERNAL_ACCESS \
 before including this header."
@@ -21,8 +22,8 @@ before including this header."
 #include <unordered_map>
 
 #include <Jolt/Jolt.h>
-#include <Jolt/Math/Vec3.h>
 #include <Jolt/Math/Quat.h>
+#include <Jolt/Math/Vec3.h>
 
 #include "runtime/physics/physics_commands.h"
 #include "runtime/physics/physics_config.h"
@@ -34,10 +35,10 @@ namespace engine {
 //============================================================================
 
 struct BodyStateSnapshot {
-    JPH::RVec3 position = JPH::RVec3::sZero();
-    JPH::Quat rotation = JPH::Quat::sIdentity();
-    JPH::Vec3 linear_velocity = JPH::Vec3::sZero();
-    JPH::Vec3 angular_velocity = JPH::Vec3::sZero();
+	JPH::RVec3 position = JPH::RVec3::sZero();
+	JPH::Quat rotation = JPH::Quat::sIdentity();
+	JPH::Vec3 linear_velocity = JPH::Vec3::sZero();
+	JPH::Vec3 angular_velocity = JPH::Vec3::sZero();
 };
 
 //============================================================================
@@ -48,11 +49,10 @@ struct BodyStateSnapshot {
 // Uses per-field epsilon from ThresholdsConfig [D24].
 //============================================================================
 
-std::optional<DiffPacket> GenerateDiff(
-    uint32_t body_id,
-    const BodyStateSnapshot& current,
-    const BodyStateSnapshot& previous,
-    const ThresholdsConfig& thresholds);
+std::optional<DiffPacket> GenerateDiff(uint32_t body_id,
+									   const BodyStateSnapshot& current,
+									   const BodyStateSnapshot& previous,
+									   const ThresholdsConfig& thresholds);
 
 //============================================================================
 // ObjectRegistry — body_id ↔ asset_name bidirectional mapping
@@ -62,33 +62,35 @@ std::optional<DiffPacket> GenerateDiff(
 //============================================================================
 
 class ObjectRegistry {
-public:
-    // Register a mapping. asset_name may be empty for dynamic spawns.
-    void Register(uint32_t body_id, const std::string& asset_name);
+	public:
+	// Register a mapping. asset_name may be empty for dynamic spawns.
+	void Register(uint32_t body_id, const std::string& asset_name);
 
-    // Remove a mapping (called when body is destroyed).
-    void Unregister(uint32_t body_id);
+	// Remove a mapping (called when body is destroyed).
+	void Unregister(uint32_t body_id);
 
-    // Lookup asset name by body_id. Returns empty string if not found.
-    const std::string& GetAssetName(uint32_t body_id) const;
+	// Lookup asset name by body_id. Returns empty string if not found.
+	const std::string& GetAssetName(uint32_t body_id) const;
 
-    // Lookup body_id by asset name. Returns 0 if not found.
-    uint32_t GetBodyId(const std::string& asset_name) const;
+	// Lookup body_id by asset name. Returns 0 if not found.
+	uint32_t GetBodyId(const std::string& asset_name) const;
 
-    // Check if a body_id is registered.
-    bool Has(uint32_t body_id) const;
+	// Check if a body_id is registered.
+	bool Has(uint32_t body_id) const;
 
-    // Clear all registrations.
-    void Clear();
+	// Clear all registrations.
+	void Clear();
 
-    size_t Size() const { return id_to_name_.size(); }
+	size_t Size() const {
+		return id_to_name_.size();
+	}
 
-private:
-    std::unordered_map<uint32_t, std::string> id_to_name_;
-    std::unordered_map<std::string, uint32_t> name_to_id_;
-    static inline const std::string kEmptyString;
+	private:
+	std::unordered_map<uint32_t, std::string> id_to_name_;
+	std::unordered_map<std::string, uint32_t> name_to_id_;
+	static inline const std::string kEmptyString;
 };
 
-} // namespace engine
+}  // namespace engine
 
-#endif // ENGINE_PHYSICS_ENABLED
+#endif	// ENGINE_PHYSICS_ENABLED

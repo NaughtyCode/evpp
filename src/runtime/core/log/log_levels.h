@@ -18,4 +18,4 @@ using LogLevel = quill::LogLevel;
 
 constexpr auto kDefaultLevel = LogLevel::Info;
 
-} // namespace engine
+}  // namespace engine

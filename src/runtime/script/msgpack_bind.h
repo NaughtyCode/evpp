@@ -19,5 +19,5 @@ namespace script {
 // pcall: on error it returns (nil, errmsg) instead of raising.
 ENGINE_API void ExportMsgPack(ScriptVM& vm);
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine

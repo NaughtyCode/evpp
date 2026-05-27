@@ -22,7 +22,7 @@ const luaL_Reg* GetMongoGridFsFileListLib();
 const luaL_Reg* GetMongoGridFsLib();
 const luaL_Reg* GetMongoGridFsBucketLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

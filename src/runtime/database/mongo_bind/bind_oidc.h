@@ -18,7 +18,7 @@ const luaL_Reg* GetMongoOidcCredentialLib();
 const luaL_Reg* GetMongoOidcCallbackParamsLib();
 const luaL_Reg* GetMongoOidcCallbackLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

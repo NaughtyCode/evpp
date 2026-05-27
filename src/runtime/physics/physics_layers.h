@@ -10,9 +10,8 @@
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
 #include <Jolt/Physics/Collision/ObjectLayer.h>
 
-#include "runtime/physics/physics_config.h"
-
 #include "runtime/core/engine_api.h"
+#include "runtime/physics/physics_config.h"
 
 namespace engine {
 
@@ -21,23 +20,23 @@ namespace engine {
 //============================================================================
 
 class ENGINE_API BPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface {
-public:
-    explicit BPLayerInterfaceImpl(const LayerConfig& config);
+	public:
+	explicit BPLayerInterfaceImpl(const LayerConfig& config);
 
-    unsigned int GetNumBroadPhaseLayers() const override;
-    JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer inLayer) const override;
+	unsigned int GetNumBroadPhaseLayers() const override;
+	JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer inLayer) const override;
 
 #if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
-    const char* GetBroadPhaseLayerName(JPH::BroadPhaseLayer inLayer) const override;
+	const char* GetBroadPhaseLayerName(JPH::BroadPhaseLayer inLayer) const override;
 #endif
 
-private:
-    unsigned int num_layers_ = 0;
-    // ObjectLayer → BroadPhaseLayer lookup
-    std::unordered_map<JPH::ObjectLayer, JPH::BroadPhaseLayer> obj_to_bp_;
+	private:
+	unsigned int num_layers_ = 0;
+	// ObjectLayer → BroadPhaseLayer lookup
+	std::unordered_map<JPH::ObjectLayer, JPH::BroadPhaseLayer> obj_to_bp_;
 
 #if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
-    std::unordered_map<JPH::BroadPhaseLayer::Type, std::string> bp_layer_names_;
+	std::unordered_map<JPH::BroadPhaseLayer::Type, std::string> bp_layer_names_;
 #endif
 };
 
@@ -46,16 +45,15 @@ private:
 //============================================================================
 
 class ENGINE_API ObjectLayerPairFilterImpl final : public JPH::ObjectLayerPairFilter {
-public:
-    explicit ObjectLayerPairFilterImpl(const LayerConfig& config);
+	public:
+	explicit ObjectLayerPairFilterImpl(const LayerConfig& config);
 
-    bool ShouldCollide(JPH::ObjectLayer inLayer1,
-                       JPH::ObjectLayer inLayer2) const override;
+	bool ShouldCollide(JPH::ObjectLayer inLayer1, JPH::ObjectLayer inLayer2) const override;
 
-private:
-    // Packed key: (layerA << 16) | layerB
-    std::unordered_map<uint32_t, bool> collision_rules_;
-    bool default_collide_ = false;
+	private:
+	// Packed key: (layerA << 16) | layerB
+	std::unordered_map<uint32_t, bool> collision_rules_;
+	bool default_collide_ = false;
 };
 
 //============================================================================
@@ -63,20 +61,19 @@ private:
 //============================================================================
 
 class ENGINE_API ObjectVSBLayerFilterImpl final : public JPH::ObjectVsBroadPhaseLayerFilter {
-public:
-    explicit ObjectVSBLayerFilterImpl(const LayerConfig& config,
-                                      const BPLayerInterfaceImpl& bp_iface);
+	public:
+	explicit ObjectVSBLayerFilterImpl(const LayerConfig& config,
+									  const BPLayerInterfaceImpl& bp_iface);
 
-    bool ShouldCollide(JPH::ObjectLayer inLayer1,
-                       JPH::BroadPhaseLayer inLayer2) const override;
+	bool ShouldCollide(JPH::ObjectLayer inLayer1, JPH::BroadPhaseLayer inLayer2) const override;
 
-private:
-    // ObjectLayer → BroadPhaseLayer → collide
-    std::unordered_map<JPH::ObjectLayer,
-                       std::unordered_map<JPH::BroadPhaseLayer::Type, bool>> rules_;
-    bool default_collide_ = false;
+	private:
+	// ObjectLayer → BroadPhaseLayer → collide
+	std::unordered_map<JPH::ObjectLayer, std::unordered_map<JPH::BroadPhaseLayer::Type, bool>>
+		rules_;
+	bool default_collide_ = false;
 };
 
-} // namespace engine
+}  // namespace engine
 
-#endif // ENGINE_PHYSICS_ENABLED
+#endif	// ENGINE_PHYSICS_ENABLED

@@ -22,5 +22,5 @@ ENGINE_API void ExportTimer(ScriptVM& vm);
 // function references.  Must be called before the ScriptVM is destroyed.
 ENGINE_API void ShutdownTimerBindings(ScriptVM& vm);
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine

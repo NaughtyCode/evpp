@@ -37,17 +37,16 @@ namespace {
 // Call a Lua function with (int, string) for HTTP response.
 // Logs and pops errors; does NOT unref.
 void call_lua_http_handler(lua_State* L, int ref, int code, const std::string& body) {
-    if (!L) return;
-    if (ref == LUA_NOREF) return;
-    lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
-    lua_pushinteger(L, static_cast<lua_Integer>(code));
-    lua_pushlstring(L, body.data(), body.size());
-    if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
-        auto* logger = GetLogger();
-        ENGINE_LOG_ERROR(logger, "[net.http] callback error: {}",
-                         lua_tostring(L, -1));
-        lua_pop(L, 1);
-    }
+	if (!L) return;
+	if (ref == LUA_NOREF) return;
+	lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+	lua_pushinteger(L, static_cast<lua_Integer>(code));
+	lua_pushlstring(L, body.data(), body.size());
+	if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+		auto* logger = GetLogger();
+		ENGINE_LOG_ERROR(logger, "[net.http] callback error: {}", lua_tostring(L, -1));
+		lua_pop(L, 1);
+	}
 }
 
 // Guards HTTP callbacks from firing after engine shutdown.
@@ -70,153 +69,151 @@ std::mutex g_http_mutex;
 //     before unlinking the ref. If ShutdownHttpBindings concurrently set
 //     g_net_alive=false and moved the pending vector, we bail out
 //     without touching the ref (shutdown already released it).
-void HandleHttpResponse(lua_State* L, int ref,
-                        const std::shared_ptr<evpp::httpc::Response>& resp) {
-    // Unlink the ref from the pending list under the mutex. This must be
-    // done before dispatching to Lua — if the Lua callback calls
-    // net.http.get/post, those functions acquire g_http_mutex and would
-    // deadlock on this thread if we still held it.
-    {
-        std::lock_guard<std::mutex> lock(g_http_mutex);
-        if (!g_net_alive.load()) return;
+void HandleHttpResponse(lua_State* L, int ref, const std::shared_ptr<evpp::httpc::Response>& resp) {
+	// Unlink the ref from the pending list under the mutex. This must be
+	// done before dispatching to Lua — if the Lua callback calls
+	// net.http.get/post, those functions acquire g_http_mutex and would
+	// deadlock on this thread if we still held it.
+	{
+		std::lock_guard<std::mutex> lock(g_http_mutex);
+		if (!g_net_alive.load()) return;
 
-        auto it = std::find(g_http_pending_refs.begin(),
-                            g_http_pending_refs.end(), ref);
-        if (it != g_http_pending_refs.end()) {
-            g_http_pending_refs.erase(it);
-        } else {
-            // ShutdownHttpBindings already took ownership of this ref.
-            return;
-        }
-    }
+		auto it = std::find(g_http_pending_refs.begin(), g_http_pending_refs.end(), ref);
+		if (it != g_http_pending_refs.end()) {
+			g_http_pending_refs.erase(it);
+		} else {
+			// ShutdownHttpBindings already took ownership of this ref.
+			return;
+		}
+	}
 
-    // Re-check g_net_alive before dispatching to Lua. If ShutdownHttpBindings
-    // ran between the mutex release and here, skip the callback (but still
-    // unref — the Lua state is still valid since DestroyScript runs after
-    // ShutdownNetBindings in Engine::Cleanup).
-    if (!g_net_alive.load()) {
-        luaL_unref(L, LUA_REGISTRYINDEX, ref);
-        return;
-    }
+	// Re-check g_net_alive before dispatching to Lua. If ShutdownHttpBindings
+	// ran between the mutex release and here, skip the callback (but still
+	// unref — the Lua state is still valid since DestroyScript runs after
+	// ShutdownNetBindings in Engine::Cleanup).
+	if (!g_net_alive.load()) {
+		luaL_unref(L, LUA_REGISTRYINDEX, ref);
+		return;
+	}
 
-    // Dispatch the Lua callback WITHOUT the mutex held, to avoid
-    // re-entrant deadlock when the Lua handler calls net.http.get/post.
-    if (resp) {
-        std::string body(resp->body().data(), resp->body().size());
-        call_lua_http_handler(L, ref, resp->http_code(), body);
-    } else {
-        call_lua_http_handler(L, ref, 0, "");
-    }
+	// Dispatch the Lua callback WITHOUT the mutex held, to avoid
+	// re-entrant deadlock when the Lua handler calls net.http.get/post.
+	if (resp) {
+		std::string body(resp->body().data(), resp->body().size());
+		call_lua_http_handler(L, ref, resp->http_code(), body);
+	} else {
+		call_lua_http_handler(L, ref, 0, "");
+	}
 
-    // Unref. Safe even if g_net_alive became false during the callback:
-    // ShutdownHttpBindings (which sets g_net_alive) runs before
-    // DestroyScript, so the Lua state is still valid. And since we
-    // removed this ref from g_http_pending_refs above, ShutdownHttpBindings
-    // won't double-unref it.
-    luaL_unref(L, LUA_REGISTRYINDEX, ref);
+	// Unref. Safe even if g_net_alive became false during the callback:
+	// ShutdownHttpBindings (which sets g_net_alive) runs before
+	// DestroyScript, so the Lua state is still valid. And since we
+	// removed this ref from g_http_pending_refs above, ShutdownHttpBindings
+	// won't double-unref it.
+	luaL_unref(L, LUA_REGISTRYINDEX, ref);
 }
 
 // ── l_net_http_get(url, on_response) ─────────────────────────────────────
 int l_net_http_get(lua_State* L) {
-    const char* url = luaL_checkstring(L, 1);
-    luaL_checktype(L, 2, LUA_TFUNCTION);
+	const char* url = luaL_checkstring(L, 1);
+	luaL_checktype(L, 2, LUA_TFUNCTION);
 
-    auto* loop = Engine::Instance().GetEventLoop();
-    if (!loop) {
-        return luaL_error(L, "EventLoop not available");
-    }
+	auto* loop = Engine::Instance().GetEventLoop();
+	if (!loop) {
+		return luaL_error(L, "EventLoop not available");
+	}
 
-    lua_pushvalue(L, 2);
-    int ref = luaL_ref(L, LUA_REGISTRYINDEX);
-    {
-        std::lock_guard<std::mutex> lock(g_http_mutex);
-        g_http_pending_refs.push_back(ref);
-    }
+	lua_pushvalue(L, 2);
+	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	{
+		std::lock_guard<std::mutex> lock(g_http_mutex);
+		g_http_pending_refs.push_back(ref);
+	}
 
-    double timeout = ConfigManager::Instance().GetServerConfig().http.timeout_sec;
-    auto req = std::make_shared<evpp::httpc::GetRequest>(
-        loop, url, evpp::Duration(timeout));
+	double timeout = ConfigManager::Instance().GetServerConfig().http.timeout_sec;
+	auto req = std::make_shared<evpp::httpc::GetRequest>(loop, url, evpp::Duration(timeout));
 
-    req->Execute([L, ref](const std::shared_ptr<evpp::httpc::Response>& resp) {
-        HandleHttpResponse(L, ref, resp);
-    });
+	req->Execute([L, ref](const std::shared_ptr<evpp::httpc::Response>& resp) {
+		HandleHttpResponse(L, ref, resp);
+	});
 
-    return 0;
+	return 0;
 }
 
 // ── l_net_http_post(url, body, on_response) ──────────────────────────────
 int l_net_http_post(lua_State* L) {
-    const char* url = luaL_checkstring(L, 1);
-    size_t body_len = 0;
-    const char* body = luaL_checklstring(L, 2, &body_len);
-    luaL_checktype(L, 3, LUA_TFUNCTION);
+	const char* url = luaL_checkstring(L, 1);
+	size_t body_len = 0;
+	const char* body = luaL_checklstring(L, 2, &body_len);
+	luaL_checktype(L, 3, LUA_TFUNCTION);
 
-    auto* loop = Engine::Instance().GetEventLoop();
-    if (!loop) {
-        return luaL_error(L, "EventLoop not available");
-    }
+	auto* loop = Engine::Instance().GetEventLoop();
+	if (!loop) {
+		return luaL_error(L, "EventLoop not available");
+	}
 
-    lua_pushvalue(L, 3);
-    int ref = luaL_ref(L, LUA_REGISTRYINDEX);
-    {
-        std::lock_guard<std::mutex> lock(g_http_mutex);
-        g_http_pending_refs.push_back(ref);
-    }
+	lua_pushvalue(L, 3);
+	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	{
+		std::lock_guard<std::mutex> lock(g_http_mutex);
+		g_http_pending_refs.push_back(ref);
+	}
 
-    double timeout = ConfigManager::Instance().GetServerConfig().http.timeout_sec;
-    auto req = std::make_shared<evpp::httpc::PostRequest>(
-        loop, url, std::string(body, body_len), evpp::Duration(timeout));
+	double timeout = ConfigManager::Instance().GetServerConfig().http.timeout_sec;
+	auto req = std::make_shared<evpp::httpc::PostRequest>(
+		loop, url, std::string(body, body_len), evpp::Duration(timeout));
 
-    req->Execute([L, ref](const std::shared_ptr<evpp::httpc::Response>& resp) {
-        HandleHttpResponse(L, ref, resp);
-    });
+	req->Execute([L, ref](const std::shared_ptr<evpp::httpc::Response>& resp) {
+		HandleHttpResponse(L, ref, resp);
+	});
 
-    return 0;
+	return 0;
 }
 
 const luaL_Reg kHttpFunctions[] = {
-    {"get",  l_net_http_get},
-    {"post", l_net_http_post},
-    {nullptr, nullptr},
+	{"get", l_net_http_get},
+	{"post", l_net_http_post},
+	{nullptr, nullptr},
 };
 
-} // namespace
+}  // namespace
 
 // ======================================================================
 // Public API
 // ======================================================================
 
 void PushHttpLibrary(lua_State* L) {
-    if (!L) return;
-    luaL_newlib(L, kHttpFunctions);
+	if (!L) return;
+	luaL_newlib(L, kHttpFunctions);
 }
 
 void ShutdownHttpBindings() {
-    auto* logger = GetLogger();
+	auto* logger = GetLogger();
 
-    // Prevent any in-flight HTTP callbacks from touching a freed Lua state.
-    g_net_alive.store(false);
+	// Prevent any in-flight HTTP callbacks from touching a freed Lua state.
+	g_net_alive.store(false);
 
-    // Atomically take ownership of pending refs. Callbacks that already
-    // passed the g_net_alive check will re-check under the mutex inside
-    // HandleHttpResponse and bail out, leaving cleanup to us.
-    lua_State* L = Engine::Instance().GetScriptVM().GetState();
-    std::vector<int> pending;
-    {
-        std::lock_guard<std::mutex> lock(g_http_mutex);
-        pending = std::move(g_http_pending_refs);
-    }
-    if (!pending.empty()) {
-        if (L) {
-            for (int ref : pending) {
-                if (ref != LUA_NOREF) {
-                    luaL_unref(L, LUA_REGISTRYINDEX, ref);
-                }
-            }
-        }
-        ENGINE_LOG_INFO(logger, "ScriptBind: released [{}] pending HTTP callback(s)", pending.size());
-    }
+	// Atomically take ownership of pending refs. Callbacks that already
+	// passed the g_net_alive check will re-check under the mutex inside
+	// HandleHttpResponse and bail out, leaving cleanup to us.
+	lua_State* L = Engine::Instance().GetScriptVM().GetState();
+	std::vector<int> pending;
+	{
+		std::lock_guard<std::mutex> lock(g_http_mutex);
+		pending = std::move(g_http_pending_refs);
+	}
+	if (!pending.empty()) {
+		if (L) {
+			for (int ref : pending) {
+				if (ref != LUA_NOREF) {
+					luaL_unref(L, LUA_REGISTRYINDEX, ref);
+				}
+			}
+		}
+		ENGINE_LOG_INFO(
+			logger, "ScriptBind: released [{}] pending HTTP callback(s)", pending.size());
+	}
 }
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine

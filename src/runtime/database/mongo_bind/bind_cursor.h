@@ -13,7 +13,7 @@ namespace script {
 void RegisterMongoCursorMeta(lua_State* L);
 const luaL_Reg* GetMongoCursorLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

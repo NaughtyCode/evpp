@@ -15,7 +15,7 @@ namespace script {
 void RegisterMongoServerApiMeta(lua_State* L);
 const luaL_Reg* GetMongoServerApiLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

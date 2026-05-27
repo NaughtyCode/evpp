@@ -1,6 +1,6 @@
-#include "runtime/evpp/inner_pre.h"
-
 #include "runtime/evpp/duration.h"
+
+#include "runtime/evpp/inner_pre.h"
 
 namespace evpp {
 const int64_t Duration::kNanosecond = 1LL;

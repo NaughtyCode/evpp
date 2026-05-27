@@ -34,7 +34,7 @@ const luaL_Reg* GetMongoClientEncryptionDatakeyOptsLib();
 const luaL_Reg* GetMongoClientEncryptionRewrapManyDatakeyResultLib();
 const luaL_Reg* GetMongoClientEncryptionLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

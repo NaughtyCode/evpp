@@ -13,7 +13,7 @@ namespace script {
 void RegisterMongoUriMeta(lua_State* L);
 const luaL_Reg* GetMongoUriLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

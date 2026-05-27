@@ -17,7 +17,7 @@ const luaL_Reg* GetMongoStructuredLogOptsLib();
 const luaL_Reg* GetMongoStructuredLogEntryLib();
 const luaL_Reg* GetMongoLogLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

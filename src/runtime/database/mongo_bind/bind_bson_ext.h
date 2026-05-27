@@ -36,7 +36,7 @@ const luaL_Reg* GetBsonValueLib();
 
 const luaL_Reg* GetBsonExtLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

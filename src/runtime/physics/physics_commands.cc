@@ -9,6 +9,6 @@ namespace engine {
 
 // Reserved for future helpers (e.g., DiffPacket serialization, CollisionEvent formatting)
 
-} // namespace engine
+}  // namespace engine
 
-#endif // ENGINE_PHYSICS_ENABLED
+#endif	// ENGINE_PHYSICS_ENABLED

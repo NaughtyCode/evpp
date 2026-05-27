@@ -15,30 +15,30 @@ namespace mongo {
 // Wraps mongoc-host-list.h — a singly-linked list of host:port entries.
 // Used by server descriptions and topology introspection.
 class ENGINE_API MongoHostList {
-public:
-    MongoHostList();
-    ~MongoHostList();
+	public:
+	MongoHostList();
+	~MongoHostList();
 
-    MongoHostList(const MongoHostList&) = delete;
-    MongoHostList& operator=(const MongoHostList&) = delete;
-    MongoHostList(MongoHostList&&) noexcept;
-    MongoHostList& operator=(MongoHostList&&) noexcept;
+	MongoHostList(const MongoHostList&) = delete;
+	MongoHostList& operator=(const MongoHostList&) = delete;
+	MongoHostList(MongoHostList&&) noexcept;
+	MongoHostList& operator=(MongoHostList&&) noexcept;
 
-    const char* GetHost() const;
-    const char* GetHostAndPort() const;
-    uint16_t GetPort() const;
-    int GetFamily() const;
+	const char* GetHost() const;
+	const char* GetHostAndPort() const;
+	uint16_t GetPort() const;
+	int GetFamily() const;
 
-    MongoHostList* GetNext() const;
+	MongoHostList* GetNext() const;
 
-    void* Raw();       // returns mongoc_host_list_t*
+	void* Raw();  // returns mongoc_host_list_t*
 
-private:
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
+	private:
+	struct Impl;
+	std::unique_ptr<Impl> impl_;
 };
 
-} // namespace mongo
-} // namespace engine
+}  // namespace mongo
+}  // namespace engine
 
 #endif

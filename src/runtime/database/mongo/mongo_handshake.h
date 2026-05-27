@@ -10,13 +10,15 @@ namespace mongo {
 
 // Wraps mongoc-handshake.h — customize driver handshake metadata.
 class ENGINE_API MongoHandshake {
-public:
-    static constexpr int kAppnameMax = 128;
+	public:
+	static constexpr int kAppnameMax = 128;
 
-    static bool DataAppend(const char* driver_name, const char* driver_version, const char* platform);
+	static bool DataAppend(const char* driver_name,
+						   const char* driver_version,
+						   const char* platform);
 };
 
-} // namespace mongo
-} // namespace engine
+}  // namespace mongo
+}  // namespace engine
 
 #endif

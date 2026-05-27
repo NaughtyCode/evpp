@@ -15,7 +15,7 @@ namespace script {
 void RegisterMongoFindAndModifyOptsMeta(lua_State* L);
 const luaL_Reg* GetMongoFindAndModifyOptsLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

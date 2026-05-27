@@ -15,5 +15,5 @@ ENGINE_API void RegisterClientMetaTable(lua_State* L);
 // Table contains: connect
 ENGINE_API void PushClientLibrary(lua_State* L);
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine

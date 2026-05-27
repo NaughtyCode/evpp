@@ -13,7 +13,7 @@ namespace script {
 void RegisterMongoBulkWriteMeta(lua_State* L);
 const luaL_Reg* GetMongoBulkWriteLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

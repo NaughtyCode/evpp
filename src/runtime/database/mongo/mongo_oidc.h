@@ -19,76 +19,77 @@ class MongoOidcCallbackParams;
 class MongoOidcCredential;
 class MongoOidcCallback;
 
-using MongoOidcCallbackFn = std::function<MongoOidcCredential*(const MongoOidcCallbackParams& params)>;
+using MongoOidcCallbackFn =
+	std::function<MongoOidcCredential*(const MongoOidcCallbackParams& params)>;
 
 // Read-only wrapper around mongoc_oidc_callback_params_t.
 class ENGINE_API MongoOidcCallbackParams {
-public:
-    explicit MongoOidcCallbackParams(void* raw_params); // takes mongoc_oidc_callback_params_t*
-    ~MongoOidcCallbackParams() = default;
+	public:
+	explicit MongoOidcCallbackParams(void* raw_params);	 // takes mongoc_oidc_callback_params_t*
+	~MongoOidcCallbackParams() = default;
 
-    int32_t GetVersion() const;
-    void* GetUserData() const;
-    const int64_t* GetTimeout() const;
-    const char* GetUsername() const;
-    MongoOidcCredential* CancelWithTimeout();
+	int32_t GetVersion() const;
+	void* GetUserData() const;
+	const int64_t* GetTimeout() const;
+	const char* GetUsername() const;
+	MongoOidcCredential* CancelWithTimeout();
 
-private:
-    void* params_; // mongoc_oidc_callback_params_t*
+	private:
+	void* params_;	// mongoc_oidc_callback_params_t*
 };
 
 // Wraps mongoc_oidc_credential_t — OIDC access token credential.
 class ENGINE_API MongoOidcCredential {
-public:
-    static MongoOidcCredential* New(const char* access_token);
-    static MongoOidcCredential* NewWithExpiresIn(const char* access_token, int64_t expires_in);
+	public:
+	static MongoOidcCredential* New(const char* access_token);
+	static MongoOidcCredential* NewWithExpiresIn(const char* access_token, int64_t expires_in);
 
-    void Destroy();
+	void Destroy();
 
-    MongoOidcCredential(const MongoOidcCredential&) = delete;
-    MongoOidcCredential& operator=(const MongoOidcCredential&) = delete;
+	MongoOidcCredential(const MongoOidcCredential&) = delete;
+	MongoOidcCredential& operator=(const MongoOidcCredential&) = delete;
 
-    const char* GetAccessToken() const;
-    const int64_t* GetExpiresIn() const;
+	const char* GetAccessToken() const;
+	const int64_t* GetExpiresIn() const;
 
-    void* Raw(); // returns mongoc_oidc_credential_t*
-    void* ReleaseRaw(); // transfers ownership, sets owned=false
+	void* Raw();  // returns mongoc_oidc_credential_t*
+	void* ReleaseRaw();	 // transfers ownership, sets owned=false
 
-    ~MongoOidcCredential();
+	~MongoOidcCredential();
 
-private:
-    friend class MongoOidcCallbackParams;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-    MongoOidcCredential();
+	private:
+	friend class MongoOidcCallbackParams;
+	struct Impl;
+	std::unique_ptr<Impl> impl_;
+	MongoOidcCredential();
 };
 
 // Wraps mongoc_oidc_callback_t — bundles the callback function + user data.
 class ENGINE_API MongoOidcCallback {
-public:
-    static MongoOidcCallback* New(MongoOidcCallbackFn fn);
-    static MongoOidcCallback* NewWithUserData(MongoOidcCallbackFn fn, void* user_data);
+	public:
+	static MongoOidcCallback* New(MongoOidcCallbackFn fn);
+	static MongoOidcCallback* NewWithUserData(MongoOidcCallbackFn fn, void* user_data);
 
-    void Destroy();
+	void Destroy();
 
-    MongoOidcCallback(const MongoOidcCallback&) = delete;
-    MongoOidcCallback& operator=(const MongoOidcCallback&) = delete;
+	MongoOidcCallback(const MongoOidcCallback&) = delete;
+	MongoOidcCallback& operator=(const MongoOidcCallback&) = delete;
 
-    void* GetUserData() const;
-    void SetUserData(void* user_data);
+	void* GetUserData() const;
+	void SetUserData(void* user_data);
 
-    const void* GetFn() const; // returns the C callback function pointer
+	const void* GetFn() const;	// returns the C callback function pointer
 
-    void* Raw(); // returns mongoc_oidc_callback_t*
+	void* Raw();  // returns mongoc_oidc_callback_t*
 
-private:
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-    MongoOidcCallback();
-    ~MongoOidcCallback();
+	private:
+	struct Impl;
+	std::unique_ptr<Impl> impl_;
+	MongoOidcCallback();
+	~MongoOidcCallback();
 };
 
-} // namespace mongo
-} // namespace engine
+}  // namespace mongo
+}  // namespace engine
 
 #endif

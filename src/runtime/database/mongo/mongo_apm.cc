@@ -2,9 +2,9 @@
 
 #include "runtime/database/mongo/mongo_apm.h"
 
-#include <mongoc/mongoc.h>
-
 #include "runtime/database/mongo/mongo_error.h"
+
+#include <mongoc/mongoc.h>
 
 namespace engine {
 namespace mongo {
@@ -14,343 +14,347 @@ namespace mongo {
 // ═══════════════════════════════════════════════════════════════════════
 
 MongoApmCommandStartedEvent::MongoApmCommandStartedEvent(const void* raw_event)
-    : event_(raw_event) {}
+	: event_(raw_event) {
+}
 
 const void* MongoApmCommandStartedEvent::GetCommand() const {
-    return mongoc_apm_command_started_get_command(
-        static_cast<const mongoc_apm_command_started_t*>(event_));
+	return mongoc_apm_command_started_get_command(
+		static_cast<const mongoc_apm_command_started_t*>(event_));
 }
 const char* MongoApmCommandStartedEvent::GetDatabaseName() const {
-    return mongoc_apm_command_started_get_database_name(
-        static_cast<const mongoc_apm_command_started_t*>(event_));
+	return mongoc_apm_command_started_get_database_name(
+		static_cast<const mongoc_apm_command_started_t*>(event_));
 }
 const char* MongoApmCommandStartedEvent::GetCommandName() const {
-    return mongoc_apm_command_started_get_command_name(
-        static_cast<const mongoc_apm_command_started_t*>(event_));
+	return mongoc_apm_command_started_get_command_name(
+		static_cast<const mongoc_apm_command_started_t*>(event_));
 }
 int64_t MongoApmCommandStartedEvent::GetRequestId() const {
-    return mongoc_apm_command_started_get_request_id(
-        static_cast<const mongoc_apm_command_started_t*>(event_));
+	return mongoc_apm_command_started_get_request_id(
+		static_cast<const mongoc_apm_command_started_t*>(event_));
 }
 int64_t MongoApmCommandStartedEvent::GetOperationId() const {
-    return mongoc_apm_command_started_get_operation_id(
-        static_cast<const mongoc_apm_command_started_t*>(event_));
+	return mongoc_apm_command_started_get_operation_id(
+		static_cast<const mongoc_apm_command_started_t*>(event_));
 }
 const void* MongoApmCommandStartedEvent::GetHost() const {
-    return mongoc_apm_command_started_get_host(
-        static_cast<const mongoc_apm_command_started_t*>(event_));
+	return mongoc_apm_command_started_get_host(
+		static_cast<const mongoc_apm_command_started_t*>(event_));
 }
 uint32_t MongoApmCommandStartedEvent::GetServerId() const {
-    return mongoc_apm_command_started_get_server_id(
-        static_cast<const mongoc_apm_command_started_t*>(event_));
+	return mongoc_apm_command_started_get_server_id(
+		static_cast<const mongoc_apm_command_started_t*>(event_));
 }
 const void* MongoApmCommandStartedEvent::GetServiceId() const {
-    return mongoc_apm_command_started_get_service_id(
-        static_cast<const mongoc_apm_command_started_t*>(event_));
+	return mongoc_apm_command_started_get_service_id(
+		static_cast<const mongoc_apm_command_started_t*>(event_));
 }
 int64_t MongoApmCommandStartedEvent::GetServerConnectionIdInt64() const {
-    return mongoc_apm_command_started_get_server_connection_id_int64(
-        static_cast<const mongoc_apm_command_started_t*>(event_));
+	return mongoc_apm_command_started_get_server_connection_id_int64(
+		static_cast<const mongoc_apm_command_started_t*>(event_));
 }
 void* MongoApmCommandStartedEvent::GetContext() const {
-    return mongoc_apm_command_started_get_context(
-        static_cast<const mongoc_apm_command_started_t*>(event_));
+	return mongoc_apm_command_started_get_context(
+		static_cast<const mongoc_apm_command_started_t*>(event_));
 }
 
 // ── Command Succeeded ──────────────────────────────────────────────────
 
 MongoApmCommandSucceededEvent::MongoApmCommandSucceededEvent(const void* raw_event)
-    : event_(raw_event) {}
+	: event_(raw_event) {
+}
 
 int64_t MongoApmCommandSucceededEvent::GetDuration() const {
-    return mongoc_apm_command_succeeded_get_duration(
-        static_cast<const mongoc_apm_command_succeeded_t*>(event_));
+	return mongoc_apm_command_succeeded_get_duration(
+		static_cast<const mongoc_apm_command_succeeded_t*>(event_));
 }
 const void* MongoApmCommandSucceededEvent::GetReply() const {
-    return mongoc_apm_command_succeeded_get_reply(
-        static_cast<const mongoc_apm_command_succeeded_t*>(event_));
+	return mongoc_apm_command_succeeded_get_reply(
+		static_cast<const mongoc_apm_command_succeeded_t*>(event_));
 }
 const char* MongoApmCommandSucceededEvent::GetCommandName() const {
-    return mongoc_apm_command_succeeded_get_command_name(
-        static_cast<const mongoc_apm_command_succeeded_t*>(event_));
+	return mongoc_apm_command_succeeded_get_command_name(
+		static_cast<const mongoc_apm_command_succeeded_t*>(event_));
 }
 const char* MongoApmCommandSucceededEvent::GetDatabaseName() const {
-    return mongoc_apm_command_succeeded_get_database_name(
-        static_cast<const mongoc_apm_command_succeeded_t*>(event_));
+	return mongoc_apm_command_succeeded_get_database_name(
+		static_cast<const mongoc_apm_command_succeeded_t*>(event_));
 }
 int64_t MongoApmCommandSucceededEvent::GetRequestId() const {
-    return mongoc_apm_command_succeeded_get_request_id(
-        static_cast<const mongoc_apm_command_succeeded_t*>(event_));
+	return mongoc_apm_command_succeeded_get_request_id(
+		static_cast<const mongoc_apm_command_succeeded_t*>(event_));
 }
 int64_t MongoApmCommandSucceededEvent::GetOperationId() const {
-    return mongoc_apm_command_succeeded_get_operation_id(
-        static_cast<const mongoc_apm_command_succeeded_t*>(event_));
+	return mongoc_apm_command_succeeded_get_operation_id(
+		static_cast<const mongoc_apm_command_succeeded_t*>(event_));
 }
 const void* MongoApmCommandSucceededEvent::GetHost() const {
-    return mongoc_apm_command_succeeded_get_host(
-        static_cast<const mongoc_apm_command_succeeded_t*>(event_));
+	return mongoc_apm_command_succeeded_get_host(
+		static_cast<const mongoc_apm_command_succeeded_t*>(event_));
 }
 uint32_t MongoApmCommandSucceededEvent::GetServerId() const {
-    return mongoc_apm_command_succeeded_get_server_id(
-        static_cast<const mongoc_apm_command_succeeded_t*>(event_));
+	return mongoc_apm_command_succeeded_get_server_id(
+		static_cast<const mongoc_apm_command_succeeded_t*>(event_));
 }
 const void* MongoApmCommandSucceededEvent::GetServiceId() const {
-    return mongoc_apm_command_succeeded_get_service_id(
-        static_cast<const mongoc_apm_command_succeeded_t*>(event_));
+	return mongoc_apm_command_succeeded_get_service_id(
+		static_cast<const mongoc_apm_command_succeeded_t*>(event_));
 }
 int64_t MongoApmCommandSucceededEvent::GetServerConnectionIdInt64() const {
-    return mongoc_apm_command_succeeded_get_server_connection_id_int64(
-        static_cast<const mongoc_apm_command_succeeded_t*>(event_));
+	return mongoc_apm_command_succeeded_get_server_connection_id_int64(
+		static_cast<const mongoc_apm_command_succeeded_t*>(event_));
 }
 void* MongoApmCommandSucceededEvent::GetContext() const {
-    return mongoc_apm_command_succeeded_get_context(
-        static_cast<const mongoc_apm_command_succeeded_t*>(event_));
+	return mongoc_apm_command_succeeded_get_context(
+		static_cast<const mongoc_apm_command_succeeded_t*>(event_));
 }
 
 // ── Command Failed ─────────────────────────────────────────────────────
 
-MongoApmCommandFailedEvent::MongoApmCommandFailedEvent(const void* raw_event)
-    : event_(raw_event) {}
+MongoApmCommandFailedEvent::MongoApmCommandFailedEvent(const void* raw_event) : event_(raw_event) {
+}
 
 int64_t MongoApmCommandFailedEvent::GetDuration() const {
-    return mongoc_apm_command_failed_get_duration(
-        static_cast<const mongoc_apm_command_failed_t*>(event_));
+	return mongoc_apm_command_failed_get_duration(
+		static_cast<const mongoc_apm_command_failed_t*>(event_));
 }
 const char* MongoApmCommandFailedEvent::GetCommandName() const {
-    return mongoc_apm_command_failed_get_command_name(
-        static_cast<const mongoc_apm_command_failed_t*>(event_));
+	return mongoc_apm_command_failed_get_command_name(
+		static_cast<const mongoc_apm_command_failed_t*>(event_));
 }
 const char* MongoApmCommandFailedEvent::GetDatabaseName() const {
-    return mongoc_apm_command_failed_get_database_name(
-        static_cast<const mongoc_apm_command_failed_t*>(event_));
+	return mongoc_apm_command_failed_get_database_name(
+		static_cast<const mongoc_apm_command_failed_t*>(event_));
 }
 void MongoApmCommandFailedEvent::GetError(MongoError* error) const {
-    if (!error) return;
-    mongoc_apm_command_failed_get_error(
-        static_cast<const mongoc_apm_command_failed_t*>(event_),
-        static_cast<bson_error_t*>(error->RawError()));
+	if (!error) return;
+	mongoc_apm_command_failed_get_error(static_cast<const mongoc_apm_command_failed_t*>(event_),
+										static_cast<bson_error_t*>(error->RawError()));
 }
 const void* MongoApmCommandFailedEvent::GetReply() const {
-    return mongoc_apm_command_failed_get_reply(
-        static_cast<const mongoc_apm_command_failed_t*>(event_));
+	return mongoc_apm_command_failed_get_reply(
+		static_cast<const mongoc_apm_command_failed_t*>(event_));
 }
 int64_t MongoApmCommandFailedEvent::GetRequestId() const {
-    return mongoc_apm_command_failed_get_request_id(
-        static_cast<const mongoc_apm_command_failed_t*>(event_));
+	return mongoc_apm_command_failed_get_request_id(
+		static_cast<const mongoc_apm_command_failed_t*>(event_));
 }
 int64_t MongoApmCommandFailedEvent::GetOperationId() const {
-    return mongoc_apm_command_failed_get_operation_id(
-        static_cast<const mongoc_apm_command_failed_t*>(event_));
+	return mongoc_apm_command_failed_get_operation_id(
+		static_cast<const mongoc_apm_command_failed_t*>(event_));
 }
 const void* MongoApmCommandFailedEvent::GetHost() const {
-    return mongoc_apm_command_failed_get_host(
-        static_cast<const mongoc_apm_command_failed_t*>(event_));
+	return mongoc_apm_command_failed_get_host(
+		static_cast<const mongoc_apm_command_failed_t*>(event_));
 }
 uint32_t MongoApmCommandFailedEvent::GetServerId() const {
-    return mongoc_apm_command_failed_get_server_id(
-        static_cast<const mongoc_apm_command_failed_t*>(event_));
+	return mongoc_apm_command_failed_get_server_id(
+		static_cast<const mongoc_apm_command_failed_t*>(event_));
 }
 const void* MongoApmCommandFailedEvent::GetServiceId() const {
-    return mongoc_apm_command_failed_get_service_id(
-        static_cast<const mongoc_apm_command_failed_t*>(event_));
+	return mongoc_apm_command_failed_get_service_id(
+		static_cast<const mongoc_apm_command_failed_t*>(event_));
 }
 int64_t MongoApmCommandFailedEvent::GetServerConnectionIdInt64() const {
-    return mongoc_apm_command_failed_get_server_connection_id_int64(
-        static_cast<const mongoc_apm_command_failed_t*>(event_));
+	return mongoc_apm_command_failed_get_server_connection_id_int64(
+		static_cast<const mongoc_apm_command_failed_t*>(event_));
 }
 void* MongoApmCommandFailedEvent::GetContext() const {
-    return mongoc_apm_command_failed_get_context(
-        static_cast<const mongoc_apm_command_failed_t*>(event_));
+	return mongoc_apm_command_failed_get_context(
+		static_cast<const mongoc_apm_command_failed_t*>(event_));
 }
 
 // ── Server Changed ─────────────────────────────────────────────────────
 
-MongoApmServerChangedEvent::MongoApmServerChangedEvent(const void* raw_event)
-    : event_(raw_event) {}
+MongoApmServerChangedEvent::MongoApmServerChangedEvent(const void* raw_event) : event_(raw_event) {
+}
 
 const void* MongoApmServerChangedEvent::GetHost() const {
-    return mongoc_apm_server_changed_get_host(
-        static_cast<const mongoc_apm_server_changed_t*>(event_));
+	return mongoc_apm_server_changed_get_host(
+		static_cast<const mongoc_apm_server_changed_t*>(event_));
 }
 void MongoApmServerChangedEvent::GetTopologyId(void* oid_out) const {
-    mongoc_apm_server_changed_get_topology_id(
-        static_cast<const mongoc_apm_server_changed_t*>(event_),
-        static_cast<bson_oid_t*>(oid_out));
+	mongoc_apm_server_changed_get_topology_id(
+		static_cast<const mongoc_apm_server_changed_t*>(event_), static_cast<bson_oid_t*>(oid_out));
 }
 const void* MongoApmServerChangedEvent::GetPreviousDescription() const {
-    return mongoc_apm_server_changed_get_previous_description(
-        static_cast<const mongoc_apm_server_changed_t*>(event_));
+	return mongoc_apm_server_changed_get_previous_description(
+		static_cast<const mongoc_apm_server_changed_t*>(event_));
 }
 const void* MongoApmServerChangedEvent::GetNewDescription() const {
-    return mongoc_apm_server_changed_get_new_description(
-        static_cast<const mongoc_apm_server_changed_t*>(event_));
+	return mongoc_apm_server_changed_get_new_description(
+		static_cast<const mongoc_apm_server_changed_t*>(event_));
 }
 void* MongoApmServerChangedEvent::GetContext() const {
-    return mongoc_apm_server_changed_get_context(
-        static_cast<const mongoc_apm_server_changed_t*>(event_));
+	return mongoc_apm_server_changed_get_context(
+		static_cast<const mongoc_apm_server_changed_t*>(event_));
 }
 
 // ── Server Opening ─────────────────────────────────────────────────────
 
-MongoApmServerOpeningEvent::MongoApmServerOpeningEvent(const void* raw_event)
-    : event_(raw_event) {}
+MongoApmServerOpeningEvent::MongoApmServerOpeningEvent(const void* raw_event) : event_(raw_event) {
+}
 
 const void* MongoApmServerOpeningEvent::GetHost() const {
-    return mongoc_apm_server_opening_get_host(
-        static_cast<const mongoc_apm_server_opening_t*>(event_));
+	return mongoc_apm_server_opening_get_host(
+		static_cast<const mongoc_apm_server_opening_t*>(event_));
 }
 void MongoApmServerOpeningEvent::GetTopologyId(void* oid_out) const {
-    mongoc_apm_server_opening_get_topology_id(
-        static_cast<const mongoc_apm_server_opening_t*>(event_),
-        static_cast<bson_oid_t*>(oid_out));
+	mongoc_apm_server_opening_get_topology_id(
+		static_cast<const mongoc_apm_server_opening_t*>(event_), static_cast<bson_oid_t*>(oid_out));
 }
 void* MongoApmServerOpeningEvent::GetContext() const {
-    return mongoc_apm_server_opening_get_context(
-        static_cast<const mongoc_apm_server_opening_t*>(event_));
+	return mongoc_apm_server_opening_get_context(
+		static_cast<const mongoc_apm_server_opening_t*>(event_));
 }
 
 // ── Server Closed ──────────────────────────────────────────────────────
 
-MongoApmServerClosedEvent::MongoApmServerClosedEvent(const void* raw_event)
-    : event_(raw_event) {}
+MongoApmServerClosedEvent::MongoApmServerClosedEvent(const void* raw_event) : event_(raw_event) {
+}
 
 const void* MongoApmServerClosedEvent::GetHost() const {
-    return mongoc_apm_server_closed_get_host(
-        static_cast<const mongoc_apm_server_closed_t*>(event_));
+	return mongoc_apm_server_closed_get_host(
+		static_cast<const mongoc_apm_server_closed_t*>(event_));
 }
 void MongoApmServerClosedEvent::GetTopologyId(void* oid_out) const {
-    mongoc_apm_server_closed_get_topology_id(
-        static_cast<const mongoc_apm_server_closed_t*>(event_),
-        static_cast<bson_oid_t*>(oid_out));
+	mongoc_apm_server_closed_get_topology_id(static_cast<const mongoc_apm_server_closed_t*>(event_),
+											 static_cast<bson_oid_t*>(oid_out));
 }
 void* MongoApmServerClosedEvent::GetContext() const {
-    return mongoc_apm_server_closed_get_context(
-        static_cast<const mongoc_apm_server_closed_t*>(event_));
+	return mongoc_apm_server_closed_get_context(
+		static_cast<const mongoc_apm_server_closed_t*>(event_));
 }
 
 // ── Topology Changed ───────────────────────────────────────────────────
 
 MongoApmTopologyChangedEvent::MongoApmTopologyChangedEvent(const void* raw_event)
-    : event_(raw_event) {}
+	: event_(raw_event) {
+}
 
 void MongoApmTopologyChangedEvent::GetTopologyId(void* oid_out) const {
-    mongoc_apm_topology_changed_get_topology_id(
-        static_cast<const mongoc_apm_topology_changed_t*>(event_),
-        static_cast<bson_oid_t*>(oid_out));
+	mongoc_apm_topology_changed_get_topology_id(
+		static_cast<const mongoc_apm_topology_changed_t*>(event_),
+		static_cast<bson_oid_t*>(oid_out));
 }
 const void* MongoApmTopologyChangedEvent::GetPreviousDescription() const {
-    return mongoc_apm_topology_changed_get_previous_description(
-        static_cast<const mongoc_apm_topology_changed_t*>(event_));
+	return mongoc_apm_topology_changed_get_previous_description(
+		static_cast<const mongoc_apm_topology_changed_t*>(event_));
 }
 const void* MongoApmTopologyChangedEvent::GetNewDescription() const {
-    return mongoc_apm_topology_changed_get_new_description(
-        static_cast<const mongoc_apm_topology_changed_t*>(event_));
+	return mongoc_apm_topology_changed_get_new_description(
+		static_cast<const mongoc_apm_topology_changed_t*>(event_));
 }
 void* MongoApmTopologyChangedEvent::GetContext() const {
-    return mongoc_apm_topology_changed_get_context(
-        static_cast<const mongoc_apm_topology_changed_t*>(event_));
+	return mongoc_apm_topology_changed_get_context(
+		static_cast<const mongoc_apm_topology_changed_t*>(event_));
 }
 
 // ── Topology Opening ───────────────────────────────────────────────────
 
 MongoApmTopologyOpeningEvent::MongoApmTopologyOpeningEvent(const void* raw_event)
-    : event_(raw_event) {}
+	: event_(raw_event) {
+}
 
 void MongoApmTopologyOpeningEvent::GetTopologyId(void* oid_out) const {
-    mongoc_apm_topology_opening_get_topology_id(
-        static_cast<const mongoc_apm_topology_opening_t*>(event_),
-        static_cast<bson_oid_t*>(oid_out));
+	mongoc_apm_topology_opening_get_topology_id(
+		static_cast<const mongoc_apm_topology_opening_t*>(event_),
+		static_cast<bson_oid_t*>(oid_out));
 }
 void* MongoApmTopologyOpeningEvent::GetContext() const {
-    return mongoc_apm_topology_opening_get_context(
-        static_cast<const mongoc_apm_topology_opening_t*>(event_));
+	return mongoc_apm_topology_opening_get_context(
+		static_cast<const mongoc_apm_topology_opening_t*>(event_));
 }
 
 // ── Topology Closed ────────────────────────────────────────────────────
 
 MongoApmTopologyClosedEvent::MongoApmTopologyClosedEvent(const void* raw_event)
-    : event_(raw_event) {}
+	: event_(raw_event) {
+}
 
 void MongoApmTopologyClosedEvent::GetTopologyId(void* oid_out) const {
-    mongoc_apm_topology_closed_get_topology_id(
-        static_cast<const mongoc_apm_topology_closed_t*>(event_),
-        static_cast<bson_oid_t*>(oid_out));
+	mongoc_apm_topology_closed_get_topology_id(
+		static_cast<const mongoc_apm_topology_closed_t*>(event_),
+		static_cast<bson_oid_t*>(oid_out));
 }
 void* MongoApmTopologyClosedEvent::GetContext() const {
-    return mongoc_apm_topology_closed_get_context(
-        static_cast<const mongoc_apm_topology_closed_t*>(event_));
+	return mongoc_apm_topology_closed_get_context(
+		static_cast<const mongoc_apm_topology_closed_t*>(event_));
 }
 
 // ── Server Heartbeat Started ───────────────────────────────────────────
 
 MongoApmServerHeartbeatStartedEvent::MongoApmServerHeartbeatStartedEvent(const void* raw_event)
-    : event_(raw_event) {}
+	: event_(raw_event) {
+}
 
 const void* MongoApmServerHeartbeatStartedEvent::GetHost() const {
-    return mongoc_apm_server_heartbeat_started_get_host(
-        static_cast<const mongoc_apm_server_heartbeat_started_t*>(event_));
+	return mongoc_apm_server_heartbeat_started_get_host(
+		static_cast<const mongoc_apm_server_heartbeat_started_t*>(event_));
 }
 void* MongoApmServerHeartbeatStartedEvent::GetContext() const {
-    return mongoc_apm_server_heartbeat_started_get_context(
-        static_cast<const mongoc_apm_server_heartbeat_started_t*>(event_));
+	return mongoc_apm_server_heartbeat_started_get_context(
+		static_cast<const mongoc_apm_server_heartbeat_started_t*>(event_));
 }
 bool MongoApmServerHeartbeatStartedEvent::GetAwaited() const {
-    return mongoc_apm_server_heartbeat_started_get_awaited(
-        static_cast<const mongoc_apm_server_heartbeat_started_t*>(event_));
+	return mongoc_apm_server_heartbeat_started_get_awaited(
+		static_cast<const mongoc_apm_server_heartbeat_started_t*>(event_));
 }
 
 // ── Server Heartbeat Succeeded ─────────────────────────────────────────
 
 MongoApmServerHeartbeatSucceededEvent::MongoApmServerHeartbeatSucceededEvent(const void* raw_event)
-    : event_(raw_event) {}
+	: event_(raw_event) {
+}
 
 int64_t MongoApmServerHeartbeatSucceededEvent::GetDuration() const {
-    return mongoc_apm_server_heartbeat_succeeded_get_duration(
-        static_cast<const mongoc_apm_server_heartbeat_succeeded_t*>(event_));
+	return mongoc_apm_server_heartbeat_succeeded_get_duration(
+		static_cast<const mongoc_apm_server_heartbeat_succeeded_t*>(event_));
 }
 const void* MongoApmServerHeartbeatSucceededEvent::GetReply() const {
-    return mongoc_apm_server_heartbeat_succeeded_get_reply(
-        static_cast<const mongoc_apm_server_heartbeat_succeeded_t*>(event_));
+	return mongoc_apm_server_heartbeat_succeeded_get_reply(
+		static_cast<const mongoc_apm_server_heartbeat_succeeded_t*>(event_));
 }
 const void* MongoApmServerHeartbeatSucceededEvent::GetHost() const {
-    return mongoc_apm_server_heartbeat_succeeded_get_host(
-        static_cast<const mongoc_apm_server_heartbeat_succeeded_t*>(event_));
+	return mongoc_apm_server_heartbeat_succeeded_get_host(
+		static_cast<const mongoc_apm_server_heartbeat_succeeded_t*>(event_));
 }
 void* MongoApmServerHeartbeatSucceededEvent::GetContext() const {
-    return mongoc_apm_server_heartbeat_succeeded_get_context(
-        static_cast<const mongoc_apm_server_heartbeat_succeeded_t*>(event_));
+	return mongoc_apm_server_heartbeat_succeeded_get_context(
+		static_cast<const mongoc_apm_server_heartbeat_succeeded_t*>(event_));
 }
 bool MongoApmServerHeartbeatSucceededEvent::GetAwaited() const {
-    return mongoc_apm_server_heartbeat_succeeded_get_awaited(
-        static_cast<const mongoc_apm_server_heartbeat_succeeded_t*>(event_));
+	return mongoc_apm_server_heartbeat_succeeded_get_awaited(
+		static_cast<const mongoc_apm_server_heartbeat_succeeded_t*>(event_));
 }
 
 // ── Server Heartbeat Failed ────────────────────────────────────────────
 
 MongoApmServerHeartbeatFailedEvent::MongoApmServerHeartbeatFailedEvent(const void* raw_event)
-    : event_(raw_event) {}
+	: event_(raw_event) {
+}
 
 int64_t MongoApmServerHeartbeatFailedEvent::GetDuration() const {
-    return mongoc_apm_server_heartbeat_failed_get_duration(
-        static_cast<const mongoc_apm_server_heartbeat_failed_t*>(event_));
+	return mongoc_apm_server_heartbeat_failed_get_duration(
+		static_cast<const mongoc_apm_server_heartbeat_failed_t*>(event_));
 }
 void MongoApmServerHeartbeatFailedEvent::GetError(MongoError* error) const {
-    if (!error) return;
-    mongoc_apm_server_heartbeat_failed_get_error(
-        static_cast<const mongoc_apm_server_heartbeat_failed_t*>(event_),
-        static_cast<bson_error_t*>(error->RawError()));
+	if (!error) return;
+	mongoc_apm_server_heartbeat_failed_get_error(
+		static_cast<const mongoc_apm_server_heartbeat_failed_t*>(event_),
+		static_cast<bson_error_t*>(error->RawError()));
 }
 const void* MongoApmServerHeartbeatFailedEvent::GetHost() const {
-    return mongoc_apm_server_heartbeat_failed_get_host(
-        static_cast<const mongoc_apm_server_heartbeat_failed_t*>(event_));
+	return mongoc_apm_server_heartbeat_failed_get_host(
+		static_cast<const mongoc_apm_server_heartbeat_failed_t*>(event_));
 }
 void* MongoApmServerHeartbeatFailedEvent::GetContext() const {
-    return mongoc_apm_server_heartbeat_failed_get_context(
-        static_cast<const mongoc_apm_server_heartbeat_failed_t*>(event_));
+	return mongoc_apm_server_heartbeat_failed_get_context(
+		static_cast<const mongoc_apm_server_heartbeat_failed_t*>(event_));
 }
 bool MongoApmServerHeartbeatFailedEvent::GetAwaited() const {
-    return mongoc_apm_server_heartbeat_failed_get_awaited(
-        static_cast<const mongoc_apm_server_heartbeat_failed_t*>(event_));
+	return mongoc_apm_server_heartbeat_failed_get_awaited(
+		static_cast<const mongoc_apm_server_heartbeat_failed_t*>(event_));
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -388,49 +392,48 @@ bool MongoApmServerHeartbeatFailedEvent::GetAwaited() const {
 // ═══════════════════════════════════════════════════════════════════════
 
 struct ApmCallbackContext {
-    MongoApmCommandStartedCb command_started;
-    MongoApmCommandSucceededCb command_succeeded;
-    MongoApmCommandFailedCb command_failed;
-    MongoApmServerChangedCb server_changed;
-    MongoApmServerOpeningCb server_opening;
-    MongoApmServerClosedCb server_closed;
-    MongoApmTopologyChangedCb topology_changed;
-    MongoApmTopologyOpeningCb topology_opening;
-    MongoApmTopologyClosedCb topology_closed;
-    MongoApmServerHeartbeatStartedCb server_heartbeat_started;
-    MongoApmServerHeartbeatSucceededCb server_heartbeat_succeeded;
-    MongoApmServerHeartbeatFailedCb server_heartbeat_failed;
+	MongoApmCommandStartedCb command_started;
+	MongoApmCommandSucceededCb command_succeeded;
+	MongoApmCommandFailedCb command_failed;
+	MongoApmServerChangedCb server_changed;
+	MongoApmServerOpeningCb server_opening;
+	MongoApmServerClosedCb server_closed;
+	MongoApmTopologyChangedCb topology_changed;
+	MongoApmTopologyOpeningCb topology_opening;
+	MongoApmTopologyClosedCb topology_closed;
+	MongoApmServerHeartbeatStartedCb server_heartbeat_started;
+	MongoApmServerHeartbeatSucceededCb server_heartbeat_succeeded;
+	MongoApmServerHeartbeatFailedCb server_heartbeat_failed;
 };
 
 struct MongoApmCallbacks::Impl {
-    mongoc_apm_callbacks_t* callbacks = nullptr;
+	mongoc_apm_callbacks_t* callbacks = nullptr;
 
-    // Store all callbacks in a context struct (heap-allocated, deleted via destroy)
-    std::shared_ptr<ApmCallbackContext> ctx;
+	// Store all callbacks in a context struct (heap-allocated, deleted via destroy)
+	std::shared_ptr<ApmCallbackContext> ctx;
 
-    Impl() : ctx(std::make_shared<ApmCallbackContext>()) {
-        callbacks = mongoc_apm_callbacks_new();
-    }
-    ~Impl() {
-        if (callbacks) mongoc_apm_callbacks_destroy(callbacks);
-    }
+	Impl() : ctx(std::make_shared<ApmCallbackContext>()) {
+		callbacks = mongoc_apm_callbacks_new();
+	}
+	~Impl() {
+		if (callbacks) mongoc_apm_callbacks_destroy(callbacks);
+	}
 };
 
 // Trampolines — each converts C event → C++ event and dispatches
 
-#define APM_TRAMPOLINE(name, typename)                                              \
-    static void apm_##name##_trampoline(const mongoc_apm_##name##_t* event) {      \
-        auto* ctx = static_cast<ApmCallbackContext*>(                              \
-            mongoc_apm_##name##_get_context(event));                                \
-        if (ctx && ctx->name) {                                                     \
-            MongoApm##typename##Event wrapper(event);                               \
-            try {                                                                   \
-                ctx->name(wrapper);                                                 \
-            } catch (...) {                                                         \
-                /* Do not let exceptions unwind through C stack frames */           \
-            }                                                                       \
-        }                                                                           \
-    }
+#define APM_TRAMPOLINE(name, typename)                                                        \
+	static void apm_##name##_trampoline(const mongoc_apm_##name##_t* event) {                 \
+		auto* ctx = static_cast<ApmCallbackContext*>(mongoc_apm_##name##_get_context(event)); \
+		if (ctx && ctx->name) {                                                               \
+			MongoApm##typename##Event wrapper(event);                                         \
+			try {                                                                             \
+				ctx->name(wrapper);                                                           \
+			} catch (...) {                                                                   \
+				/* Do not let exceptions unwind through C stack frames */                     \
+			}                                                                                 \
+		}                                                                                     \
+	}
 
 APM_TRAMPOLINE(command_started, CommandStarted)
 APM_TRAMPOLINE(command_succeeded, CommandSucceeded)
@@ -447,7 +450,8 @@ APM_TRAMPOLINE(server_heartbeat_failed, ServerHeartbeatFailed)
 
 #undef APM_TRAMPOLINE
 
-MongoApmCallbacks::MongoApmCallbacks() : impl_(std::make_unique<Impl>()) {}
+MongoApmCallbacks::MongoApmCallbacks() : impl_(std::make_unique<Impl>()) {
+}
 
 MongoApmCallbacks::~MongoApmCallbacks() = default;
 
@@ -457,23 +461,23 @@ MongoApmCallbacks& MongoApmCallbacks::operator=(MongoApmCallbacks&&) noexcept = 
 // The Context pointer is passed as the "context" to mongoc_client_set_apm_callbacks.
 // Each event's get_context() returns this pointer.
 void* MongoApmCallbacks::Raw() {
-    return impl_ ? impl_->callbacks : nullptr;
+	return impl_ ? impl_->callbacks : nullptr;
 }
 
 void* MongoApmCallbacks::RawContext() {
-    return impl_ ? impl_->ctx.get() : nullptr;
+	return impl_ ? impl_->ctx.get() : nullptr;
 }
 
 // ── Callback setters ────────────────────────────────────────────────────────
 
-#define APM_SET_CB(name, typename)                                                  \
-    void MongoApmCallbacks::Set##typename##Cb(MongoApm##typename##Cb cb) {          \
-        if (impl_) {                                                                \
-            impl_->ctx->name = std::move(cb);                                       \
-            mongoc_apm_set_##name##_cb(impl_->callbacks,                            \
-                impl_->ctx->name ? apm_##name##_trampoline : nullptr);              \
-        }                                                                           \
-    }
+#define APM_SET_CB(name, typename)                                                            \
+	void MongoApmCallbacks::Set##typename##Cb(MongoApm##typename##Cb cb) {                    \
+		if (impl_) {                                                                          \
+			impl_->ctx->name = std::move(cb);                                                 \
+			mongoc_apm_set_##name##_cb(impl_->callbacks,                                      \
+									   impl_->ctx->name ? apm_##name##_trampoline : nullptr); \
+		}                                                                                     \
+	}
 
 APM_SET_CB(command_started, CommandStarted)
 APM_SET_CB(command_succeeded, CommandSucceeded)
@@ -490,7 +494,7 @@ APM_SET_CB(server_heartbeat_failed, ServerHeartbeatFailed)
 
 #undef APM_SET_CB
 
-} // namespace mongo
-} // namespace engine
+}  // namespace mongo
+}  // namespace engine
 
 #endif

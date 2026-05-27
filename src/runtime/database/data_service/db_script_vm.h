@@ -1,7 +1,8 @@
 #pragma once
 
 #ifndef DATABASE_SERVICE_INTERNAL_ACCESS
-#error "db_script_vm.h is internal to the database service module. \
+#error \
+	"db_script_vm.h is internal to the database service module. \
 Use database_service.h instead. \
 If you are writing database-service-internal code, #define \
 DATABASE_SERVICE_INTERNAL_ACCESS before including this header."
@@ -37,10 +38,10 @@ class MongoClientPool;
 // Reserve() call in RegisterSubsystemObjects().
 
 enum DbCustomPtr : int {
-    kDbPtrDBThread  = 1,  // DBThread*        — owning thread
-    kDbPtrScriptVM  = 2,  // DBScriptVM*      — self-reference for upvalue access
-    kDbPtrClient    = 3,  // MongoClient*     — per-thread exclusive client (from pool)
-    kDbPtrPool      = 4,  // MongoClientPool* — shared pool (for scripts that need pool ops)
+	kDbPtrDBThread = 1,	 // DBThread*        — owning thread
+	kDbPtrScriptVM = 2,	 // DBScriptVM*      — self-reference for upvalue access
+	kDbPtrClient = 3,  // MongoClient*     — per-thread exclusive client (from pool)
+	kDbPtrPool = 4,	 // MongoClientPool* — shared pool (for scripts that need pool ops)
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -64,38 +65,38 @@ enum DbCustomPtr : int {
 //   6. DoDirectory() + InitScript()— load scripts (R12)
 
 class DBScriptVM : public ScriptVM {
-public:
-    DBScriptVM();
-    ~DBScriptVM() override;
+	public:
+	DBScriptVM();
+	~DBScriptVM() override;
 
-    DBScriptVM(const DBScriptVM&) = delete;
-    DBScriptVM& operator=(const DBScriptVM&) = delete;
+	DBScriptVM(const DBScriptVM&) = delete;
+	DBScriptVM& operator=(const DBScriptVM&) = delete;
 
-    // Register subsystem object pointers into the VM's CustomPtrStore.
-    // Must be called once at EventLoop start, before any script execution.
-    // Internally reserves 4 slots via VMCustomPtrStore::Reserve(kDbPtrPool).
-    void RegisterSubsystemObjects(DBThread* thread,
-                                  mongo::MongoClient* client,
-                                  mongo::MongoClientPool* pool);
+	// Register subsystem object pointers into the VM's CustomPtrStore.
+	// Must be called once at EventLoop start, before any script execution.
+	// Internally reserves 4 slots via VMCustomPtrStore::Reserve(kDbPtrPool).
+	void RegisterSubsystemObjects(DBThread* thread,
+								  mongo::MongoClient* client,
+								  mongo::MongoClientPool* pool);
 
-    // Typed accessors for subsystem objects (read from CustomPtrStore).
-    // All are DBT-exclusive — the owning DBThread calls them.
-    DBThread*               GetDBThread() const;
-    mongo::MongoClient*     GetMongoClient() const;
-    mongo::MongoClientPool* GetMongoClientPool() const;
+	// Typed accessors for subsystem objects (read from CustomPtrStore).
+	// All are DBT-exclusive — the owning DBThread calls them.
+	DBThread* GetDBThread() const;
+	mongo::MongoClient* GetMongoClient() const;
+	mongo::MongoClientPool* GetMongoClientPool() const;
 
-    // Returns true if all four core slots are non-null.
-    // Used as a sanity check after RegisterSubsystemObjects().
-    bool AreCoreSlotsValid() const;
+	// Returns true if all four core slots are non-null.
+	// Used as a sanity check after RegisterSubsystemObjects().
+	bool AreCoreSlotsValid() const;
 
-    // Per-frame callback: invokes the Lua global function on_db_frame(info)
-    // where info = { frame_count = <int>, delta_seconds = <number> }.
-    // If on_db_frame is not defined in the Lua environment the call is
-    // silently skipped. Lua errors are caught and logged via the DBThread
-    // logger.
-    //
-    // Called once per EventLoop iteration (DBT exclusive).
-    void CallFrameCallback(int64_t frame_count, double delta_seconds);
+	// Per-frame callback: invokes the Lua global function on_db_frame(info)
+	// where info = { frame_count = <int>, delta_seconds = <number> }.
+	// If on_db_frame is not defined in the Lua environment the call is
+	// silently skipped. Lua errors are caught and logged via the DBThread
+	// logger.
+	//
+	// Called once per EventLoop iteration (DBT exclusive).
+	void CallFrameCallback(int64_t frame_count, double delta_seconds);
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -131,6 +132,6 @@ void ExportDbLog(ScriptVM& vm, quill::Logger* logger);
 
 void ExportDbRuntime(ScriptVM& vm);
 
-} // namespace engine
+}  // namespace engine
 
-#endif // ENGINE_MONGODB_ENABLED
+#endif	// ENGINE_MONGODB_ENABLED

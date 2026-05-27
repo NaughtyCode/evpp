@@ -5,7 +5,7 @@
 // MSVC 14.50+ (_MSC_VER >= 1950) has a broken std::snprintf in debug builds.
 // Disable quill's debug assertion macro to avoid the compilation error.
 #if defined(_MSC_VER) && _MSC_VER >= 1950 && !defined(QUILL_ASSERT_WITH_FMT)
-#define QUILL_ASSERT_WITH_FMT(expr, fmt, ...) ((void)0)
+#define QUILL_ASSERT_WITH_FMT(expr, fmt, ...) ((void) 0)
 #endif
 
 // ThreadContextManager.h forward-declares get_thread_name/get_thread_id as
@@ -18,8 +18,8 @@
 
 #include <quill/Logger.h>
 
-#include "runtime/core/log/log_macros.h"
 #include "runtime/core/engine_api.h"
+#include "runtime/core/log/log_macros.h"
 
 namespace engine {
 
@@ -33,4 +33,4 @@ ENGINE_API quill::Logger* CreateLogger(const LogConfig& config);
 
 ENGINE_API void ShutdownLogger();
 
-} // namespace engine
+}  // namespace engine

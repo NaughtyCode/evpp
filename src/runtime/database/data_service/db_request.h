@@ -16,19 +16,19 @@ namespace engine {
 // kNoOp is the wakeup sentinel — see DBThread::Stop().
 
 enum class DbOperation : uint8_t {
-    kNoOp = 0,       // sentinel: wakeup / no-op (EventLoop silently discards)
-    kFind,           // cursor-based find, limit/skip in DbRequest
-    kFindOne,        // single document via cursor limit-1
-    kInsertOne,      // single document insert
-    kInsertMany,     // batch insert (bson_data = JSON array of documents)
-    kUpdateOne,      // single document update (filter in bson_data, update desc in bson_data2)
-    kUpdateMany,     // multi-document update (same split)
-    kDeleteOne,      // single document delete
-    kDeleteMany,     // multi-document delete
-    kCount,          // count documents matching filter
-    kAggregate,      // aggregation pipeline (bson_data or bson_data2 = JSON array of stages)
-    kCommand,        // raw MongoDB command (no collection — runs on database or client level)
-    kExecuteScript,  // Lua script execution inside the thread's DBScriptVM (R11)
+	kNoOp = 0,	// sentinel: wakeup / no-op (EventLoop silently discards)
+	kFind,	// cursor-based find, limit/skip in DbRequest
+	kFindOne,  // single document via cursor limit-1
+	kInsertOne,	 // single document insert
+	kInsertMany,  // batch insert (bson_data = JSON array of documents)
+	kUpdateOne,	 // single document update (filter in bson_data, update desc in bson_data2)
+	kUpdateMany,  // multi-document update (same split)
+	kDeleteOne,	 // single document delete
+	kDeleteMany,  // multi-document delete
+	kCount,	 // count documents matching filter
+	kAggregate,	 // aggregation pipeline (bson_data or bson_data2 = JSON array of stages)
+	kCommand,  // raw MongoDB command (no collection — runs on database or client level)
+	kExecuteScript,	 // Lua script execution inside the thread's DBScriptVM (R11)
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -59,15 +59,15 @@ enum class DbOperation : uint8_t {
 // is genuinely intended.
 
 struct DbRequest {
-    uint64_t    request_id = 0;     // caller-assigned id, echoed in DbResponse for matching
-    DbOperation operation = DbOperation::kNoOp;
-    std::string database;           // target database name (required for all CRUD + kCommand)
-    std::string collection;         // target collection name (required for CRUD except kCommand)
-    std::string bson_data;          // primary BSON/JSON doc (filter / insert doc / command / pipeline)
-    std::string bson_data2;         // secondary BSON/JSON doc (update descriptor / alt pipeline)
-    std::string script;             // Lua source for kExecuteScript
-    int32_t     limit = 0;          // kFind: max documents (0 = unlimited)
-    int32_t     skip = 0;           // kFind: skip first N documents
+	uint64_t request_id = 0;  // caller-assigned id, echoed in DbResponse for matching
+	DbOperation operation = DbOperation::kNoOp;
+	std::string database;  // target database name (required for all CRUD + kCommand)
+	std::string collection;	 // target collection name (required for CRUD except kCommand)
+	std::string bson_data;	// primary BSON/JSON doc (filter / insert doc / command / pipeline)
+	std::string bson_data2;	 // secondary BSON/JSON doc (update descriptor / alt pipeline)
+	std::string script;	 // Lua source for kExecuteScript
+	int32_t limit = 0;	// kFind: max documents (0 = unlimited)
+	int32_t skip = 0;  // kFind: skip first N documents
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -92,12 +92,12 @@ struct DbRequest {
 // affected_count is the number of documents matched/modified/deleted.
 
 struct DbResponse {
-    uint64_t    request_id = 0;     // matches DbRequest::request_id
-    bool        success = false;
-    uint32_t    error_code = 0;     // MongoDB error code (0 on success)
-    std::string error_message;
-    std::string result_data;        // JSON-serialised result (format varies by operation)
-    int64_t     affected_count = 0; // nModified (update) or n (delete) from server reply
+	uint64_t request_id = 0;  // matches DbRequest::request_id
+	bool success = false;
+	uint32_t error_code = 0;  // MongoDB error code (0 on success)
+	std::string error_message;
+	std::string result_data;  // JSON-serialised result (format varies by operation)
+	int64_t affected_count = 0;	 // nModified (update) or n (delete) from server reply
 };
 
-} // namespace engine
+}  // namespace engine

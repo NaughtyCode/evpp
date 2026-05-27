@@ -1,8 +1,7 @@
 #pragma once
 
-#include "runtime/evpp/inner_pre.h"
-
 #include "runtime/evpp/duration.h"
+#include "runtime/evpp/inner_pre.h"
 
 struct event;
 struct event_base;
@@ -10,89 +9,97 @@ struct event_base;
 namespace evpp {
 class EventLoop;
 class EVPP_EXPORT EventWatcher {
-public:
-    typedef std::function<void()> Handler;
+	public:
+	typedef std::function<void()> Handler;
 
-    virtual ~EventWatcher();
+	virtual ~EventWatcher();
 
-    bool Init();
+	bool Init();
 
-    // @note It MUST be called in the event thread.
-    void Cancel();
+	// @note It MUST be called in the event thread.
+	void Cancel();
 
-    // @brief :
-    // @param[IN] const Handler& cb - The callback which will be called when this event is canceled.
-    // @return void -
-    void SetCancelCallback(const Handler& cb);
+	// @brief :
+	// @param[IN] const Handler& cb - The callback which will be called when this event is canceled.
+	// @return void -
+	void SetCancelCallback(const Handler& cb);
 
-    void ClearHandler() { handler_ = Handler(); }
-protected:
-    // @note It MUST be called in the event thread.
-    // @param timeout the maximum amount of time to wait for the event, or 0 to wait forever
-    bool Watch(Duration timeout);
+	void ClearHandler() {
+		handler_ = Handler();
+	}
 
-protected:
-    EventWatcher(struct event_base* evbase, const Handler& handler);
-    EventWatcher(struct event_base* evbase, Handler&& handler);
+	protected:
+	// @note It MUST be called in the event thread.
+	// @param timeout the maximum amount of time to wait for the event, or 0 to wait forever
+	bool Watch(Duration timeout);
 
-    void Close();
-    void FreeEvent();
+	protected:
+	EventWatcher(struct event_base* evbase, const Handler& handler);
+	EventWatcher(struct event_base* evbase, Handler&& handler);
 
-    virtual bool DoInit() = 0;
-    virtual void DoClose() {}
+	void Close();
+	void FreeEvent();
 
-protected:
-    struct event* event_;
-    struct event_base* evbase_;
-    bool attached_;
-    Handler handler_;
-    Handler cancel_callback_;
+	virtual bool DoInit() = 0;
+	virtual void DoClose() {
+	}
+
+	protected:
+	struct event* event_;
+	struct event_base* evbase_;
+	bool attached_;
+	Handler handler_;
+	Handler cancel_callback_;
 };
 
 class EVPP_EXPORT PipeEventWatcher : public EventWatcher {
-public:
-    PipeEventWatcher(EventLoop* loop, const Handler& handler);
-    PipeEventWatcher(EventLoop* loop, Handler&& handler);
-    ~PipeEventWatcher();
+	public:
+	PipeEventWatcher(EventLoop* loop, const Handler& handler);
+	PipeEventWatcher(EventLoop* loop, Handler&& handler);
+	~PipeEventWatcher();
 
-    bool AsyncWait();
-    void Notify();
-    evpp_socket_t wfd() const { return pipe_[0]; }
-private:
-    virtual bool DoInit();
-    virtual void DoClose();
-    static void HandlerFn(evpp_socket_t fd, short which, void* v);
+	bool AsyncWait();
+	void Notify();
+	evpp_socket_t wfd() const {
+		return pipe_[0];
+	}
 
-    evpp_socket_t pipe_[2]; // Write to pipe_[0] , Read from pipe_[1]
+	private:
+	virtual bool DoInit();
+	virtual void DoClose();
+	static void HandlerFn(evpp_socket_t fd, short which, void* v);
+
+	evpp_socket_t pipe_[2];	 // Write to pipe_[0] , Read from pipe_[1]
 };
 
 class EVPP_EXPORT TimerEventWatcher : public EventWatcher {
-public:
-    TimerEventWatcher(EventLoop* loop, const Handler& handler, Duration timeout);
-    TimerEventWatcher(EventLoop* loop, Handler&& handler, Duration timeout);
-    TimerEventWatcher(struct event_base* loop, const Handler& handler, Duration timeout);
-    TimerEventWatcher(struct event_base* loop, Handler&& handler, Duration timeout);
+	public:
+	TimerEventWatcher(EventLoop* loop, const Handler& handler, Duration timeout);
+	TimerEventWatcher(EventLoop* loop, Handler&& handler, Duration timeout);
+	TimerEventWatcher(struct event_base* loop, const Handler& handler, Duration timeout);
+	TimerEventWatcher(struct event_base* loop, Handler&& handler, Duration timeout);
 
-    bool AsyncWait();
+	bool AsyncWait();
 
-private:
-    virtual bool DoInit();
-    static void HandlerFn(evpp_socket_t fd, short which, void* v);
-private:
-    Duration timeout_;
+	private:
+	virtual bool DoInit();
+	static void HandlerFn(evpp_socket_t fd, short which, void* v);
+
+	private:
+	Duration timeout_;
 };
 
 class EVPP_EXPORT SignalEventWatcher : public EventWatcher {
-public:
-    SignalEventWatcher(signal_number_t signo, EventLoop* loop, const Handler& handler);
-    SignalEventWatcher(signal_number_t signo, EventLoop* loop, Handler&& handler);
+	public:
+	SignalEventWatcher(signal_number_t signo, EventLoop* loop, const Handler& handler);
+	SignalEventWatcher(signal_number_t signo, EventLoop* loop, Handler&& handler);
 
-    bool AsyncWait();
-private:
-    virtual bool DoInit();
-    static void HandlerFn(signal_number_t sn, short which, void* v);
+	bool AsyncWait();
 
-    int signo_;
+	private:
+	virtual bool DoInit();
+	static void HandlerFn(signal_number_t sn, short which, void* v);
+
+	int signo_;
 };
 }
-

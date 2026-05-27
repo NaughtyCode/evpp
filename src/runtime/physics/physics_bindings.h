@@ -7,7 +7,8 @@
 // Including this header without the macro will cause a compile-time #error.
 //==============================================================================
 #ifndef PHYSICS_INTERNAL_ACCESS
-#error "physics_bindings.h is internal to the physics subsystem. \
+#error \
+	"physics_bindings.h is internal to the physics subsystem. \
 Use physics_engine_bridge.h instead. \
 If you are writing physics-internal code, #define PHYSICS_INTERNAL_ACCESS \
 before including this header."
@@ -25,7 +26,7 @@ namespace physics_bindings {
 // Called by PhysicsSystem::Initialize() during VM setup.
 void Register(ScriptVM& vm);
 
-} // namespace physics_bindings
-} // namespace engine
+}  // namespace physics_bindings
+}  // namespace engine
 
-#endif // ENGINE_PHYSICS_ENABLED
+#endif	// ENGINE_PHYSICS_ENABLED

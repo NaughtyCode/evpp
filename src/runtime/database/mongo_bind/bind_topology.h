@@ -16,7 +16,7 @@ void RegisterMongoTopologyDescriptionMeta(lua_State* L);
 const luaL_Reg* GetMongoServerDescriptionLib();
 const luaL_Reg* GetMongoTopologyDescriptionLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

@@ -15,7 +15,7 @@ namespace script {
 void RegisterMongoBulkWriteOptsMeta(lua_State* L);
 const luaL_Reg* GetMongoBulkWriteOptsLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

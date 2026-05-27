@@ -13,7 +13,7 @@ namespace script {
 void RegisterBsonDocumentMeta(lua_State* L);
 const luaL_Reg* GetBsonDocumentLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

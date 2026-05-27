@@ -16,20 +16,26 @@ namespace mongo {
 // 16-byte IEEE 754 decimal128 floating-point value.
 // Binary-compatible with bson_decimal128_t (low at offset 0, high at offset 8 on LE).
 class ENGINE_API MongoDecimal128 {
-public:
-    MongoDecimal128() : low_(0), high_(0) {}
-    explicit MongoDecimal128(uint64_t high, uint64_t low) : low_(low), high_(high) {}
+	public:
+	MongoDecimal128() : low_(0), high_(0) {
+	}
+	explicit MongoDecimal128(uint64_t high, uint64_t low) : low_(low), high_(high) {
+	}
 
-    uint64_t high() const { return high_; }
-    uint64_t low()  const { return low_; }
+	uint64_t high() const {
+		return high_;
+	}
+	uint64_t low() const {
+		return low_;
+	}
 
-    bool FromString(const char* str);
-    bool FromStringLen(const char* str, int len);
-    std::string ToString() const;
+	bool FromString(const char* str);
+	bool FromStringLen(const char* str, int len);
+	std::string ToString() const;
 
-private:
-    uint64_t low_;
-    uint64_t high_;
+	private:
+	uint64_t low_;
+	uint64_t high_;
 };
 static_assert(sizeof(MongoDecimal128) == 16, "MongoDecimal128 must be 16 bytes");
 
@@ -42,275 +48,280 @@ static_assert(sizeof(MongoDecimal128) == 16, "MongoDecimal128 must be 16 bytes")
 //   doc.AppendUtf8("name", "value");
 //   char* json = doc.AsJson();
 class ENGINE_API BsonDocument {
-public:
-    BsonDocument();
-    explicit BsonDocument(const uint8_t* data, size_t length);
-    ~BsonDocument();
+	public:
+	BsonDocument();
+	explicit BsonDocument(const uint8_t* data, size_t length);
+	~BsonDocument();
 
-    // Non-copyable due to internal bson_t flags; use Copy().
-    BsonDocument(const BsonDocument&) = delete;
-    BsonDocument& operator=(const BsonDocument&) = delete;
+	// Non-copyable due to internal bson_t flags; use Copy().
+	BsonDocument(const BsonDocument&) = delete;
+	BsonDocument& operator=(const BsonDocument&) = delete;
 
-    BsonDocument(BsonDocument&& other) noexcept;
-    BsonDocument& operator=(BsonDocument&& other) noexcept;
+	BsonDocument(BsonDocument&& other) noexcept;
+	BsonDocument& operator=(BsonDocument&& other) noexcept;
 
-    // Deep copy.
-    BsonDocument Copy() const;
+	// Deep copy.
+	BsonDocument Copy() const;
 
-    // Reinitialize as an empty document.
-    void Clear();
+	// Reinitialize as an empty document.
+	void Clear();
 
-    // ── Append fields ───────────────────────────────────────────────
-    // All return true on success.
+	// ── Append fields ───────────────────────────────────────────────
+	// All return true on success.
 
-    bool AppendDouble(const char* key, double value);
-    bool AppendUtf8(const char* key, const char* value);
-    bool AppendUtf8(const char* key, std::string_view value);
-    bool AppendDocument(const char* key, const BsonDocument& subdoc);
-    bool AppendArray(const char* key, const BsonDocument& array);
-    bool AppendBinary(const char* key, int subtype, const uint8_t* data, uint32_t length);
-    bool AppendBool(const char* key, bool value);
-    bool AppendOid(const char* key, const MongoOid& oid);
-    bool AppendInt32(const char* key, int32_t value);
-    bool AppendInt64(const char* key, int64_t value);
-    bool AppendDateTime(const char* key, int64_t msec_since_epoch);
-    bool AppendNull(const char* key);
-    bool AppendTimestamp(const char* key, uint32_t timestamp, uint32_t increment);
-    bool AppendCode(const char* key, const char* javascript);
-    bool AppendCodeWithScope(const char* key, const char* javascript, const BsonDocument& scope);
-    bool AppendRegex(const char* key, const char* regex, const char* options);
-    bool AppendRegexWLen(const char* key, int keylen, const char* regex, const char* options);
-    bool AppendSymbol(const char* key, const char* symbol);
-    bool AppendUndefined(const char* key);
-    bool AppendMinkey(const char* key);
-    bool AppendMaxkey(const char* key);
-    bool AppendDBPointer(const char* key, const char* collection, const MongoOid& oid);
-    bool AppendTimeT(const char* key, time_t value);
-    bool AppendTimeval(const char* key, const void* tv);  // struct timeval*
-    bool AppendNowUtc(const char* key);
-    bool AppendDecimal128(const char* key, const MongoDecimal128& value);
-    bool AppendValue(const char* key, const void* bson_value);
-    bool AppendIter(const char* key, const BsonIter& iter);
-    bool AppendBinaryUninit(const char* key, int subtype, uint8_t** data_out, uint32_t len);
-    bool AppendArrayFromVector(const char* key, const BsonIter& iter);
+	bool AppendDouble(const char* key, double value);
+	bool AppendUtf8(const char* key, const char* value);
+	bool AppendUtf8(const char* key, std::string_view value);
+	bool AppendDocument(const char* key, const BsonDocument& subdoc);
+	bool AppendArray(const char* key, const BsonDocument& array);
+	bool AppendBinary(const char* key, int subtype, const uint8_t* data, uint32_t length);
+	bool AppendBool(const char* key, bool value);
+	bool AppendOid(const char* key, const MongoOid& oid);
+	bool AppendInt32(const char* key, int32_t value);
+	bool AppendInt64(const char* key, int64_t value);
+	bool AppendDateTime(const char* key, int64_t msec_since_epoch);
+	bool AppendNull(const char* key);
+	bool AppendTimestamp(const char* key, uint32_t timestamp, uint32_t increment);
+	bool AppendCode(const char* key, const char* javascript);
+	bool AppendCodeWithScope(const char* key, const char* javascript, const BsonDocument& scope);
+	bool AppendRegex(const char* key, const char* regex, const char* options);
+	bool AppendRegexWLen(const char* key, int keylen, const char* regex, const char* options);
+	bool AppendSymbol(const char* key, const char* symbol);
+	bool AppendUndefined(const char* key);
+	bool AppendMinkey(const char* key);
+	bool AppendMaxkey(const char* key);
+	bool AppendDBPointer(const char* key, const char* collection, const MongoOid& oid);
+	bool AppendTimeT(const char* key, time_t value);
+	bool AppendTimeval(const char* key, const void* tv);  // struct timeval*
+	bool AppendNowUtc(const char* key);
+	bool AppendDecimal128(const char* key, const MongoDecimal128& value);
+	bool AppendValue(const char* key, const void* bson_value);
+	bool AppendIter(const char* key, const BsonIter& iter);
+	bool AppendBinaryUninit(const char* key, int subtype, uint8_t** data_out, uint32_t len);
+	bool AppendArrayFromVector(const char* key, const BsonIter& iter);
 
-    // ── Sub-document building ───────────────────────────────────────
-    bool AppendDocumentBegin(const char* key, BsonDocument* subdoc);
-    static bool AppendDocumentEnd(BsonDocument* parent, BsonDocument* subdoc);
-    bool AppendArrayBegin(const char* key, BsonDocument* array);
-    bool AppendArrayUnsafeBegin(const char* key, BsonDocument* child);
-    static bool AppendArrayEnd(BsonDocument* parent, BsonDocument* array);
+	// ── Sub-document building ───────────────────────────────────────
+	bool AppendDocumentBegin(const char* key, BsonDocument* subdoc);
+	static bool AppendDocumentEnd(BsonDocument* parent, BsonDocument* subdoc);
+	bool AppendArrayBegin(const char* key, BsonDocument* array);
+	bool AppendArrayUnsafeBegin(const char* key, BsonDocument* child);
+	static bool AppendArrayEnd(BsonDocument* parent, BsonDocument* array);
 
-    // ── Array builder sub-builders ────────────────────────────────────
-    bool AppendArrayBuilderBegin(const char* key, void** builder_out); // bson_array_builder_t**
-    static bool AppendArrayBuilderEnd(BsonDocument* parent, void* builder);
+	// ── Array builder sub-builders ────────────────────────────────────
+	bool AppendArrayBuilderBegin(const char* key, void** builder_out);	// bson_array_builder_t**
+	static bool AppendArrayBuilderEnd(BsonDocument* parent, void* builder);
 
-    // ── Query / access ──────────────────────────────────────────────
-    uint32_t CountKeys() const;
-    bool HasField(const char* key) const;
-    bool Empty() const;
-    bool Equal(const BsonDocument& other) const;
-    int Compare(const BsonDocument& other) const;
-    bool Concat(const BsonDocument& src);
-    bool CopyTo(BsonDocument& dst) const; // copy contents into an existing document
-    bool CopyToExcludingNoinit(BsonDocument& dst, const char* first_exclude, ...) const;
-    // va_list variant; use CopyToExcludingNoinit for variadic convenience
-    bool CopyToExcludingNoinitVa(BsonDocument& dst, const char* first_exclude, void* args) const;
-    bool ReserveBuffer(uint32_t size);    // pre-allocate buffer space
+	// ── Query / access ──────────────────────────────────────────────
+	uint32_t CountKeys() const;
+	bool HasField(const char* key) const;
+	bool Empty() const;
+	bool Equal(const BsonDocument& other) const;
+	int Compare(const BsonDocument& other) const;
+	bool Concat(const BsonDocument& src);
+	bool CopyTo(BsonDocument& dst) const;  // copy contents into an existing document
+	bool CopyToExcludingNoinit(BsonDocument& dst, const char* first_exclude, ...) const;
+	// va_list variant; use CopyToExcludingNoinit for variadic convenience
+	bool CopyToExcludingNoinitVa(BsonDocument& dst, const char* first_exclude, void* args) const;
+	bool ReserveBuffer(uint32_t size);	// pre-allocate buffer space
 
-    // ── Serialization ───────────────────────────────────────────────
-    const uint8_t* GetData() const;
-    uint32_t GetLength() const;
+	// ── Serialization ───────────────────────────────────────────────
+	const uint8_t* GetData() const;
+	uint32_t GetLength() const;
 
-    char* AsCanonicalExtendedJson(size_t* length) const;
-    char* AsRelaxedExtendedJson(size_t* length) const;
-    char* AsLegacyExtendedJson(size_t* length) const;
-    char* AsJson(size_t* length) const;
-    char* AsJsonWithOpts(size_t* length, const void* opts) const; // bson_json_opts_t*
-    std::string ToJson() const;  // returns AsJson() as std::string, caller owns
+	char* AsCanonicalExtendedJson(size_t* length) const;
+	char* AsRelaxedExtendedJson(size_t* length) const;
+	char* AsLegacyExtendedJson(size_t* length) const;
+	char* AsJson(size_t* length) const;
+	char* AsJsonWithOpts(size_t* length, const void* opts) const;  // bson_json_opts_t*
+	std::string ToJson() const;	 // returns AsJson() as std::string, caller owns
 
-    static char* ArrayAsCanonicalExtendedJson(const BsonDocument& array, size_t* length);
-    static char* ArrayAsRelaxedExtendedJson(const BsonDocument& array, size_t* length);
-    static char* ArrayAsLegacyExtendedJson(const BsonDocument& array, size_t* length);
+	static char* ArrayAsCanonicalExtendedJson(const BsonDocument& array, size_t* length);
+	static char* ArrayAsRelaxedExtendedJson(const BsonDocument& array, size_t* length);
+	static char* ArrayAsLegacyExtendedJson(const BsonDocument& array, size_t* length);
 
-    // ── Static initializers ─────────────────────────────────────────
-    static BsonDocument NewFromJson(const char* json, size_t len);
-    static BsonDocument NewFromJson(const uint8_t* data, size_t len);
-    static BsonDocument NewFromData(const uint8_t* data, size_t length);
-    static BsonDocument NewFromBuffer(uint8_t** buf, size_t* buf_len,
-                                       void* realloc_func, void* realloc_func_ctx);
-    static BsonDocument SizedNew(size_t size);
+	// ── Static initializers ─────────────────────────────────────────
+	static BsonDocument NewFromJson(const char* json, size_t len);
+	static BsonDocument NewFromJson(const uint8_t* data, size_t len);
+	static BsonDocument NewFromData(const uint8_t* data, size_t length);
+	static BsonDocument NewFromBuffer(uint8_t** buf,
+									  size_t* buf_len,
+									  void* realloc_func,
+									  void* realloc_func_ctx);
+	static BsonDocument SizedNew(size_t size);
 
-    // ── Validation / Reinit ─────────────────────────────────────────
-    bool Validate(MongoError* error = nullptr) const;
-    bool ValidateWithErrorAndOffset(MongoError* error, size_t* offset) const;
-    void Reinit(); // reinitialize as an empty document
-    bool InitFromJson(const char* json, int64_t len, MongoError* error = nullptr);
+	// ── Validation / Reinit ─────────────────────────────────────────
+	bool Validate(MongoError* error = nullptr) const;
+	bool ValidateWithErrorAndOffset(MongoError* error, size_t* offset) const;
+	void Reinit();	// reinitialize as an empty document
+	bool InitFromJson(const char* json, int64_t len, MongoError* error = nullptr);
 
-    // ── Steal (move bson_t buffer; src is left empty) ───────────────
-    static void Steal(BsonDocument& dst, BsonDocument& src);
-    // Destroy a bson_t* and steal its buffer for inline storage.
-    static void DestroyWithSteal(uint8_t** data, uint32_t* length, bool* reached_eof, void* raw_bson);
+	// ── Steal (move bson_t buffer; src is left empty) ───────────────
+	static void Steal(BsonDocument& dst, BsonDocument& src);
+	// Destroy a bson_t* and steal its buffer for inline storage.
+	static void DestroyWithSteal(uint8_t** data,
+								 uint32_t* length,
+								 bool* reached_eof,
+								 void* raw_bson);
 
-    // ── Internal access (database/mongo/ layer only) ────────────────
-    void* RawBson();         // returns bson_t*
-    const void* RawBson() const;
+	// ── Internal access (database/mongo/ layer only) ────────────────
+	void* RawBson();  // returns bson_t*
+	const void* RawBson() const;
 
-private:
-    // bson_t is 128 bytes. We store it inline so default-construction
-    // is cheap and avoids heap allocation.
-    alignas(8) char storage_[128];
+	private:
+	// bson_t is 128 bytes. We store it inline so default-construction
+	// is cheap and avoids heap allocation.
+	alignas(8) char storage_[128];
 };
 
 // Iterator for traversing a BSON document's fields.
 class ENGINE_API BsonIter {
-public:
-    BsonIter();
-    explicit BsonIter(const BsonDocument& doc);
-    ~BsonIter() = default;
+	public:
+	BsonIter();
+	explicit BsonIter(const BsonDocument& doc);
+	~BsonIter() = default;
 
-    bool Next();
-    bool Find(const char* key);
-    const char* Key() const;
+	bool Next();
+	bool Find(const char* key);
+	const char* Key() const;
 
-    // Type query
-    int Type() const;
+	// Type query
+	int Type() const;
 
-    // Typed value accessors — call the right one for the field type.
-    double       AsDouble() const;
-    double       AsDoubleCoerce() const; // converts int32/int64 to double
-    int32_t      AsInt32() const;
-    int64_t      AsInt64() const;
-    int64_t      AsInt64Coerce() const; // converts int32/double to int64
-    const char*  AsUtf8(uint32_t* length) const;
-    bool         AsBool() const;
-    bool         AsBoolCoerce() const;  // coerces int32/double to bool
-    MongoOid     AsOid() const;
-    int64_t      AsDateTime() const;
-    void         AsBinary(int* subtype, uint32_t* length, const uint8_t** data) const;
-    void         AsDocument(uint32_t* length, const uint8_t** data) const;
-    void         AsArray(uint32_t* array_len, const uint8_t** array) const;
-    const char*  AsCode(uint32_t* length = nullptr) const;
-    void         AsCodeWithScope(uint32_t* code_length, const char** code, BsonDocument* scope) const;
-    void         AsRegex(const char** regex, const char** options) const;
-    const char*  AsSymbol(uint32_t* length = nullptr) const;
-    void         AsTimestamp(uint32_t* timestamp, uint32_t* increment) const;
-    time_t       AsTimeT() const;
-    bool         AsDecimal128(MongoDecimal128* dec) const;
+	// Typed value accessors — call the right one for the field type.
+	double AsDouble() const;
+	double AsDoubleCoerce() const;	// converts int32/int64 to double
+	int32_t AsInt32() const;
+	int64_t AsInt64() const;
+	int64_t AsInt64Coerce() const;	// converts int32/double to int64
+	const char* AsUtf8(uint32_t* length) const;
+	bool AsBool() const;
+	bool AsBoolCoerce() const;	// coerces int32/double to bool
+	MongoOid AsOid() const;
+	int64_t AsDateTime() const;
+	void AsBinary(int* subtype, uint32_t* length, const uint8_t** data) const;
+	void AsDocument(uint32_t* length, const uint8_t** data) const;
+	void AsArray(uint32_t* array_len, const uint8_t** array) const;
+	const char* AsCode(uint32_t* length = nullptr) const;
+	void AsCodeWithScope(uint32_t* code_length, const char** code, BsonDocument* scope) const;
+	void AsRegex(const char** regex, const char** options) const;
+	const char* AsSymbol(uint32_t* length = nullptr) const;
+	void AsTimestamp(uint32_t* timestamp, uint32_t* increment) const;
+	time_t AsTimeT() const;
+	bool AsDecimal128(MongoDecimal128* dec) const;
 
-    // Find variants
-    bool FindCase(const char* key);
-    bool FindDescendant(const char* dotkey, BsonIter* descendant);
-    bool FindWLen(const char* key, int keylen);
+	// Find variants
+	bool FindCase(const char* key);
+	bool FindDescendant(const char* dotkey, BsonIter* descendant);
+	bool FindWLen(const char* key, int keylen);
 
-    // Init-and-find (initialize iterator and find key in one call)
-    bool InitFind(const BsonDocument& doc, const char* key);
-    bool InitFindCase(const BsonDocument& doc, const char* key);
-    bool InitFindWLen(const BsonDocument& doc, const char* key, int keylen);
-    bool InitFromData(const uint8_t* data, size_t length);
-    bool InitFromDataAtOffset(const uint8_t* data, size_t length, uint32_t offset, uint32_t keylen);
-    const char* KeyUnsafe() const;
-    uint32_t KeyLen() const;
-    char* DupUtf8(uint32_t* length) const;
+	// Init-and-find (initialize iterator and find key in one call)
+	bool InitFind(const BsonDocument& doc, const char* key);
+	bool InitFindCase(const BsonDocument& doc, const char* key);
+	bool InitFindWLen(const BsonDocument& doc, const char* key, int keylen);
+	bool InitFromData(const uint8_t* data, size_t length);
+	bool InitFromDataAtOffset(const uint8_t* data, size_t length, uint32_t offset, uint32_t keylen);
+	const char* KeyUnsafe() const;
+	uint32_t KeyLen() const;
+	char* DupUtf8(uint32_t* length) const;
 
-    // Type-specific helpers
-    int BinarySubtype() const;
-    static bool BinaryEqual(const BsonIter& a, const BsonIter& b);
+	// Type-specific helpers
+	int BinarySubtype() const;
+	static bool BinaryEqual(const BsonIter& a, const BsonIter& b);
 
-    // Timeval
-    void AsTimeval(void* tv) const; // struct timeval*
+	// Timeval
+	void AsTimeval(void* tv) const;	 // struct timeval*
 
-    // DBPointer type access
-    void AsDBPointer(uint32_t* collection_len, const char** collection, const void** oid) const;
+	// DBPointer type access
+	void AsDBPointer(uint32_t* collection_len, const char** collection, const void** oid) const;
 
-    // Visit all fields with a visitor callback
-    bool VisitAll(const void* visitor, void* data);
+	// Visit all fields with a visitor callback
+	bool VisitAll(const void* visitor, void* data);
 
-    // Offset (byte position in the document)
-    uint32_t Offset() const;
+	// Offset (byte position in the document)
+	uint32_t Offset() const;
 
-    // Get the raw bson_value_t for the current element
-    const void* Value() const;
+	// Get the raw bson_value_t for the current element
+	const void* Value() const;
 
-    // Overwrite current element's value (must be at correct position)
-    void OverwriteInt32(int32_t value);
-    void OverwriteInt64(int64_t value);
-    void OverwriteDouble(double value);
-    void OverwriteDecimal128(const MongoDecimal128& value);
-    void OverwriteBool(bool value);
-    void OverwriteOid(const MongoOid& value);
-    void OverwriteTimestamp(uint32_t timestamp, uint32_t increment);
-    void OverwriteDateTime(int64_t value);
-    void OverwriteBinary(int subtype, uint32_t* binary_len, uint8_t** binary);
+	// Overwrite current element's value (must be at correct position)
+	void OverwriteInt32(int32_t value);
+	void OverwriteInt64(int64_t value);
+	void OverwriteDouble(double value);
+	void OverwriteDecimal128(const MongoDecimal128& value);
+	void OverwriteBool(bool value);
+	void OverwriteOid(const MongoOid& value);
+	void OverwriteTimestamp(uint32_t timestamp, uint32_t increment);
+	void OverwriteDateTime(int64_t value);
+	void OverwriteBinary(int subtype, uint32_t* binary_len, uint8_t** binary);
 
-    // Recursion into sub-documents
-    BsonIter Recurse() const;
+	// Recursion into sub-documents
+	BsonIter Recurse() const;
 
-    // Internal access
-    void* RawIter();       // returns bson_iter_t*
-    const void* RawIter() const;
+	// Internal access
+	void* RawIter();  // returns bson_iter_t*
+	const void* RawIter() const;
 
-private:
-    alignas(8) char storage_[160]; // sizeof(bson_iter_t)
+	private:
+	alignas(8) char storage_[160];	// sizeof(bson_iter_t)
 };
 
 // Builder for BSON arrays (newer API style).
 class ENGINE_API BsonArrayBuilder {
-public:
-    BsonArrayBuilder();
-    ~BsonArrayBuilder();
+	public:
+	BsonArrayBuilder();
+	~BsonArrayBuilder();
 
-    BsonArrayBuilder(const BsonArrayBuilder&) = delete;
-    BsonArrayBuilder& operator=(const BsonArrayBuilder&) = delete;
+	BsonArrayBuilder(const BsonArrayBuilder&) = delete;
+	BsonArrayBuilder& operator=(const BsonArrayBuilder&) = delete;
 
-    bool AppendDouble(double value);
-    bool AppendUtf8(const char* value);
-    bool AppendInt32(int32_t value);
-    bool AppendInt64(int64_t value);
-    bool AppendBool(bool value);
-    bool AppendOid(const MongoOid& oid);
-    bool AppendNull();
-    bool AppendDateTime(int64_t msec_since_epoch);
-    bool AppendTimestamp(uint32_t timestamp, uint32_t increment);
-    bool AppendDocument(const BsonDocument& doc);
-    bool AppendArray(const BsonDocument& array);
-    bool AppendBinary(int subtype, const uint8_t* data, uint32_t length);
-    bool AppendRegex(const char* regex, const char* options);
-    bool AppendCode(const char* javascript);
-    bool AppendCodeWithScope(const char* javascript, const BsonDocument& scope);
-    bool AppendIter(const BsonIter& iter);
-    bool AppendValue(const void* bson_value);
-    bool AppendMinkey();
-    bool AppendMaxkey();
-    bool AppendUndefined();
-    bool AppendSymbol(const char* value);
-    bool AppendDBPointer(const char* collection, const MongoOid& oid);
-    bool AppendTimeT(time_t value);
-    bool AppendTimeval(const void* tv);  // struct timeval*
-    bool AppendNowUtc();
-    bool AppendDecimal128(const MongoDecimal128& value);
-    bool AppendArrayFromVector(const BsonIter& iter);
-    bool AppendBinaryUninit(int subtype, uint8_t** data_out, uint32_t len);
+	bool AppendDouble(double value);
+	bool AppendUtf8(const char* value);
+	bool AppendInt32(int32_t value);
+	bool AppendInt64(int64_t value);
+	bool AppendBool(bool value);
+	bool AppendOid(const MongoOid& oid);
+	bool AppendNull();
+	bool AppendDateTime(int64_t msec_since_epoch);
+	bool AppendTimestamp(uint32_t timestamp, uint32_t increment);
+	bool AppendDocument(const BsonDocument& doc);
+	bool AppendArray(const BsonDocument& array);
+	bool AppendBinary(int subtype, const uint8_t* data, uint32_t length);
+	bool AppendRegex(const char* regex, const char* options);
+	bool AppendCode(const char* javascript);
+	bool AppendCodeWithScope(const char* javascript, const BsonDocument& scope);
+	bool AppendIter(const BsonIter& iter);
+	bool AppendValue(const void* bson_value);
+	bool AppendMinkey();
+	bool AppendMaxkey();
+	bool AppendUndefined();
+	bool AppendSymbol(const char* value);
+	bool AppendDBPointer(const char* collection, const MongoOid& oid);
+	bool AppendTimeT(time_t value);
+	bool AppendTimeval(const void* tv);	 // struct timeval*
+	bool AppendNowUtc();
+	bool AppendDecimal128(const MongoDecimal128& value);
+	bool AppendArrayFromVector(const BsonIter& iter);
+	bool AppendBinaryUninit(int subtype, uint8_t** data_out, uint32_t len);
 
-    // Sub-document building within the builder
-    bool AppendDocumentBegin(BsonDocument* subdoc);
-    static bool AppendDocumentEnd(BsonArrayBuilder* builder, BsonDocument* subdoc);
+	// Sub-document building within the builder
+	bool AppendDocumentBegin(BsonDocument* subdoc);
+	static bool AppendDocumentEnd(BsonArrayBuilder* builder, BsonDocument* subdoc);
 
-    // Array builder sub-builders
-    bool AppendArrayBuilderBegin(void** builder_out); // bson_array_builder_t**
-    static bool AppendArrayBuilderEnd(BsonArrayBuilder* builder, void* child);
+	// Array builder sub-builders
+	bool AppendArrayBuilderBegin(void** builder_out);  // bson_array_builder_t**
+	static bool AppendArrayBuilderEnd(BsonArrayBuilder* builder, void* child);
 
-    // Finalize into a document (writes array into the given BsonDocument).
-    bool Build(BsonDocument* out);
+	// Finalize into a document (writes array into the given BsonDocument).
+	bool Build(BsonDocument* out);
 
-    // Internal access.
-    void* Raw(); // returns bson_array_builder_t*
+	// Internal access.
+	void* Raw();  // returns bson_array_builder_t*
 
-private:
-    void* ptr_; // bson_array_builder_t*
+	private:
+	void* ptr_;	 // bson_array_builder_t*
 };
 
-} // namespace mongo
-} // namespace engine
+}  // namespace mongo
+}  // namespace engine
 
 #endif

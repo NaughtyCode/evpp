@@ -15,7 +15,7 @@ namespace script {
 void RegisterBsonArrayBuilderMeta(lua_State* L);
 const luaL_Reg* GetBsonArrayBuilderLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

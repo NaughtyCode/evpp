@@ -3,6 +3,7 @@
 #include "runtime/database/mongo/mongo_oidc.h"
 
 #include <cstdio>
+
 #include <mongoc/mongoc.h>
 
 namespace engine {
@@ -13,44 +14,45 @@ namespace mongo {
 // ═══════════════════════════════════════════════════════════════════════
 
 struct MongoOidcCredential::Impl {
-    mongoc_oidc_credential_t* cred = nullptr;
-    bool owned = true;
+	mongoc_oidc_credential_t* cred = nullptr;
+	bool owned = true;
 };
 
 // ═══════════════════════════════════════════════════════════════════════
 // MongoOidcCallbackParams
 // ═══════════════════════════════════════════════════════════════════════
 
-MongoOidcCallbackParams::MongoOidcCallbackParams(void* raw_params) : params_(raw_params) {}
+MongoOidcCallbackParams::MongoOidcCallbackParams(void* raw_params) : params_(raw_params) {
+}
 
 int32_t MongoOidcCallbackParams::GetVersion() const {
-    return mongoc_oidc_callback_params_get_version(
-        static_cast<mongoc_oidc_callback_params_t*>(params_));
+	return mongoc_oidc_callback_params_get_version(
+		static_cast<mongoc_oidc_callback_params_t*>(params_));
 }
 
 void* MongoOidcCallbackParams::GetUserData() const {
-    return mongoc_oidc_callback_params_get_user_data(
-        static_cast<mongoc_oidc_callback_params_t*>(params_));
+	return mongoc_oidc_callback_params_get_user_data(
+		static_cast<mongoc_oidc_callback_params_t*>(params_));
 }
 
 const int64_t* MongoOidcCallbackParams::GetTimeout() const {
-    return mongoc_oidc_callback_params_get_timeout(
-        static_cast<mongoc_oidc_callback_params_t*>(params_));
+	return mongoc_oidc_callback_params_get_timeout(
+		static_cast<mongoc_oidc_callback_params_t*>(params_));
 }
 
 const char* MongoOidcCallbackParams::GetUsername() const {
-    return mongoc_oidc_callback_params_get_username(
-        static_cast<mongoc_oidc_callback_params_t*>(params_));
+	return mongoc_oidc_callback_params_get_username(
+		static_cast<mongoc_oidc_callback_params_t*>(params_));
 }
 
 MongoOidcCredential* MongoOidcCallbackParams::CancelWithTimeout() {
-    auto* raw = mongoc_oidc_callback_params_cancel_with_timeout(
-        static_cast<mongoc_oidc_callback_params_t*>(params_));
-    if (!raw) return nullptr;
-    auto* cred = new MongoOidcCredential();
-    cred->impl_->owned = false;
-    cred->impl_->cred = raw;
-    return cred;
+	auto* raw = mongoc_oidc_callback_params_cancel_with_timeout(
+		static_cast<mongoc_oidc_callback_params_t*>(params_));
+	if (!raw) return nullptr;
+	auto* cred = new MongoOidcCredential();
+	cred->impl_->owned = false;
+	cred->impl_->cred = raw;
+	return cred;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -58,45 +60,57 @@ MongoOidcCredential* MongoOidcCallbackParams::CancelWithTimeout() {
 // ═══════════════════════════════════════════════════════════════════════
 
 MongoOidcCredential* MongoOidcCredential::New(const char* access_token) {
-    auto* c = new MongoOidcCredential();
-    c->impl_->cred = mongoc_oidc_credential_new(access_token);
-    if (!c->impl_->cred) { delete c; return nullptr; }
-    return c;
+	auto* c = new MongoOidcCredential();
+	c->impl_->cred = mongoc_oidc_credential_new(access_token);
+	if (!c->impl_->cred) {
+		delete c;
+		return nullptr;
+	}
+	return c;
 }
 
-MongoOidcCredential* MongoOidcCredential::NewWithExpiresIn(const char* access_token, int64_t expires_in) {
-    auto* c = new MongoOidcCredential();
-    c->impl_->cred = mongoc_oidc_credential_new_with_expires_in(access_token, expires_in);
-    if (!c->impl_->cred) { delete c; return nullptr; }
-    return c;
+MongoOidcCredential* MongoOidcCredential::NewWithExpiresIn(const char* access_token,
+														   int64_t expires_in) {
+	auto* c = new MongoOidcCredential();
+	c->impl_->cred = mongoc_oidc_credential_new_with_expires_in(access_token, expires_in);
+	if (!c->impl_->cred) {
+		delete c;
+		return nullptr;
+	}
+	return c;
 }
 
-MongoOidcCredential::MongoOidcCredential() : impl_(std::make_unique<Impl>()) {}
-MongoOidcCredential::~MongoOidcCredential() { Destroy(); }
+MongoOidcCredential::MongoOidcCredential() : impl_(std::make_unique<Impl>()) {
+}
+MongoOidcCredential::~MongoOidcCredential() {
+	Destroy();
+}
 
 void MongoOidcCredential::Destroy() {
-    if (impl_ && impl_->cred && impl_->owned) {
-        mongoc_oidc_credential_destroy(impl_->cred);
-        impl_->cred = nullptr;
-    }
+	if (impl_ && impl_->cred && impl_->owned) {
+		mongoc_oidc_credential_destroy(impl_->cred);
+		impl_->cred = nullptr;
+	}
 }
 
 const char* MongoOidcCredential::GetAccessToken() const {
-    return impl_ && impl_->cred ? mongoc_oidc_credential_get_access_token(impl_->cred) : nullptr;
+	return impl_ && impl_->cred ? mongoc_oidc_credential_get_access_token(impl_->cred) : nullptr;
 }
 
 const int64_t* MongoOidcCredential::GetExpiresIn() const {
-    return impl_ && impl_->cred ? mongoc_oidc_credential_get_expires_in(impl_->cred) : nullptr;
+	return impl_ && impl_->cred ? mongoc_oidc_credential_get_expires_in(impl_->cred) : nullptr;
 }
 
-void* MongoOidcCredential::Raw() { return impl_ ? impl_->cred : nullptr; }
+void* MongoOidcCredential::Raw() {
+	return impl_ ? impl_->cred : nullptr;
+}
 
 void* MongoOidcCredential::ReleaseRaw() {
-    if (impl_) {
-        impl_->owned = false;
-        return impl_->cred;
-    }
-    return nullptr;
+	if (impl_) {
+		impl_->owned = false;
+		return impl_->cred;
+	}
+	return nullptr;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -106,81 +120,89 @@ void* MongoOidcCredential::ReleaseRaw() {
 namespace {
 
 struct OidcCtx {
-    MongoOidcCallbackFn fn;
-    void* user_data = nullptr;
+	MongoOidcCallbackFn fn;
+	void* user_data = nullptr;
 };
 
 mongoc_oidc_credential_t* oidc_trampoline(mongoc_oidc_callback_params_t* params) {
-    auto* ctx = static_cast<OidcCtx*>(mongoc_oidc_callback_params_get_user_data(params));
-    if (!ctx || !ctx->fn) return nullptr;
-    MongoOidcCallbackParams wrapper(params);
-    MongoOidcCredential* cred = nullptr;
-    try {
-        cred = ctx->fn(wrapper);
-    } catch (const std::exception& e) {
-        // Do not let exceptions unwind through C stack frames
-        std::fprintf(stderr, "[mongo_oidc] exception in OIDC callback: %s\n", e.what());
-        return nullptr;
-    } catch (...) {
-        // Do not let exceptions unwind through C stack frames
-        std::fprintf(stderr, "[mongo_oidc] unknown exception in OIDC callback\n");
-        return nullptr;
-    }
-    if (!cred) return nullptr;
-    auto* raw = static_cast<mongoc_oidc_credential_t*>(cred->ReleaseRaw());
-    delete cred;
-    return raw;
+	auto* ctx = static_cast<OidcCtx*>(mongoc_oidc_callback_params_get_user_data(params));
+	if (!ctx || !ctx->fn) return nullptr;
+	MongoOidcCallbackParams wrapper(params);
+	MongoOidcCredential* cred = nullptr;
+	try {
+		cred = ctx->fn(wrapper);
+	} catch (const std::exception& e) {
+		// Do not let exceptions unwind through C stack frames
+		std::fprintf(stderr, "[mongo_oidc] exception in OIDC callback: %s\n", e.what());
+		return nullptr;
+	} catch (...) {
+		// Do not let exceptions unwind through C stack frames
+		std::fprintf(stderr, "[mongo_oidc] unknown exception in OIDC callback\n");
+		return nullptr;
+	}
+	if (!cred) return nullptr;
+	auto* raw = static_cast<mongoc_oidc_credential_t*>(cred->ReleaseRaw());
+	delete cred;
+	return raw;
 }
 
-} // namespace
+}  // namespace
 
 struct MongoOidcCallback::Impl {
-    mongoc_oidc_callback_t* cb = nullptr;
-    std::shared_ptr<OidcCtx> ctx;
+	mongoc_oidc_callback_t* cb = nullptr;
+	std::shared_ptr<OidcCtx> ctx;
 };
 
 MongoOidcCallback* MongoOidcCallback::New(MongoOidcCallbackFn fn) {
-    return NewWithUserData(std::move(fn), nullptr);
+	return NewWithUserData(std::move(fn), nullptr);
 }
 
 MongoOidcCallback* MongoOidcCallback::NewWithUserData(MongoOidcCallbackFn fn, void* user_data) {
-    auto* c = new MongoOidcCallback();
-    c->impl_->ctx = std::make_shared<OidcCtx>();
-    c->impl_->ctx->fn = std::move(fn);
-    c->impl_->ctx->user_data = user_data;
-    c->impl_->cb = mongoc_oidc_callback_new_with_user_data(oidc_trampoline, c->impl_->ctx.get());
-    if (!c->impl_->cb) { delete c; return nullptr; }
-    return c;
+	auto* c = new MongoOidcCallback();
+	c->impl_->ctx = std::make_shared<OidcCtx>();
+	c->impl_->ctx->fn = std::move(fn);
+	c->impl_->ctx->user_data = user_data;
+	c->impl_->cb = mongoc_oidc_callback_new_with_user_data(oidc_trampoline, c->impl_->ctx.get());
+	if (!c->impl_->cb) {
+		delete c;
+		return nullptr;
+	}
+	return c;
 }
 
-MongoOidcCallback::MongoOidcCallback() : impl_(std::make_unique<Impl>()) {}
+MongoOidcCallback::MongoOidcCallback() : impl_(std::make_unique<Impl>()) {
+}
 MongoOidcCallback::~MongoOidcCallback() {
-    if (impl_ && impl_->cb) {
-        mongoc_oidc_callback_destroy(impl_->cb);
-        impl_->cb = nullptr;
-    }
+	if (impl_ && impl_->cb) {
+		mongoc_oidc_callback_destroy(impl_->cb);
+		impl_->cb = nullptr;
+	}
 }
 
-void MongoOidcCallback::Destroy() { delete this; }
+void MongoOidcCallback::Destroy() {
+	delete this;
+}
 
 void* MongoOidcCallback::GetUserData() const {
-    return impl_->ctx ? impl_->ctx->user_data : nullptr;
+	return impl_->ctx ? impl_->ctx->user_data : nullptr;
 }
 
 void MongoOidcCallback::SetUserData(void* user_data) {
-    if (impl_ && impl_->cb) {
-        impl_->ctx->user_data = user_data;
-        mongoc_oidc_callback_set_user_data(impl_->cb, impl_->ctx.get());
-    }
+	if (impl_ && impl_->cb) {
+		impl_->ctx->user_data = user_data;
+		mongoc_oidc_callback_set_user_data(impl_->cb, impl_->ctx.get());
+	}
 }
 
 const void* MongoOidcCallback::GetFn() const {
-    return impl_ && impl_->cb ? mongoc_oidc_callback_get_fn(impl_->cb) : nullptr;
+	return impl_ && impl_->cb ? mongoc_oidc_callback_get_fn(impl_->cb) : nullptr;
 }
 
-void* MongoOidcCallback::Raw() { return impl_ ? impl_->cb : nullptr; }
+void* MongoOidcCallback::Raw() {
+	return impl_ ? impl_->cb : nullptr;
+}
 
-} // namespace mongo
-} // namespace engine
+}  // namespace mongo
+}  // namespace engine
 
 #endif

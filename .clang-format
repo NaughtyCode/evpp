@@ -1,0 +1,109 @@
+---
+# clang-format configuration for evpp2
+# Based on observed codebase conventions.
+
+BasedOnStyle: Google
+Language: Cpp
+
+# ── Indentation ──────────────────────────────────────────────────────────
+UseTab: Always
+TabWidth: 4
+IndentWidth: 4
+ContinuationIndentWidth: 4
+NamespaceIndentation: None
+AccessModifierOffset: 0
+IndentCaseLabels: false
+IndentGotoLabels: false
+IndentPPDirectives: None
+IndentRequiresClause: false
+
+# ── Braces ───────────────────────────────────────────────────────────────
+BreakBeforeBraces: Attach
+# Attach: braces always on the opening line
+#   void f() {
+#   if (x) {
+#   namespace N {
+#   class C {
+
+# ── Pointers & References ────────────────────────────────────────────────
+PointerAlignment: Left
+ReferenceAlignment: Left
+# int* p;   int& r;
+
+# ── Line width & wrapping ────────────────────────────────────────────────
+ColumnLimit: 100
+AlignAfterOpenBracket: Align
+AlignOperands: Align
+BinPackArguments: false
+BinPackParameters: false
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+BreakBeforeBinaryOperators: None
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializers: BeforeColon
+ConstructorInitializerIndentWidth: 4
+AlwaysBreakAfterReturnType: None
+PenaltyBreakBeforeFirstCallParameter: 19
+PenaltyBreakString: 1000
+PenaltyReturnTypeOnItsOwnLine: 200
+
+# ── Short blocks ─────────────────────────────────────────────────────────
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+AllowShortCompoundRequirementOnASingleLine: false
+AllowShortLambdasOnASingleLine: All
+
+# ── Includes ─────────────────────────────────────────────────────────────
+SortIncludes: true
+IncludeBlocks: Regroup
+IncludeIsMainRegex: '.*'
+IncludeCategories:
+  # C/C++ standard library (angle brackets, no path separator).
+  - Regex: '^<[^/]*>$'
+    Priority: 1
+    SortPriority: 1
+  # Project / third-party libs with angle brackets.
+  - Regex: '^<(runtime|evpp|quill|concurrentqueue|bsoncxx|mongocxx|lauxlib|lua\.hpp|lualib\.hpp|lua|msgpack|Jolt|glaze|libevent|bson|mongo)/'
+    Priority: 2
+    SortPriority: 2
+  # Quoted project headers.
+  - Regex: '^"(runtime|engine|config|database|core|vm|profiler|physics|script|network|math)/'
+    Priority: 3
+    SortPriority: 3
+  # Catch-all.
+  - Regex: '.*'
+    Priority: 4
+    SortPriority: 4
+
+# ── Spacing ──────────────────────────────────────────────────────────────
+SpaceAfterCStyleCast: true
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesInAngles: Never
+SpacesInCStyleCastParentheses: false
+SpacesInConditionalStatement: false
+SpacesInContainerLiterals: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+MaxEmptyLinesToKeep: 2
+
+# ── Trailing comments ────────────────────────────────────────────────────
+AlignTrailingComments: false
+
+# ── Comments ─────────────────────────────────────────────────────────────
+ReflowComments: false
+
+# ── Braced lists ─────────────────────────────────────────────────────────
+Cpp11BracedListStyle: true
+
+# ── Misc ─────────────────────────────────────────────────────────────────
+DerivePointerAlignment: false
+FixNamespaceComments: false
+KeepEmptyLinesAtEOF: false
+KeepEmptyLinesAtTheStartOfBlocks: false
+---

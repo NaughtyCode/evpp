@@ -103,7 +103,7 @@ class MongoStream;
 struct MongoIovec;
 struct MongoSocketPollFd;
 
-} // namespace mongo
-} // namespace engine
+}  // namespace mongo
+}  // namespace engine
 
 #endif

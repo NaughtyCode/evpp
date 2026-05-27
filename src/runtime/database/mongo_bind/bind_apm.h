@@ -38,7 +38,7 @@ const luaL_Reg* GetMongoApmServerHeartbeatSucceededEventLib();
 const luaL_Reg* GetMongoApmServerHeartbeatFailedEventLib();
 const luaL_Reg* GetMongoApmCallbacksLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

@@ -19,5 +19,5 @@ ENGINE_API void PushServerLibrary(lua_State* L);
 // Stop all active TCP servers and release Lua callback references.
 ENGINE_API void ShutdownServerBindings();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine

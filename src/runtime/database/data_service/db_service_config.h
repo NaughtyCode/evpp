@@ -21,10 +21,10 @@ namespace engine {
 //   rotation_time_daily = "00:00"
 
 struct DbLogConfig {
-    std::string dir = "logs/db_service";   // log output directory (separate from main logs)
-    std::string level = "info";            // trace / debug / info / warn / error / fatal
-    int rotation_size_mb = 100;            // roll to new file when this size is exceeded
-    int max_backup_files = 10;             // keep at most this many old log files
+	std::string dir = "logs/db_service";  // log output directory (separate from main logs)
+	std::string level = "info";	 // trace / debug / info / warn / error / fatal
+	int rotation_size_mb = 100;	 // roll to new file when this size is exceeded
+	int max_backup_files = 10;	// keep at most this many old log files
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -39,9 +39,11 @@ struct DbLogConfig {
 //   3. Calls InitScript().
 
 struct DbScriptConfig {
-    std::string runtime_scripts_dir = "resources/script/runtime";   // shared runtime scripts (loaded first)
-    std::string db_scripts_dir = "resources/script/db_service";     // DB-service-specific scripts (loaded second)
-    bool        auto_load = true;      // auto-load script directories on EventLoop start
+	std::string runtime_scripts_dir =
+		"resources/script/runtime";	 // shared runtime scripts (loaded first)
+	std::string db_scripts_dir =
+		"resources/script/db_service";	// DB-service-specific scripts (loaded second)
+	bool auto_load = true;	// auto-load script directories on EventLoop start
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -58,11 +60,11 @@ struct DbScriptConfig {
 //   max_requests_per_frame   → cap requests per frame (0 = unlimited)
 
 struct DbThreadPoolConfig {
-    int thread_count = 4;              // number of DBThreads (R7, default 4)
-    int request_queue_size = 1024;     // max pending requests per thread
-    int response_queue_size = 1024;    // max pending responses per thread
-    int target_fps = 0;                // target loop iterations per second (0 = unlimited, as fast as possible)
-    int max_requests_per_frame = 0;    // max requests to process per frame (0 = unlimited)
+	int thread_count = 4;  // number of DBThreads (R7, default 4)
+	int request_queue_size = 1024;	// max pending requests per thread
+	int response_queue_size = 1024;	 // max pending responses per thread
+	int target_fps = 0;	 // target loop iterations per second (0 = unlimited, as fast as possible)
+	int max_requests_per_frame = 0;	 // max requests to process per frame (0 = unlimited)
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -79,8 +81,8 @@ struct DbThreadPoolConfig {
 //   Positive value = Pop() returns nullptr after this many ms, thread exits.
 
 struct DbConnectionPoolConfig {
-    int max_pool_size = 16;            // MongoClientPool max clients (must be >= thread_count)
-    int wait_queue_timeout_ms = 5000;  // pool Pop() timeout in ms (0 = infinite — avoid)
+	int max_pool_size = 16;	 // MongoClientPool max clients (must be >= thread_count)
+	int wait_queue_timeout_ms = 5000;  // pool Pop() timeout in ms (0 = infinite — avoid)
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -91,10 +93,10 @@ struct DbConnectionPoolConfig {
 // ConfigManager::LoadDbServiceConfigFromFile().
 
 struct DbServiceConfig {
-    DbLogConfig log;
-    DbThreadPoolConfig thread_pool;
-    DbConnectionPoolConfig connection_pool;
-    DbScriptConfig script;
+	DbLogConfig log;
+	DbThreadPoolConfig thread_pool;
+	DbConnectionPoolConfig connection_pool;
+	DbScriptConfig script;
 };
 
-} // namespace engine
+}  // namespace engine

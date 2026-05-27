@@ -12,5 +12,5 @@ namespace script {
 // as global Lua functions. Each takes a single string argument.
 ENGINE_API void ExportLog(ScriptVM& vm);
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine

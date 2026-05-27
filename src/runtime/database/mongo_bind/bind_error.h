@@ -15,7 +15,7 @@ namespace script {
 void RegisterMongoErrorMeta(lua_State* L);
 const luaL_Reg* GetMongoErrorLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

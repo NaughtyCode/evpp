@@ -21,8 +21,10 @@ typedef std::function<void(const TCPConnPtr&, size_t)> HighWaterMarkCallback;
 typedef std::function<void(const TCPConnPtr&, Buffer*)> MessageCallback;
 
 namespace internal {
-inline void DefaultConnectionCallback(const TCPConnPtr&) {}
-inline void DefaultMessageCallback(const TCPConnPtr&, Buffer*) {}
+inline void DefaultConnectionCallback(const TCPConnPtr&) {
+}
+inline void DefaultMessageCallback(const TCPConnPtr&, Buffer*) {
+}
 }
 
 }

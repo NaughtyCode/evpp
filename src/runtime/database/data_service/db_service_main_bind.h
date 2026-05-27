@@ -119,7 +119,7 @@ namespace script {
 
 ENGINE_API void ExportDbService(ScriptVM& vm);
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
-#endif // ENGINE_MONGODB_ENABLED
+#endif	// ENGINE_MONGODB_ENABLED

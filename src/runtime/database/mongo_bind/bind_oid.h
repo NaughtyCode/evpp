@@ -12,7 +12,7 @@ namespace script {
 
 const luaL_Reg* GetOidLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

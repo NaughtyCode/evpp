@@ -14,308 +14,391 @@ namespace engine {
 namespace mongo {
 
 class ENGINE_API MongoClient {
-public:
-    // Create a client from a connection URI string (e.g. "mongodb://localhost:27017").
-    static MongoClient* New(const char* uri_string);
-    static MongoClient* New(const MongoUri& uri);
-    static MongoClient* New(const MongoUri& uri, MongoError* error);
+	public:
+	// Create a client from a connection URI string (e.g. "mongodb://localhost:27017").
+	static MongoClient* New(const char* uri_string);
+	static MongoClient* New(const MongoUri& uri);
+	static MongoClient* New(const MongoUri& uri, MongoError* error);
 
-    void Destroy(); // frees the underlying mongoc client
+	void Destroy();	 // frees the underlying mongoc client
 
-    // Settings
-    void SetSocketTimeoutMs(int32_t timeout_ms);
-    void SetAppname(const char* appname);
-    void SetSslOpts(const void* ssl_opts);
-    MongoUri GetUri() const;
-    void SetReadPrefs(const MongoReadPrefs& read_prefs);
-    void SetWriteConcern(const MongoWriteConcern& write_concern);
-    void SetReadConcern(const MongoReadConcern& read_concern);
-    const void* GetReadPrefs() const;
-    const void* GetWriteConcern() const;
-    const void* GetReadConcern() const;
-    void SetErrorApi(uint32_t version);
-    bool SetServerApi(const MongoServerApi& api, MongoError* error);
-    void Reset();
+	// Settings
+	void SetSocketTimeoutMs(int32_t timeout_ms);
+	void SetAppname(const char* appname);
+	void SetSslOpts(const void* ssl_opts);
+	MongoUri GetUri() const;
+	void SetReadPrefs(const MongoReadPrefs& read_prefs);
+	void SetWriteConcern(const MongoWriteConcern& write_concern);
+	void SetReadConcern(const MongoReadConcern& read_concern);
+	const void* GetReadPrefs() const;
+	const void* GetWriteConcern() const;
+	const void* GetReadConcern() const;
+	void SetErrorApi(uint32_t version);
+	bool SetServerApi(const MongoServerApi& api, MongoError* error);
+	void Reset();
 
-    // Get child objects (caller owns the returned pointer; must call Destroy()).
-    MongoDatabase* GetDatabase(const char* name);
-    MongoDatabase* GetDefaultDatabase();
-    MongoCollection* GetCollection(const char* db_name, const char* coll_name);
+	// Get child objects (caller owns the returned pointer; must call Destroy()).
+	MongoDatabase* GetDatabase(const char* name);
+	MongoDatabase* GetDefaultDatabase();
+	MongoCollection* GetCollection(const char* db_name, const char* coll_name);
 
-    // Run a raw command on a database, returning the server reply in `reply`.
-    bool CommandSimple(const char* db_name, const BsonDocument& command,
-                       const MongoReadPrefs* read_prefs,
-                       BsonDocument* reply, MongoError* error);
-    bool CommandSimpleWithServerId(const char* db_name, const BsonDocument& command,
-                                    const MongoReadPrefs* read_prefs, uint32_t server_id,
-                                    BsonDocument* reply, MongoError* error);
-    bool CommandWithOpts(const char* db_name, const BsonDocument& command,
-                         const MongoReadPrefs* read_prefs, const BsonDocument* opts,
-                         BsonDocument* reply, MongoError* error);
-    bool ReadCommandWithOpts(const char* db_name, const BsonDocument& command,
-                             const MongoReadPrefs* read_prefs, const BsonDocument* opts,
-                             BsonDocument* reply, MongoError* error);
-    bool WriteCommandWithOpts(const char* db_name, const BsonDocument& command,
-                              const BsonDocument* opts,
-                              BsonDocument* reply, MongoError* error);
-    bool ReadWriteCommandWithOpts(const char* db_name, const BsonDocument& command,
-                                  const MongoReadPrefs* read_prefs, const BsonDocument* opts,
-                                  BsonDocument* reply, MongoError* error);
+	// Run a raw command on a database, returning the server reply in `reply`.
+	bool CommandSimple(const char* db_name,
+					   const BsonDocument& command,
+					   const MongoReadPrefs* read_prefs,
+					   BsonDocument* reply,
+					   MongoError* error);
+	bool CommandSimpleWithServerId(const char* db_name,
+								   const BsonDocument& command,
+								   const MongoReadPrefs* read_prefs,
+								   uint32_t server_id,
+								   BsonDocument* reply,
+								   MongoError* error);
+	bool CommandWithOpts(const char* db_name,
+						 const BsonDocument& command,
+						 const MongoReadPrefs* read_prefs,
+						 const BsonDocument* opts,
+						 BsonDocument* reply,
+						 MongoError* error);
+	bool ReadCommandWithOpts(const char* db_name,
+							 const BsonDocument& command,
+							 const MongoReadPrefs* read_prefs,
+							 const BsonDocument* opts,
+							 BsonDocument* reply,
+							 MongoError* error);
+	bool WriteCommandWithOpts(const char* db_name,
+							  const BsonDocument& command,
+							  const BsonDocument* opts,
+							  BsonDocument* reply,
+							  MongoError* error);
+	bool ReadWriteCommandWithOpts(const char* db_name,
+								  const BsonDocument& command,
+								  const MongoReadPrefs* read_prefs,
+								  const BsonDocument* opts,
+								  BsonDocument* reply,
+								  MongoError* error);
 
-    // ── Session ────────────────────────────────────────────────────
-    MongoSession* StartSession(const MongoSessionOpts* opts, MongoError* error);
+	// ── Session ────────────────────────────────────────────────────
+	MongoSession* StartSession(const MongoSessionOpts* opts, MongoError* error);
 
-    // ── Database names / listing ────────────────────────────────────
-    // Caller must bson_free() the returned string array.
-    char** GetDatabaseNames(MongoError* error);
-    char** GetDatabaseNamesWithOpts(const BsonDocument* opts, MongoError* error);
-    MongoCursor* FindDatabasesWithOpts(const BsonDocument* opts);
+	// ── Database names / listing ────────────────────────────────────
+	// Caller must bson_free() the returned string array.
+	char** GetDatabaseNames(MongoError* error);
+	char** GetDatabaseNamesWithOpts(const BsonDocument* opts, MongoError* error);
+	MongoCursor* FindDatabasesWithOpts(const BsonDocument* opts);
 
-    // ── Change stream ────────────────────────────────────────────────
-    MongoChangeStream* Watch(const BsonDocument& pipeline, const BsonDocument* opts);
+	// ── Change stream ────────────────────────────────────────────────
+	MongoChangeStream* Watch(const BsonDocument& pipeline, const BsonDocument* opts);
 
-    // ── GridFS ───────────────────────────────────────────────────────
-    void* GetGridfs(const char* db, const char* prefix, MongoError* error);
+	// ── GridFS ───────────────────────────────────────────────────────
+	void* GetGridfs(const char* db, const char* prefix, MongoError* error);
 
-    // ── APM (Application Performance Monitoring) ──────────────────────
-    bool SetApmCallbacks(void* callbacks, void* context);
+	// ── APM (Application Performance Monitoring) ──────────────────────
+	bool SetApmCallbacks(void* callbacks, void* context);
 
-    // ── Structured logging ───────────────────────────────────────────
-    bool SetStructuredLogOpts(const void* opts);
+	// ── Structured logging ───────────────────────────────────────────
+	bool SetStructuredLogOpts(const void* opts);
 
-    // ── Server selection / description ───────────────────────────────
-    void* SelectServer(bool for_writes, const MongoReadPrefs* prefs, MongoError* error);
-    void* GetServerDescription(uint32_t server_id);
-    void** GetServerDescriptions(size_t* n) const;
-    static void ServerDescriptionsDestroyAll(void** sds, size_t n);
-    void* GetHandshakeDescription(uint32_t server_id, const BsonDocument* opts, MongoError* error);
+	// ── Server selection / description ───────────────────────────────
+	void* SelectServer(bool for_writes, const MongoReadPrefs* prefs, MongoError* error);
+	void* GetServerDescription(uint32_t server_id);
+	void** GetServerDescriptions(size_t* n) const;
+	static void ServerDescriptionsDestroyAll(void** sds, size_t n);
+	void* GetHandshakeDescription(uint32_t server_id, const BsonDocument* opts, MongoError* error);
 
-    // ── Auto-encryption ──────────────────────────────────────────────
-    bool EnableAutoEncryption(void* opts, MongoError* error);
-    const char* GetCryptSharedVersion() const;
+	// ── Auto-encryption ──────────────────────────────────────────────
+	bool EnableAutoEncryption(void* opts, MongoError* error);
+	const char* GetCryptSharedVersion() const;
 
-    // ── Stream initiator (for custom transports) ──────────────────────
-    void SetStreamInitiator(void* initiator, void* user_data);
+	// ── Stream initiator (for custom transports) ──────────────────────
+	void SetStreamInitiator(void* initiator, void* user_data);
 
-    // ── OIDC callback ────────────────────────────────────────────────
-    bool SetOidcCallback(const void* callback);
+	// ── OIDC callback ────────────────────────────────────────────────
+	bool SetOidcCallback(const void* callback);
 
-    // ── Microsecond sleep (for custom event loop integration) ─────────
-    using UsleepFunc = void (*)(int64_t usec, void* user_data);
-    void SetUsleepImpl(UsleepFunc func, void* user_data);
+	// ── Microsecond sleep (for custom event loop integration) ─────────
+	using UsleepFunc = void (*)(int64_t usec, void* user_data);
+	void SetUsleepImpl(UsleepFunc func, void* user_data);
 
-    // ── Metadata ─────────────────────────────────────────────────────
-    bool AppendMetadata(const char* name, const char* version, const char* platform);
+	// ── Metadata ─────────────────────────────────────────────────────
+	bool AppendMetadata(const char* name, const char* version, const char* platform);
 
-    // Internal access
-    void* RawClient(); // returns mongoc_client_t*
+	// Internal access
+	void* RawClient();	// returns mongoc_client_t*
 
-    // For pool use: release ownership (client is now managed by the pool).
-    void ReleaseFromPool();
+	// For pool use: release ownership (client is now managed by the pool).
+	void ReleaseFromPool();
 
-    // Static factory for pool-owned clients.
-    static MongoClient* FromPooled(void* raw_client);
+	// Static factory for pool-owned clients.
+	static MongoClient* FromPooled(void* raw_client);
 
-private:
-    friend class MongoClientPool;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
+	private:
+	friend class MongoClientPool;
+	struct Impl;
+	std::unique_ptr<Impl> impl_;
 
-    MongoClient();
+	MongoClient();
 
-public:
-    ~MongoClient();
-    MongoClient(const MongoClient&) = delete;
-    MongoClient& operator=(const MongoClient&) = delete;
-    MongoClient(MongoClient&&) = delete;
-    MongoClient& operator=(MongoClient&&) = delete;
+	public:
+	~MongoClient();
+	MongoClient(const MongoClient&) = delete;
+	MongoClient& operator=(const MongoClient&) = delete;
+	MongoClient(MongoClient&&) = delete;
+	MongoClient& operator=(MongoClient&&) = delete;
 };
 
 class ENGINE_API MongoDatabase {
-public:
-    void Destroy();
+	public:
+	void Destroy();
 
-    const char* GetName() const;
+	const char* GetName() const;
 
-    MongoDatabase* Copy() const;
+	MongoDatabase* Copy() const;
 
-    MongoCollection* GetCollection(const char* name);
-    MongoCollection* CreateCollection(const char* name, const BsonDocument* options, MongoError* error);
+	MongoCollection* GetCollection(const char* name);
+	MongoCollection* CreateCollection(const char* name,
+									  const BsonDocument* options,
+									  MongoError* error);
 
-    bool Drop(MongoError* error);
-    bool DropWithOpts(const BsonDocument* opts, MongoError* error);
-    bool HasCollection(const char* name, MongoError* error);
+	bool Drop(MongoError* error);
+	bool DropWithOpts(const BsonDocument* opts, MongoError* error);
+	bool HasCollection(const char* name, MongoError* error);
 
-    bool CommandSimple(const BsonDocument& command, const MongoReadPrefs* read_prefs,
-                       BsonDocument* reply, MongoError* error);
-    bool ReadCommandWithOpts(const BsonDocument& command, const MongoReadPrefs* read_prefs,
-                             const BsonDocument* opts, BsonDocument* reply, MongoError* error);
-    bool WriteCommandWithOpts(const BsonDocument& command, const BsonDocument* opts,
-                              BsonDocument* reply, MongoError* error);
-    bool ReadWriteCommandWithOpts(const BsonDocument& command, const MongoReadPrefs* read_prefs,
-                                  const BsonDocument* opts, BsonDocument* reply, MongoError* error);
-    bool CommandWithOpts(const BsonDocument& command, const MongoReadPrefs* read_prefs,
-                         const BsonDocument* opts, BsonDocument* reply, MongoError* error);
+	bool CommandSimple(const BsonDocument& command,
+					   const MongoReadPrefs* read_prefs,
+					   BsonDocument* reply,
+					   MongoError* error);
+	bool ReadCommandWithOpts(const BsonDocument& command,
+							 const MongoReadPrefs* read_prefs,
+							 const BsonDocument* opts,
+							 BsonDocument* reply,
+							 MongoError* error);
+	bool WriteCommandWithOpts(const BsonDocument& command,
+							  const BsonDocument* opts,
+							  BsonDocument* reply,
+							  MongoError* error);
+	bool ReadWriteCommandWithOpts(const BsonDocument& command,
+								  const MongoReadPrefs* read_prefs,
+								  const BsonDocument* opts,
+								  BsonDocument* reply,
+								  MongoError* error);
+	bool CommandWithOpts(const BsonDocument& command,
+						 const MongoReadPrefs* read_prefs,
+						 const BsonDocument* opts,
+						 BsonDocument* reply,
+						 MongoError* error);
 
-    // ── Read/Write settings ─────────────────────────────────────────
-    const void* GetReadPrefs() const;
-    void SetReadPrefs(const MongoReadPrefs& read_prefs);
-    const void* GetWriteConcern() const;
-    void SetWriteConcern(const MongoWriteConcern& write_concern);
-    const void* GetReadConcern() const;
-    void SetReadConcern(const MongoReadConcern& read_concern);
+	// ── Read/Write settings ─────────────────────────────────────────
+	const void* GetReadPrefs() const;
+	void SetReadPrefs(const MongoReadPrefs& read_prefs);
+	const void* GetWriteConcern() const;
+	void SetWriteConcern(const MongoWriteConcern& write_concern);
+	const void* GetReadConcern() const;
+	void SetReadConcern(const MongoReadConcern& read_concern);
 
-    // ── Aggregate ──────────────────────────────────────────────────
-    MongoCursor* Aggregate(const BsonDocument& pipeline, const BsonDocument* opts,
-                           const MongoReadPrefs* read_prefs);
+	// ── Aggregate ──────────────────────────────────────────────────
+	MongoCursor* Aggregate(const BsonDocument& pipeline,
+						   const BsonDocument* opts,
+						   const MongoReadPrefs* read_prefs);
 
-    // ── Change stream ────────────────────────────────────────────────
-    MongoChangeStream* Watch(const BsonDocument& pipeline, const BsonDocument* opts);
+	// ── Change stream ────────────────────────────────────────────────
+	MongoChangeStream* Watch(const BsonDocument& pipeline, const BsonDocument* opts);
 
-    // ── Collection names / listing ──────────────────────────────────
-    char** GetCollectionNames(MongoError* error);
-    char** GetCollectionNamesWithOpts(const BsonDocument* opts, MongoError* error);
-    MongoCursor* FindCollectionsWithOpts(const BsonDocument* opts);
+	// ── Collection names / listing ──────────────────────────────────
+	char** GetCollectionNames(MongoError* error);
+	char** GetCollectionNamesWithOpts(const BsonDocument* opts, MongoError* error);
+	MongoCursor* FindCollectionsWithOpts(const BsonDocument* opts);
 
-    // ── User management ─────────────────────────────────────────────
-    bool AddUser(const char* username, const char* password,
-                 const BsonDocument* roles, const BsonDocument* custom_data, MongoError* error);
-    bool RemoveUser(const char* username, MongoError* error);
-    bool RemoveAllUsers(MongoError* error);
+	// ── User management ─────────────────────────────────────────────
+	bool AddUser(const char* username,
+				 const char* password,
+				 const BsonDocument* roles,
+				 const BsonDocument* custom_data,
+				 MongoError* error);
+	bool RemoveUser(const char* username, MongoError* error);
+	bool RemoveAllUsers(MongoError* error);
 
-    void* RawDatabase(); // returns mongoc_database_t*
+	void* RawDatabase();  // returns mongoc_database_t*
 
-private:
-    friend class MongoClient;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-    MongoDatabase();
+	private:
+	friend class MongoClient;
+	struct Impl;
+	std::unique_ptr<Impl> impl_;
+	MongoDatabase();
 
-public:
-    ~MongoDatabase();
-    MongoDatabase(const MongoDatabase&) = delete;
-    MongoDatabase& operator=(const MongoDatabase&) = delete;
-    MongoDatabase(MongoDatabase&&) = delete;
-    MongoDatabase& operator=(MongoDatabase&&) = delete;
+	public:
+	~MongoDatabase();
+	MongoDatabase(const MongoDatabase&) = delete;
+	MongoDatabase& operator=(const MongoDatabase&) = delete;
+	MongoDatabase(MongoDatabase&&) = delete;
+	MongoDatabase& operator=(MongoDatabase&&) = delete;
 };
 
 class ENGINE_API MongoCollection {
-public:
-    void Destroy();
+	public:
+	void Destroy();
 
-    const char* GetName() const;
+	const char* GetName() const;
 
-    MongoCollection* Copy() const;
+	MongoCollection* Copy() const;
 
-    // ── Collection-level commands ─────────────────────────────────────
-    bool CommandSimple(const BsonDocument& command, const MongoReadPrefs* read_prefs,
-                       BsonDocument* reply, MongoError* error);
-    bool CommandWithOpts(const BsonDocument& command, const MongoReadPrefs* read_prefs,
-                         const BsonDocument* opts, BsonDocument* reply, MongoError* error);
-    bool ReadCommandWithOpts(const BsonDocument& command, const MongoReadPrefs* read_prefs,
-                             const BsonDocument* opts, BsonDocument* reply, MongoError* error);
-    bool WriteCommandWithOpts(const BsonDocument& command, const BsonDocument* opts,
-                              BsonDocument* reply, MongoError* error);
-    bool ReadWriteCommandWithOpts(const BsonDocument& command, const MongoReadPrefs* read_prefs,
-                                  const BsonDocument* opts, BsonDocument* reply, MongoError* error);
+	// ── Collection-level commands ─────────────────────────────────────
+	bool CommandSimple(const BsonDocument& command,
+					   const MongoReadPrefs* read_prefs,
+					   BsonDocument* reply,
+					   MongoError* error);
+	bool CommandWithOpts(const BsonDocument& command,
+						 const MongoReadPrefs* read_prefs,
+						 const BsonDocument* opts,
+						 BsonDocument* reply,
+						 MongoError* error);
+	bool ReadCommandWithOpts(const BsonDocument& command,
+							 const MongoReadPrefs* read_prefs,
+							 const BsonDocument* opts,
+							 BsonDocument* reply,
+							 MongoError* error);
+	bool WriteCommandWithOpts(const BsonDocument& command,
+							  const BsonDocument* opts,
+							  BsonDocument* reply,
+							  MongoError* error);
+	bool ReadWriteCommandWithOpts(const BsonDocument& command,
+								  const MongoReadPrefs* read_prefs,
+								  const BsonDocument* opts,
+								  BsonDocument* reply,
+								  MongoError* error);
 
-    // ── Read/Write settings ─────────────────────────────────────────
-    const void* GetReadPrefs() const;
-    void SetReadPrefs(const MongoReadPrefs& read_prefs);
-    const void* GetReadConcern() const;
-    void SetReadConcern(const MongoReadConcern& read_concern);
-    const void* GetWriteConcern() const;
-    void SetWriteConcern(const MongoWriteConcern& write_concern);
+	// ── Read/Write settings ─────────────────────────────────────────
+	const void* GetReadPrefs() const;
+	void SetReadPrefs(const MongoReadPrefs& read_prefs);
+	const void* GetReadConcern() const;
+	void SetReadConcern(const MongoReadConcern& read_concern);
+	const void* GetWriteConcern() const;
+	void SetWriteConcern(const MongoWriteConcern& write_concern);
 
-    // ── Insert ──────────────────────────────────────────────────────
-    bool InsertOne(const BsonDocument& document, const BsonDocument* opts,
-                   BsonDocument* reply, MongoError* error);
+	// ── Insert ──────────────────────────────────────────────────────
+	bool InsertOne(const BsonDocument& document,
+				   const BsonDocument* opts,
+				   BsonDocument* reply,
+				   MongoError* error);
 
-    // ── Find ────────────────────────────────────────────────────────
-    MongoCursor* FindWithOpts(const BsonDocument& filter, const BsonDocument* opts,
-                              const MongoReadPrefs* read_prefs);
+	// ── Find ────────────────────────────────────────────────────────
+	MongoCursor* FindWithOpts(const BsonDocument& filter,
+							  const BsonDocument* opts,
+							  const MongoReadPrefs* read_prefs);
 
-    // ── Update ──────────────────────────────────────────────────────
-    bool UpdateOne(const BsonDocument& selector, const BsonDocument& update,
-                   const BsonDocument* opts, BsonDocument* reply, MongoError* error);
-    bool UpdateMany(const BsonDocument& selector, const BsonDocument& update,
-                    const BsonDocument* opts, BsonDocument* reply, MongoError* error);
-    bool ReplaceOne(const BsonDocument& selector, const BsonDocument& replacement,
-                    const BsonDocument* opts, BsonDocument* reply, MongoError* error);
+	// ── Update ──────────────────────────────────────────────────────
+	bool UpdateOne(const BsonDocument& selector,
+				   const BsonDocument& update,
+				   const BsonDocument* opts,
+				   BsonDocument* reply,
+				   MongoError* error);
+	bool UpdateMany(const BsonDocument& selector,
+					const BsonDocument& update,
+					const BsonDocument* opts,
+					BsonDocument* reply,
+					MongoError* error);
+	bool ReplaceOne(const BsonDocument& selector,
+					const BsonDocument& replacement,
+					const BsonDocument* opts,
+					BsonDocument* reply,
+					MongoError* error);
 
-    // ── Delete ──────────────────────────────────────────────────────
-    bool DeleteOne(const BsonDocument& selector, const BsonDocument* opts,
-                   BsonDocument* reply, MongoError* error);
-    bool DeleteMany(const BsonDocument& selector, const BsonDocument* opts,
-                    BsonDocument* reply, MongoError* error);
+	// ── Delete ──────────────────────────────────────────────────────
+	bool DeleteOne(const BsonDocument& selector,
+				   const BsonDocument* opts,
+				   BsonDocument* reply,
+				   MongoError* error);
+	bool DeleteMany(const BsonDocument& selector,
+					const BsonDocument* opts,
+					BsonDocument* reply,
+					MongoError* error);
 
-    // ── Count ───────────────────────────────────────────────────────
-    int64_t CountDocuments(const BsonDocument& filter, const BsonDocument* opts,
-                           const MongoReadPrefs* read_prefs,
-                           BsonDocument* reply, MongoError* error);
+	// ── Count ───────────────────────────────────────────────────────
+	int64_t CountDocuments(const BsonDocument& filter,
+						   const BsonDocument* opts,
+						   const MongoReadPrefs* read_prefs,
+						   BsonDocument* reply,
+						   MongoError* error);
 
-    // ── Aggregate ──────────────────────────────────────────────────
-    MongoCursor* Aggregate(const BsonDocument& pipeline, const BsonDocument* opts,
-                           const MongoReadPrefs* read_prefs);
+	// ── Aggregate ──────────────────────────────────────────────────
+	MongoCursor* Aggregate(const BsonDocument& pipeline,
+						   const BsonDocument* opts,
+						   const MongoReadPrefs* read_prefs);
 
-    // ── Insert many ─────────────────────────────────────────────────
-    bool InsertMany(const BsonDocument* documents[], size_t count,
-                    const BsonDocument* opts, BsonDocument* reply, MongoError* error);
+	// ── Insert many ─────────────────────────────────────────────────
+	bool InsertMany(const BsonDocument* documents[],
+					size_t count,
+					const BsonDocument* opts,
+					BsonDocument* reply,
+					MongoError* error);
 
-    // ── Find and modify ────────────────────────────────────────────
-    bool FindAndModify(const BsonDocument& query, const MongoFindAndModifyOpts* opts,
-                       BsonDocument* reply, MongoError* error);
+	// ── Find and modify ────────────────────────────────────────────
+	bool FindAndModify(const BsonDocument& query,
+					   const MongoFindAndModifyOpts* opts,
+					   BsonDocument* reply,
+					   MongoError* error);
 
-    // ── Change stream ────────────────────────────────────────────────
-    MongoChangeStream* Watch(const BsonDocument& pipeline, const BsonDocument* opts);
+	// ── Change stream ────────────────────────────────────────────────
+	MongoChangeStream* Watch(const BsonDocument& pipeline, const BsonDocument* opts);
 
-    // ── Drop / indexes ──────────────────────────────────────────────
-    bool Drop(MongoError* error);
-    bool DropWithOpts(const BsonDocument* opts, MongoError* error);
-    bool DropIndex(const char* index_name, MongoError* error);
-    bool DropIndexWithOpts(const char* index_name, const BsonDocument* opts, MongoError* error);
-    bool CreateIndex(const BsonDocument& keys, const BsonDocument* opts,
-                     BsonDocument* reply, MongoError* error);
-    // Create multiple indexes at once. models[] are raw mongoc_index_model_t* pointers.
-    bool CreateIndexesWithOpts(const void* const* models, size_t n_models,
-                               const BsonDocument* opts, BsonDocument* reply, MongoError* error);
-    MongoCursor* FindIndexes(const BsonDocument* opts);
+	// ── Drop / indexes ──────────────────────────────────────────────
+	bool Drop(MongoError* error);
+	bool DropWithOpts(const BsonDocument* opts, MongoError* error);
+	bool DropIndex(const char* index_name, MongoError* error);
+	bool DropIndexWithOpts(const char* index_name, const BsonDocument* opts, MongoError* error);
+	bool CreateIndex(const BsonDocument& keys,
+					 const BsonDocument* opts,
+					 BsonDocument* reply,
+					 MongoError* error);
+	// Create multiple indexes at once. models[] are raw mongoc_index_model_t* pointers.
+	bool CreateIndexesWithOpts(const void* const* models,
+							   size_t n_models,
+							   const BsonDocument* opts,
+							   BsonDocument* reply,
+							   MongoError* error);
+	MongoCursor* FindIndexes(const BsonDocument* opts);
 
-    // ── Utilities ───────────────────────────────────────────────────
-    char* KeysToIndexString(const BsonDocument& keys) const;
+	// ── Utilities ───────────────────────────────────────────────────
+	char* KeysToIndexString(const BsonDocument& keys) const;
 
-    // ── Rename ──────────────────────────────────────────────────────
-    bool Rename(const char* new_db, const char* new_name, bool drop_target_before_rename,
-                MongoError* error);
-    bool RenameWithOpts(const char* new_db, const char* new_name, bool drop_target_before_rename,
-                        const BsonDocument* opts, MongoError* error);
+	// ── Rename ──────────────────────────────────────────────────────
+	bool Rename(const char* new_db,
+				const char* new_name,
+				bool drop_target_before_rename,
+				MongoError* error);
+	bool RenameWithOpts(const char* new_db,
+						const char* new_name,
+						bool drop_target_before_rename,
+						const BsonDocument* opts,
+						MongoError* error);
 
-    // ── Estimated count ─────────────────────────────────────────────
-    int64_t EstimatedDocumentCount(const BsonDocument* opts, const MongoReadPrefs* read_prefs,
-                                    MongoError* error);
+	// ── Estimated count ─────────────────────────────────────────────
+	int64_t EstimatedDocumentCount(const BsonDocument* opts,
+								   const MongoReadPrefs* read_prefs,
+								   MongoError* error);
 
-    // ── Bulk operation ─────────────────────────────────────────────
-    MongoBulkOperation* CreateBulkOperation(bool ordered, const void* session_raw);
-    MongoBulkOperation* CreateBulkOperationWithOpts(const BsonDocument* opts);
+	// ── Bulk operation ─────────────────────────────────────────────
+	MongoBulkOperation* CreateBulkOperation(bool ordered, const void* session_raw);
+	MongoBulkOperation* CreateBulkOperationWithOpts(const BsonDocument* opts);
 
-    void* RawCollection(); // returns mongoc_collection_t*
+	void* RawCollection();	// returns mongoc_collection_t*
 
-private:
-    friend class MongoClient;
-    friend class MongoDatabase;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-    MongoCollection();
+	private:
+	friend class MongoClient;
+	friend class MongoDatabase;
+	struct Impl;
+	std::unique_ptr<Impl> impl_;
+	MongoCollection();
 
-public:
-    ~MongoCollection();
-    MongoCollection(const MongoCollection&) = delete;
-    MongoCollection& operator=(const MongoCollection&) = delete;
-    MongoCollection(MongoCollection&&) = delete;
-    MongoCollection& operator=(MongoCollection&&) = delete;
+	public:
+	~MongoCollection();
+	MongoCollection(const MongoCollection&) = delete;
+	MongoCollection& operator=(const MongoCollection&) = delete;
+	MongoCollection(MongoCollection&&) = delete;
+	MongoCollection& operator=(MongoCollection&&) = delete;
 };
 
-} // namespace mongo
-} // namespace engine
+}  // namespace mongo
+}  // namespace engine
 
 #endif

@@ -11,4 +11,4 @@ class ScriptVM;
 // by ScriptVM::GetImporter().
 ENGINE_API void ExportImport(ScriptVM& vm);
 
-} // namespace engine
+}  // namespace engine

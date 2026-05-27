@@ -78,125 +78,138 @@ class ScriptVM;
 #else
 // Stub type — ensures std::optional<PhysicsFrameResult> compiles
 struct PhysicsFrameResult {
-    uint64_t frame_id = 0;
-    bool valid() const { return false; }
+	uint64_t frame_id = 0;
+	bool valid() const {
+		return false;
+	}
 };
-#endif // ENGINE_PHYSICS_ENABLED
+#endif	// ENGINE_PHYSICS_ENABLED
 
 class PhysicsEngineBridge {
-public:
-    PhysicsEngineBridge(const PhysicsEngineBridge&) = delete;
-    PhysicsEngineBridge& operator=(const PhysicsEngineBridge&) = delete;
+	public:
+	PhysicsEngineBridge(const PhysicsEngineBridge&) = delete;
+	PhysicsEngineBridge& operator=(const PhysicsEngineBridge&) = delete;
 
 #ifdef ENGINE_PHYSICS_ENABLED
 
-    // ==================================================================
-    // Full implementation (delegates to internal PhysicsSystem singleton)
-    //
-    // All methods below are called from the main thread. See the
-    // thread-safety boundary comment at the top of this file for the
-    // safety guarantees of each method.
-    // ==================================================================
+	// ==================================================================
+	// Full implementation (delegates to internal PhysicsSystem singleton)
+	//
+	// All methods below are called from the main thread. See the
+	// thread-safety boundary comment at the top of this file for the
+	// safety guarantees of each method.
+	// ==================================================================
 
-    static PhysicsEngineBridge& Instance();
+	static PhysicsEngineBridge& Instance();
 
-    // ── Lifecycle (MT, strict happens-before ordering with PT) ─────────
+	// ── Lifecycle (MT, strict happens-before ordering with PT) ─────────
 
-    /// Load configs, create physics-dedicated ScriptVM, load scripts.
-    /// Does NOT start the physics thread.
-    /// Thread: MT only. Must be called before Start().
-    bool Initialize(const std::string& config_dir,
-                    const std::string& assets_path,
-                    const std::string& scripts_dir);
+	/// Load configs, create physics-dedicated ScriptVM, load scripts.
+	/// Does NOT start the physics thread.
+	/// Thread: MT only. Must be called before Start().
+	bool Initialize(const std::string& config_dir,
+					const std::string& assets_path,
+					const std::string& scripts_dir);
 
-    /// Start the physics thread. Physics simulation begins.
-    /// Thread: MT only. Must be called after Initialize().
-    bool Start();
+	/// Start the physics thread. Physics simulation begins.
+	/// Thread: MT only. Must be called after Initialize().
+	bool Start();
 
-    /// Stop the physics thread (join), destroy ScriptVM, release resources.
-    /// Thread: MT only. After this call the physics thread is guaranteed
-    /// to have exited (happens-before).
-    void Shutdown();
+	/// Stop the physics thread (join), destroy ScriptVM, release resources.
+	/// Thread: MT only. After this call the physics thread is guaranteed
+	/// to have exited (happens-before).
+	void Shutdown();
 
-    // ── Per-frame command enqueue (MT -> SPSC queue -> PT) ────────────
+	// ── Per-frame command enqueue (MT -> SPSC queue -> PT) ────────────
 
-    /// Enqueue a Tick command. The physics thread will execute world_.Step(),
-    /// trigger the PostStepCallback for Lua collision callbacks, then enqueue
-    /// the result.
-    /// Thread: MT only. Internal SPSC lock-free queue, thread-safe.
-    void Tick(uint64_t frame_id, float delta_time);
+	/// Enqueue a Tick command. The physics thread will execute world_.Step(),
+	/// trigger the PostStepCallback for Lua collision callbacks, then enqueue
+	/// the result.
+	/// Thread: MT only. Internal SPSC lock-free queue, thread-safe.
+	void Tick(uint64_t frame_id, float delta_time);
 
-    /// Block until the physics frame result for the given frame_id is
-    /// available, or timeout_ms elapses. Returns std::nullopt on timeout.
-    /// Thread: MT only. Internal SPSC lock-free queue, thread-safe.
-    std::optional<PhysicsFrameResult> FetchResult(uint64_t frame_id,
-                                                   int timeout_ms);
+	/// Block until the physics frame result for the given frame_id is
+	/// available, or timeout_ms elapses. Returns std::nullopt on timeout.
+	/// Thread: MT only. Internal SPSC lock-free queue, thread-safe.
+	std::optional<PhysicsFrameResult> FetchResult(uint64_t frame_id, int timeout_ms);
 
-    // ── Status queries (read atomic variables, lock-free) ─────────────
+	// ── Status queries (read atomic variables, lock-free) ─────────────
 
-    /// Whether the physics thread is currently running.
-    /// Thread: any. Reads std::atomic<bool>, lock-free.
-    bool IsRunning() const;
+	/// Whether the physics thread is currently running.
+	/// Thread: any. Reads std::atomic<bool>, lock-free.
+	bool IsRunning() const;
 
-    /// Whether the physics thread is healthy (has not crashed).
-    /// Thread: any. Reads std::atomic<bool>, lock-free.
-    bool IsHealthy() const;
+	/// Whether the physics thread is healthy (has not crashed).
+	/// Thread: any. Reads std::atomic<bool>, lock-free.
+	bool IsHealthy() const;
 
-    // ── ScriptVM access ───────────────────────────────────────────────
+	// ── ScriptVM access ───────────────────────────────────────────────
 
-    /// Get the physics-dedicated ScriptVM.
-    /// Thread: MT may call. However, the returned VM's Lua state is
-    /// exclusively accessed by the physics thread after Start()
-    /// (coroutine driving, collision callbacks). The main thread
-    /// should only use this during Initialize to register bindings
-    /// or load scripts.
-    ScriptVM* GetScriptVM();
+	/// Get the physics-dedicated ScriptVM.
+	/// Thread: MT may call. However, the returned VM's Lua state is
+	/// exclusively accessed by the physics thread after Start()
+	/// (coroutine driving, collision callbacks). The main thread
+	/// should only use this during Initialize to register bindings
+	/// or load scripts.
+	ScriptVM* GetScriptVM();
 
-    /// Get the fixed timestep for physics simulation.
-    /// Thread: MT only. Reads a config snapshot, no contention.
-    float GetFixedDeltaTime() const;
+	/// Get the fixed timestep for physics simulation.
+	/// Thread: MT only. Reads a config snapshot, no contention.
+	float GetFixedDeltaTime() const;
 
 #else
 
-    // ==================================================================
-    // Empty stubs (ENGINE_PHYSICS_ENABLED off — zero-cost inline no-ops)
-    // ==================================================================
+	// ==================================================================
+	// Empty stubs (ENGINE_PHYSICS_ENABLED off — zero-cost inline no-ops)
+	// ==================================================================
 
-    static PhysicsEngineBridge& Instance() {
-        static PhysicsEngineBridge instance;
-        return instance;
-    }
+	static PhysicsEngineBridge& Instance() {
+		static PhysicsEngineBridge instance;
+		return instance;
+	}
 
-    bool Initialize(const std::string&, const std::string&, const std::string&) {
-        return false;
-    }
-    bool Start() { return false; }
-    void Tick(uint64_t, float) {}
-    std::optional<PhysicsFrameResult> FetchResult(uint64_t, int) {
-        return std::nullopt;
-    }
-    void Shutdown() {}
-    bool IsRunning() const { return false; }
-    bool IsHealthy() const { return false; }
-    ScriptVM* GetScriptVM() { return nullptr; }
-    float GetFixedDeltaTime() const { return 0.01667f; }
+	bool Initialize(const std::string&, const std::string&, const std::string&) {
+		return false;
+	}
+	bool Start() {
+		return false;
+	}
+	void Tick(uint64_t, float) {
+	}
+	std::optional<PhysicsFrameResult> FetchResult(uint64_t, int) {
+		return std::nullopt;
+	}
+	void Shutdown() {
+	}
+	bool IsRunning() const {
+		return false;
+	}
+	bool IsHealthy() const {
+		return false;
+	}
+	ScriptVM* GetScriptVM() {
+		return nullptr;
+	}
+	float GetFixedDeltaTime() const {
+		return 0.01667f;
+	}
 
-#endif // ENGINE_PHYSICS_ENABLED
+#endif	// ENGINE_PHYSICS_ENABLED
 
-private:
-    PhysicsEngineBridge() = default;
-    ~PhysicsEngineBridge() = default;
+	private:
+	PhysicsEngineBridge() = default;
+	~PhysicsEngineBridge() = default;
 
-    // ── Thread verification ──────────────────────────────────────────
-    //
-    /// Captured at the start of Initialize() — the thread that bootstraps
-    /// the physics subsystem is considered the "main thread". All MT-only
-    /// methods assert/log if called from a different thread.
-    std::thread::id main_thread_id_;
+	// ── Thread verification ──────────────────────────────────────────
+	//
+	/// Captured at the start of Initialize() — the thread that bootstraps
+	/// the physics subsystem is considered the "main thread". All MT-only
+	/// methods assert/log if called from a different thread.
+	std::thread::id main_thread_id_;
 
-    /// Assert (debug) + log warning (all builds) if the calling thread
-    /// is not the main thread that called Initialize().
-    void VerifyMainThread() const;
+	/// Assert (debug) + log warning (all builds) if the calling thread
+	/// is not the main thread that called Initialize().
+	void VerifyMainThread() const;
 };
 
-} // namespace engine
+}  // namespace engine

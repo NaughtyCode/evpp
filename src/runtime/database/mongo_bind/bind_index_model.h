@@ -13,7 +13,7 @@ namespace script {
 void RegisterMongoIndexModelMeta(lua_State* L);
 const luaL_Reg* GetMongoIndexModelLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

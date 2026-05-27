@@ -18,5 +18,5 @@ ENGINE_API void PushUdpServerLibrary(lua_State* L);
 // Stop all active UDP servers and release Lua callback references.
 ENGINE_API void ShutdownUdpServerBindings();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine

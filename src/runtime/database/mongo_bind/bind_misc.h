@@ -14,7 +14,7 @@ void RegisterMongoOptionalMeta(lua_State* L);
 const luaL_Reg* GetMongoOptionalLib();
 const luaL_Reg* GetMongoMiscLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

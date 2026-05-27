@@ -15,5 +15,5 @@ ENGINE_API void PushHttpLibrary(lua_State* L);
 // then release all pending HTTP callback registry references.
 ENGINE_API void ShutdownHttpBindings();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine

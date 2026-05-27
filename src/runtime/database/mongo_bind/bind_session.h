@@ -13,7 +13,7 @@ namespace script {
 void RegisterMongoSessionMeta(lua_State* L);
 const luaL_Reg* GetMongoSessionLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

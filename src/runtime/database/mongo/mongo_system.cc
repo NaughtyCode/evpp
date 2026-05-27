@@ -8,28 +8,28 @@ namespace engine {
 namespace mongo {
 
 MongoSystem& MongoSystem::Instance() {
-    static MongoSystem instance;
-    return instance;
+	static MongoSystem instance;
+	return instance;
 }
 
 bool MongoSystem::Initialize() {
-    if (initialized_) return true;
-    mongoc_init();
-    initialized_ = true;
-    return true;
+	if (initialized_) return true;
+	mongoc_init();
+	initialized_ = true;
+	return true;
 }
 
 void MongoSystem::Shutdown() {
-    if (!initialized_) return;
-    mongoc_cleanup();
-    initialized_ = false;
+	if (!initialized_) return;
+	mongoc_cleanup();
+	initialized_ = false;
 }
 
 bool MongoSystem::IsInitialized() const {
-    return initialized_;
+	return initialized_;
 }
 
-} // namespace mongo
-} // namespace engine
+}  // namespace mongo
+}  // namespace engine
 
 #endif

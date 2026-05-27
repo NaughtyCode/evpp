@@ -15,7 +15,7 @@ namespace script {
 void RegisterMongoTransactionOptsMeta(lua_State* L);
 const luaL_Reg* GetMongoTransactionOptsLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

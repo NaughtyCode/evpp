@@ -9,7 +9,7 @@ namespace httpc {
 bool InitSSL();
 void CleanSSL();
 SSL_CTX* GetSSLCtx();
-} // httpc
-} // evpp
+}  // httpc
+}  // evpp
 
 #endif

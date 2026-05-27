@@ -56,93 +56,97 @@ class DBThread;
 //   5. MongoSystem::Instance().Shutdown()       — mongoc_cleanup, global once
 
 class ENGINE_API DatabaseService {
-public:
-    static DatabaseService& Instance();
+	public:
+	static DatabaseService& Instance();
 
-    ~DatabaseService();
+	~DatabaseService();
 
-    DatabaseService(const DatabaseService&) = delete;
-    DatabaseService& operator=(const DatabaseService&) = delete;
+	DatabaseService(const DatabaseService&) = delete;
+	DatabaseService& operator=(const DatabaseService&) = delete;
 
-    // ── Lifecycle (MT exclusive) ───────────────────────────────────────
-    //
-    // Initialize:
-    //   Copies the URI, injects waitQueueTimeoutMS from config, creates a
-    //   MongoClientPool, then creates and starts N DBThreads.
-    //
-    //   Preconditions:
-    //     - MongoSystem::Instance().Initialize() must have been called.
-    //     - config.thread_pool.thread_count >= 1.
-    //
-    //   The caller does NOT need to pre-set waitQueueTimeoutMS on the URI
-    //   — Initialize handles this internally via uri.Copy() + SetOptionAsInt32
-    //   (design §13).
-    //
-    //   Validation:
-    //     - thread_count < 1 → returns false.
-    //     - max_pool_size < thread_count → warns (Pop may timeout).
-    //
-    //   Returns false on: validation failure, pool creation failure, or
-    //   any thread Start() failure (already-started threads are stopped).
-    //
-    // Shutdown:
-    //   Gracefully stops all DBThreads (running_=false, wakeup, join),
-    //   drains remaining responses from all queues, destroys the pool.
-    //   Idempotent — safe to call multiple times.
-    //
-    //   Postcondition: all borrowed MongoClient* have been returned to pool.
-    //   Must be called before MongoSystem::Instance().Shutdown().
+	// ── Lifecycle (MT exclusive) ───────────────────────────────────────
+	//
+	// Initialize:
+	//   Copies the URI, injects waitQueueTimeoutMS from config, creates a
+	//   MongoClientPool, then creates and starts N DBThreads.
+	//
+	//   Preconditions:
+	//     - MongoSystem::Instance().Initialize() must have been called.
+	//     - config.thread_pool.thread_count >= 1.
+	//
+	//   The caller does NOT need to pre-set waitQueueTimeoutMS on the URI
+	//   — Initialize handles this internally via uri.Copy() + SetOptionAsInt32
+	//   (design §13).
+	//
+	//   Validation:
+	//     - thread_count < 1 → returns false.
+	//     - max_pool_size < thread_count → warns (Pop may timeout).
+	//
+	//   Returns false on: validation failure, pool creation failure, or
+	//   any thread Start() failure (already-started threads are stopped).
+	//
+	// Shutdown:
+	//   Gracefully stops all DBThreads (running_=false, wakeup, join),
+	//   drains remaining responses from all queues, destroys the pool.
+	//   Idempotent — safe to call multiple times.
+	//
+	//   Postcondition: all borrowed MongoClient* have been returned to pool.
+	//   Must be called before MongoSystem::Instance().Shutdown().
 
-    bool Initialize(const DbServiceConfig& config, const mongo::MongoUri& uri);
-    void Shutdown();
+	bool Initialize(const DbServiceConfig& config, const mongo::MongoUri& uri);
+	void Shutdown();
 
-    // ── Request / Response (thread-safe) ───────────────────────────────
-    //
-    // SendRequest:
-    //   Routes a request to the next DBThread via round-robin (NextThreadIndex).
-    //   Returns false if the service is not running, no threads exist, or
-    //   the target thread's request queue is full (back-pressure, §6.3).
-    //
-    // PollResponse:
-    //   Scans all DBThread response queues in round-robin order, returning
-    //   the first available DbResponse. Returns nullptr if all queues are
-    //   empty (non-blocking). Each call scans at most one full circle.
+	// ── Request / Response (thread-safe) ───────────────────────────────
+	//
+	// SendRequest:
+	//   Routes a request to the next DBThread via round-robin (NextThreadIndex).
+	//   Returns false if the service is not running, no threads exist, or
+	//   the target thread's request queue is full (back-pressure, §6.3).
+	//
+	// PollResponse:
+	//   Scans all DBThread response queues in round-robin order, returning
+	//   the first available DbResponse. Returns nullptr if all queues are
+	//   empty (non-blocking). Each call scans at most one full circle.
 
-    bool SendRequest(DbRequest&& request);
-    std::unique_ptr<DbResponse> PollResponse();
+	bool SendRequest(DbRequest&& request);
+	std::unique_ptr<DbResponse> PollResponse();
 
-    // ── Status queries (thread-safe) ───────────────────────────────────
+	// ── Status queries (thread-safe) ───────────────────────────────────
 
-    bool IsRunning() const { return running_.load(std::memory_order_acquire); }
-    bool IsHealthy() const;
-    int  GetThreadCount() const;
-    const DbServiceConfig& GetConfig() const { return config_; }
+	bool IsRunning() const {
+		return running_.load(std::memory_order_acquire);
+	}
+	bool IsHealthy() const;
+	int GetThreadCount() const;
+	const DbServiceConfig& GetConfig() const {
+		return config_;
+	}
 
-private:
-    DatabaseService();
+	private:
+	DatabaseService();
 
-    // Round-robin thread selection: atomic fetch_add modulo thread count.
-    // Thread-safe — MT may call SendRequest from multiple threads, though
-    // the common case is a single MT caller.
-    int NextThreadIndex();
+	// Round-robin thread selection: atomic fetch_add modulo thread count.
+	// Thread-safe — MT may call SendRequest from multiple threads, though
+	// the common case is a single MT caller.
+	int NextThreadIndex();
 
-    std::atomic<uint64_t> next_thread_{0};
+	std::atomic<uint64_t> next_thread_{0};
 
-    // pool_ MUST be declared BEFORE threads_ (LIFO destruction order:
-    // threads destroyed first → each ~DBThread calls Stop() → client
-    // pushed back to pool → pool destroyed last, cleanly).
-    std::unique_ptr<mongo::MongoClientPool> pool_;
-    std::vector<std::unique_ptr<DBThread>> threads_;
+	// pool_ MUST be declared BEFORE threads_ (LIFO destruction order:
+	// threads destroyed first → each ~DBThread calls Stop() → client
+	// pushed back to pool → pool destroyed last, cleanly).
+	std::unique_ptr<mongo::MongoClientPool> pool_;
+	std::vector<std::unique_ptr<DBThread>> threads_;
 
-    DbServiceConfig config_;
-    std::atomic<bool> running_{false};
+	DbServiceConfig config_;
+	std::atomic<bool> running_{false};
 
-    // PollResponse round-robin cursor. Not atomic — only the MT calls
-    // PollResponse, so no concurrent access. Restarts from 0 on each scan
-    // to avoid bias toward low-index threads.
-    int poll_cursor_ = 0;
+	// PollResponse round-robin cursor. Not atomic — only the MT calls
+	// PollResponse, so no concurrent access. Restarts from 0 on each scan
+	// to avoid bias toward low-index threads.
+	int poll_cursor_ = 0;
 };
 
-} // namespace engine
+}  // namespace engine
 
-#endif // ENGINE_MONGODB_ENABLED
+#endif	// ENGINE_MONGODB_ENABLED

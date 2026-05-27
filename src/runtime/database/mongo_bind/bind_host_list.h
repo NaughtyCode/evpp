@@ -15,7 +15,7 @@ namespace script {
 void RegisterMongoHostListMeta(lua_State* L);
 const luaL_Reg* GetMongoHostListLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

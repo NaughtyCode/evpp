@@ -15,7 +15,7 @@ namespace script {
 void RegisterMongoSessionOptsMeta(lua_State* L);
 const luaL_Reg* GetMongoSessionOptsLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

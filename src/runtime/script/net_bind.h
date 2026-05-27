@@ -19,5 +19,5 @@ ENGINE_API void ExportNet(ScriptVM& vm);
 // Cancel all network objects and release Lua function references.
 ENGINE_API void ShutdownNetBindings();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine

@@ -13,7 +13,7 @@ namespace script {
 void RegisterMongoSslOptsMeta(lua_State* L);
 const luaL_Reg* GetMongoSslOptsLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

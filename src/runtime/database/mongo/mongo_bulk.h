@@ -21,64 +21,74 @@ namespace mongo {
 //   uint32_t server_id = bulk->Execute(reply, &error);
 //   delete bulk;
 class ENGINE_API MongoBulkOperation {
-public:
-    static MongoBulkOperation* New(bool ordered);
+	public:
+	static MongoBulkOperation* New(bool ordered);
 
-    void Destroy();
+	void Destroy();
 
-    // ── Add operations ──────────────────────────────────────────────
-    // Legacy-style (no error parameter, no opts)
-    void Insert(const BsonDocument& document);
-    void Remove(const BsonDocument& selector);
-    void RemoveOne(const BsonDocument& selector);
-    void ReplaceOne(const BsonDocument& selector, const BsonDocument& document, bool upsert);
-    void Update(const BsonDocument& selector, const BsonDocument& document, bool upsert);
-    void UpdateOne(const BsonDocument& selector, const BsonDocument& document, bool upsert);
+	// ── Add operations ──────────────────────────────────────────────
+	// Legacy-style (no error parameter, no opts)
+	void Insert(const BsonDocument& document);
+	void Remove(const BsonDocument& selector);
+	void RemoveOne(const BsonDocument& selector);
+	void ReplaceOne(const BsonDocument& selector, const BsonDocument& document, bool upsert);
+	void Update(const BsonDocument& selector, const BsonDocument& document, bool upsert);
+	void UpdateOne(const BsonDocument& selector, const BsonDocument& document, bool upsert);
 
-    // Opts-style (with optional BSON opts and error out-parameter)
-    bool InsertWithOpts(const BsonDocument& document, const BsonDocument* opts, MongoError* error);
-    bool RemoveOneWithOpts(const BsonDocument& selector, const BsonDocument* opts, MongoError* error);
-    bool RemoveManyWithOpts(const BsonDocument& selector, const BsonDocument* opts, MongoError* error);
-    bool ReplaceOneWithOpts(const BsonDocument& selector, const BsonDocument& document,
-                            const BsonDocument* opts, MongoError* error);
-    bool UpdateOneWithOpts(const BsonDocument& selector, const BsonDocument& document,
-                           const BsonDocument* opts, MongoError* error);
-    bool UpdateManyWithOpts(const BsonDocument& selector, const BsonDocument& document,
-                            const BsonDocument* opts, MongoError* error);
+	// Opts-style (with optional BSON opts and error out-parameter)
+	bool InsertWithOpts(const BsonDocument& document, const BsonDocument* opts, MongoError* error);
+	bool RemoveOneWithOpts(const BsonDocument& selector,
+						   const BsonDocument* opts,
+						   MongoError* error);
+	bool RemoveManyWithOpts(const BsonDocument& selector,
+							const BsonDocument* opts,
+							MongoError* error);
+	bool ReplaceOneWithOpts(const BsonDocument& selector,
+							const BsonDocument& document,
+							const BsonDocument* opts,
+							MongoError* error);
+	bool UpdateOneWithOpts(const BsonDocument& selector,
+						   const BsonDocument& document,
+						   const BsonDocument* opts,
+						   MongoError* error);
+	bool UpdateManyWithOpts(const BsonDocument& selector,
+							const BsonDocument& document,
+							const BsonDocument* opts,
+							MongoError* error);
 
-    // ── Execute ─────────────────────────────────────────────────────
-    // Returns server_id on success; 0 on error (check error out-parameter).
-    uint32_t Execute(BsonDocument* reply, MongoError* error);
+	// ── Execute ─────────────────────────────────────────────────────
+	// Returns server_id on success; 0 on error (check error out-parameter).
+	uint32_t Execute(BsonDocument* reply, MongoError* error);
 
-    // ── Settings ────────────────────────────────────────────────────
-    void SetBypassDocumentValidation(bool bypass);
-    void SetLet(const BsonDocument& let);
-    void SetWriteConcern(const MongoWriteConcern& write_concern);
-    void SetServerId(uint32_t server_id);
-    uint32_t GetServerId() const;
-    void SetDatabase(const char* database);
-    void SetCollection(const char* collection);
-    void SetComment(const void* comment);  // bson_value_t*
-    void SetClient(void* client);         // mongoc_client_t*
-    void SetClientSession(void* session); // mongoc_client_session_t*
-    const void* GetWriteConcern() const;  // returns mongoc_write_concern_t*
+	// ── Settings ────────────────────────────────────────────────────
+	void SetBypassDocumentValidation(bool bypass);
+	void SetLet(const BsonDocument& let);
+	void SetWriteConcern(const MongoWriteConcern& write_concern);
+	void SetServerId(uint32_t server_id);
+	uint32_t GetServerId() const;
+	void SetDatabase(const char* database);
+	void SetCollection(const char* collection);
+	void SetComment(const void* comment);  // bson_value_t*
+	void SetClient(void* client);  // mongoc_client_t*
+	void SetClientSession(void* session);  // mongoc_client_session_t*
+	const void* GetWriteConcern() const;  // returns mongoc_write_concern_t*
 
-    void* RawBulkOperation(); // returns mongoc_bulk_operation_t*
-    void SetRawBulkOperation(void* bulk); // takes ownership
+	void* RawBulkOperation();  // returns mongoc_bulk_operation_t*
+	void SetRawBulkOperation(void* bulk);  // takes ownership
 
-private:
-    friend class MongoCollection;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-    MongoBulkOperation();
-    ~MongoBulkOperation();
-    MongoBulkOperation(const MongoBulkOperation&) = delete;
-    MongoBulkOperation& operator=(const MongoBulkOperation&) = delete;
-    MongoBulkOperation(MongoBulkOperation&&) = delete;
-    MongoBulkOperation& operator=(MongoBulkOperation&&) = delete;
+	private:
+	friend class MongoCollection;
+	struct Impl;
+	std::unique_ptr<Impl> impl_;
+	MongoBulkOperation();
+	~MongoBulkOperation();
+	MongoBulkOperation(const MongoBulkOperation&) = delete;
+	MongoBulkOperation& operator=(const MongoBulkOperation&) = delete;
+	MongoBulkOperation(MongoBulkOperation&&) = delete;
+	MongoBulkOperation& operator=(MongoBulkOperation&&) = delete;
 };
 
-} // namespace mongo
-} // namespace engine
+}  // namespace mongo
+}  // namespace engine
 
 #endif

@@ -15,5 +15,5 @@ ENGINE_API void RegisterKcpClientMetaTable(lua_State* L);
 // Table contains: connect, do_request, new
 ENGINE_API void PushKcpClientLibrary(lua_State* L);
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine

@@ -13,7 +13,7 @@ namespace script {
 void RegisterMongoStreamMeta(lua_State* L);
 const luaL_Reg* GetMongoStreamLib();
 
-} // namespace script
-} // namespace engine
+}  // namespace script
+}  // namespace engine
 
 #endif

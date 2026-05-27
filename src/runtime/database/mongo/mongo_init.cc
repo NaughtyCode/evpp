@@ -7,10 +7,14 @@
 namespace engine {
 namespace mongo {
 
-void MongoInit::Init() { mongoc_init(); }
-void MongoInit::Cleanup() { mongoc_cleanup(); }
+void MongoInit::Init() {
+	mongoc_init();
+}
+void MongoInit::Cleanup() {
+	mongoc_cleanup();
+}
 
-} // namespace mongo
-} // namespace engine
+}  // namespace mongo
+}  // namespace engine
 
 #endif

@@ -51,14 +51,14 @@ namespace engine {
 // ---------------------------------------------------------------------------
 
 void PhysicsEngineBridge::VerifyMainThread() const {
-    // Skip check if main_thread_id_ hasn't been captured yet
-    // (default-constructed thread::id means "not a thread").
-    if (main_thread_id_ != std::thread::id{}) {
-        assert(main_thread_id_ == std::this_thread::get_id()
-            && "PhysicsEngineBridge: MT-only API called from wrong thread. "
-               "These APIs must only be called from the main thread "
-               "(Engine::FrameLoop).");
-    }
+	// Skip check if main_thread_id_ hasn't been captured yet
+	// (default-constructed thread::id means "not a thread").
+	if (main_thread_id_ != std::thread::id{}) {
+		assert(main_thread_id_ == std::this_thread::get_id() &&
+			   "PhysicsEngineBridge: MT-only API called from wrong thread. "
+			   "These APIs must only be called from the main thread "
+			   "(Engine::FrameLoop).");
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -66,8 +66,8 @@ void PhysicsEngineBridge::VerifyMainThread() const {
 // ---------------------------------------------------------------------------
 
 PhysicsEngineBridge& PhysicsEngineBridge::Instance() {
-    static PhysicsEngineBridge instance;
-    return instance;
+	static PhysicsEngineBridge instance;
+	return instance;
 }
 
 // ---------------------------------------------------------------------------
@@ -75,19 +75,19 @@ PhysicsEngineBridge& PhysicsEngineBridge::Instance() {
 // ---------------------------------------------------------------------------
 
 bool PhysicsEngineBridge::Initialize(const std::string& config_dir,
-                                      const std::string& assets_path,
-                                      const std::string& scripts_dir) {
-    // Capture the calling thread as the "main thread".
-    // All subsequent MT-only calls verify against this ID.
-    main_thread_id_ = std::this_thread::get_id();
+									 const std::string& assets_path,
+									 const std::string& scripts_dir) {
+	// Capture the calling thread as the "main thread".
+	// All subsequent MT-only calls verify against this ID.
+	main_thread_id_ = std::this_thread::get_id();
 
-    bool ok = PhysicsSystem::Instance().Initialize(config_dir, assets_path, scripts_dir);
+	bool ok = PhysicsSystem::Instance().Initialize(config_dir, assets_path, scripts_dir);
 
-    // Re-verify in case Initialize() is called a second time from a
-    // different thread (lifecycle methods should all be on the same thread).
-    VerifyMainThread();
+	// Re-verify in case Initialize() is called a second time from a
+	// different thread (lifecycle methods should all be on the same thread).
+	VerifyMainThread();
 
-    return ok;
+	return ok;
 }
 
 // ---------------------------------------------------------------------------
@@ -98,8 +98,8 @@ bool PhysicsEngineBridge::Initialize(const std::string& config_dir,
 // between Initialize/Start/Shutdown.
 
 bool PhysicsEngineBridge::Start() {
-    VerifyMainThread();
-    return PhysicsSystem::Instance().Start();
+	VerifyMainThread();
+	return PhysicsSystem::Instance().Start();
 }
 
 // ---------------------------------------------------------------------------
@@ -110,8 +110,8 @@ bool PhysicsEngineBridge::Start() {
 // other lifecycle calls.
 
 void PhysicsEngineBridge::Shutdown() {
-    VerifyMainThread();
-    PhysicsSystem::Instance().Shutdown();
+	VerifyMainThread();
+	PhysicsSystem::Instance().Shutdown();
 }
 
 // ---------------------------------------------------------------------------
@@ -122,8 +122,8 @@ void PhysicsEngineBridge::Shutdown() {
 // threads would violate the SPSC contract and cause data races.
 
 void PhysicsEngineBridge::Tick(uint64_t frame_id, float delta_time) {
-    VerifyMainThread();
-    PhysicsSystem::Instance().Tick(frame_id, delta_time);
+	VerifyMainThread();
+	PhysicsSystem::Instance().Tick(frame_id, delta_time);
 }
 
 // ---------------------------------------------------------------------------
@@ -133,10 +133,10 @@ void PhysicsEngineBridge::Tick(uint64_t frame_id, float delta_time) {
 // consumer (the main thread). Calling this from multiple threads would
 // violate the SPSC contract.
 
-std::optional<PhysicsFrameResult> PhysicsEngineBridge::FetchResult(
-    uint64_t frame_id, int timeout_ms) {
-    VerifyMainThread();
-    return PhysicsSystem::Instance().FetchResult(frame_id, timeout_ms);
+std::optional<PhysicsFrameResult> PhysicsEngineBridge::FetchResult(uint64_t frame_id,
+																   int timeout_ms) {
+	VerifyMainThread();
+	return PhysicsSystem::Instance().FetchResult(frame_id, timeout_ms);
 }
 
 // ---------------------------------------------------------------------------
@@ -145,7 +145,7 @@ std::optional<PhysicsFrameResult> PhysicsEngineBridge::FetchResult(
 // Reads std::atomic<bool> with acquire semantics. No verification needed.
 
 bool PhysicsEngineBridge::IsRunning() const {
-    return PhysicsSystem::Instance().IsRunning();
+	return PhysicsSystem::Instance().IsRunning();
 }
 
 // ---------------------------------------------------------------------------
@@ -154,7 +154,7 @@ bool PhysicsEngineBridge::IsRunning() const {
 // Reads std::atomic<bool> with acquire semantics. No verification needed.
 
 bool PhysicsEngineBridge::IsHealthy() const {
-    return PhysicsSystem::Instance().IsHealthy();
+	return PhysicsSystem::Instance().IsHealthy();
 }
 
 // ---------------------------------------------------------------------------
@@ -165,8 +165,8 @@ bool PhysicsEngineBridge::IsHealthy() const {
 // use this during initialization (register bindings, load scripts).
 
 ScriptVM* PhysicsEngineBridge::GetScriptVM() {
-    VerifyMainThread();
-    return &PhysicsSystem::Instance().GetScriptVM();
+	VerifyMainThread();
+	return &PhysicsSystem::Instance().GetScriptVM();
 }
 
 // ---------------------------------------------------------------------------
@@ -176,10 +176,10 @@ ScriptVM* PhysicsEngineBridge::GetScriptVM() {
 // pattern simple (config hot-reload also happens on MT).
 
 float PhysicsEngineBridge::GetFixedDeltaTime() const {
-    VerifyMainThread();
-    return PhysicsSystem::Instance().GetFixedDeltaTime();
+	VerifyMainThread();
+	return PhysicsSystem::Instance().GetFixedDeltaTime();
 }
 
-} // namespace engine
+}  // namespace engine
 
-#endif // ENGINE_PHYSICS_ENABLED
+#endif	// ENGINE_PHYSICS_ENABLED

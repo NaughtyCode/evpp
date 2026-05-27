@@ -18,12 +18,13 @@
 #include "runtime/evpp/platform_config.h"
 
 #ifdef H_OS_WINDOWS
-#include <ws2tcpip.h>
 #include <ws2def.h>
+#include <ws2tcpip.h>
 #else
 #include <netdb.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h> // for TCP_NODELAY
-#include <sys/socket.h>
+
 #include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>  // for TCP_NODELAY
+#include <sys/socket.h>
 #endif

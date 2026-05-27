@@ -1,77 +1,80 @@
 #include "runtime/evpp/httpc/conn_pool.h"
+
 #include "runtime/evpp/httpc/conn.h"
 
 namespace evpp {
 namespace httpc {
-ConnPool::ConnPool(const std::string& h, int p,
+ConnPool::ConnPool(const std::string& h,
+				   int p,
 #if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL)
-    bool enable_ssl,
+				   bool enable_ssl,
 #endif
-    Duration t,
-    size_t size)
-    : host_(h), port_(p),
+				   Duration t,
+				   size_t size)
+	: host_(h),
+	  port_(p),
 #if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL)
-      enable_ssl_(enable_ssl),
+	  enable_ssl_(enable_ssl),
 #endif
-      timeout_(t),
-      max_pool_size_(size) {
+	  timeout_(t),
+	  max_pool_size_(size) {
 }
 
 ConnPool::~ConnPool() {
-    assert(pool_.empty());
+	assert(pool_.empty());
 }
 
 ConnPtr ConnPool::Get(EventLoop* loop) {
-    assert(loop->IsInLoopThread());
-    std::lock_guard<std::mutex> guard(mutex_);
-    auto it = pool_.find(loop);
-    if (it == pool_.end()) {
-        pool_[loop] = std::vector<ConnPtr>();
-        it = pool_.find(loop);
-    }
+	assert(loop->IsInLoopThread());
+	std::lock_guard<std::mutex> guard(mutex_);
+	auto it = pool_.find(loop);
+	if (it == pool_.end()) {
+		pool_[loop] = std::vector<ConnPtr>();
+		it = pool_.find(loop);
+	}
 
-    ConnPtr c;
-    if (it->second.empty()) {
-        c.reset(new Conn(this, loop));
-        return c;
-    }
+	ConnPtr c;
+	if (it->second.empty()) {
+		c.reset(new Conn(this, loop));
+		return c;
+	}
 
-    c = it->second.back();
-    it->second.pop_back();
-    return c;
+	c = it->second.back();
+	it->second.pop_back();
+	return c;
 }
 
 void ConnPool::Put(const ConnPtr& c) {
-    EventLoop* loop = c->loop();
-    assert(loop->IsInLoopThread());
-    std::lock_guard<std::mutex> guard(mutex_);
-    auto it = pool_.find(loop);
-    if (it == pool_.end()) {
-        return;
-    }
-    if (it->second.size() >= max_pool_size_) {
-        return;
-    }
-    it->second.push_back(c);
+	EventLoop* loop = c->loop();
+	assert(loop->IsInLoopThread());
+	std::lock_guard<std::mutex> guard(mutex_);
+	auto it = pool_.find(loop);
+	if (it == pool_.end()) {
+		return;
+	}
+	if (it->second.size() >= max_pool_size_) {
+		return;
+	}
+	it->second.push_back(c);
 }
 
 void ConnPool::Clear() {
-    std::map<EventLoop*, std::vector<ConnPtr> > map;
-    {
-        std::lock_guard<std::mutex> guard(mutex_);
-        if (pool_.empty()) {
-            return;
-        }
-        pool_.swap(map);
-    }
+	std::map<EventLoop*, std::vector<ConnPtr> > map;
+	{
+		std::lock_guard<std::mutex> guard(mutex_);
+		if (pool_.empty()) {
+			return;
+		}
+		pool_.swap(map);
+	}
 
-    // Make sure delete Conn in its own EventLoop thread
-    for (auto& m : map) {
-        for (auto& c : m.second) {
-            m.first->RunInLoop(std::bind(&Conn::Close, c));
-        }
-        m.second.clear();
-    }
+	// Make sure delete Conn in its own EventLoop thread
+	for (auto& m : map) {
+		for (auto& c : m.second) {
+			m.first->RunInLoop(std::bind(&Conn::Close, c));
+		}
+		m.second.clear();
+	}
 }
 }
 }

@@ -12,11 +12,11 @@ namespace mongo {
 
 // Mirrors mongoc_iovec_t (compatible with WSABUF on Windows, struct iovec on POSIX)
 struct ENGINE_API MongoIovec {
-    size_t iov_len;
-    char*  iov_base;
+	size_t iov_len;
+	char* iov_base;
 };
 
-} // namespace mongo
-} // namespace engine
+}  // namespace mongo
+}  // namespace engine
 
 #endif
