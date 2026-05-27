@@ -17,6 +17,7 @@
 
 extern "C" {
 #include "lauxlib.h"
+#include "runtime/config/limits.h"
 }
 
 namespace engine {
@@ -179,7 +180,12 @@ int l_kcp_client_send(lua_State* L) {
 	if (ctx->disposed) return luaL_error(L, "kcp_client: closed");
 
 	size_t len = 0;
+
 	const char* data = luaL_checklstring(L, 2, &len);
+		if (len > engine::ResourceLimits::kDefaultMaxMessageSize) {
+			return luaL_error(L, "message size %zu exceeds limit %u",
+					 len, engine::ResourceLimits::kDefaultMaxMessageSize);
+		}
 
 	bool ok = ctx->client->Send(data, len);
 	lua_pushboolean(L, ok ? 1 : 0);

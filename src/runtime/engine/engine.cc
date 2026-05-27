@@ -33,13 +33,29 @@
 #include "runtime/profiler/profiler_core.h"
 #include "runtime/profiler/profiler_events.h"
 #include "runtime/script/script_bind.h"
+#include "runtime/vm/sandbox.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {
 
+namespace {
+Engine* g_test_instance = nullptr;
+}  // namespace
+
 Engine& Engine::Instance() {
+	if (g_test_instance) {
+		return *g_test_instance;
+	}
 	static Engine instance;
 	return instance;
+}
+
+void Engine::SetInstanceForTesting(Engine* test_instance) {
+	g_test_instance = test_instance;
+}
+
+void Engine::ClearTestInstance() {
+	g_test_instance = nullptr;
 }
 
 Engine::Engine() = default;
@@ -150,9 +166,16 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		frame_interval_ = std::chrono::milliseconds(runtime_cfg.frame.interval_ms);
 	}
 
-	script_vm_ = std::make_unique<ScriptVM>();
-	ENGINE_LOG_INFO(logger, "lua vm initialized, version=[{}]", ScriptVM::LuaVersion());
-	std::fprintf(stderr, "[engine] ScriptVM created\n");
+	/* Map config string to sandbox level enum */
+	LuaSandboxLevel sandbox_level = LuaSandboxLevel::Strict;
+	if (runtime_cfg.sandbox_level == "server") {
+			sandbox_level = LuaSandboxLevel::Server;
+	} else if (runtime_cfg.sandbox_level == "full") {
+			sandbox_level = LuaSandboxLevel::Full;
+	}
+
+	script_vm_ = std::make_unique<ScriptVM>(sandbox_level);
+	ENGINE_LOG_INFO(logger, "lua vm initialized, version=[{}], sandbox=[{}]", ScriptVM::LuaVersion(), runtime_cfg.sandbox_level);
 
 	// ── Physics system initialization ──────────────────────────────────
 	{
@@ -357,6 +380,9 @@ void Engine::Cleanup() {
 
 	if (script_vm_) {
 		script::ShutdownNetBindings();
+	}
+	if (script_vm_) {
+		script::ShutdownEntityBindings();
 	}
 	if (script_vm_) {
 		script::ShutdownTimerBindings(*script_vm_);

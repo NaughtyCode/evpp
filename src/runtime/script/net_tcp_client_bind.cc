@@ -14,8 +14,10 @@
 #include <runtime/evpp/tcp_client.h>
 #include <runtime/evpp/tcp_conn.h>
 
+#include "runtime/config/limits.h"
 #include "runtime/core/log/log.h"
 #include "runtime/engine/engine.h"
+#include "runtime/network/length_prefixed_codec.h"
 
 extern "C" {
 #include "lauxlib.h"
@@ -34,6 +36,7 @@ struct ClientCtx {
 	std::unique_ptr<evpp::TCPClient> client;
 	lua_State* L = nullptr;
 	int instance_ref = LUA_NOREF;  // ref to Lua class instance table
+	engine::LengthPrefixedCodec codec;  /* message framing */
 	bool is_connected = false;
 	bool disposed = false;
 };
@@ -63,7 +66,7 @@ void CallClientMethod(lua_State* L, int instance_ref, const char* method) {
 		lua_pop(L, 2);
 		return;
 	}
-	lua_insert(L, -2);	// inst, func → func, inst (self)
+	lua_insert(L, -2);	// inst, func �?func, inst (self)
 	if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
 		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger, "[net.client] {} error: {}", method, lua_tostring(L, -1));
@@ -96,7 +99,7 @@ void CallClientMethodStr(lua_State* L,
 	}
 }
 
-// ── l_net_client_connect(addr) → instance_table ──
+// ── l_net_client_connect(addr) �?instance_table ──
 int l_net_client_connect(lua_State* L) {
 	const char* addr = luaL_checkstring(L, 1);
 	if (!*addr) {
@@ -179,8 +182,10 @@ int l_net_client_connect(lua_State* L) {
 	ctx->client->SetMessageCallback(
 		[L_ptr, inst_ref, ctx_ptr](const evpp::TCPConnPtr&, evpp::Buffer* buf) {
 			if (ctx_ptr->disposed) return;
-			std::string data = buf->NextAllString();
-			CallClientMethodStr(L_ptr, inst_ref, "on_message", data);
+			auto messages = ctx_ptr->codec.Decode(buf);
+			for (const auto& data : messages) {
+				CallClientMethodStr(L_ptr, inst_ref, "on_message", data);
+			}
 		});
 
 	auto* logger = GetLogger();
@@ -199,16 +204,25 @@ int l_client_send(lua_State* L) {
 	size_t len = 0;
 	const char* data = luaL_checklstring(L, 2, &len);
 
+		if (len > ctx->codec.GetMaxMessageSize()) {
+			return luaL_error(L, "message size %zu exceeds limit %u",
+					 len, ctx->codec.GetMaxMessageSize());
+		}
+
 	auto conn = ctx->client->conn();
 	if (!conn || !conn->IsConnected()) {
 		return luaL_error(L, "client: not connected");
 	}
 
-	conn->Send(data, len);
+		/* Encode with length-prefixed framing so the receiver can split messages */
+		std::string framed = ctx->codec.Encode(std::string(data, len));
+		if (!framed.empty()) {
+			conn->Send(framed.data(), framed.size());
+		}
 	return 0;
 }
 
-// ── client:disconnect() → bool ───────────────────────────────────────────
+// ── client:disconnect() �?bool ───────────────────────────────────────────
 int l_client_disconnect(lua_State* L) {
 	auto* ctx = GetClientCtxFromTable(L, 1);
 	if (!ctx || ctx->disposed) {
@@ -231,7 +245,7 @@ int l_client_disconnect(lua_State* L) {
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "[net.client] disconnecting");
 
-	// Clear callbacks before Disconnect() — TCPConn::Close() uses
+	// Clear callbacks before Disconnect() �?TCPConn::Close() uses
 	// QueueInLoop (always defers), so HandleClose may execute after
 	// delete ctx below, and the stored callbacks capture raw ClientCtx*.
 	ctx->client->SetConnectionCallback(evpp::ConnectionCallback());
@@ -250,7 +264,7 @@ int l_client_disconnect(lua_State* L) {
 	return 1;
 }
 
-// ── client:is_connected() → bool ─────────────────────────────────────────
+// ── client:is_connected() �?bool ─────────────────────────────────────────
 int l_client_is_connected(lua_State* L) {
 	auto* ctx = GetClientCtxFromTable(L, 1);
 	if (!ctx || ctx->disposed) {

@@ -24,6 +24,12 @@ class ENGINE_API Engine {
 	public:
 	static Engine& Instance();
 
+	// Test support: inject a test Engine instance. When set,
+	// Instance() returns *test_instance instead of the global
+	// singleton, enabling test isolation without full engine startup.
+	static void SetInstanceForTesting(Engine* test_instance);
+	static void ClearTestInstance();
+
 	Engine();
 	~Engine();
 

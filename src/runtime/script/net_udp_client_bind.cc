@@ -17,6 +17,7 @@
 #include "runtime/engine/engine.h"
 
 extern "C" {
+#include "runtime/config/limits.h"
 #include "lauxlib.h"
 }
 
@@ -103,6 +104,11 @@ int l_udp_client_send(lua_State* L) {
 
 	size_t len = 0;
 	const char* data = luaL_checklstring(L, 2, &len);
+
+		if (len > engine::ResourceLimits::kDefaultMaxMessageSize) {
+			return luaL_error(L, "message size %zu exceeds limit %u",
+					 len, engine::ResourceLimits::kDefaultMaxMessageSize);
+		}
 
 	bool ok = ctx->client->Send(data, len);
 	lua_pushboolean(L, ok ? 1 : 0);
@@ -213,12 +219,18 @@ int l_udp_client_send_to(lua_State* L) {
 		return luaL_error(L, "host must not be empty");
 	}
 	lua_Integer port64 = luaL_checkinteger(L, 2);
+
 	if (port64 <= 0 || port64 > 65535) {
 		return luaL_error(L, "port out of range");
 	}
 	int port = static_cast<int>(port64);
 	size_t len = 0;
 	const char* data = luaL_checklstring(L, 3, &len);
+
+		if (len > engine::ResourceLimits::kDefaultMaxMessageSize) {
+			return luaL_error(L, "message size %zu exceeds limit %u",
+					 len, engine::ResourceLimits::kDefaultMaxMessageSize);
+		}
 
 	evpp::udp::sync::Client tmp;
 	if (!tmp.Connect(host, port)) {

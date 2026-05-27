@@ -26,5 +26,8 @@ ENGINE_API void ExportDbService(ScriptVM& vm);
 ENGINE_API void ShutdownTimerBindings(ScriptVM& vm);
 ENGINE_API void ShutdownNetBindings();
 
+ENGINE_API void ExportEntity(ScriptVM& vm);
+ENGINE_API void ShutdownEntityBindings();
+
 }  // namespace script
 }  // namespace engine

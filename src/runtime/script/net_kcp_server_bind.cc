@@ -17,6 +17,7 @@
 
 #include "runtime/core/log/log.h"
 #include "runtime/engine/engine.h"
+#include "runtime/script/net_lifetime.h"
 
 extern "C" {
 #include "lauxlib.h"
@@ -45,6 +46,10 @@ const char* kKcpServerMetaName = "net.kcp_server.instance";
 // ShutdownKcpServerBindings to find and stop all servers during engine shutdown.
 std::unordered_set<KcpServerCtx*> g_kcp_server_ctxs;
 
+/* Lifetime guard: prevents RunInLoop callbacks from accessing a freed
+ * lua_State during shutdown. See net_lifetime.h for the pattern. */
+static NetAliveGuard g_kcp_alive;
+
 // ── Internal helpers ─────────────────────────────────────────────────
 
 KcpServerCtx* GetKcpServerCtxFromTable(lua_State* L, int idx) {
@@ -71,10 +76,15 @@ void BindKcpMessageHandler(KcpServerCtx* ctx) {
 		lua_State* L_ptr = ctx->L;
 
 		main_loop->RunInLoop([L_ptr, msg_ref, data, remote_ip, conv]() {
-			if (!L_ptr || msg_ref == LUA_NOREF) return;
+			if (!g_kcp_alive.TryAcquire()) return;
+			if (msg_ref == LUA_NOREF) {
+				g_kcp_alive.Release();
+				return;
+			}
 			lua_rawgeti(L_ptr, LUA_REGISTRYINDEX, msg_ref);
 			if (lua_isnil(L_ptr, -1)) {
 				lua_pop(L_ptr, 1);
+				g_kcp_alive.Release();
 				return;
 			}
 			lua_pushlstring(L_ptr, data.data(), data.size());
@@ -86,6 +96,7 @@ void BindKcpMessageHandler(KcpServerCtx* ctx) {
 					logger, "[net.kcp_server] on_message error: {}", lua_tostring(L_ptr, -1));
 				lua_pop(L_ptr, 1);
 			}
+			g_kcp_alive.Release();
 		});
 	});
 }
@@ -110,6 +121,7 @@ void ReleaseKcpServer(lua_State* L, KcpServerCtx* ctx) {
 	auto* loop = Engine::Instance().GetEventLoop();
 	if (loop && loop->IsRunning()) {
 		loop->RunInLoop([L, old_msg_ref, old_inst_ref, ctx] {
+			if (!g_kcp_alive.TryAcquire()) return;
 			if (old_msg_ref != LUA_NOREF) {
 				luaL_unref(L, LUA_REGISTRYINDEX, old_msg_ref);
 			}
@@ -117,6 +129,7 @@ void ReleaseKcpServer(lua_State* L, KcpServerCtx* ctx) {
 				luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
 			}
 			delete ctx;
+			g_kcp_alive.Release();
 		});
 	} else {
 		if (old_msg_ref != LUA_NOREF) {
@@ -277,7 +290,11 @@ int l_kcp_server_set_on_message(lua_State* L) {
 		auto* loop = Engine::Instance().GetEventLoop();
 		if (loop) {
 			lua_State* L_ptr = L;
-			loop->RunInLoop([L_ptr, old_ref] { luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_ref); });
+			loop->RunInLoop([L_ptr, old_ref] {
+				if (!g_kcp_alive.TryAcquire()) return;
+				luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_ref);
+				g_kcp_alive.Release();
+			});
 		} else {
 			luaL_unref(L, LUA_REGISTRYINDEX, old_ref);
 		}
@@ -390,40 +407,38 @@ void PushKcpServerLibrary(lua_State* L) {
 void ShutdownKcpServerBindings() {
 	auto* logger = GetLogger();
 
+	/* Step 1: Atomically mark the guard as dead. New RunInLoop callbacks
+	 * (message dispatch, cleanup) will see TryAcquire return false and
+	 * bail out immediately. */
+	g_kcp_alive.Shutdown();
+
+	/* Step 2: Wait for all in-flight callbacks to finish their Lua
+	 * operations. After this returns, no callback is touching lua_State. */
+	g_kcp_alive.WaitDrain();
+
+	/* Step 3: Stop all servers. Recv threads join; any RunInLoop callbacks
+	 * queued between Shutdown and Stop will bail on TryAcquire. */
 	auto ctxs = std::move(g_kcp_server_ctxs);
 	for (auto* ctx : ctxs) {
 		if (ctx->disposed) continue;
 		ctx->disposed = true;
 		ctx->server->Stop(true);
 
-		// Defer unref + delete so pending RunInLoop message callbacks
-		// (queued before Stop returned) execute before we free the refs.
-		// Same pattern as ReleaseKcpServer.
+		/* Step 4: Direct cleanup — no RunInLoop deferral needed because
+		 * WaitDrain guarantees no callback is touching Lua state, and
+		 * TryAcquire=false guarantees no future callback will try. */
 		int old_msg_ref = ctx->on_message_ref.exchange(LUA_NOREF);
 		int old_inst_ref = ctx->instance_ref;
 		ctx->instance_ref = LUA_NOREF;
 		lua_State* L_ptr = ctx->L;
 
-		auto* loop = Engine::Instance().GetEventLoop();
-		if (loop && loop->IsRunning()) {
-			loop->RunInLoop([L_ptr, old_msg_ref, old_inst_ref, ctx] {
-				if (old_msg_ref != LUA_NOREF && L_ptr) {
-					luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_msg_ref);
-				}
-				if (old_inst_ref != LUA_NOREF && L_ptr) {
-					luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_inst_ref);
-				}
-				delete ctx;
-			});
-		} else {
-			if (old_msg_ref != LUA_NOREF && L_ptr) {
-				luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_msg_ref);
-			}
-			if (old_inst_ref != LUA_NOREF && L_ptr) {
-				luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_inst_ref);
-			}
-			delete ctx;
+		if (old_msg_ref != LUA_NOREF && L_ptr) {
+			luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_msg_ref);
 		}
+		if (old_inst_ref != LUA_NOREF && L_ptr) {
+			luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_inst_ref);
+		}
+		delete ctx;
 	}
 
 	if (!ctxs.empty()) {

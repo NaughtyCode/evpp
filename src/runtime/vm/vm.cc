@@ -8,7 +8,7 @@
 
 namespace engine {
 
-ScriptVM::ScriptVM() {
+ScriptVM::ScriptVM(LuaSandboxLevel level) {
 	ENGINE_PROFILE_SCOPE("engine.vm", "ScriptVM::ctor");
 
 	auto* logger = GetLogger();
@@ -20,11 +20,9 @@ ScriptVM::ScriptVM() {
 		abort();
 	}
 
-	luaL_openlibs(L_);
+	luaL_openlibs_sandboxed(L_, level);
 	ENGINE_LOG_INFO(logger,
-					"ScriptVM: lua state created, version=[{}], "
-					"base libs loaded (basic/coroutine/table/io/os/string/"
-					"math/utf8/debug/package)",
+					"ScriptVM: lua state created, version=[{}]",
 					LUA_VERSION);
 
 	int mem_kb = lua_gc(L_, LUA_GCCOUNT, 0);

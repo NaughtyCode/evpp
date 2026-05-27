@@ -51,6 +51,7 @@ struct RuntimeConfig {
 	LogConfig log;
 	FrameConfig frame;
 	std::string scripts_dir = config::kDefaultRuntimeScriptsDir;
+	std::string sandbox_level = "strict";
 };
 
 // Client config — loaded from resources/config/client/client.json.

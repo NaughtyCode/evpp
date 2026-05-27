@@ -16,8 +16,10 @@
 #include <runtime/evpp/tcp_conn.h>
 #include <runtime/evpp/tcp_server.h>
 
+#include "runtime/config/limits.h"
 #include "runtime/core/log/log.h"
 #include "runtime/engine/engine.h"
+#include "runtime/network/length_prefixed_codec.h"
 
 extern "C" {
 #include "lauxlib.h"
@@ -37,6 +39,7 @@ struct ConnCtx {
 	lua_State* L = nullptr;
 	int instance_ref = LUA_NOREF;  // Lua conn instance table
 	int server_inst_ref = LUA_NOREF;  // Lua server instance (for fallback callbacks)
+	engine::LengthPrefixedCodec* codec = nullptr;  /* owned by ServerCtx */
 	bool disposed = false;
 };
 
@@ -44,6 +47,7 @@ struct ServerCtx {
 	std::unique_ptr<evpp::TCPServer> server;
 	lua_State* L = nullptr;
 	int instance_ref = LUA_NOREF;  // Lua server instance table
+	engine::LengthPrefixedCodec codec;  /* message framing, shared by all connections */
 	bool disposed = false;
 };
 
@@ -73,7 +77,7 @@ ConnCtx* GetConnCtxFromTable(lua_State* L, int idx) {
 
 // ── Callback dispatchers ─────────────────────────────────────────────
 
-// Call inst:method(str) — for conn.on_message(self, data), conn.on_close(self, addr)
+// Call inst:method(str) �?for conn.on_message(self, data), conn.on_close(self, addr)
 void CallInstMethodStr(lua_State* L, int inst_ref, const char* method, const std::string& arg) {
 	if (!L || inst_ref == LUA_NOREF) return;
 	lua_rawgeti(L, LUA_REGISTRYINDEX, inst_ref);
@@ -95,7 +99,7 @@ void CallInstMethodStr(lua_State* L, int inst_ref, const char* method, const std
 	}
 }
 
-// Call inst:method(table, str) — for server.on_connect(self, conn, addr),
+// Call inst:method(table, str) �?for server.on_connect(self, conn, addr),
 // server.on_message(self, conn, data), server.on_close(self, conn, addr)
 void CallInstMethodTableStr(
 	lua_State* L, int inst_ref, const char* method, int table_ref, const std::string& arg) {
@@ -143,11 +147,20 @@ int l_conn_send(lua_State* L) {
 	size_t len = 0;
 	const char* data = luaL_checklstring(L, 2, &len);
 
+		if (len > ctx->codec->GetMaxMessageSize()) {
+			return luaL_error(L, "message size %zu exceeds limit %u",
+				 len, ctx->codec->GetMaxMessageSize());
+		}
+
 	if (!ctx->conn->IsConnected()) {
 		return luaL_error(L, "conn: not connected");
 	}
 
-	ctx->conn->Send(data, len);
+		/* Encode with length-prefixed framing so the receiver can split messages */
+		std::string framed = ctx->codec->Encode(std::string(data, len));
+		if (!framed.empty()) {
+			ctx->conn->Send(framed.data(), framed.size());
+		}
 	return 0;
 }
 
@@ -174,7 +187,7 @@ int l_conn_close(lua_State* L) {
 
 	ctx->conn->Close();
 	// Close() may fire the disconnect callback synchronously, but it
-	// checks ctx->disposed and returns early — on_close is NOT called
+	// checks ctx->disposed and returns early �?on_close is NOT called
 	// for a manual close.
 
 	auto* loop = Engine::Instance().GetEventLoop();
@@ -262,7 +275,7 @@ int l_server_stop(lua_State* L) {
 
 	ctx->disposed = true;
 
-	// Remove from shutdown tracking BEFORE Stop() — Stop() fires Lua
+	// Remove from shutdown tracking BEFORE Stop() �?Stop() fires Lua
 	// callbacks that may call server:stop() re-entrantly; the inner
 	// stop would otherwise try to erase from g_server_ctxs a second time.
 	g_server_ctxs.erase(ctx);
@@ -361,7 +374,7 @@ int l_server_gc(lua_State* L) {
 	return 0;
 }
 
-// ── net.server.listen(addr) → server_instance ────────────────────────
+// ── net.server.listen(addr) �?server_instance ────────────────────────
 
 int l_net_server_listen(lua_State* L) {
 	const char* addr = luaL_checkstring(L, 1);
@@ -389,10 +402,13 @@ int l_net_server_listen(lua_State* L) {
 	lua_pushvalue(L, -1);  // t, t
 	ctx->instance_ref = luaL_ref(L, LUA_REGISTRYINDEX);	 // t
 
-	// Create TCPServer
-	auto name = std::string("lua_server_") + std::to_string(reinterpret_cast<uintptr_t>(ctx));
-	ctx->server = std::make_unique<evpp::TCPServer>(loop, addr, name, 0);
+	// Create TCPServer — name is a temporary so std::string
+	// destructor runs before the Init()/Start() error paths below.
 	// thread_num=0: handle connections on the main EventLoop thread.
+	ctx->server = std::make_unique<evpp::TCPServer>(
+		loop, addr,
+		std::string("lua_server_") + std::to_string(reinterpret_cast<uintptr_t>(ctx)),
+		0);
 
 	auto* L_ptr = L;
 	int server_inst_ref = ctx->instance_ref;
@@ -410,6 +426,7 @@ int l_net_server_listen(lua_State* L) {
 				conn_ctx->L = L_ptr;
 				conn_ctx->conn = conn;
 				conn_ctx->server_inst_ref = server_inst_ref;
+				conn_ctx->codec = &ctx_ptr->codec;
 
 				// Build Lua conn instance table
 				lua_newtable(L_ptr);  // ct
@@ -447,7 +464,7 @@ int l_net_server_listen(lua_State* L) {
 				auto* logger = GetLogger();
 				ENGINE_LOG_INFO(logger, "[net.server] conn closed: conn=[{}]", raw_id);
 
-				// Guard against re-entrant disconnect through on_close →
+				// Guard against re-entrant disconnect through on_close �?
 				// conn:close() or server:stop(). Setting disposed before
 				// dispatch blocks the re-entrant path and makes conn:close()
 				// return false so the outer cleanup below always runs.
@@ -470,7 +487,7 @@ int l_net_server_listen(lua_State* L) {
 
 				// l_conn_close sets instance_ref = LUA_NOREF after unref;
 				// if that happened re-entrantly the inner call already
-				// cleaned up — skip outer cleanup to avoid double-unref.
+				// cleaned up �?skip outer cleanup to avoid double-unref.
 				if (conn_ctx->instance_ref == LUA_NOREF) return;
 
 				// Clean up ConnCtx
@@ -502,14 +519,16 @@ int l_net_server_listen(lua_State* L) {
 
 		int conn_ref = conn_ctx->instance_ref;
 		int sv_ref = conn_ctx->server_inst_ref;
-		std::string data = buf->NextAllString();
+		auto messages = conn_ctx->codec->Decode(buf);
 
-		// Per-connection on_message overrides server-wide.
-		if (HasMethod(L_ptr, conn_ref, "on_message")) {
-			CallInstMethodStr(L_ptr, conn_ref, "on_message", data);
-		} else {
-			CallInstMethodTableStr(L_ptr, sv_ref, "on_message", conn_ref, data);
-		}
+			for (const auto& data : messages) {
+				// Per-connection on_message overrides server-wide.
+				if (HasMethod(L_ptr, conn_ref, "on_message")) {
+					CallInstMethodStr(L_ptr, conn_ref, "on_message", data);
+				} else {
+					CallInstMethodTableStr(L_ptr, sv_ref, "on_message", conn_ref, data);
+				}
+			}
 	});
 
 	auto* logger = GetLogger();
@@ -605,7 +624,7 @@ void PushServerLibrary(lua_State* L) {
 void ShutdownServerBindings() {
 	auto* logger = GetLogger();
 
-	// Move to local before iterating — Stop() fires Lua callbacks that
+	// Move to local before iterating �?Stop() fires Lua callbacks that
 	// may call server:stop() re-entrantly, which erases from g_server_ctxs.
 	auto ctxs = std::move(g_server_ctxs);
 	for (auto* ctx : ctxs) {

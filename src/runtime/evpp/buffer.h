@@ -1,4 +1,4 @@
-// Modified from muduo project http://github.com/chenshuo/muduo
+﻿// Modified from muduo project http://github.com/chenshuo/muduo
 // @see https://github.com/chenshuo/muduo/blob/master/muduo/net/Buffer.h and https://github.com/chenshuo/muduo/blob/master/muduo/net/Buffer.cc
 
 #pragma once
@@ -21,7 +21,7 @@ class EVPP_EXPORT Buffer {
 		: capacity_(reserved_prepend_size + initial_size),
 		  read_index_(reserved_prepend_size),
 		  write_index_(reserved_prepend_size),
-		  reserved_prepend_size_(reserved_prepend_size) {
+		  reserved_prepend_size_(reserved_prepend_size), max_capacity_(256 * 1024) {
 		buffer_ = new char[capacity_];
 		assert(length() == 0);
 		assert(WritableBytes() == initial_size);
@@ -119,7 +119,6 @@ class EVPP_EXPORT Buffer {
 			return;
 		}
 
-		// TODO add the implementation logic here
 		grow(len + reserved_prepend_size_);
 	}
 
@@ -139,12 +138,22 @@ class EVPP_EXPORT Buffer {
 		UnwriteBytes(1);
 	}
 
-	// TODO XXX Little-Endian/Big-Endian problem.
-#define evppbswap_64(x)                                                              \
-	((((x) & 0xff00000000000000ull) >> 56) | (((x) & 0x00ff000000000000ull) >> 40) | \
-	 (((x) & 0x0000ff0000000000ull) >> 24) | (((x) & 0x000000ff00000000ull) >> 8) |  \
-	 (((x) & 0x00000000ff000000ull) << 8) | (((x) & 0x0000000000ff0000ull) << 24) |  \
-	 (((x) & 0x000000000000ff00ull) << 40) | (((x) & 0x00000000000000ffull) << 56))
+	/* Convert 64-bit integer between host and network byte order.
+	 * Uses compiler builtins (always available) for byte swap.
+	 * On little-endian systems this is the correct host鈫攏etwork conversion.
+	 * On big-endian systems this would be a no-op, but we assume little-endian. */
+	static uint64_t HostToNetwork64(uint64_t host64) {
+#ifdef _MSC_VER
+		return _byteswap_uint64(host64);
+#else
+		return __builtin_bswap64(host64);
+#endif
+	}
+
+	static uint64_t NetworkToHost64(uint64_t net64) {
+		/* HostToNetwork64 and NetworkToHost64 are identical operations */
+		return HostToNetwork64(net64);
+	}
 
 	// Write
 	public:
@@ -169,7 +178,7 @@ class EVPP_EXPORT Buffer {
 
 	// Append int64_t/int32_t/int16_t with network endian
 	void AppendInt64(int64_t x) {
-		int64_t be = evppbswap_64(x);
+		int64_t be = static_cast<int64_t>(HostToNetwork64(static_cast<uint64_t>(x)));
 		Write(&be, sizeof be);
 	}
 
@@ -189,7 +198,7 @@ class EVPP_EXPORT Buffer {
 
 	// Prepend int64_t/int32_t/int16_t with network endian
 	void PrependInt64(int64_t x) {
-		int64_t be = evppbswap_64(x);
+		int64_t be = static_cast<int64_t>(HostToNetwork64(static_cast<uint64_t>(x)));
 		Prepend(&be, sizeof be);
 	}
 
@@ -270,6 +279,12 @@ class EVPP_EXPORT Buffer {
 	// and return result of readv, errno is saved into saved_errno
 	ssize_t ReadFromFD(evpp_socket_t fd, int* saved_errno);
 
+		/* Maximum total capacity in bytes. When length() reaches this
+		 * limit, ReadFromFD returns 0 (no more data read). Default 256KB. */
+		void SetMaxCapacity(size_t max) { max_capacity_ = max; }
+		size_t GetMaxCapacity() const { return max_capacity_; }
+		bool AtMaxCapacity() const { return length() >= max_capacity_; }
+
 	// Next returns a slice containing the next n bytes from the buffer,
 	// advancing the buffer as if the bytes had been returned by Read.
 	// If there are fewer than n bytes in the buffer, Next returns the entire buffer.
@@ -327,7 +342,7 @@ class EVPP_EXPORT Buffer {
 		if (length() < sizeof(int64_t)) return 0;
 		int64_t be64 = 0;
 		::memcpy(&be64, data(), sizeof be64);
-		return evppbswap_64(be64);
+		return static_cast<int64_t>(NetworkToHost64(static_cast<uint64_t>(be64)));
 	}
 
 	int32_t PeekInt32() const {
@@ -468,6 +483,7 @@ class EVPP_EXPORT Buffer {
 	size_t read_index_;
 	size_t write_index_;
 	size_t reserved_prepend_size_;
+		size_t max_capacity_;
 	static const char kCRLF[];
 };
 

@@ -8,6 +8,7 @@
 
 #include "runtime/core/engine_api.h"
 #include "runtime/vm/custom_ptr_store.h"
+#include "runtime/vm/sandbox.h"
 #include "runtime/vm/script_importer.h"
 
 extern "C" {
@@ -32,7 +33,7 @@ class ENGINE_API ScriptVM {
 	// Construction / destruction
 	//=================================================================
 
-	ScriptVM();
+	ScriptVM(LuaSandboxLevel level = LuaSandboxLevel::Full);
 	virtual ~ScriptVM();
 
 	ScriptVM(const ScriptVM&) = delete;

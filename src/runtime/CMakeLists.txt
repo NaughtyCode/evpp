@@ -102,6 +102,12 @@ source_group("core\\timer" FILES ${TIMER_SOURCES})
 set(CONFIG_SOURCES ${RUNTIME_DIR}/config/config.cc ${RUNTIME_DIR}/config/config.h)
 source_group("config" FILES ${CONFIG_SOURCES})
 
+# ── Network codec ───────────────────────────────────────────────────
+set(NETWORK_SOURCES
+	${RUNTIME_DIR}/network/length_prefixed_codec.cc ${RUNTIME_DIR}/network/length_prefixed_codec.h
+)
+source_group("network" FILES ${NETWORK_SOURCES})
+
 # ── Engine core ────────────────────────────────────────────────────
 set(ENGINE_SOURCES ${RUNTIME_DIR}/engine/engine.cc ${RUNTIME_DIR}/engine/engine.h)
 source_group("engine" FILES ${ENGINE_SOURCES})
@@ -109,13 +115,25 @@ source_group("engine" FILES ${ENGINE_SOURCES})
 # ── Script VM ─────────────────────────────────────────────────────
 set(VM_SOURCES
     ${RUNTIME_DIR}/vm/vm.cc ${RUNTIME_DIR}/vm/vm.h
+    ${RUNTIME_DIR}/vm/sandbox.cc ${RUNTIME_DIR}/vm/sandbox.h
     ${RUNTIME_DIR}/vm/script_importer.cc ${RUNTIME_DIR}/vm/script_importer.h
     ${RUNTIME_DIR}/vm/custom_ptr_store.cc ${RUNTIME_DIR}/vm/custom_ptr_store.h
 )
 source_group("vm" FILES ${VM_SOURCES})
 
+# ── Entity system ──────────────────────────────────────────────────
+set(ENTITY_SOURCES
+    ${RUNTIME_DIR}/entity/entity_id.h
+    ${RUNTIME_DIR}/entity/attribute.h
+    ${RUNTIME_DIR}/entity/entity.cc ${RUNTIME_DIR}/entity/entity.h
+    ${RUNTIME_DIR}/entity/entity_manager.cc ${RUNTIME_DIR}/entity/entity_manager.h
+)
+source_group("entity" FILES ${ENTITY_SOURCES})
+
 # ── Script bindings ────────────────────────────────────────────────
 set(SCRIPT_SOURCES
+    ${RUNTIME_DIR}/script/bind_util.cc ${RUNTIME_DIR}/script/bind_util.h
+    ${RUNTIME_DIR}/script/net_lifetime.cc ${RUNTIME_DIR}/script/net_lifetime.h
     ${RUNTIME_DIR}/script/script_bind.cc ${RUNTIME_DIR}/script/script_bind.h
     ${RUNTIME_DIR}/script/log_bind.cc ${RUNTIME_DIR}/script/log_bind.h
     ${RUNTIME_DIR}/script/timer_bind.cc ${RUNTIME_DIR}/script/timer_bind.h
@@ -129,6 +147,7 @@ set(SCRIPT_SOURCES
     ${RUNTIME_DIR}/script/net_kcp_server_bind.cc ${RUNTIME_DIR}/script/net_kcp_server_bind.h
     ${RUNTIME_DIR}/script/msgpack_bind.cc ${RUNTIME_DIR}/script/msgpack_bind.h
     ${RUNTIME_DIR}/script/import_bind.cc ${RUNTIME_DIR}/script/import_bind.h
+    ${RUNTIME_DIR}/script/entity_bind.cc ${RUNTIME_DIR}/script/entity_bind.h
 )
 source_group("script" FILES ${SCRIPT_SOURCES})
 
@@ -285,8 +304,10 @@ set(SERVERENGINE_SOURCES
     ${LOG_SOURCES}
     ${TIMER_SOURCES}
     ${CONFIG_SOURCES}
+    ${NETWORK_SOURCES}
     ${ENGINE_SOURCES}
     ${VM_SOURCES}
+    ${ENTITY_SOURCES}
     ${SCRIPT_SOURCES}
     ${PROFILER_SOURCES}
     ${PHYSICS_HEADERS}

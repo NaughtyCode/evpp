@@ -4,6 +4,7 @@
 #include "runtime/profiler/profiler_events.h"
 #include "runtime/script/import_bind.h"
 #include "runtime/script/log_bind.h"
+#include "runtime/script/entity_bind.h"
 #include "runtime/script/msgpack_bind.h"
 #include "runtime/script/net_bind.h"
 #include "runtime/script/timer_bind.h"
@@ -31,6 +32,10 @@ void ExportAll(ScriptVM& vm) {
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("net");
 		ExportNet(vm);
+	}
+	{
+		ENGINE_PROFILE_SCRIPT_EXPORT("entity");
+		ExportEntity(vm);
 	}
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("msgpack");

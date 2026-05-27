@@ -21,6 +21,12 @@ const size_t Buffer::kCheapPrependSize = 8;
 const size_t Buffer::kInitialSize = 1024;
 
 ssize_t Buffer::ReadFromFD(evpp_socket_t fd, int* savedErrno) {
+
+		/* Refuse to read if already at max capacity */
+		if (AtMaxCapacity()) {
+			if (savedErrno) *savedErrno = 0;
+			return 0;
+		}
 	// saved an ioctl()/FIONREAD call to tell how much to read
 	char extrabuf[65536];
 	struct iovec vec[2];

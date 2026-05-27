@@ -12,5 +12,6 @@
     "interval_ms": 33,
     "slow_threshold_multiplier": 2
   },
-  "scripts_dir": "resources/script/runtime"
+  "scripts_dir": "resources/script/runtime",
+  "sandbox_level": "strict"
 }
