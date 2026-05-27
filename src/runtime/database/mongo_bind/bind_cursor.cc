@@ -1,8 +1,9 @@
-#if defined(ENGINE_MONGODB_ENABLED)
+﻿#if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo_bind/bind_cursor.h"
 
 #include <cstdint>
+#include <memory>
 #include <new>
 
 #include <bson/bson.h>
@@ -37,18 +38,10 @@ int l_cursor_next(lua_State* L) {
 		lua_pushboolean(L, false);
 		return 1;
 	}
-	auto* doc = new (std::nothrow) mongo::BsonDocument();
-	if (!doc) {
-		lua_pushnil(L);
-		lua_pushstring(L, "allocation failure");
-		return 2;
-	}
+	auto doc = std::make_unique<mongo::BsonDocument>();
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
-	*ud = doc;
-	bool ok = cursor->Next(doc);
+	bool ok = cursor->Next(doc.get());
 	if (!ok) {
-		delete *ud;
-		*ud = nullptr;
 		lua_pop(L, 1);
 		mongo::MongoError error;
 		if (cursor->HasError(&error)) {
@@ -56,10 +49,7 @@ int l_cursor_next(lua_State* L) {
 			lua_pushstring(L, error.Message());
 			return 2;
 		}
-		lua_pushboolean(L, false);
-		return 1;
-	}
-	return 1;
+		lua_pushboolean(L, false);`r`n			return 1;`r`n		}`r`n		*ud = doc.release();`r`n		return 1;
 }
 
 int l_cursor_more(lua_State* L) {
@@ -266,3 +256,4 @@ const luaL_Reg* GetMongoCursorLib() {
 }  // namespace engine
 
 #endif
+

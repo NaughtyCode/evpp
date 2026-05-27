@@ -70,7 +70,10 @@ Engine::~Engine() {
 
 ScriptVM& Engine::GetScriptVM() {
 	if (!script_vm_) {
-		std::fprintf(stderr, "FATAL: GetScriptVM() called before Engine::Init()\n");
+		std::fprintf(stderr,
+					 "FATAL: GetScriptVM() called but ScriptVM is null. "
+					 "Cleanup phase: %d. This is a lifecycle ordering bug.\n",
+					 static_cast<int>(cleanup_phase_));
 		std::exit(EXIT_FAILURE);
 	}
 	return *script_vm_;
@@ -186,7 +189,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	{
 		std::fprintf(stderr, "[engine] initializing physics...\n");
 		auto phys_cfg = runtime_cfg.resource_dir + "/physics/configs";
-		auto phys_data = runtime_cfg.resource_dir + "/physics/data/scene.json";
+		auto phys_data = runtime_cfg.resource_dir + runtime_cfg.physics_scene_path;
 		bool ok = PhysicsEngineBridge::Instance().Initialize(
 			phys_cfg, phys_data, runtime_cfg.scripts_dir);
 		if (!ok) {
@@ -318,37 +321,6 @@ void Engine::Start() {
 		script_reloader_->Start();
 	}
 
-#if defined(ENGINE_MONGODB_ENABLED) && !defined(NDEBUG)
-	// 鈹€鈹€ DB Service smoke test: SendRequest 鈫?PollResponse 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-	// Validates the end-to-end SPSC pipeline.  Uses kExecuteScript to
-	// avoid MongoDB network I/O (kCommand on a background thread breaks
-	// libevent frame timers on Windows when no server is running).
-	{
-		DbRequest req;
-		req.request_id = 100;
-		req.operation = DbOperation::kExecuteScript;
-		req.script = "return 'hello from db vm'";
-		DatabaseService::Instance().SendRequest(std::move(req));
-	}
-	{
-		auto done = std::make_shared<bool>(false);
-		auto poll_timer = std::make_shared<evpp::InvokeTimerPtr>();
-		*poll_timer = Engine::Instance().GetEventLoop()->RunEvery(
-			evpp::Duration(evpp::Duration::kMillisecond * 250), [done, poll_timer]() {
-				if (*done) return;
-				auto resp = DatabaseService::Instance().PollResponse();
-				if (resp) {
-					*done = true;
-					std::fprintf(stderr,
-								 "[db-smoke] response: id=%llu ok=%d\n",
-								 (unsigned long long) resp->request_id,
-								 resp->success ? 1 : 0);
-					fflush(stderr);
-					(*poll_timer)->Cancel();
-				}
-			});
-	}
-#endif
 
 	std::fprintf(stderr, "[engine] Start() complete, running_=true\n");
 }
@@ -413,29 +385,32 @@ void Engine::Cleanup() {
 
 	if (cleaned_up_.exchange(true)) return;
 
-	// Shutdown physics (stops thread + destroys physics VM) 鈥?before engine VM
+	cleanup_phase_ = CleanupPhase::PhysicsShutdown;
 	PhysicsEngineBridge::Instance().Shutdown();
 
-	// Shutdown database service (before mongo driver cleanup)
+	cleanup_phase_ = CleanupPhase::DatabaseShutdown;
 #if defined(ENGINE_MONGODB_ENABLED)
 	DatabaseService::Instance().Shutdown();
 	mongo::MongoSystem::Instance().Shutdown();
 #endif
 
-	// Cancel frame timer before destroying Lua state.
 	if (frame_timer_) {
 		frame_timer_->Cancel();
 		frame_timer_.reset();
 	}
 
-	// Stop hot-reload file watcher before touching the Lua VM.
 	if (script_reloader_) {
 		script_reloader_->Stop();
 	}
 
+	cleanup_phase_ = CleanupPhase::NetworkShutdown;
+	assert(script_vm_ != nullptr);
 	if (script_vm_) {
 		script::ShutdownNetBindings();
 	}
+
+	cleanup_phase_ = CleanupPhase::TimerShutdown;
+	assert(script_vm_ != nullptr);
 	if (script_vm_) {
 		script::ShutdownEntityBindings();
 	}
@@ -443,26 +418,25 @@ void Engine::Cleanup() {
 		script::ShutdownTimerBindings(*script_vm_);
 	}
 
+	cleanup_phase_ = CleanupPhase::ScriptDestroyed;
 	if (script_vm_) {
 		script_vm_->DestroyScript();
 		int mem_kb = lua_gc(script_vm_->GetState(), LUA_GCCOUNT, 0);
 		auto* logger = GetLogger();
 		ENGINE_LOG_INFO(logger, "ScriptVM: final memory [{} KB], exiting", mem_kb);
 	}
+	script_vm_.reset();
 	TimerManager::destroy_instance();
 
+	cleanup_phase_ = CleanupPhase::FinalLogs;
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "timer manager shut down");
 
-	// Release signal watchers.
 	sigint_watcher_.reset();
 #ifndef _WIN32
 	sigterm_watcher_.reset();
 #endif
 
-	// 鈹€鈹€ Profiler shutdown 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-	// Must happen after all subsystems stop (physics, timers, VM)
-	// and before the logger is destroyed, so profiler can log its status.
 	{
 		ENGINE_LOG_INFO(logger, "profiler: flushing, stopping, saving trace...");
 		ProfilerManager::Get().Flush();
@@ -471,6 +445,7 @@ void Engine::Cleanup() {
 		ProfilerManager::Get().Shutdown();
 	}
 
+	cleanup_phase_ = CleanupPhase::Complete;
 	ShutdownLogger();
 
 	loop_ = nullptr;
@@ -554,3 +529,4 @@ void Engine::SetPhysicsResultHandler(PhysicsResultHandler handler) {
 }
 
 }  // namespace engine
+

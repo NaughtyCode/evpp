@@ -53,6 +53,7 @@ struct RuntimeConfig {
 	FrameConfig frame;
 	std::string scripts_dir = config::kDefaultRuntimeScriptsDir;
 	std::string sandbox_level = "strict";
+	std::string physics_scene_path = "/physics/data/scene.json";
 };
 
 // Client config — loaded from resources/config/client/client.json.

@@ -12,6 +12,14 @@ class FdChannel;
 class TimerEventWatcher;
 class DNSResolver;
 class TCPClient;
+
+struct ConnectorConfig {
+	int max_retries = 5;
+	int retry_interval_ms = 1000;
+	int max_retry_interval_ms = 30000;
+	double backoff_multiplier = 2.0;
+};
+
 class EVPP_EXPORT Connector : public std::enable_shared_from_this<Connector> {
 	public:
 	typedef std::function<void(evpp_socket_t sockfd, const std::string& /*local addr*/)>
@@ -25,6 +33,10 @@ class EVPP_EXPORT Connector : public std::enable_shared_from_this<Connector> {
 	void SetNewConnectionCallback(NewConnectionCallback cb) {
 		conn_fn_ = cb;
 	}
+	void SetRetryConfig(const ConnectorConfig& cfg) {
+		retry_cfg_ = cfg;
+	}
+	int retry_count() const { return retry_count_; }
 	bool IsConnecting() const {
 		return status_ == kConnecting;
 	}
@@ -76,5 +88,9 @@ class EVPP_EXPORT Connector : public std::enable_shared_from_this<Connector> {
 	std::shared_ptr<DNSResolver> dns_resolver_;
 	InvokeTimerPtr reconnect_timer_;
 	NewConnectionCallback conn_fn_;
+
+	ConnectorConfig retry_cfg_;
+	int retry_count_ = 0;
+	int current_interval_ms_ = 0;
 };
 }

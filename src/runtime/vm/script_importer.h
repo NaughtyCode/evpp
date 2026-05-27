@@ -2,6 +2,7 @@
 
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 #include "runtime/core/engine_api.h"
@@ -45,7 +46,10 @@ class ENGINE_API ScriptImporter {
 	int ImportSingle(lua_State* L, std::string_view name);
 	int ImportAll(lua_State* L, std::string_view name);
 
+	std::string FormatImportStack() const;
+
 	std::vector<std::string> search_paths_;
+	std::unordered_set<std::string> importing_;
 };
 
 }  // namespace engine

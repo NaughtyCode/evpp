@@ -50,6 +50,24 @@ int ScriptImporter::Import(lua_State* L, std::string_view name) {
 int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
 	std::string name_str(name);
 
+	// Circular dependency detection
+	if (importing_.count(name_str)) {
+		auto* logger = GetLogger();
+		ENGINE_LOG_ERROR(logger,
+						 "Circular dependency detected: module '{}' is already being imported. "
+						 "Import stack: {}",
+						 name_str,
+						 FormatImportStack());
+		return luaL_error(L, "circular dependency detected: module '%s'", name_str.c_str());
+	}
+	importing_.insert(name_str);
+
+	// RAII cleanup: remove from importing set on scope exit.
+	// luaL_error does a longjmp, so we must erase before those calls.
+	auto cleanup_importing = [this, &name_str]() {
+		importing_.erase(name_str);
+	};
+
 	// ── Check package.loaded cache ──────────────────────────────────
 	lua_getglobal(L, "package");  // ..., pkg
 	lua_getfield(L, -1, "loaded");	// ..., pkg, loaded
@@ -58,6 +76,7 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
 	if (!lua_isnil(L, -1)) {
 		lua_remove(L, -3);	// ..., loaded, cached
 		lua_remove(L, -2);	// ..., cached
+		cleanup_importing();
 		return 1;
 	}
 	lua_pop(L, 1);	// pop nil
@@ -66,6 +85,7 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
 	std::string filepath = FindModule(name);
 	if (filepath.empty()) {
 		lua_pop(L, 2);	// pop loaded, package
+		cleanup_importing();
 		return luaL_error(L, "module '%s' not found in import paths", name_str.c_str());
 	}
 
@@ -78,6 +98,7 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
 		std::string err_msg(lua_tostring(L, -1));
 		lua_pop(L, 1);	// pop error message
 		lua_pop(L, 2);	// pop loaded, package
+		cleanup_importing();
 		return luaL_error(L, "error loading module '%s': %s", name_str.c_str(), err_msg.c_str());
 	}
 
@@ -87,6 +108,7 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
 		std::string err_msg(lua_tostring(L, -1));
 		lua_pop(L, 1);	// pop error message
 		lua_pop(L, 2);	// pop loaded, package
+		cleanup_importing();
 		return luaL_error(L, "error running module '%s': %s", name_str.c_str(), err_msg.c_str());
 	}
 
@@ -96,7 +118,17 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
 	lua_setfield(L, -3, name_str.c_str());	// loaded[name] = copy
 	lua_remove(L, -3);	// ..., pkg, result
 	lua_remove(L, -2);	// ..., result
+	cleanup_importing();
 	return 1;
+}
+
+std::string ScriptImporter::FormatImportStack() const {
+	std::string stack;
+	for (const auto& m : importing_) {
+		if (!stack.empty()) stack += " -> ";
+		stack += m;
+	}
+	return stack.empty() ? "(empty)" : stack;
 }
 
 int ScriptImporter::ImportAll(lua_State* L, std::string_view name) {

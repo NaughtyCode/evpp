@@ -251,7 +251,7 @@ void Connector::HandleError() {
 		reconnect_timer_.reset();
 	}
 
-	// Capture values before invoking user callback — the callback may
+	// Capture values before invoking user callback 鈥?the callback may
 	// delete the TCPClient (owner_tcp_client_), making any subsequent
 	// access to it a use-after-free.
 	bool do_reconnect = owner_tcp_client_->auto_reconnect();
@@ -271,23 +271,41 @@ void Connector::HandleError() {
 	// the TCPClient's Reconnect() will never be triggled.
 	// So Connector needs to do reconnection automatically itself.
 	if (do_reconnect) {
-		// We must close(fd) firstly and then we can do the reconnection.
-		if (fd_ > 0) {
-			ENGINE_LOG_TRACE(
-				engine::GetLogger(), "this={} Connector::HandleError close({})", (void*) this, fd_);
-			assert(own_fd_);
-			EVUTIL_CLOSESOCKET(fd_);
-			fd_ = INVALID_SOCKET;
-		}
+			retry_count_++;
+			if (retry_cfg_.max_retries >= 0 && retry_count_ > retry_cfg_.max_retries) {
+				ENGINE_LOG_ERROR(engine::GetLogger(),
+								 "Connector: max retries ({}) reached, giving up",
+								 retry_cfg_.max_retries);
+				conn_fn_(-1, "max retries reached");
+				return;
+			}
 
-		ENGINE_LOG_TRACE(engine::GetLogger(),
-						 "this={} loop={} auto reconnect in {}s thread={}",
-						 (void*) this,
-						 (void*) loop_,
-						 reconnect_interval.Seconds(),
-						 std::hash<std::thread::id>{}(std::this_thread::get_id()));
-		reconnect_timer_ =
-			loop_->RunAfter(reconnect_interval, std::bind(&Connector::Start, shared_from_this()));
+			if (current_interval_ms_ == 0) {
+				current_interval_ms_ = retry_cfg_.retry_interval_ms;
+			} else {
+				current_interval_ms_ = (std::min)(
+					static_cast<int>(current_interval_ms_ * retry_cfg_.backoff_multiplier),
+					retry_cfg_.max_retry_interval_ms);
+			}
+
+			if (fd_ > 0) {
+				ENGINE_LOG_TRACE(
+					engine::GetLogger(), "this={} Connector::HandleError close({})", (void*) this, fd_);
+				assert(own_fd_);
+				EVUTIL_CLOSESOCKET(fd_);
+				fd_ = INVALID_SOCKET;
+			}
+
+			ENGINE_LOG_TRACE(engine::GetLogger(),
+							 "this={} loop={} auto reconnect in {}ms (attempt {}) thread={}",
+							 (void*) this,
+							 (void*) loop_,
+							 current_interval_ms_,
+							 retry_count_,
+							 std::hash<std::thread::id>{}(std::this_thread::get_id()));
+			reconnect_timer_ = loop_->RunAfter(
+				Duration(static_cast<int64_t>(current_interval_ms_) * Duration::kMillisecond),
+				std::bind(&Connector::Start, shared_from_this()));
 	}
 }
 
@@ -337,3 +355,4 @@ std::string Connector::StatusToString() const {
 	H_CASE_STRING_END();
 }
 }
+

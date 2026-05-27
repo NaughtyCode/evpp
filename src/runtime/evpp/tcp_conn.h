@@ -16,6 +16,13 @@ class FdChannel;
 class TCPClient;
 class InvokeTimer;
 
+enum class MessagePriority {
+	kCritical = 0,
+	kHigh = 1,
+	kNormal = 2,
+	kLow = 3,
+};
+
 class EVPP_EXPORT TCPConn : public std::enable_shared_from_this<TCPConn> {
 	public:
 	enum Type {

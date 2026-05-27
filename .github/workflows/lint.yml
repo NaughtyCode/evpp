@@ -1,0 +1,40 @@
+name: Lint
+
+on:
+  pull_request:
+    branches: [master, main]
+  push:
+    branches: [master, main]
+
+jobs:
+  forbidden-patterns:
+    name: "Forbidden Patterns"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check fprintf(stderr)
+        run: |
+          if grep -rn "fprintf(stderr" src/runtime/ --include="*.cc" --include="*.h"; then
+            echo "ERROR: fprintf(stderr, ...) found in runtime code"
+            exit 1
+          fi
+      - name: Check std::cout
+        run: |
+          if grep -rn "std::cout" src/runtime/ --include="*.cc" --include="*.h"; then
+            echo "ERROR: std::cout found in runtime code"
+            exit 1
+          fi
+
+  todo-check:
+    name: "TODO Count Check"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check TODO count
+        run: |
+          count=$(grep -rn "TODO\|FIXME\|HACK\|XXX" src/ --include="*.cc" --include="*.h" | wc -l)
+          echo "Current TODO/FIXME/HACK/XXX count: $count"
+          if [ $count -gt 30 ]; then
+            echo "ERROR: TODO count ($count) exceeds baseline (30)"
+            exit 1
+          fi

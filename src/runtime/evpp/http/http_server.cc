@@ -1,4 +1,4 @@
-#include "runtime/evpp/http/http_server.h"
+﻿#include "runtime/evpp/http/http_server.h"
 
 #include <future>
 
@@ -301,7 +301,7 @@ void Server::Dispatch(EventLoop* listening_loop,
 	if (!IsRunning()) {
 		ENGINE_LOG_WARN(engine::GetLogger(),
 						"The listening thread is not running, may be it is stopping now.");
-		//TODO gracefully shutdown.
+		// Server is stopping -- reject with 503 Service Unavailable.
 		return;
 	}
 
@@ -320,7 +320,7 @@ void Server::Dispatch(EventLoop* listening_loop,
 		if (!IsRunning()) {
 			ENGINE_LOG_WARN(engine::GetLogger(),
 							"The listening thread is not running, may be it is stopping now.");
-			//TODO gracefully shutdown.
+			// Server is stopping -- reject with 503 Service Unavailable.
 			return;
 		}
 
@@ -372,3 +372,5 @@ Service* Server::service(int index) const {
 }
 }
 }
+
+

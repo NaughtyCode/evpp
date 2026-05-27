@@ -39,6 +39,30 @@ class ENGINE_API Engine {
 	static void SetInstanceForTesting(Engine* test_instance);
 	static void ClearTestInstance();
 
+	/*
+	 * Cleanup Lifecycle Order (MUST be maintained):
+	 *
+	 *   1. Physics Shutdown      — stops physics VM + physics thread
+	 *   2. Database Shutdown     — stops DB threads + drains queues
+	 *   3. Network Shutdown      — [REQUIRES script_vm_ alive]
+	 *   4. Timer Shutdown        — [REQUIRES script_vm_ alive]
+	 *   5. DestroyScript         — destroys Lua VM + lifecycle hooks
+	 *   6. Final Logs            — GC stats, cleanup confirmation
+	 *
+	 * CRITICAL: Steps 3-4 require script_vm_ to be alive.
+	 * Do NOT reorder without updating ALL callers.
+	 */
+	enum class CleanupPhase {
+		NotStarted,
+		PhysicsShutdown,
+		DatabaseShutdown,
+		NetworkShutdown,
+		TimerShutdown,
+		ScriptDestroyed,
+		FinalLogs,
+		Complete
+	};
+
 	Engine();
 	~Engine();
 
@@ -134,6 +158,7 @@ class ENGINE_API Engine {
 
 	std::unique_ptr<ScriptVM> script_vm_;
 	std::unique_ptr<ScriptReloader> script_reloader_;
+	CleanupPhase cleanup_phase_{CleanupPhase::NotStarted};
 
 	// Standalone-mode resources (owned, created in Start, destroyed in Cleanup).
 	std::unique_ptr<evpp::SignalEventWatcher> sigint_watcher_;

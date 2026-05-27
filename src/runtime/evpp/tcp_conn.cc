@@ -105,6 +105,7 @@ void TCPConn::Send(const Slice& message) {
 
 void TCPConn::Send(const void* data, size_t len) {
 	if (status_ != kConnected) {
+		ENGINE_LOG_WARN(engine::GetLogger(), "Send dropped: connection {} not connected", id_);
 		return;
 	}
 
