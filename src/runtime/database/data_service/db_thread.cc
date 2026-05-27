@@ -278,9 +278,11 @@ void DBThread::EventLoop() {
         script::ExportMongo(script_vm_);
 
         // 2d. Wire global tables into the module system so require() works
-        script_vm_.DoString(
-            "package.loaded.mongoc = mongoc; "
-            "package.loaded.bson   = bson");
+        if (!script_vm_.DoString(
+                "package.loaded.mongoc = mongoc; "
+                "package.loaded.bson   = bson")) {
+            ENGINE_LOG_WARN(logger_, "DBThread[{}]: failed to register mongoc/bson in package.loaded", index_);
+        }
 
         // 2e. db_get_client / db_get_pool — access CustomPtr slots from Lua
         ExportDbRuntime(script_vm_);
@@ -551,6 +553,11 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             mongo::BsonDocument filter;
             if (!ParseJsonDoc(req.bson_data, "bson_data", &filter, &resp)) break;
             auto* cursor = coll->FindWithOpts(filter, nullptr, nullptr);
+            if (!cursor) {
+                resp.success = false;
+                resp.error_message = "failed to create find cursor";
+                break;
+            }
             if (req.limit > 0) cursor->SetLimit(req.limit);
             resp.result_data = SerializeCursor(cursor, req.skip);
             cursor->Destroy();
@@ -563,6 +570,11 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             mongo::BsonDocument filter;
             if (!ParseJsonDoc(req.bson_data, "bson_data", &filter, &resp)) break;
             auto* cursor = coll->FindWithOpts(filter, nullptr, nullptr);
+            if (!cursor) {
+                resp.success = false;
+                resp.error_message = "failed to create find cursor";
+                break;
+            }
             cursor->SetLimit(1);
             mongo::BsonDocument doc;
             if (cursor->Next(&doc)) resp.result_data = doc.ToJson();
@@ -771,6 +783,11 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             mongo::BsonDocument pipeline;
             if (!ParseJsonDoc(pipe_json, pipe_field, &pipeline, &resp)) break;
             auto* cursor = coll->Aggregate(pipeline, nullptr, nullptr);
+            if (!cursor) {
+                resp.success = false;
+                resp.error_message = "failed to create aggregate cursor";
+                break;
+            }
             resp.result_data = SerializeCursor(cursor, 0);
             cursor->Destroy();
             resp.success = true;
