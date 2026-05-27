@@ -34,5 +34,5 @@
   "rotationFrequency": "",
   "rotationInterval": 1,
   "rotationTimeDaily": "00:00",
-  "formatPattern": "%(time) [%(thread_id)] [%(log_level_short_code)] [%(logger)] %(message)"
+  "formatPattern": "%(time) [%(thread_id)] [%(log_level_short_code)] [%(short_source_location)] [%(caller_function)] [%(logger)] %(message)"
 }

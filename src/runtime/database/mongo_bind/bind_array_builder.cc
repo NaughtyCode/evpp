@@ -3,6 +3,7 @@
 #include "runtime/database/mongo_bind/bind_array_builder.h"
 #include "runtime/database/mongo_bind/bind_util.h"
 
+#include <bson/bson.h>
 #include <cstdint>
 #include <cstring>
 #include <new>

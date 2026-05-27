@@ -5,7 +5,7 @@
     "level": "info",
     "rotation_size_mb": 100,
     "max_backup_files": 10,
-    "format_pattern": "%(time) [%(thread_id)] [%(log_level_short_code)] [%(logger)] %(message)"
+    "format_pattern": "%(time) [%(thread_id)] [%(log_level_short_code)] [%(short_source_location)] [%(caller_function)] [%(logger)] %(message)"
   },
   "frame": {
     "target_fps": 30,

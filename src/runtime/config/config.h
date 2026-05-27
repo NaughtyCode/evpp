@@ -24,7 +24,7 @@ struct LogConfig {
     int rotation_size_mb = config::kDefaultRotationSizeMb;
     int max_backup_files = config::kDefaultMaxBackupFiles;
     std::string format_pattern =
-        "%(time) [%(thread_id)] [%(log_level_short_code)] [%(logger)] %(message)";
+        "%(time) [%(thread_id)] [%(log_level_short_code)] [%(short_source_location)] [%(caller_function)] [%(logger)] %(message)";
 
     // Time-based rotation (empty = disabled, size-based only)
     std::string rotation_frequency = "";        // "daily", "hourly", "minutely"
