@@ -74,7 +74,7 @@ Plans are organized by priority level matching the deficiency analysis:
 | ID | Plan | Category | Est. Effort |
 |----|------|----------|-------------|
 | P3-1 | [Multi-Database Backend Abstraction](p3/p3-1-multi-db-backend.md) | Database | ~500 LOC |
-| P3-2 | [CI/CD Pipeline Configuration](p3/p3-2-ci-cd-pipeline.md) | DevOps | Config files |
+| P3-2 | [CI/CD Pipeline Configuration](p3/p3-2-ci-cd-pipeline.md) | DevOps | ~580 LOC |
 | P3-3 | [Message Priority Queue + Per-Connection Rate Limiting](p3/p3-3-message-priority-limits.md) | Network | ~300 LOC |
 | P3-4 | [Singleton Decoupling — Enable Multi-Engine Instances](p3/p3-4-singleton-decoupling.md) | Architecture | ~500 LOC |
 | P3-5 | [TODO/FIXME/HACK Resolution](p3/p3-5-todo-resolution.md) | Code Quality | ~200 LOC |
