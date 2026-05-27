@@ -549,17 +549,34 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 
         switch (req.operation) {
         // ── kFind: cursor-based query with optional limit/skip ──────────
+        //
+        // skip and limit are passed to FindWithOpts via the opts BSON so
+        // they match MongoDB native semantics: skip is applied first on
+        // the server, then limit caps the returned documents.  Previously
+        // skip was applied in SerializeCursor AFTER the cursor limit,
+        // which caused skip=5,limit=10 to return only 5 documents.
         case DbOperation::kFind: {
             mongo::BsonDocument filter;
             if (!ParseJsonDoc(req.bson_data, "bson_data", &filter, &resp)) break;
-            auto* cursor = coll->FindWithOpts(filter, nullptr, nullptr);
+
+            mongo::BsonDocument opts;
+            bool has_opts = false;
+            if (req.skip > 0) {
+                opts.AppendInt32("skip", req.skip);
+                has_opts = true;
+            }
+            if (req.limit > 0) {
+                opts.AppendInt32("limit", req.limit);
+                has_opts = true;
+            }
+
+            auto* cursor = coll->FindWithOpts(filter, has_opts ? &opts : nullptr, nullptr);
             if (!cursor) {
                 resp.success = false;
                 resp.error_message = "failed to create find cursor";
                 break;
             }
-            if (req.limit > 0) cursor->SetLimit(req.limit);
-            resp.result_data = SerializeCursor(cursor, req.skip);
+            resp.result_data = SerializeCursor(cursor, 0);
             cursor->Destroy();
             resp.success = true;
             break;
