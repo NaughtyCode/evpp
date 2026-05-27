@@ -82,16 +82,35 @@ int l_db_send_request(lua_State* L) {
 
     // request_id (optional, default 0)
     lua_getfield(L, 1, "request_id");
-    if (lua_isinteger(L, -1) || lua_isnumber(L, -1)) {
-        req.request_id = static_cast<uint64_t>(lua_tointeger(L, -1));
+    if (lua_isinteger(L, -1)) {
+        lua_Integer v = lua_tointeger(L, -1);
+        if (v < 0) {
+            lua_pop(L, 1);
+            lua_pushboolean(L, 0);
+            lua_pushstring(L, "db_send_request: request_id must be non-negative");
+            return 2;
+        }
+        req.request_id = static_cast<uint64_t>(v);
+    } else if (lua_isnumber(L, -1)) {
+        lua_pop(L, 1);
+        lua_pushboolean(L, 0);
+        lua_pushstring(L, "db_send_request: request_id must be an integer");
+        return 2;
     }
     lua_pop(L, 1);
 
     // operation (required, string or integer)
     lua_getfield(L, 1, "operation");
     if (lua_isinteger(L, -1)) {
-        int op_int = static_cast<int>(lua_tointeger(L, -1));
-        req.operation = static_cast<DbOperation>(op_int);
+        lua_Integer v = lua_tointeger(L, -1);
+        if (v < static_cast<lua_Integer>(DbOperation::kNoOp) ||
+            v > static_cast<lua_Integer>(DbOperation::kExecuteScript)) {
+            lua_pop(L, 1);
+            lua_pushboolean(L, 0);
+            lua_pushstring(L, "db_send_request: operation integer out of range");
+            return 2;
+        }
+        req.operation = static_cast<DbOperation>(v);
     } else if (lua_isstring(L, -1)) {
         DbOperation op;
         if (!ParseOperationName(lua_tostring(L, -1), &op)) {
@@ -146,15 +165,39 @@ int l_db_send_request(lua_State* L) {
 
     // limit
     lua_getfield(L, 1, "limit");
-    if (lua_isinteger(L, -1) || lua_isnumber(L, -1)) {
-        req.limit = static_cast<int32_t>(lua_tointeger(L, -1));
+    if (lua_isinteger(L, -1)) {
+        lua_Integer v = lua_tointeger(L, -1);
+        if (v < 0 || v > INT32_MAX) {
+            lua_pop(L, 1);
+            lua_pushboolean(L, 0);
+            lua_pushstring(L, "db_send_request: limit must be in [0, 2147483647]");
+            return 2;
+        }
+        req.limit = static_cast<int32_t>(v);
+    } else if (lua_isnumber(L, -1)) {
+        lua_pop(L, 1);
+        lua_pushboolean(L, 0);
+        lua_pushstring(L, "db_send_request: limit must be an integer");
+        return 2;
     }
     lua_pop(L, 1);
 
     // skip
     lua_getfield(L, 1, "skip");
-    if (lua_isinteger(L, -1) || lua_isnumber(L, -1)) {
-        req.skip = static_cast<int32_t>(lua_tointeger(L, -1));
+    if (lua_isinteger(L, -1)) {
+        lua_Integer v = lua_tointeger(L, -1);
+        if (v < 0 || v > INT32_MAX) {
+            lua_pop(L, 1);
+            lua_pushboolean(L, 0);
+            lua_pushstring(L, "db_send_request: skip must be in [0, 2147483647]");
+            return 2;
+        }
+        req.skip = static_cast<int32_t>(v);
+    } else if (lua_isnumber(L, -1)) {
+        lua_pop(L, 1);
+        lua_pushboolean(L, 0);
+        lua_pushstring(L, "db_send_request: skip must be an integer");
+        return 2;
     }
     lua_pop(L, 1);
 

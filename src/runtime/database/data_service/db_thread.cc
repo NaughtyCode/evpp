@@ -80,7 +80,7 @@ bool ParseJsonDoc(const std::string& json_str,
 // ══════════════════════════════════════════════════════════════════════════════
 
 DBThread::DBThread(int index, const DbServiceConfig& config)
-    : index_(index), config_(config) {}
+    : index_(index), config_(config), last_frame_time_(std::chrono::steady_clock::time_point{}) {}
 
 DBThread::~DBThread() {
     Stop();
@@ -134,8 +134,9 @@ bool DBThread::Start(mongo::MongoClientPool& pool) {
 }
 
 void DBThread::Stop() {
-    if (!running_.load(std::memory_order_acquire)) return;
-
+    // Signal the EventLoop to shut down. Always store, even if the thread
+    // has already exited — the store is cheap and ensures the signal is
+    // visible regardless of which code path the thread took.
     running_.store(false, std::memory_order_release);
 
     // Wakeup sentinel: enqueue a kNoOp so EventLoop breaks out of sleep.
@@ -144,10 +145,16 @@ void DBThread::Stop() {
     // In that case Shutdown latency is bounded by waitQueueTimeoutMS —
     // Pop() will return nullptr on timeout, the thread exits init, finds
     // running_==false, and the sentinel is drained during the next cycle.
+    // If the thread already exited, the sentinel is harmless — it will be
+    // discarded when the DBThread is destroyed.
     DbRequest wakeup;
     wakeup.operation = DbOperation::kNoOp;
     request_queue_.enqueue(std::move(wakeup));
 
+    // Always join if the thread is valid and joinable.  This covers both
+    // the normal exit path and the early-return path (pool Pop timeout).
+    // joinable() returns false after the first join, making Stop() safe
+    // to call multiple times (idempotent).
     if (thread_ && thread_->joinable()) {
         thread_->join();
     }
@@ -166,7 +173,7 @@ bool DBThread::EnqueueRequest(DbRequest&& req) {
     // it may undercount but never overcount beyond a small epsilon.
     // This is acceptable; the alternative (exact count) requires a mutex.
     size_t sz = request_queue_.size_approx();
-    if (static_cast<int>(sz) >= config_.thread_pool.request_queue_size) {
+    if (sz >= static_cast<size_t>(config_.thread_pool.request_queue_size)) {
         ENGINE_LOG_WARN(logger_, "DBThread[{}]: request queue full (approx={}, max={})",
                         index_, sz, config_.thread_pool.request_queue_size);
         return false;
@@ -647,7 +654,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             if (!ParseJsonDoc(req.bson_data, "bson_data", &arr, &resp)) break;
             mongo::BsonIter iter(arr);
             while (iter.Next()) {
-                if (iter.Type() != 3) continue;  // skip non-document elements (BSON_TYPE_DOCUMENT)
+                if (iter.Type() != static_cast<int>(mongo::BsonType::kDocument)) continue;
                 uint32_t len = 0;
                 const uint8_t* data = nullptr;
                 iter.AsDocument(&len, &data);
@@ -860,6 +867,9 @@ void DBThread::ProcessRequest(const DbRequest& req) {
     } catch (const std::exception& e) {
         resp.success = false;
         resp.error_message = e.what();
+    } catch (...) {
+        resp.success = false;
+        resp.error_message = "unknown exception in ProcessRequest";
     }
 
     // RAII cleanup: destroy handles if they were obtained.

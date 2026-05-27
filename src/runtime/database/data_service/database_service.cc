@@ -148,6 +148,7 @@ void DatabaseService::Shutdown() {
     }
 
     threads_.clear();
+    poll_cursor_ = 0;
 
     ENGINE_LOG_INFO(GetLogger(), "DatabaseService: shutdown complete");
 }
