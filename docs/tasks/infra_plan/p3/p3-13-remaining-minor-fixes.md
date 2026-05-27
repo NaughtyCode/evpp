@@ -6,21 +6,24 @@ Address the remaining defects from the deficiency analysis that are too small fo
 
 ## Items
 
-### 13.1: conn:Send() Return Value Unchecked
+### 13.1: conn:Send() Failure Visibility
 
-**Current State**: `tcp_conn.cc` and binding files call `conn->Send()` without checking the return value. If the send buffer is full or the connection is closed, data is silently dropped.
+**Current State**: `TCPConn::Send()` returns `void` and silently drops data when the connection is disconnected (`status_ != kConnected`). Internally, `SendInLoop()` does handle `EPIPE`/`ECONNRESET` errors (calling `HandleError()` to trigger disconnect), but Lua has no visibility into which specific `conn:send()` calls succeeded or failed. If the connection closes between the Lua `conn:send()` call and the actual wire write, the data is lost without Lua being notified.
 
 **Fix** (estimated 30 lines):
-- `tcp_conn.cc`: Check return value of `bufferevent_write()` in `Send()` / `SendStringInLoop()`. Log WARN on failure.
-- All bind files: Return success/failure status to Lua so scripts can handle send failures.
+- `tcp_conn.cc`: Log WARN in `Send()` when connection is not connected (not just return silently).
+- Binding files: Add an optional `on_error` callback to connections so Lua can detect send failures asynchronously.
 
 ```cpp
-/* In TCPConn::Send(): */
-int result = bufferevent_write(bev_, data, len);
-if (result != 0) {
-    ENGINE_LOG_WARN("Send failed on connection {}: buffer full or connection closed", conn_id_);
+/* In TCPConn::SendInLoop(), already handles EPIPE/ECONNRESET — add logging
+   for silent drops at the Send() entry point: */
+void TCPConn::Send(const void* data, size_t len) {
+    if (status_ != kConnected) {
+        ENGINE_LOG_WARN("Send dropped: connection {} not connected", conn_id_);
+        return;
+    }
+    // ... existing logic ...
 }
-return result == 0;
 ```
 
 ### 13.2: Circular Dependency Detection in ScriptImporter
@@ -68,13 +71,13 @@ struct ConfigValidator {
 - Call `ConfigValidator::Validate()` after each `glaze::read_json()` call.
 - On validation failure, log the error and refuse to apply the config.
 
-### 13.4: Physics Scene Path Hardcoded
+### 13.4: Physics Scene Path Suffix Hardcoded
 
-**Current State**: `engine.cc:159` hardcodes `"scene.json"` as the physics scene path. No config override exists.
+**Current State**: `engine.cc:159-161` constructs the scene path as `runtime_cfg.resource_dir + "/physics/data/scene.json"`. The base directory comes from config, but the suffix `"/physics/data/scene.json"` is hardcoded — there is no `physics.scene_path` config field to override it.
 
 **Fix** (estimated 10 lines):
-- Add `physics.scene_path` to `RuntimeConfig`.
-- Read from config instead of hardcoding.
+- Add `physics.scene_path` to `RuntimeConfig`, defaulting to `"/physics/data/scene.json"`.
+- Read from config to construct the full path, allowing override.
 
 ### 13.5: Minor/Cosmetic Items (Documented, No Immediate Fix)
 
@@ -93,7 +96,7 @@ These items are noted for future reference but do not warrant dedicated plans:
 
 ## Acceptance Criteria
 
-1. `conn:Send()` return value is checked; failures are logged
+1. `conn:Send()` failures are logged (WARN on disconnected send); Lua can detect failures via `on_error` callback
 2. Circular imports are detected and reported with clear error messages
 3. Config validation rejects out-of-range values at startup
 4. Physics scene path is configurable via JSON config

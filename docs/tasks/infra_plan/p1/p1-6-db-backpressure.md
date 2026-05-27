@@ -6,16 +6,25 @@ Implement backpressure notification for the database request queue so that when 
 
 ## Current State
 
-`DatabaseService::SendRequest` returns `bool`, but callers often don't check:
+`DBThread::EnqueueRequest` (`db_thread.cc:170-187`) already has basic backpressure:
+- Checks `request_queue_.size_approx() >= config_.thread_pool.request_queue_size` before enqueue
+- Logs WARN when queue is full ("DBThread[N]: request queue full")
+- Returns `false` to the caller
+
+`DatabaseService::SendRequest` returns `bool`, and the Lua binding (`db_service_main_bind.cc`) passes this to Lua as a boolean return value — but Lua scripts may not check it:
 
 ```cpp
-/* db_service_main_bind.cc:205-206 */
+/* db_service_main_bind.cc — existing pattern */
 bool ok = DatabaseService::Instance().SendRequest(std::move(req));
 lua_pushboolean(L, ok ? 1 : 0);  /* returns to Lua — but Lua side may not check */
 return 1;
 ```
 
-`DBThread::EnqueueRequest` internally uses `moodycamel::ConcurrentQueue::enqueue`, which returns `false` when the queue is full. The request is **silently discarded** — no log, no retry, no timeout notification.
+What's missing:
+- **No synthetic response**: When the queue is full, the caller gets `false` but no `DbResponse` is generated — the request_id is lost and no callback fires
+- **No metrics**: No tracking of dropped/enqueued/completed/error counts
+- **No degradation path**: No retry mechanism or backoff strategy for callers
+- **Per-thread pending counts**: No visibility into which DBThread is overloaded
 
 ## Root Cause
 

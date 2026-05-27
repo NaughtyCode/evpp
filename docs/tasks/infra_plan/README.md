@@ -20,7 +20,7 @@ Plans are organized by priority level matching the deficiency analysis:
 | ID | Plan | Category | Est. Effort |
 |----|------|----------|-------------|
 | P0-1 | [Entity Model — Entity/Actor/GameObject Abstraction](p0/p0-1-entity-model.md) | Core Architecture | ~1500 LOC C++ + Lua |
-| P0-2 | [Message Framing Protocol — LengthPrefixedCodec](p0/p0-2-message-framing.md) | Network | ~500 LOC C++ |
+| P0-2 | [Message Framing Protocol — LengthPrefixedCodec](p0/p0-2-message-framing.md) | Network | ~490 LOC C++ |
 | P0-3 | [Test Infrastructure](p0/p0-3-test-infrastructure.md) | Quality | ~2000 LOC |
 | P0-4 | [luaL_error Exception Safety — Prevent C++ Destructor Bypass](p0/p0-4-lual-error-safety.md) | Script Binding | ~200 LOC |
 | P0-5 | [Message/Payload Size Limits — DoS Prevention](p0/p0-5-message-size-limits.md) | Security | ~100 LOC |
@@ -79,7 +79,7 @@ Plans are organized by priority level matching the deficiency analysis:
 | P3-4 | [Singleton Decoupling — Enable Multi-Engine Instances](p3/p3-4-singleton-decoupling.md) | Architecture | ~500 LOC |
 | P3-5 | [TODO/FIXME/HACK Resolution](p3/p3-5-todo-resolution.md) | Code Quality | ~200 LOC |
 | P3-6 | [Embedded Test Code Cleanup — Remove DB Smoke Test from engine.cc](p3/p3-6-embedded-test-cleanup.md) | Code Quality | ~50 LOC |
-| P3-7 | [Buffer::Reserve Implementation + Endian Fix](p3/p3-7-buffer-fixes.md) | Network | ~100 LOC |
+| P3-7 | [Buffer Cleanup — Remove Stale TODO + Fix int64 Endian](p3/p3-7-buffer-fixes.md) | Network | ~30 LOC |
 | P3-8 | [Engine::Cleanup Lifecycle Order Documentation + Assertions](p3/p3-8-cleanup-lifecycle-docs.md) | Reliability | ~30 LOC |
 | P3-9 | [MongoDB Binding Return Value Unification](p3/p3-9-mongo-return-unification.md) | Database | ~200 LOC |
 | P3-10 | [Cursor Pre-allocation Pattern Safety](p3/p3-10-cursor-prealloc-safety.md) | Database | ~80 LOC |

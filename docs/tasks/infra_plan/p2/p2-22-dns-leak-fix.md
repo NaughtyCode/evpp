@@ -6,68 +6,58 @@ Fix the potential memory leak in `dns_resolver.cc:190` where a heap-allocated `s
 
 ## Current State
 
-`dns_resolver.cc:190`:
+`dns_resolver.cc:189-190` stores a heap-allocated `shared_ptr<DNSResolver>` as a raw `void*` for the C callback:
 
 ```cpp
-auto* cb_data = new std::shared_ptr<DNSResolver::Callback>(std::move(callback));
-/* cb_data passed to evdns_getaddrinfo as void* arg.
- * If the DNS request times out or is cancelled, the C callback
- * never fires, and cb_data is leaked. */
+std::shared_ptr<DNSResolver> p = shared_from_this();
+evdns_cb_arg_ = new std::shared_ptr<DNSResolver>(p);
+// passed as void* arg to evdns_getaddrinfo
 ```
 
-The `shared_ptr` is heap-allocated because the callback signature requires a `void*`. If `evdns_getaddrinfo` never invokes the callback (timeout, cancellation, network error), the heap allocation is permanently leaked.
+The code already handles cleanup on all paths:
+- **Success**: `OnResolved` static callback deletes the arg (line 288)
+- **Timeout**: `OnTimeout()` deletes `evdns_cb_arg_` (line 145-147)
+- **Cancel**: `Cancel()` deletes `evdns_cb_arg_` (line 112-114)  
+- **Cancel via timer**: `OnCanceled()` deletes `evdns_cb_arg_` (line 165-167)
+- **Request creation failure**: immediately deletes (line 202-203)
+
+Double-delete is prevented by setting `(*pp)->evdns_cb_arg_ = nullptr` (line 286) before invoking callbacks that may trigger Cancel/OnTimeout.
+
+**Remaining concern**: The raw `new`/`delete` + `void*` cast pattern is fragile. A future refactor could easily introduce a leak or double-free. The plan is to replace this with a safer RAII wrapper rather than fixing an active leak.
 
 ## Implementation Steps
 
-### Step 1: Add Timeout-Based Cleanup
+### Step 1: Replace raw new/delete with unique_ptr + custom deleter
 
 **File**: `src/runtime/evpp/dns_resolver.cc`
 
+Replace the manual `new shared_ptr<DNSResolver>` + `delete` pattern with a `unique_ptr` wrapper that ensures cleanup:
+
 ```cpp
-/* Instead of raw heap allocation, use a wrapper with timeout: */
-struct DNSCallbackData {
-    std::shared_ptr<DNSResolver::Callback> callback;
-    std::shared_ptr<evpp::InvokeTimerPtr> timeout_timer;
-};
+/* In AsyncDNSResolve(), replace lines 189-190: */
+auto resolver_holder = std::make_unique<std::shared_ptr<DNSResolver>>(
+    std::make_shared<DNSResolver>(shared_from_this()));
+evdns_cb_arg_ = resolver_holder.get();
 
-/* In Resolve(): */
-auto* data = new DNSCallbackData();
-data->callback = std::make_shared<DNSResolver::Callback>(std::move(callback));
-
-/* Set a timeout: if callback not invoked within 30s, clean up */
-data->timeout_timer = std::make_shared<evpp::InvokeTimerPtr>();
-*data->timeout_timer = loop_->RunAfter(30000, [data]() {
-    ENGINE_LOG_WARN("DNS resolution timed out");
-    delete data;
-});
-
-/* In the C callback: */
-static void DNSCallback(int err, struct evutil_addrinfo* addr, void* arg) {
-    auto* data = static_cast<DNSCallbackData*>(arg);
-    /* Cancel the timeout — callback was invoked */
-    data->timeout_timer->Cancel();
-    /* ... invoke callback ... */
-    delete data;
-}
+dns_req_ = evdns_getaddrinfo(dnsbase_, host_.c_str(), nullptr,
+                             &hints, &DNSResolver::OnResolved,
+                             resolver_holder.release());  // transfer ownership
 ```
 
-### Step 2: Cleanup on Shutdown
+The existing cleanup in `OnResolved`/`OnTimeout`/`Cancel`/`OnCanceled` already handles deletion. This change makes ownership transfer explicit via `unique_ptr::release()` rather than raw `new`.
 
-Add a list of outstanding DNS requests that are cancelled during `DNSResolver::Shutdown()`.
+### Step 2: Tests
 
-### Step 3: Tests
-
-- DNS resolution succeeds within timeout: callback invoked, no leak
-- DNS resolution times out: timeout callback fires, resource cleaned up
-- Shutdown during pending DNS: requests cancelled, no leak
-- ASAN verification: no leaks
+- DNS resolution succeeds: `shared_ptr` deleted in OnResolved, ASAN clean
+- DNS resolution times out: `shared_ptr` deleted in OnTimeout, ASAN clean  
+- Cancel during DNS: `shared_ptr` deleted in Cancel, ASAN clean
+- Verify no regression in DNS resolution behavior
 
 ## Acceptance Criteria
 
-1. DNS callback data is cleaned up on timeout (30s default)
-2. DNS callback data is cleaned up on shutdown
-3. Successful resolution cancels the timeout timer
-4. ASAN clean
-5. Tests verify timeout and shutdown cleanup
+1. Raw `new` for `evdns_cb_arg_` replaced with `unique_ptr` ownership transfer
+2. All existing cleanup paths continue to work
+3. ASAN clean on all DNS resolution paths
+4. No behavior change — DNS resolution functions identically
 
-## Dependencies: None | Estimated Effort: ~50 lines
+## Dependencies: None | Estimated Effort: ~30 lines

@@ -116,7 +116,7 @@ ConfigManager::Instance().RegisterReloadCallback([]() {
 /* Timer */
 ConfigManager::Instance().RegisterReloadCallback([]() {
     auto& config = ConfigManager::Instance().GetConfig();
-    TimerManager::Instance().SetDefaultInterval(config.timer.default_interval_ms);
+    TimerManager::instance().SetDefaultInterval(config.timer.default_interval_ms);
 });
 
 /* Network limits */

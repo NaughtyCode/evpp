@@ -6,22 +6,22 @@ Add a maximum document count limit to `SerializeCursor()` in `db_thread.cc` to p
 
 ## Current State
 
-`db_thread.cc:38-54` — `SerializeCursor()` iterates a MongoDB cursor and builds a JSON array string with **no document count limit**:
+`db_thread.cc:39-55` — `SerializeCursor()` iterates a `mongo::MongoCursor` and builds a JSON array string with **no document count limit**:
 
 ```cpp
-std::string SerializeCursor(mongoc_cursor_t* cursor) {
-    std::string json = "[";
-    const bson_t* doc;
+std::string SerializeCursor(mongo::MongoCursor* cursor, int32_t skip) {
+    std::string result = "[";
     bool first = true;
-    while (mongoc_cursor_next(cursor, &doc)) {
-        /* No limit — can iterate millions of documents */
-        if (!first) json += ",";
-        /* ... serialize doc to JSON string ... */
-        json += bson_as_json_str(doc);
+    while (true) {
+        mongo::BsonDocument doc;
+        if (!cursor->Next(&doc)) break;
+        if (skip > 0) { --skip; continue; }
+        if (!first) result += ",";
+        result += doc.ToJson();
         first = false;
     }
-    json += "]";
-    return json;  /* Could be gigabytes */
+    result += "]";
+    return result;  /* No limit — could be gigabytes */
 }
 ```
 
@@ -31,37 +31,35 @@ A query returning 1 million documents with 1KB each would produce a 1GB string �
 
 ### Step 1: Add Limit Parameter
 
-**File**: `src/runtime/database/db_thread.cc`
+**File**: `src/runtime/database/data_service/db_thread.cc`
 
 ```cpp
 /* Maximum number of documents to serialize in a single cursor response */
 static constexpr uint32_t kMaxCursorDocuments = 1000;
 
-std::string SerializeCursor(mongoc_cursor_t* cursor, uint32_t max_documents = kMaxCursorDocuments) {
-    std::string json = "[";
-    const bson_t* doc;
+std::string SerializeCursor(mongo::MongoCursor* cursor, int32_t skip,
+                            uint32_t max_documents = kMaxCursorDocuments) {
+    std::string result = "[";
     bool first = true;
     uint32_t count = 0;
 
-    while (mongoc_cursor_next(cursor, &doc)) {
+    while (true) {
         if (count >= max_documents) {
-            DB_LOG_WARN("SerializeCursor: reached limit of {} documents. "
-                        "Results truncated.", max_documents);
+            ENGINE_LOG_WARN(logger, "SerializeCursor: reached limit of {} documents. "
+                            "Results truncated.", max_documents);
             break;
         }
-
-        if (!first) json += ",";
-        char* doc_json = bson_as_json(doc, nullptr);
-        if (doc_json) {
-            json += doc_json;
-            bson_free(doc_json);
-        }
+        mongo::BsonDocument doc;
+        if (!cursor->Next(&doc)) break;
+        if (skip > 0) { --skip; continue; }
+        if (!first) result += ",";
+        result += doc.ToJson();
         first = false;
         count++;
     }
 
-    json += "]";
-    return json;
+    result += "]";
+    return result;
 }
 ```
 

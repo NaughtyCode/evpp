@@ -30,10 +30,10 @@ Consequences:
 
 ## Buffer Prerequisites (Must Fix First)
 
-Two pre-existing Buffer bugs must be fixed:
+Two pre-existing Buffer issues must be addressed:
 
-1. **`buffer.h:121`** — `Reserve()` is an empty stub (marked TODO)
-2. **`buffer.h:141`** — Byte order issue (marked "TODO XXX Little-Endian/Big-Endian problem")
+1. **`buffer.h:121`** — `Reserve()` has a stale `// TODO add the implementation logic here` comment but actually calls `grow()` — functionally correct. The TODO comment should be removed and an optimization audit done (the current grow-then-copy may be replaceable with a more efficient realloc pattern).
+2. **`buffer.h:141`** — Byte order: `AppendInt16`/`AppendInt32` already use `htons`/`htonl` correctly. Only `AppendInt64`/`PrependInt64` use a custom `evppbswap_64` macro that should be replaced with `htonll` for consistency.
 
 ## Root Cause
 
@@ -52,28 +52,11 @@ Without framing:
 
 **File**: `src/runtime/evpp/buffer.h`
 
-**Fix 1 — Implement `Reserve()`** (line ~121):
-```cpp
-void Reserve(size_t additional_bytes) {
-    size_t required = write_index_ + additional_bytes;
-    if (required > capacity_) {
-        size_t new_capacity = capacity_;
-        while (new_capacity < required) {
-            new_capacity *= 2;
-        }
-        char* new_buf = new char[new_capacity];
-        memcpy(new_buf, buf_ + read_index_, ReadableBytes());
-        write_index_ -= read_index_;
-        read_index_ = 0;
-        delete[] buf_;
-        buf_ = new_buf;
-        capacity_ = new_capacity;
-    }
-}
-```
+**Fix 1 — Remove stale TODO, audit Reserve()** (line ~122):
+`Reserve()` already calls `grow()` and is functionally correct. Remove the stale `// TODO add the implementation logic here` comment. Optionally optimize the grow strategy (currently calls `grow()` which allocates, copies, and frees — could use `realloc` for potential in-place expansion).
 
-**Fix 2 — Resolve byte order** (line ~141):
-Ensure `AppendInt16`/`AppendInt32`/`PrependInt16`/`PrependInt32` consistently use network byte order (big-endian) via `htonl`/`htons`/`ntohl`/`ntohs`.
+**Fix 2 — Fix int64 byte order** (line ~141):
+`AppendInt16`/`AppendInt32`/`PrependInt16`/`PrependInt32` already use `htons`/`htonl`/`ntohs`/`ntohl` correctly. Only `AppendInt64`/`PrependInt64` use a custom `evppbswap_64` macro — replace with standard `htonll`/`ntohll` for consistency.
 
 ### Step 2: Implement LengthPrefixedCodec
 
@@ -232,8 +215,8 @@ Make encoding optional (configurable) so existing clients can migrate gradually.
 
 ## Acceptance Criteria
 
-1. `Buffer::Reserve()` is implemented and tested
-2. Buffer byte order is consistently network byte order
+1. `Buffer::Reserve()` stale TODO comment removed; Reserve is functionally correct
+2. Buffer int64 byte order uses standard `htonll`/`ntohll` (16/32-bit already correct)
 3. `LengthPrefixedCodec` correctly splits sticky packets
 4. `LengthPrefixedCodec` correctly reassembles fragmented packets
 5. Max message size is enforced (oversized messages rejected)
@@ -249,12 +232,12 @@ Make encoding optional (configurable) so existing clients can migrate gradually.
 
 ## Estimated Effort
 
-- Buffer fixes: ~50 lines
+- Buffer fixes: ~20 lines
 - LengthPrefixedCodec: ~150 lines header + ~200 lines impl
 - Binding integration (4 files): ~80 lines
 - Config: ~10 lines
 - Tests: ~150 lines C++ + ~100 lines Lua
-- **Total**: ~500 lines
+- **Total**: ~490 lines
 
 ## Risks
 

@@ -9,20 +9,24 @@ Eliminate all cases where `luaL_error` (which uses `longjmp`) bypasses C++ destr
 `luaL_error` is implemented via `longjmp`, which unwinds the C stack **without calling C++ destructors**. Binding code uses `luaL_error` for input validation while `std::unique_ptr`, `std::string`, and other RAII objects are on the stack:
 
 ```cpp
-/* net_tcp_server_bind.cc — simplified example */
+/* net_tcp_server_bind.cc — simplified from actual code (lines 366-541) */
 int l_net_server_listen(lua_State* L) {
-    auto* ctx = new ServerCtx();                    /* bare new */
+    auto* ctx = new ServerCtx();                    /* bare new, manually managed */
     auto name = std::string("lua_server_") + ...;   /* std::string on stack */
     ctx->server = std::make_unique<evpp::TCPServer>(...);
     if (!ctx->server->Init()) {
-        /* manual ctx cleanup... */
+        delete ctx;                                  /* ctx IS freed manually */
         return luaL_error(L, "server init failed");  /* longjmp! */
-        /* name's ~string() never called; ctx leaked if cleanup incomplete */
+        /* name's ~string() never called — its heap buffer (~30 bytes) leaks.
+         * ctx->server's unique_ptr destructor also skipped, but *ctx was
+         * already deleted, so the TCPServer is properly freed. */
     }
 }
 ```
 
-Affected files: `net_tcp_server_bind.cc`, `net_tcp_client_bind.cc`, `net_kcp_server_bind.cc`, `net_kcp_client_bind.cc`, `net_udp_server_bind.cc`, `net_udp_client_bind.cc`.
+Affected files (all 6 protocol bindings have `luaL_error` calls, but risk is concentrated): 
+- **Active leak risk**: `net_tcp_server_bind.cc`, `net_tcp_client_bind.cc` (RAII `std::string` on stack at `luaL_error` call sites in `l_*_listen`)
+- **Safe (raw pointer validation only)**: `net_kcp_server_bind.cc`, `net_kcp_client_bind.cc`, `net_udp_server_bind.cc`, `net_udp_client_bind.cc`
 
 ## Root Cause
 
@@ -34,6 +38,16 @@ Lua's C API uses `longjmp` for error propagation. The C++ standard guarantees lo
 - Resource leaks: file descriptors, locks, and other OS resources not released
 - Non-deterministic: only manifests on error paths, which are rarely tested
 - Debug builds: ASAN may catch these; Release builds: silent leaks
+
+## Actual Risk Assessment (Source Code Audit)
+
+An audit of all 6 binding files reveals that the risk is concentrated, not uniform:
+
+**Low-risk (majority of call sites):** Most `luaL_error` calls in `l_conn_send`, `l_conn_close`, `l_conn_set_on_message`, `l_server_set_on_*`, `l_kcp_server_*`, `l_udp_server_*` are simple context validation — null pointer checks and disposed-flag checks. These have **no RAII objects on the stack** and are safe as-is.
+
+**Real risk (concentrated in `l_*_listen` functions):** The `l_net_server_listen` function (and analogous functions in other bindings) constructs a `std::string name` for the server name on the stack, then calls `luaL_error` on `Init()`/`Start()` failure. The code already does `delete ctx` before `luaL_error`, so the heap-allocated `ServerCtx` is properly freed — but `name`'s destructor is **not** called by `longjmp`, leaking its internal heap buffer (~30 bytes per error path). The KCP and UDP server bindings avoid this by not constructing a `std::string` before their `luaL_error` calls.
+
+**Verdict:** Fix the `l_*_listen` functions in TCP server/client bindings (the only bindings using `std::string` for server naming). The other `luaL_error` call sites can be fixed opportunistically with the `LuaError` helper for consistency, but are not actively leaking.
 
 ## Implementation Steps
 

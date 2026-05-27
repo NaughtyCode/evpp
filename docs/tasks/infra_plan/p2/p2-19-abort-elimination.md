@@ -13,7 +13,7 @@ Four `abort()` calls exist:
 | `vm.cc:20` | `luaL_newstate()` returns nullptr | P2 |
 | `engine.cc:54` | `GetScriptVM()` called before `Init()` | P2 |
 | `event_loop.cc:38` | `event_base_new()` fails | P2 |
-| `event_loop.cc:191` | `event_base_dispatch()` called twice | P2 |
+| `event_loop.cc:196` | `event_reinit()` fails in `AfterFork()` | P2 |
 
 Each `abort()` terminates the entire process, killing all online players and losing all unsaved data. For a server, graceful degradation is always better than hard crash.
 
