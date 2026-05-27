@@ -205,9 +205,10 @@ void DBThread::EnqueueResponse(DbResponse&& resp) {
 //
 //   3. Main loop (while running_):
 //      Each iteration = one "frame". Drains all available requests
-//      (up to max_requests_per_frame if configured). Frame rate is
-//      maintained via target_fps — sleeps at end of frame to match
-//      the target rate; overruns are logged at WARN level.
+//      (up to max_requests_per_frame if configured). After processing,
+//      calls script_vm_.CallFrameCallback() → Lua global on_db_frame(info).
+//      Frame rate is maintained via target_fps — sleeps at end of frame
+//      to match the target rate; overruns are logged at WARN level.
 //      - target_fps = 0: unlimited mode, 1ms idle sleep only when queue empty.
 //      - Empty queue → sleep to avoid busy-wait.
 //      - Catch std::exception / ... → log, mark unhealthy, break to cleanup.
@@ -287,6 +288,8 @@ void DBThread::EventLoop() {
                 1000000 / config_.thread_pool.target_fps);
         }
 
+        last_frame_time_ = std::chrono::steady_clock::now();
+
         while (running_.load(std::memory_order_acquire)) {
             auto frame_start = std::chrono::steady_clock::now();
             int processed = 0;
@@ -318,9 +321,19 @@ void DBThread::EventLoop() {
                 break;
             }
 
-            
-
             frame_count_++;
+
+            // ── Per-frame Lua callback ────────────────────────────
+            {
+                auto now = std::chrono::steady_clock::now();
+                double delta = 0.0;
+                if (frame_count_ > 1) {
+                    delta = std::chrono::duration<double>(
+                        now - last_frame_time_).count();
+                }
+                last_frame_time_ = now;
+                script_vm_.CallFrameCallback(frame_count_, delta);
+            }
 
             // ── Frame rate control ─────────────────────────────────
             if (config_.thread_pool.target_fps > 0) {

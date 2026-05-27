@@ -87,6 +87,15 @@ public:
     // Returns true if all four core slots are non-null.
     // Used as a sanity check after RegisterSubsystemObjects().
     bool AreCoreSlotsValid() const;
+
+    // Per-frame callback: invokes the Lua global function on_db_frame(info)
+    // where info = { frame_count = <int>, delta_seconds = <number> }.
+    // If on_db_frame is not defined in the Lua environment the call is
+    // silently skipped. Lua errors are caught and logged via the DBThread
+    // logger.
+    //
+    // Called once per EventLoop iteration (DBT exclusive).
+    void CallFrameCallback(int64_t frame_count, double delta_seconds);
 };
 
 // ══════════════════════════════════════════════════════════════════════════════

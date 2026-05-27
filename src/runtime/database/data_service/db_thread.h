@@ -148,6 +148,7 @@ private:
 
     // ── Frame timing ────────────────────────────────────────────────────
     int64_t frame_count_ = 0;                                      // [DBT] total completed frames, for diagnostics
+    std::chrono::steady_clock::time_point last_frame_time_;        // [DBT] previous frame end time (for delta)
 };
 
 } // namespace engine

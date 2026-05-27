@@ -316,6 +316,46 @@ bool DBScriptVM::AreCoreSlotsValid() const {
            GetCustomPtr(kDbPtrScriptVM) != nullptr;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// CallFrameCallback — invoke Lua global on_db_frame(info) once per frame
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Looks up the global function on_db_frame in the VM's Lua state.
+// If defined: constructs an info table {frame_count, delta_seconds} and
+// calls on_db_frame(info) via lua_pcall. Lua errors are caught and logged
+// through the DBThread's logger (obtained via CustomPtrStore).
+// If not defined: silently returns (not every script needs a frame callback).
+//
+// Called from DBThread::EventLoop after request processing and before
+// frame-rate sleep. DBT-exclusive — no thread-safety concern.
+
+void DBScriptVM::CallFrameCallback(int64_t frame_count, double delta_seconds) {
+    auto L = GetState();
+
+    lua_getglobal(L, "on_db_frame");
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return;
+    }
+
+    lua_newtable(L);
+    lua_pushinteger(L, frame_count);
+    lua_setfield(L, -2, "frame_count");
+    lua_pushnumber(L, delta_seconds);
+    lua_setfield(L, -2, "delta_seconds");
+
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+        const char* err = lua_tostring(L, -1);
+        auto* thread = GetDBThread();
+        auto* logger = thread ? thread->GetLogger() : nullptr;
+        if (logger) {
+            ENGINE_LOG_ERROR(logger, "DBThread[{}]: on_db_frame error: {}",
+                             thread->Index(), err ? err : "unknown");
+        }
+        lua_pop(L, 1);
+    }
+}
+
 } // namespace engine
 
 #endif // ENGINE_MONGODB_ENABLED
