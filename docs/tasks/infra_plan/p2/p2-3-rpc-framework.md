@@ -101,11 +101,28 @@ end)
 
 ### Step 5: Tests
 
-- Client sync call → server → response
-- Client async call → multiple concurrent requests
-- Timeout handling
-- Error propagation
-- Service not found
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/rpc_client_test.cc`:
+- Sync call: client sends request, receives matching response by sequence number
+- Async call: fire multiple concurrent requests, verify each gets correct response
+- Timeout: request exceeds deadline → timeout error returned
+- Error propagation: server-side error marshaled back to client
+- Service not found: calling unregistered service returns "not found" error
+
+**Unit tests** — `src/tests/unit/rpc_server_test.cc`:
+- Register service handler, receive request, dispatch, return response
+- Multiple services registered on same server, routing is correct
+
+**Lua tests** — `src/tests/lua/rpc_test.lua`:
+- `rpc.call("service", "method", args)` → returns result
+- `rpc.call_async("service", "method", args, callback)` → callback receives result
+
+```
+src/tests/unit/rpc_client_test.cc   # ~70 lines
+src/tests/unit/rpc_server_test.cc   # ~50 lines
+src/tests/lua/rpc_test.lua          # ~50 lines
+```
 
 ## Acceptance Criteria
 

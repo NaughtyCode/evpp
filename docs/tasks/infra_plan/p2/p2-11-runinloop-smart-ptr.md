@@ -70,9 +70,17 @@ main_loop->RunInLoop([weak_ctx, L]() {
 
 ### Step 4: Tests
 
-- Create context, trigger __gc, verify context destroyed (ref count drops to 0)
-- Cross-thread callback with weak_ptr: destroy context, verify callback safely returns
-- No leaks under ASAN
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/runinloop_smart_ptr_test.cc`:
+- Create context with `shared_ptr`, capture `weak_ptr` in RunInLoop callback → callback safely no-ops if context was destroyed
+- Destroy context → verify ref count drops to 0 (destructor fires)
+- Cross-thread callback: post callback, destroy context from another thread, callback safely skips
+- ASAN verification: no leaks after rapid context create/destroy cycle
+
+```
+src/tests/unit/runinloop_smart_ptr_test.cc   # ~50 lines
+```
 
 ## Acceptance Criteria
 

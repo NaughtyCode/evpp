@@ -48,10 +48,17 @@ The existing cleanup in `OnResolved`/`OnTimeout`/`Cancel`/`OnCanceled` already h
 
 ### Step 2: Tests
 
-- DNS resolution succeeds: `shared_ptr` deleted in OnResolved, ASAN clean
-- DNS resolution times out: `shared_ptr` deleted in OnTimeout, ASAN clean  
-- Cancel during DNS: `shared_ptr` deleted in Cancel, ASAN clean
-- Verify no regression in DNS resolution behavior
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/dns_resolver_test.cc`:
+- DNS resolution succeeds → `unique_ptr` ownership transferred, callback fires, ASAN clean
+- DNS resolution times out → `unique_ptr` deleted in OnTimeout, no leak, ASAN clean
+- Cancel during DNS resolution → `unique_ptr` deleted in Cancel path, ASAN clean
+- Verify DNS resolution behavior is unchanged (same IP returned as before fix)
+
+```
+src/tests/unit/dns_resolver_test.cc   # ~50 lines
+```
 
 ## Acceptance Criteria
 

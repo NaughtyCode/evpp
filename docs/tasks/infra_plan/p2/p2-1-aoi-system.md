@@ -78,9 +78,28 @@ entity:on_aoi_leave(function(entity, left_entity) ... end)
 
 ### Step 5: Tests
 
-- Insert 10,000 entities, query radius, verify correct results
-- Move entity across cell boundary, verify cell update
-- AOI enter/leave events on boundary crossing
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/aoi_spatial_grid_test.cc`:
+- Insert entity, verify cell assignment and O(1) lookup
+- Remove entity, verify cell cleanup
+- Move entity across cell boundary, verify old cell removed and new cell added
+- Query radius returns correct entities from overlapping cells
+- Empty grid: insert and query at boundaries
+
+**Unit tests** — `src/tests/unit/aoi_manager_test.cc`:
+- AOI enter event fires when entity crosses into another entity's radius
+- AOI leave event fires when entity exits another entity's radius
+- Multiple entities in same cell: all visible within radius
+
+**Performance tests** — `src/tests/performance/aoi_benchmark.cc`:
+- Insert 10,000 entities, query radius, verify < 1ms
+
+```
+src/tests/unit/aoi_spatial_grid_test.cc   # ~70 lines
+src/tests/unit/aoi_manager_test.cc        # ~60 lines
+src/tests/performance/aoi_benchmark.cc    # ~40 lines
+```
 
 ## Acceptance Criteria
 

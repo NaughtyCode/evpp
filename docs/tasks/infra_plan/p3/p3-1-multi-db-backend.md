@@ -62,9 +62,24 @@ class SQLiteBackend : public IDatabaseBackend {
 
 ### Step 5: Tests
 
-- Interface compliance test: same test suite runs against all backends
-- SQLite backend passes all CRUD tests
-- Backend switching at startup based on config
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/db_backend_test.cc`:
+- Interface compliance: same CRUD test suite runs against MongoDB backend and SQLite backend
+- SQLite backend: insert, find, update, delete — all produce correct results
+- MongoDB backend: same test suite, identical behavior
+- Backend switching at startup based on config `{backends: {default: "sqlite"}}` vs `{backends: {default: "mongodb"}}`
+- Lua API is identical regardless of active backend
+
+**Lua tests** — `src/tests/lua/db_backend_test.lua`:
+- SQLite: `db_send_request("insert_one", ...)` → success with generated ID
+- MongoDB: same call → success, identical return format
+- Backend is transparent to Lua scripts
+
+```
+src/tests/unit/db_backend_test.cc   # ~70 lines
+src/tests/lua/db_backend_test.lua   # ~40 lines
+```
 
 ## Acceptance Criteria
 

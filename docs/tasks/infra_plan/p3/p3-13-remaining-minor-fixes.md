@@ -94,12 +94,49 @@ These items are noted for future reference but do not warrant dedicated plans:
 | Hardcoded FetchResult timeout (5ms) | Covered implicitly by P2-13 (condition_variable) |
 | Physics Recover() poll-sleep health check (100ms × 50) | Low impact; startup-only path |
 
+### Step 14: Tests
+
+After completing each sub-item, add automated tests in the following categorized locations:
+
+**13.1 conn:Send() Failure Visibility** — `src/tests/unit/tcp_conn_send_test.cc`:
+- Send on disconnected connection → WARN logged, no crash
+- Send on connected connection → succeeds, data delivered
+- `on_error` callback fires on EPIPE/ECONNRESET during send
+- Multiple rapid sends after disconnect → each produces one WARN
+
+**13.2 Circular Dependency Detection** — `src/tests/unit/script_importer_test.cc`:
+- `import("A")` where A imports B → succeeds (no cycle)
+- `import("A")` where A imports B and B imports A → fails with "Circular dependency detected"
+- Error message includes the full import stack (A → B → A)
+- Self-import (`import("A")` from within A) → detected and reported
+- Importing set is cleaned up after successful load (no false positive on re-import)
+
+**13.3 Config Schema Validation** — `src/tests/unit/config_validator_test.cc`:
+- Valid config passes all validation checks
+- Missing required field → rejected with field name in error
+- Out-of-range value (negative pool_size, connection limit 0) → rejected
+- Empty string for required path field → rejected
+- All validation checks run before reporting (accumulate errors, not fail-fast)
+
+**13.4 Physics Scene Path** — `src/tests/unit/config_scene_path_test.cc`:
+- Default scene path uses `"/physics/data/scene.json"` suffix
+- Custom `physics.scene_path` in config overrides the default
+- Empty scene_path in config → rejected by validator
+
+```
+src/tests/unit/tcp_conn_send_test.cc          # ~50 lines
+src/tests/unit/script_importer_test.cc         # ~50 lines
+src/tests/unit/config_validator_test.cc        # ~70 lines
+src/tests/unit/config_scene_path_test.cc       # ~30 lines
+```
+
 ## Acceptance Criteria
 
 1. `conn:Send()` failures are logged (WARN on disconnected send); Lua can detect failures via `on_error` callback
-2. Circular imports are detected and reported with clear error messages
-3. Config validation rejects out-of-range values at startup
+2. Circular imports are detected and reported with clear error messages including the import stack
+3. Config validation rejects out-of-range values at startup with descriptive errors
 4. Physics scene path is configurable via JSON config
 5. All existing tests pass
+6. All new unit tests pass with categorized file structure
 
-## Dependencies: None | Estimated Effort: ~160 lines total
+## Dependencies: P0-3 (Test Infrastructure) | Estimated Effort: ~160 lines + ~200 lines tests

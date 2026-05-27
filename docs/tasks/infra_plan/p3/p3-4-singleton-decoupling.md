@@ -94,9 +94,17 @@ class Engine {
 
 ### Step 5: Tests
 
-- Two Engine instances in same process, no cross-contamination
-- Each Engine has independent TimerManager, ConfigManager
-- Per-VM Engine context correctly retrieved from Lua
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/singleton_decouple_test.cc`:
+- Two Engine instances in same process → each has independent TimerManager, ConfigManager
+- No cross-contamination between engines: timer created on Engine1 does not fire on Engine2
+- Per-VM Engine context correctly retrieved from Lua (each VM sees its own Engine)
+- Existing single-Engine usage unchanged (backward compatibility)
+
+```
+src/tests/unit/singleton_decouple_test.cc   # ~60 lines
+```
 
 ## Acceptance Criteria
 

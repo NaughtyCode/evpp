@@ -99,12 +99,34 @@ ScriptVM& Engine::GetScriptVM() {
  */
 ```
 
+### Step 4: Tests
+
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/engine_cleanup_order_test.cc`:
+- Verify `CleanupPhase` progresses through all expected states in order
+- Verify `GetScriptVM()` assertion fires (or throws) when called after `ScriptDestroyed` phase
+- Verify `GetScriptVM()` succeeds when called during `NetworkShutdown`/`TimerShutdown` phases
+- Test intentional reorder: call `ShutdownNetBindings()` after `DestroyScript()` → assertion fires with clear diagnostic message including phase name
+- Verify the diagnostic message contains the current phase name (not just an integer)
+
+**Integration tests** — `src/tests/integration/engine_lifecycle_test.cc` (shared, add case):
+- Full `Engine::Init()` → `Start()` → `Cleanup()` with phase tracking enabled
+- Verify all phases are visited exactly once in the correct order
+- Verify `Complete` is the terminal phase
+
+```
+src/tests/unit/engine_cleanup_order_test.cc   # ~60 lines
+src/tests/integration/engine_lifecycle_test.cc  # +20 lines (extend existing)
+```
+
 ## Acceptance Criteria
 
 1. `CleanupPhase` enum tracks cleanup progress
 2. Assertions verify `script_vm_` is alive when accessed by ShutdownBindings
-3. Ordering violation produces a clear diagnostic message
+3. Ordering violation produces a clear diagnostic message with phase name
 4. Cleanup order is documented in `engine.h`
-5. Tests: intentionally reorder cleanup, verify assertion fires
+5. Unit tests verify all phase transitions and assertion behavior
+6. Integration test verifies full cleanup order is correct
 
-## Dependencies: None | Estimated Effort: ~30 lines
+## Dependencies: P0-3 (Test Infrastructure) | Estimated Effort: ~30 lines + ~80 lines tests

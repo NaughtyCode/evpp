@@ -54,8 +54,17 @@ void Engine::InstallSignalHandlers() {
 
 ### Step 2: Tests
 
-- Manual test: run on Windows, press Ctrl+C, verify graceful shutdown log messages
-- On Linux: existing signal handling tests continue to pass
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/signal_handler_test.cc`:
+- Windows: `SetConsoleCtrlHandler` callback invokes `Engine::SignalShutdown()`
+- Linux: `SIGINT` handler invokes `Engine::SignalShutdown()` (existing behavior)
+- Shutdown flag is set atomically and visible to engine loop
+- Double signal: second Ctrl+C after shutdown initiated → force exit
+
+```
+src/tests/unit/signal_handler_test.cc   # ~50 lines
+```
 
 ## Acceptance Criteria
 

@@ -80,9 +80,18 @@ conn:set_rate_limit(1024 * 100)  -- 100 KB/s per connection
 
 ### Step 5: Tests
 
-- Priority queue: critical messages sent before normal when queue is backlogged
-- Rate limiter: tokens consumed correctly, refilled at correct rate
-- Burst allowance: short bursts allowed, sustained rate capped
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/message_priority_test.cc`:
+- Priority queue: when backlogged, critical messages dequeued before high, high before normal, normal before low
+- Rate limiter: tokens consumed per byte sent, refilled at configured rate
+- Burst allowance: short burst above rate succeeds, sustained rate above limit is capped
+- Per-connection rate limits: one connection throttled doesn't affect another
+- Configurable priority levels and rate limits via JSON config
+
+```
+src/tests/unit/message_priority_test.cc   # ~80 lines
+```
 
 ## Acceptance Criteria
 

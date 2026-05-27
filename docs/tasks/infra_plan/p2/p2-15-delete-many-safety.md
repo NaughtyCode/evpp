@@ -84,10 +84,22 @@ db_send_request("delete_many", {
 
 ### Step 4: Tests
 
-- Empty filter without confirmation → request rejected with error
-- Empty filter with confirmation → delete proceeds
-- Non-empty filter → delete proceeds normally (no confirmation needed)
-- Error message is clear and descriptive
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/delete_many_safety_test.cc`:
+- Empty filter `{}` without confirmation → request rejected with clear error message
+- Empty filter `{}` with `allow_empty_filter = true` → delete proceeds
+- Non-empty filter `{status: "inactive"}` → delete proceeds normally without flag
+- Error message contains actionable text: "set allow_empty_filter=true to confirm"
+
+**Lua tests** — `src/tests/lua/db_safety_test.lua`:
+- `db_send_request("delete_many", {filter = {}})` → error returned
+- `db_send_request("delete_many", {filter = {}, allow_empty_filter = true})` → success
+
+```
+src/tests/unit/delete_many_safety_test.cc   # ~50 lines
+src/tests/lua/db_safety_test.lua            # ~40 lines
+```
 
 ## Acceptance Criteria
 

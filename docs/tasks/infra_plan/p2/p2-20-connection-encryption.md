@@ -73,11 +73,21 @@ local server = net.server.listen("0.0.0.0", 443, {
 
 ### Step 5: Tests
 
-- SSL handshake: client connects with TLS, handshake completes
-- Data transfer: encrypted data sent, decrypted correctly on receiving end
-- Certificate validation: invalid cert → connection rejected
-- Non-SSL client → SSL server: graceful rejection
-- Performance: benchmark throughput with/without SSL
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/tls_connection_test.cc`:
+- SSL handshake: client connects with TLS, handshake completes, connection established
+- Data transfer: encrypted data sent on one end, decrypted correctly on receiving end
+- Certificate validation: invalid/self-signed cert → connection rejected with clear error
+- Non-SSL client connecting to SSL-enabled port → graceful rejection
+
+**Performance tests** — `src/tests/performance/tls_benchmark.cc`:
+- Throughput with SSL vs without SSL (baseline comparison)
+
+```
+src/tests/unit/tls_connection_test.cc      # ~70 lines
+src/tests/performance/tls_benchmark.cc     # ~30 lines
+```
 
 ## Acceptance Criteria
 

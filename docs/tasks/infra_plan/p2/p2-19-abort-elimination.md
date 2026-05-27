@@ -96,8 +96,23 @@ if (dispatching_) {
 
 ### Step 5: Tests
 
-- Test each error path: verify the error is logged and gracefully handled
-- Test engine shutdown after init failure: verify no crash, clean exit
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/abort_elimination_test.cc`:
+- Former abort(1) site: error path triggers log + throw (or return false), no process termination
+- Former assert(false) site: error path triggers log + graceful return
+- Engine shutdown after each error: verify clean exit without crash
+- GoogleTest death tests: verify specific error paths no longer call abort()
+
+**Integration tests** — `src/tests/integration/shutdown_safety_test.cc` (shared, add cases):
+- Init failure → shutdown → no crash, clean exit
+- Start failure → shutdown → no crash, clean exit
+- All 4 former abort sites produce descriptive error messages
+
+```
+src/tests/unit/abort_elimination_test.cc         # ~60 lines
+src/tests/integration/shutdown_safety_test.cc     # +30 lines (extend existing)
+```
 
 ## Acceptance Criteria
 

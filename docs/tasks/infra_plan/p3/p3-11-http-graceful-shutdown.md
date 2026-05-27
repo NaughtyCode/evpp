@@ -69,9 +69,17 @@ Increment `in_flight_requests_` at request start, decrement at response completi
 
 ### Step 4: Tests
 
-- Send request, initiate graceful shutdown, verify request completes before server stops
-- Graceful shutdown with timeout: verify server stops after timeout even if requests are still in flight
-- No new connections accepted during drain
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/http_graceful_shutdown_test.cc`:
+- Send long-running request, initiate GracefulShutdown → request completes before server stops
+- GracefulShutdown with timeout: server stops after timeout even if requests still in flight
+- During drain: no new connections accepted (SYN rejected or immediately closed)
+- No pending requests: shutdown completes immediately (no unnecessary wait)
+
+```
+src/tests/unit/http_graceful_shutdown_test.cc   # ~60 lines
+```
 
 ## Acceptance Criteria
 

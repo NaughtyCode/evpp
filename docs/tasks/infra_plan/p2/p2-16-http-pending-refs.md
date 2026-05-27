@@ -60,9 +60,17 @@ Run a benchmark comparing vector vs unordered_set for various pending request co
 
 ### Step 4: Tests
 
-- Add/remove 1000 refs, verify all operations complete without error
-- Shutdown with pending refs, verify all are unref'd
-- Concurrent add/remove under mutex (thread safety)
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/http_pending_refs_test.cc`:
+- Add 1000 refs → all operations O(1), < 1ms total (benchmark)
+- Remove refs → verify `std::unordered_set` size decreases correctly
+- Shutdown with pending refs → all are iterated and unref'd, no leaks
+- Concurrent add/remove under mutex → no corruption, ASAN clean
+
+```
+src/tests/unit/http_pending_refs_test.cc   # ~50 lines
+```
 
 ## Acceptance Criteria
 

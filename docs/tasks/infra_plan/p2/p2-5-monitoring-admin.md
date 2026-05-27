@@ -107,10 +107,24 @@ private:
 
 ### Step 4: Tests
 
-- Health endpoint returns 200
-- Metrics endpoint returns valid Prometheus format
-- Counter increments correctly under concurrent access
-- Histogram percentiles are accurate
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/metrics_test.cc`:
+- Counter: increment from multiple threads, verify final count is correct
+- Gauge: set, increment, decrement, verify value at each step
+- Histogram: record samples, verify p50/p95/p99 are accurate within tolerance
+- Prometheus format: export counter/gauge/histogram, verify valid Prometheus text format
+
+**Unit tests** — `src/tests/unit/admin_server_test.cc`:
+- Health endpoint returns 200 with JSON body
+- Stats endpoint returns engine metrics (connection count, message rate)
+- Config reload action triggers `ConfigManager::Reload()`
+- GC trigger action invokes `lua_gc`
+
+```
+src/tests/unit/metrics_test.cc        # ~70 lines
+src/tests/unit/admin_server_test.cc   # ~60 lines
+```
 
 ## Acceptance Criteria
 

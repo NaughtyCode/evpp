@@ -64,9 +64,23 @@ end
 
 ### Step 4: Tests
 
-- Verify all binding functions return exactly 3 values
-- Verify 3rd value is nil for operations without result data
-- Verify existing Lua tests pass with new return pattern
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/mongo_return_test.cc`:
+- Verify all MongoDB binding functions return exactly 3 values: (bool, err_msg, result)
+- Successful insert → (true, nil, {inserted_id: ...})
+- Failed insert → (false, "error message", nil)
+- Operations without result data (delete) → (true, nil, nil) — 3rd value is nil
+- Verify existing Lua DB tests pass with new 3-value return pattern
+
+**Lua tests** — `src/tests/lua/db_return_test.lua`:
+- `local ok, err, result = db_send_request(...)` → 3 values always returned
+- Iterate all Mongo operations, verify 3-return-value consistency
+
+```
+src/tests/unit/mongo_return_test.cc   # ~50 lines
+src/tests/lua/db_return_test.lua      # ~40 lines
+```
 
 ## Acceptance Criteria
 

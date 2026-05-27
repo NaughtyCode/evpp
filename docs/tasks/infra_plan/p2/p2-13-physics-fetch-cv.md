@@ -75,9 +75,17 @@ std::optional<PhysicsResult> PhysicsSystem::FetchResult(int timeout_ms) {
 
 ### Step 4: Tests
 
-- FetchResult receives result from physics thread without busy-waiting
-- Timeout returns nullopt correctly
-- Multiple FetchResult calls without new physics data: second call waits
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/physics_fetch_cv_test.cc`:
+- FetchResult receives result from physics thread without busy-waiting (verify CPU usage near zero)
+- Timeout: no result produced within deadline → FetchResult returns nullopt
+- Multiple FetchResult calls without new physics data: second call waits on CV, not spinning
+- Signal from physics thread wakes waiting FetchResult immediately (latency < 1ms)
+
+```
+src/tests/unit/physics_fetch_cv_test.cc   # ~60 lines
+```
 
 ## Acceptance Criteria
 

@@ -49,6 +49,27 @@ Run the build with the new warning flags on both platforms. Fix all warnings:
 
 CI pipelines check both Linux and Windows builds with -Werror / /WX.
 
+### Step 4: Tests
+
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/compiler_warning_regression_test.cc`:
+- Verify that each `/wd` → `/W4` conversion does not re-enable warnings that were suppressed for valid reasons (noise from third-party headers, intentional template patterns)
+- Compile a minimal source file with the new flags and verify zero warnings
+- Test that `/WX` (or `-Werror`) causes build failure when a warning is present
+
+**Integration tests** — `src/tests/integration/build_config_test.cc`:
+- Reuse CMake test infrastructure to configure a build with the new warning flags, compile a test target, and verify exit code 0
+
+**CI enforcement** — `.github/workflows/ci.yml` (already configured):
+- Both Linux (`-Werror`) and Windows (`/WX`) builds must pass with zero warnings
+- CI failure on any new warning is blocking
+
+```
+src/tests/unit/compiler_warning_regression_test.cc   # ~30 lines
+src/tests/integration/build_config_test.cc            # ~40 lines (shared with other build-config tests)
+```
+
 ## Acceptance Criteria
 
 1. Windows builds use /W4 (not /wd-everything)
@@ -56,5 +77,7 @@ CI pipelines check both Linux and Windows builds with -Werror / /WX.
 3. Both platforms use "warnings as errors"
 4. Zero warnings on both platforms
 5. CI enforces zero-warning policy
+6. Unit tests verify the warning configuration catches real issues
+7. Integration test verifies build succeeds with warning flags
 
-## Dependencies: None | Estimated Effort: ~50 lines CMake + warning fixes
+## Dependencies: P0-3 (Test Infrastructure) | Estimated Effort: ~50 lines CMake + warning fixes + ~70 lines tests

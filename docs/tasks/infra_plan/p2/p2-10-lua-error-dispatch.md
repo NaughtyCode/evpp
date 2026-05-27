@@ -120,11 +120,19 @@ static bool ShouldLogError(const std::string& key) {
 
 ### Step 5: Tests
 
-- `SafeCallLua` on valid function → returns Ok, results on stack
-- `SafeCallLua` on runtime error → returns LuaError, stack clean
-- `SafeCallLua` on disposed object → returns Disposed
-- Error throttling: rapid errors → only first is logged within 1s window
-- Traceback is included in error log
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/lua_error_dispatch_test.cc`:
+- `SafeCallLua` on valid function → returns Ok, Lua results on stack
+- `SafeCallLua` on Lua runtime error → returns LuaError, stack is clean
+- `SafeCallLua` on disposed object → returns Disposed error
+- Error throttling: 100 rapid errors within 1s → only first is logged, subsequent are rate-limited
+- Throttle window expires: after 1s, next error is logged again
+- Traceback is included in error log output (verify with log capture)
+
+```
+src/tests/unit/lua_error_dispatch_test.cc   # ~70 lines
+```
 
 ## Acceptance Criteria
 

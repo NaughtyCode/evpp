@@ -104,9 +104,22 @@ Keep the old `ExportMongo()` working during transition. The X-macro version can 
 
 ### Step 5: Tests
 
-- Verify all 82 types are registered (compare old and new ExportMongo output)
-- Add a new type using only the X-macro list — verify it appears in Lua
-- Remove a type — verify it's removed from all 3 registration points
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/mongo_xmacro_test.cc`:
+- Verify all 82 types are registered: compare old and new ExportMongo output (identical)
+- Add a new type using only the X-macro list → verify it appears in Lua without touching any other registration code
+- Remove a type from the X-macro list → verify it's removed from all 3 registration points
+- Build does not import any new headers (just the `.def` file)
+
+**Lua tests** — `src/tests/lua/mongo_types_test.lua`:
+- Iterate all registered Mongo types, verify count matches 82
+- Verify key types (InsertOne, Find, DeleteMany, etc.) are callable
+
+```
+src/tests/unit/mongo_xmacro_test.cc   # ~50 lines
+src/tests/lua/mongo_types_test.lua    # ~30 lines
+```
 
 ## Acceptance Criteria
 

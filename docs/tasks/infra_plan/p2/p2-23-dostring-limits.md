@@ -99,11 +99,19 @@ struct ScriptSourcePolicy {
 
 ### Step 5: Tests
 
-- DoString from "network" source with timeout: respects timeout
-- DoString with infinite loop: terminated by timeout hook
-- DoString with large allocations: memory quota check triggers
-- Disallowed source: DoString returns false
-- Normal script execution: no performance regression from hooks
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/dostring_limits_test.cc`:
+- DoString from "network" source with 2s timeout → script within limit succeeds
+- DoString with infinite loop → terminated by instruction-count timeout hook
+- DoString with large allocations (exceeding memory quota) → quota check triggers, execution stopped
+- Disallowed source ("network") → DoString returns false, script not executed
+- Normal script execution → no measurable performance regression from hook overhead
+- Timeout and quota violations produce log messages with source info
+
+```
+src/tests/unit/dostring_limits_test.cc   # ~60 lines
+```
 
 ## Acceptance Criteria
 

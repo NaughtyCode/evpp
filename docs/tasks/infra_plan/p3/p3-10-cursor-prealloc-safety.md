@@ -56,9 +56,17 @@ Search for all `new BsonDocument()` / `new BsonValue()` in the mongo_bind direct
 
 ### Step 3: Tests
 
-- Normal cursor iteration: no leak (verified with ASAN)
-- cursor->Next() failure: doc freed (verified with ASAN)
-- Exception thrown mid-function: doc freed (verified with ASAN)
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/cursor_prealloc_test.cc`:
+- Normal cursor iteration → document allocated via `make_unique`, freed at end of scope, ASAN clean
+- cursor->Next() returns false → no document to free, no leak
+- Exception thrown mid-function → `unique_ptr` destructor fires during stack unwind, ASAN clean
+- Stress: iterate 1000 documents through cursor, verify zero leaks
+
+```
+src/tests/unit/cursor_prealloc_test.cc   # ~40 lines
+```
 
 ## Acceptance Criteria
 

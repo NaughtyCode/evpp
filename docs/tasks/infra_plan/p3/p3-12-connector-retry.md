@@ -91,12 +91,25 @@ local client = net.client.connect("example.com", 8080, {
 
 ### Step 4: Tests
 
-- Failed connection → retry with exponential backoff → succeed on 3rd attempt
-- Exponential backoff: delays increase by backoff_multiplier each retry
-- Max retries reached: error callback invoked, no more retries
-- Successful connection resets retry counter and interval
-- Infinite retries mode (max_retries = -1) retries indefinitely
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/connector_retry_test.cc`:
+- Failed connection → retry with exponential backoff, succeed on 3rd attempt
+- Backoff: delays increase by `backoff_multiplier` each retry (1s → 2s → 4s → 8s)
+- Max retries: after `max_retries=3`, error callback invoked, no more retries
+- Successful connection resets `retry_count_` to 0 and `current_interval_ms_` to 0
+- Infinite retries (`max_retries = -1`): retries indefinitely
 - `EVUTIL_ERR_CONNECT_RETRIABLE` triggers retry instead of giving up
+- `on_retry` callback notifies Lua with (attempt_number, next_delay_ms)
+
+**Lua tests** — `src/tests/lua/connector_retry_test.lua`:
+- `net.client.connect(host, port, {retry = {...}, on_retry = fn})` → callback fires on each retry
+- Retry config from Lua overrides defaults
+
+```
+src/tests/unit/connector_retry_test.cc   # ~80 lines
+src/tests/lua/connector_retry_test.lua   # ~50 lines
+```
 
 ## Acceptance Criteria
 

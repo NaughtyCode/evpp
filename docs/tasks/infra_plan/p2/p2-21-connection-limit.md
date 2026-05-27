@@ -74,10 +74,18 @@ print(server:connection_count())  -- current count
 
 ### Step 6: Tests
 
-- Start server with max_connections=2
-- Connect 3 clients: first 2 succeed, 3rd is rejected
-- Disconnect 1 client: new connection now accepted
-- Connection count returns to 0 after all clients disconnect
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/connection_limit_test.cc`:
+- Start server with max_connections=2, connect 2 clients → both succeed
+- Connect 3rd client → rejected, connection closed with WARN log
+- Disconnect 1 client → connection count decremented, new connection now accepted
+- Disconnect all clients → connection count returns to 0
+- Concurrent connect/disconnect stress: 50 rapid connect/disconnect cycles, count stays accurate
+
+```
+src/tests/unit/connection_limit_test.cc   # ~60 lines
+```
 
 ## Acceptance Criteria
 

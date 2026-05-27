@@ -72,12 +72,39 @@ local data = cmsgpack.pack(large_table, {max_depth = 32, max_size = 512 * 1024})
 local data = cmsgpack_safe.pack(large_table)  -- errors on exceed
 ```
 
+### Step 4: Tests
+
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/msgpack_limits_test.cc`:
+- Encode table with depth = 10 → succeeds (under default limit of 64)
+- Encode table with depth = 65 → fails with clear error "nesting depth exceeds maximum"
+- Encode table with depth = 1000 → fails without stack overflow (caught by limit check)
+- Encode table producing payload = 512KB → succeeds (under 1MB default)
+- Encode table producing payload = 2MB → fails with "payload exceeds maximum size"
+- Custom limits via config: `max_depth = 32, max_size = 64KB` → enforced
+- `cmsgpack_safe.pack()` applies default limits automatically
+- Zero-size payload (empty table) → succeeds
+- Single-element table → succeeds with correct output
+
+**Lua tests** — `src/tests/lua/msgpack_safe_test.lua`:
+- Test `cmsgpack_safe.pack()` with nested table at limit boundary
+- Test explicit per-call limits override config defaults
+- Test error message format is parseable by Lua error handler
+
+```
+src/tests/unit/msgpack_limits_test.cc    # ~80 lines
+src/tests/lua/msgpack_safe_test.lua      # ~50 lines
+```
+
 ## Acceptance Criteria
 
 1. msgpack encode fails with clear error when depth exceeds limit
 2. msgpack encode fails with clear error when payload size exceeds limit
 3. Limits are configurable via JSON config
 4. `cmsgpack_safe` applies default limits automatically
-5. Tests verify depth and size limits
+5. Tests verify depth and size limits at boundaries
+6. Tests verify configurable limits override defaults
+7. Tests verify no stack overflow on depth = 1000
 
-## Dependencies: None | Estimated Effort: ~80 lines
+## Dependencies: P0-3 (Test Infrastructure) | Estimated Effort: ~80 lines + ~130 lines tests

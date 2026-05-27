@@ -65,6 +65,5 @@ public:
 2. Equivalent test exists in `src/tests/integration/db_smoke_test.cc`
 3. Production `Engine::Start()` contains no test logic
 4. `#if !defined(NDEBUG)` test guard removed from engine.cc
-5. CI runs the new test
-
-## Dependencies: P0-3 (Test Infrastructure — creates the test directory) | Estimated Effort: ~50 lines
+5. CI runs the new integration test
+6. New test is properly categorized in `src/tests/integration/` (not mixed with production code)

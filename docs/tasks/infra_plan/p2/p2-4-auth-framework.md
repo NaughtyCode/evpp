@@ -106,11 +106,29 @@ Integrate the auth handshake into the TCP server connection flow. New connection
 
 ### Step 6: Tests
 
-- Token auth: valid token → authenticated; invalid token → rejected
-- Session creation and validation
-- Session expiry
-- Session revocation (logout)
-- Unauthenticated connection cannot send messages
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/auth_session_test.cc`:
+- Session creation: valid auth → session ID returned, metadata stored
+- Session validation: valid session ID → returns session data; invalid → rejected
+- Session expiry: expired session → validation returns "expired"
+- Session revocation: logout → session removed, subsequent validation fails
+- Concurrent session access: two requests for same session, no corruption
+
+**Unit tests** — `src/tests/unit/auth_backend_test.cc`:
+- Token backend: valid token → authenticated; invalid → rejected
+- Backend switching: config change switches from token to JWT backend
+
+**Integration tests** — `src/tests/integration/auth_flow_test.cc`:
+- Full auth handshake: require → challenge → response → ok/fail
+- Unauthenticated connection: send message before auth → rejected
+- Authenticated connection: send message after auth → delivered
+
+```
+src/tests/unit/auth_session_test.cc       # ~60 lines
+src/tests/unit/auth_backend_test.cc       # ~40 lines
+src/tests/integration/auth_flow_test.cc   # ~60 lines
+```
 
 ## Acceptance Criteria
 

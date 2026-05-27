@@ -98,10 +98,18 @@ Add a warning when a module sets globals: `log_warn("Module '{}' sets global '{}
 
 ### Step 4: Tests
 
-- Import module that sets globals, verify ownership is tracked
-- ClearCache: verify all tracked globals are nil'd
-- Re-import after ClearCache: verify new globals are set correctly
-- Module that returns local table: verify no global tracking needed
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/global_tracking_test.cc`:
+- Import module that sets globals → verify ownership is tracked in `g_module_globals`
+- ClearCache: verify all tracked globals are nil'd after clearing
+- Re-import after ClearCache: verify new globals are set correctly with fresh tracking
+- Module that returns local table → verify no global tracking entry needed
+- Warning logged when module sets globals (verify via log capture with opt-in config)
+
+```
+src/tests/unit/global_tracking_test.cc   # ~60 lines
+```
 
 ## Acceptance Criteria
 

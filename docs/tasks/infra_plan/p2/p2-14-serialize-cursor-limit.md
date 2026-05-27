@@ -90,11 +90,19 @@ end
 
 ### Step 4: Tests
 
-- Cursor with 0 documents: empty array, truncated=false
-- Cursor with < limit documents: all returned, truncated=false
-- Cursor with > limit documents: limited returned, truncated=true
-- Subsequent `next_batch` calls return remaining documents
-- No OOM with very large cursor (mock)
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/serialize_cursor_test.cc`:
+- Cursor with 0 documents → response empty array, truncated=false
+- Cursor with N < limit documents → all N returned, truncated=false
+- Cursor with N > limit documents → only `limit` returned, truncated=true
+- Subsequent `next_batch` call returns remaining documents from cursor position
+- Very large cursor (10K documents) → no OOM, all batches within limit
+- Custom limit per-request overrides default
+
+```
+src/tests/unit/serialize_cursor_test.cc   # ~60 lines
+```
 
 ## Acceptance Criteria
 

@@ -58,11 +58,30 @@ For each marker:
 - **Delete**: Obsolete notes from early development
 - **Document**: Convert permanent notes to proper doc comments
 
+### Step 5: Tests
+
+After completing each step, add automated tests in the following categorized locations:
+
+**CI enforcement** — `.github/workflows/lint.yml` (pre-existing, add check):
+- CI step fails if TODO/FIXME/HACK/XXX count increases beyond baseline
+- Baseline count is committed to `src/tests/fixtures/todo_baseline.txt`
+
+**Unit tests** — `src/tests/unit/todo_tracking_test.cc`:
+- Verify the TODO-count script produces correct count on sample files
+- Verify CI check rejects a commit that adds new TODO markers
+- Verify zero HACK markers in the codebase
+
+```
+src/tests/unit/todo_tracking_test.cc     # ~25 lines
+src/tests/fixtures/todo_baseline.txt     # committed baseline count
+```
+
 ## Acceptance Criteria
 
 1. All P2-categorized TODO items are fixed
 2. Remaining TODOs are either fixed or tracked as tickets
 3. TODO count does not increase (CI enforcement)
 4. Zero "HACK" markers remain
+5. CI test verifies TODO/HACK count does not regress
 
-## Dependencies: Various (items covered by other plans) | Estimated Effort: ~200 lines
+## Dependencies: P0-3 (Test Infrastructure), P3-2 (CI Pipeline) | Estimated Effort: ~200 lines + ~25 lines tests

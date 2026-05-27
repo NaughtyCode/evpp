@@ -92,8 +92,20 @@ Add a CI lint check that rejects new `fprintf(stderr` and `std::cout` usage:
 
 ### Step 6: Tests
 
-- Verify all existing log output still appears (using log capture in tests)
+After completing each step, add automated tests in the following categorized locations:
+
+**CI enforcement** — `.github/workflows/lint.yml` (already configured):
+- CI step fails if `fprintf(stderr` found in `src/runtime/`
+- CI step fails if `std::cout` found in `src/runtime/`
+
+**Unit tests** — `src/tests/unit/log_output_test.cc`:
+- Verify all former fprintf locations now produce output via Quill (log capture)
 - Verify DumpStats output is accessible via log capture
+- Verify log levels are correct: status=INFO, recoverable=WARN, failure=ERROR
+
+```
+src/tests/unit/log_output_test.cc   # ~40 lines
+```
 
 ## Acceptance Criteria
 

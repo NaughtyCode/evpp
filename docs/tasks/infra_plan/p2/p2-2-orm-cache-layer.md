@@ -97,10 +97,25 @@ print(orm.cache_stats())  -- {hits = 1234, misses = 56, hit_rate = 0.956}
 
 ### Step 5: Tests
 
-- Cache hit/miss behavior
-- LRU eviction
-- Write-through consistency
-- Concurrent access (multiple coroutines reading/writing)
+After completing each step, add automated tests in the following categorized locations:
+
+**Unit tests** — `src/tests/unit/orm_cache_test.cc`:
+- Cache hit: query returns cached entity (no DB call)
+- Cache miss: query fetches from DB, populates cache
+- LRU eviction: overflow cache capacity, verify oldest unused entry evicted
+- Write-through: insert/update writes to both cache and DB
+- Write invalidation: delete removes from both cache and DB
+- Concurrent access: multiple coroutines reading/writing same key
+
+**Lua tests** — `src/tests/lua/orm_test.lua`:
+- `orm.define()` registers a schema and makes it queryable
+- `orm.find()`, `orm.insert()`, `orm.update()`, `orm.delete()` roundtrip
+- Cache hit rate is queryable via stats
+
+```
+src/tests/unit/orm_cache_test.cc   # ~80 lines
+src/tests/lua/orm_test.lua         # ~60 lines
+```
 
 ## Acceptance Criteria
 
