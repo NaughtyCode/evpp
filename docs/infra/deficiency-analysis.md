@@ -6,7 +6,7 @@ CloudEngine 的定位是"通用游戏服务器基础设施"——C++ 层实现�
 
 **分析方法约定**：每个条目按"现状 → 根因 → 影响 → 方向"四段式展开。P0 问题（第一部分）是阻塞性缺陷——不解决则无法承载实际游戏业务。P1-P3 问题（第二至第四部分）是完善性缺陷——影响开发效率、运维质量或安全性。
 
-**数据来源**：基于对 `src/runtime/` 下全部源代码的逐行审查，覆盖 engine、vm、script、config、database、physics、evpp 七个子系统及其绑定层，以及 `resources/script/` 下的全部 Lua 脚本。本轮 (R6) 新增：Lua 沙箱逃逸漏洞详情 (P0-8)、物理线程轮询休眠延迟分析、PhysicsEngineBridge 单例发现、DatabaseService fprintf 审计、MongoDB 绑定返回值一致性审查、class.lua isinstanceof 性能分析、PhysicsThread Recover/Stop 竞态条件、CMakeLists C++23 编译器约束。
+**数据来源**：基于对 `src/runtime/` 下全部源代码的逐行审查，覆盖 engine、vm、script、config、database、physics、evpp 七个子系统及其绑定层，以及 `resources/script/` 下的全部 Lua 脚本。本轮 (R7) 新增：TCP 客户端 Shutdown 缺失、HTTP pending refs O(n) 线性查找、DBThread SerializeCursor 无界 JSON、kDeleteMany 全删安全锁缺失、ExportMongo 82 类型注册代码重复、Lua 封装层深度评估。
 
 ---
 
@@ -464,6 +464,7 @@ luaL_openlibs(L_);  // 加载全部：basic/coroutine/table/io/os/string/math/ut
 | 子系统 | 问题 |
 |--------|------|
 | 网络绑定（6 个协议，13 个文件） | 80% 重复样板代码，手动 lightuserdata + disposed 标记，无模板辅助函数 |
+| ExportMongo 注册函数 | 82 个 metatable 注册 × 3 处/类型 = 246 个手工维护点，X-macro 可降至 82 |
 
 #### 根因
 
@@ -626,6 +627,43 @@ Release 构建中，从错误线程调用 `event_add`/`event_del` 不会触发�
 
 ---
 
+### 2.10 TCP 客户端连接无显式 Shutdown — 仅靠 Lua GC 兜底
+
+#### 现状
+
+`ShutdownNetBindings()`（`net_bind.cc:79-88`）显式跳过 TCP 客户端连接的清理：
+
+```cpp
+void ShutdownNetBindings() {
+    ShutdownHttpBindings();
+    // TCP client instances are cleaned up by Lua GC (__gc metamethod).
+    // We do not maintain a global client map.
+    ShutdownServerBindings();
+    ShutdownUdpServerBindings();
+    ShutdownKcpServerBindings();
+}
+```
+
+与 TCP Server、UDP Server、KCP Server 不同——它们都有显式的 Shutdown 函数追逐一关闭监听端口并 unref Lua 对象——**TCP 客户端连接完全依赖 Lua GC 的 `__gc` metamethod 来触发 C++ 侧的 `Close()` 和资源释放**。
+
+#### 根因
+
+TCP 客户端没有全局注册表。`ClientCtx` 在 `l_client_connect()` 中通过 `new` 分配，指针存储为 lightuserdata。没有类似 `g_server_ctxs` 的全局 map 追踪活跃的客户端连接。这是设计选择——客户端连接被视为"短暂的、由 Lua 脚本管理的对象"——但这个假设在 Shutdown 场景下不成立。
+
+#### 影响
+
+1. **Shutdown 时资源泄漏**：如果 Lua GC 尚未运行，活跃的 TCP 客户端连接在 Shutdown 期间不会被关闭——它们持有的文件描述符、libevent 资源和内存继续占用直到进程退出
+2. **回调悬空风险**：`ClientCtx` 中的连接回调 lambda 捕获了原始 `lua_State*`（`L_ptr`）和 `inst_ref`（Lua 注册表引用）。如果 ShutdownNetBindings 返回后、VM 销毁前，仍有一个排队的网络事件触发回调，则会访问可能已部分清理的 Lua state
+3. **与 Server 绑定的不对称**：Server/HTTP/UDP/KCP 都有显式 Shutdown，唯独 TCP 客户端没有——这种不一致是维护陷阱
+
+#### 改进方向
+
+1. 增加全局 `g_client_ctxs` 映射（参考 `g_server_ctxs` 模式）
+2. 实现 `ShutdownClientBindings()` 遍历所有活跃客户端连接：先设置 disposed 标记 → 清除回调 lambda 捕获 → 调用 `conn->Close()` → unref Lua 注册表引用
+3. 在 `ShutdownNetBindings()` 中调用 `ShutdownClientBindings()`
+
+---
+
 ## 第三部分：系统级缺陷（P2-P3）
 
 ### 3.1 网络层
@@ -645,6 +683,9 @@ Release 构建中，从错误线程调用 `event_add`/`event_del` 不会触发�
 | DNS 仅 IPv4 | P2 | `dns_resolver.h:14` 标注 TODO |
 | DNS `new shared_ptr` 泄漏 | P2 | `dns_resolver.cc:190` — heap-allocate shared_ptr 透传给 C 回调，若回调从不触发则永久泄漏 |
 | send() 未检查返回值 | P3 | `tcp_conn.cc` 和 bind 文件中的 `conn->Send()` 忽略返回值 |
+| **TCP 客户端连接无显式 Shutdown** | **P1** | `ShutdownNetBindings()` 跳过 TCP 客户端 — 仅靠 Lua GC 的 `__gc` metamethod 清理。详见 2.10 |
+| **HTTP pending refs O(n) 线性移除** | P2 | `net_http_bind.cc:82` — `HandleHttpResponse` 用 `std::find` 在 pending refs vector 中查找。高并发 HTTP 下累积 O(n²) 开销 |
+| HTTP POST body 无大小限制 | P2 | `net_http_bind.cc:148` — `luaL_checklstring` 无长度上限，同 P0-6 模式但 HTTP 路径独立可攻击 |
 
 ### 3.2 脚本系统
 
@@ -680,6 +721,8 @@ Release 构建中，从错误线程调用 `event_add`/`event_del` 不会触发�
 | 请求队列满时静默丢弃 | P1 | `EnqueueRequest` 返回 false 时无日志、无重试、无降级通知 |
 | MongoDB 绑定返回值不一致 | P3 | `bind_collection.cc` 中部分操作返回 `(bool, err\|nil)` 共 2 值，部分返回 `(bool, err\|nil, doc\|nil)` 共 3 值。Lua 侧需记忆每个操作的返回值个数 |
 | cursor 预分配泄漏风险 | P3 | `bind_cursor.cc:40` — `l_cursor_next` 在调用 `cursor->Next()` 前预分配 `BsonDocument`，若 Next() 失败需手动清理。该模式在 collection.cc 中多次重复 |
+| **SerializeCursor 无文档数上限** | **P2** | `db_thread.cc:38-54` — `SerializeCursor()` 构建 JSON 数组字符串，无文档数限制。返回百万级文档可产生 GB 级字符串导致 OOM |
+| **kDeleteMany "{}" 全删无安全锁** | **P2** | `db_thread.cc:752-758` — `ProcessRequest` 中 `kDeleteMany` 显式允许空 filter，注释为"intentional"。Lua 侧一个 typo 即可全表清空，无二次确认机制 |
 
 ### 3.4 配置系统
 
@@ -813,6 +856,56 @@ loop->RunInLoop([del_ctx] { delete del_ctx; });  // 延迟 delete
 - 无 HTTP admin endpoint（`/health`、`/stats`）
 - Perfetto 适合开发期 trace，不适合生产持续监控
 
+### 4.12 ExportMongo 注册代码极端重复 — 82 类型 × 3 注册点
+
+#### 现状
+
+`mongo_bind.cc` 的 `ExportMongo()` 函数（254 行）包含：
+
+```cpp
+// 82 个 metatable 注册调用：
+RegisterClientMeta(L);
+RegisterCollectionMeta(L);
+RegisterCursorMeta(L);
+// ... 79 more ...
+RegisterBulkOperationMeta(L);
+
+// 74 个 AddToModule 调用：
+AddToModule(L, "mongoc", "client", l_mongo_client_create);
+AddToModule(L, "mongoc", "collection", l_mongo_collection_find);
+// ... 72 more ...
+```
+
+每个 MongoDB 类型需要出现在**三个不同位置**：`RegisterXxxMeta(L)` 注册 metatable、`AddToModule(L, ...)` 添加到导出模块、对应的 `#include` 头文件。82 个类型意味着 **246 处手工维护的注册点**。
+
+#### 根因
+
+metatable 注册和模块导出是分离的两个步骤，它们之间的关联仅靠命名约定。没有一个宏或模板来自动化"定义类型 → 注册 metatable → 添加函数到模块"这个流程。C++ 没有反射，但可以通过 X-macro 列表或代码生成解决。
+
+#### 影响
+
+1. **新增类型极易遗漏**：开发者必须记住三个注册点，漏掉任何一个表现为静默失败（Lua 侧收到 nil 或 "attempt to call nil"）
+2. **重构困难**：修改一个类型的函数集合需要跨 3 个位置同步
+3. **代码审查负担**：254 行几乎相同的调用，审查者很难发现遗漏或不一致
+
+#### 改进方向
+
+使用 X-macro 列表定义所有类型及其函数：
+
+```cpp
+#define MONGOC_TYPES(X) \
+  X(client, Client) \
+  X(collection, Collection) \
+  X(cursor, Cursor) \
+  // ...
+
+// 自动生成 RegisterMeta + AddToModule
+```
+
+单个列表 → 编译期生成所有注册代码，减少 246 → 82 个维护点。
+
+
+
 ---
 
 ## 第五部分：正面发现 — 已有良好实践
@@ -840,9 +933,24 @@ loop->RunInLoop([del_ctx] { delete del_ctx; });  // 延迟 delete
 
 `bind_util.h` 中的 `GetUserdata<T>`/`NewUserdata<T>` 模板统一了全用户数据生命周期管理，消除了手动 `luaL_ref`/`luaL_unref` 的需要。46 个绑定文件都遵循相同模式。
 
-### 5.5 Lua 侧封装质量
+### 5.5 Lua 侧封装质量 — 参考级实现
 
-`server.lua` 和 `client.lua` 有状态追踪、pcall 安全回调、use-after-free 防护。
+`server.lua`（240 行）和 `client.lua`（163 行）展示了精心设计的 Lua 封装层：
+
+**server.lua — TcpServer 封装**：
+- **连接追踪**：`_connections` 表（raw_conn → TcpConnection），支持 `broadcast()`、`connection_count()`、`get_connections()`
+- **分层回调**：per-connection handler 优先，fallback 到 server 级 handler
+- **_safe_callback**：所有用户回调通过 `pcall` 保护，单个回调异常不影响其他连接
+- **_bind_raw()**：统一管理 on_message/on_close 的 C++ 回调注册
+- **生命周期安全**：连接关闭时自动从 `_connections` 移除，防止 use-after-free
+
+**client.lua — TcpClient 封装**：
+- **三态 FSM**：DISCONNECTED(0) → CONNECTING(1) → CONNECTED(2)，带状态名查找表
+- **防双重关闭**：`on_close` 检查当前状态后再通知，防止重复触发
+- **_safe_callback**：所有用户回调 pcall 保护
+- **状态查询 API**：`is_connected()`、`is_connecting()`、`get_state_name()`
+
+这两个 Lua 封装层是同类代码中的**参考级实现**，可直接作为其他 Lua 封装模块的设计模板。
 
 ### 5.6 db_service_main_bind.cc 的输入验证
 
@@ -858,9 +966,9 @@ loop->RunInLoop([del_ctx] { delete del_ctx; });  // 延迟 delete
 | 定时器 | ★★★★☆ | 层级过重、Lua 生命周期绑定 |
 | 日志 | ★★★★☆ | 76+ 处 fprintf + std::cout 绕过日志系统 |
 | 脚本 VM | ★★☆☆☆ | 沙箱（P0）、协程、热更、错误恢复、循环依赖检测、脚本来源限制 |
-| 脚本绑定 | ★★★☆☆ | 覆盖核心 API，80% 重复样板，RunInLoop 跨线程生命周期安全 |
+| 脚本绑定 | ★★★☆☆ | 覆盖核心 API，80% 重复样板，RunInLoop 跨线程生命周期安全，TCP 客户端无显式 Shutdown |
 | 配置管理 | ★★★☆☆ | 热通知缺失 — Reload 形同虚设 |
-| 数据库 | ★★★☆☆ | ORM、缓存、多后端、cursor 泄漏、队列满静默丢弃、返回值不一致 |
+| 数据库 | ★★★☆☆ | ORM、缓存、多后端、cursor 泄漏、队列满静默丢弃、返回值不一致、SerializeCursor 无界、kDeleteMany 全删无安全锁 |
 | 物理 | ★★☆☆☆ | 结果未接入游戏对象和网络同步；50ms 轮询休眠延迟；FetchResult 忙等待 |
 | **实体模型** | ☆☆☆☆☆ | 无任何形式的实体存储或抽象 |
 | **消息分帧** | ★☆☆☆☆ | 无，原始字节流直传 Lua |
@@ -900,6 +1008,7 @@ P1（第一个里程碑 — 提升开发效率与安全性）：
   │ 13. 配置热通知机制（Reload → 子系统回调）                    │
   │ 14. 绑定样板消除 — 将 bind_util.h 模式推广到网络绑定层      │
   │ 15. 物理线程 EventLoop 改为 condition_variable 唤醒         │
+│ 16. TCP 客户端显式 Shutdown — 增加 g_client_ctxs 全局追踪    │
   └──────────────────────────────────────────────────────────────┘
 
 P2（生产就绪）：
@@ -917,19 +1026,23 @@ P2（生产就绪）：
   │ 26. RunInLoop 延迟 delete → weak_ptr/shared_ptr 迁移         │
   │ 27. 全局变量归属追踪 → ClearCache 清理全局                    │
   │ 28. PhysicsSystem::FetchResult 改为 condition_variable       │
+│ 29. SerializeCursor 增加文档数上限 — 防 GB 级 OOM            │
+│ 30. kDeleteMany 空 filter 二次确认机制                        │
+│ 31. HTTP pending refs 改为 unordered_set — O(1) 移除         │
+│ 32. ExportMongo X-macro 简化 — 246 → 82 维护点               │
   └──────────────────────────────────────────────────────────────┘
 
 P3（持续完善）：
   ┌──────────────────────────────────────────────────────────────┐
-  │ 29. 多数据库后端 + CI/CD                                     │
-  │ 30. 消息优先级/限流 + 断线重连                               │
-  │ 31. 代码重构（单例解耦、编译防火墙、TODO 清偿）              │
-  │ 32. 清理内嵌测试代码（engine.cc DB smoke test）              │
-  │ 33. Buffer 字节序问题修复                                    │
-  │ 34. DNS resolver shared_ptr 泄漏修复                          │
-  │ 35. Engine::Cleanup 生命周期顺序文档化 + 断言                 │
-  │ 36. MongoDB 绑定返回值统一化                                  │
-  │ 37. cursor 预分配模式安全化                                   │
+  │ 33. 多数据库后端 + CI/CD                                     │
+  │ 34. 消息优先级/限流 + 断线重连                               │
+  │ 35. 代码重构（单例解耦、编译防火墙、TODO 清偿）              │
+  │ 36. 清理内嵌测试代码（engine.cc DB smoke test）              │
+  │ 37. Buffer 字节序问题修复                                    │
+  │ 38. DNS resolver shared_ptr 泄漏修复                          │
+  │ 39. Engine::Cleanup 生命周期顺序文档化 + 断言                 │
+  │ 40. MongoDB 绑定返回值统一化                                  │
+  │ 41. cursor 预分配模式安全化                                   │
   └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -950,7 +1063,7 @@ P3（持续完善）：
 
 ### 关键洞察
 
-**代码库内部存在可复用的设计模式**——MongoDB 绑定层的 `bind_util.h` 模板系统如果被推广到网络绑定层，可以消除约 1500 行手工样板代码。PhysicsEngineBridge 的线程验证模式如果被推广，可以消除单例依赖。
+**代码库内部存在可复用的设计模式**——MongoDB 绑定层的 `bind_util.h` 模板系统如果被推广到网络绑定层，可以消除约 1500 行手工样板代码。PhysicsEngineBridge 的线程验证模式如果被推广，可以消除单例依赖。ExportMongo 的 82 类型 × 3 注册点如果改为 X-macro 列表，维护点可从 246 降至 82。
 
 网络绑定层的设计质量低不是因为"不知道怎么做"，而是因为**没有将已验证的模式横向推广**。
 
@@ -991,3 +1104,8 @@ P3（持续完善）：
 | `assert()` 调用总数 | ~120（主要在 evpp 层线程/状态验证） |
 | Release 中禁用的线程安全检查 | 1 整套系统（inner_pre.cc evmap） |
 | DNS resolver heap-alloc shared_ptr 泄漏风险 | 1（dns_resolver.cc:190） |
+| 不追踪/不显式关闭的 TCP 客户端连接 | 持久（net_bind.cc — Shutdown 跳过） |
+| HTTP pending refs O(n) 线性查找 | ~15（net_http_bind.cc HandleHttpResponse） |
+| SerializeCursor 无文档数上限 | 1（db_thread.cc:38-54，可产生 GB 级字符串） |
+| kDeleteMany "{}" 全删无安全锁 | 1（db_thread.cc:752-758） |
+| ExportMongo 每类型 3 处注册点 | 82 × 3 = 246（mongo_bind.cc） |
