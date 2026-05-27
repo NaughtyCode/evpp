@@ -91,6 +91,13 @@ int l_bulk_set_write_concern(lua_State* L) {
     return 0;
 }
 
+int l_bulk_set_comment(lua_State* L) {
+    auto* bulk = GetUserdata<mongo::MongoBulkOperation>(L, 1, kMetaName);
+    void* comment = lua_touserdata(L, 2);
+    if (bulk) bulk->SetComment(comment);
+    return 0;
+}
+
 int l_bulk_update(lua_State* L) {
     auto* bulk = GetUserdata<mongo::MongoBulkOperation>(L, 1, kMetaName);
     auto* selector = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
@@ -243,6 +250,7 @@ const luaL_Reg kLib[] = {
     {"bulk_replace_one", l_bulk_replace_one},
     {"bulk_execute", l_bulk_execute},
     {"bulk_set_write_concern", l_bulk_set_write_concern},
+    {"bulk_set_comment", l_bulk_set_comment},
     {"bulk_set_bypass_document_validation", l_bulk_set_bypass_document_validation},
     {"bulk_set_let", l_bulk_set_let},
     {"bulk_insert_with_opts", l_bulk_insert_with_opts},

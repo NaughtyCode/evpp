@@ -510,6 +510,24 @@ int l_gridfs_drop(lua_State* L) {
     return 1;
 }
 
+int l_gridfs_get_files_collection(lua_State* L) {
+    auto* gridfs = GetUserdata<mongo::MongoGridFs>(L, 1, kGridFsMeta);
+    if (!gridfs) { lua_pushnil(L); return 1; }
+    void* col = gridfs->GetFilesCollection();
+    if (col) lua_pushlightuserdata(L, col);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_gridfs_get_chunks_collection(lua_State* L) {
+    auto* gridfs = GetUserdata<mongo::MongoGridFs>(L, 1, kGridFsMeta);
+    if (!gridfs) { lua_pushnil(L); return 1; }
+    void* col = gridfs->GetChunksCollection();
+    if (col) lua_pushlightuserdata(L, col);
+    else lua_pushnil(L);
+    return 1;
+}
+
 int l_gridfs_remove_by_filename(lua_State* L) {
     auto* gridfs = GetUserdata<mongo::MongoGridFs>(L, 1, kGridFsMeta);
     const char* filename = luaL_checkstring(L, 2);
@@ -527,6 +545,8 @@ const luaL_Reg kGridFsLib[] = {
     {"gridfs_find_one_with_opts", l_gridfs_find_one_with_opts},
     {"gridfs_find_with_opts", l_gridfs_find_with_opts},
     {"gridfs_drop", l_gridfs_drop},
+    {"gridfs_get_files_collection", l_gridfs_get_files_collection},
+    {"gridfs_get_chunks_collection", l_gridfs_get_chunks_collection},
     {"gridfs_remove_by_filename", l_gridfs_remove_by_filename},
     {nullptr, nullptr},
 };

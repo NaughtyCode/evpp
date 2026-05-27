@@ -640,6 +640,15 @@ int l_utf8_next_char(lua_State* L) {
     return 1;
 }
 
+int l_utf8_from_unichar(lua_State* L) {
+    auto unichar = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    char utf8[6];
+    uint32_t len = 0;
+    mongo::BsonUtf8::FromUnichar(unichar, utf8, &len);
+    lua_pushlstring(L, utf8, len);
+    return 1;
+}
+
 int l_clock_get_time_ns(lua_State* L) {
     lua_pushinteger(L, mongo::BsonClock::GetTimeNs());
     return 1;
@@ -648,6 +657,14 @@ int l_clock_get_time_ns(lua_State* L) {
 int l_clock_get_date_time(lua_State* L) {
     lua_pushinteger(L, mongo::BsonClock::GetDateTime());
     return 1;
+}
+
+int l_clock_get_time_of_day(lua_State* L) {
+    struct timeval tv;
+    mongo::BsonClock::GetTimeOfDay(&tv);
+    lua_pushinteger(L, static_cast<lua_Integer>(tv.tv_sec));
+    lua_pushinteger(L, static_cast<lua_Integer>(tv.tv_usec));
+    return 2;
 }
 
 int l_str_dup(lua_State* L) {
@@ -717,8 +734,10 @@ const luaL_Reg kExtLib[] = {
     {"utf8_escape_for_json",  l_utf8_escape_for_json},
     {"utf8_get_char",         l_utf8_get_char},
     {"utf8_next_char",        l_utf8_next_char},
+    {"utf8_from_unichar",     l_utf8_from_unichar},
     {"clock_get_time_ns",     l_clock_get_time_ns},
     {"clock_get_date_time",   l_clock_get_date_time},
+    {"clock_get_time_of_day", l_clock_get_time_of_day},
     {"str_dup",               l_str_dup},
     {"str_ndup",              l_str_ndup},
     {"str_ncpy",              l_str_ncpy},

@@ -149,8 +149,10 @@ int l_client_command_simple(lua_State* L) {
 int l_client_start_session(lua_State* L) {
     auto* client = GetUserdata<mongo::MongoClient>(L, 1, kMetaName);
     if (!client) { lua_pushnil(L); return 1; }
+    auto* opts = lua_isnoneornil(L, 2) ? nullptr
+                : GetUserdata<mongo::MongoSessionOpts>(L, 2, "mongoc.session_opts");
     mongo::MongoError error;
-    auto* session = client->StartSession(nullptr, &error);
+    auto* session = client->StartSession(opts, &error);
     if (!session) {
         lua_pushnil(L);
         lua_pushstring(L, error.Message());
@@ -395,6 +397,22 @@ int l_client_reset(lua_State* L) {
     return 0;
 }
 
+int l_client_release_from_pool(lua_State* L) {
+    auto* client = GetUserdata<mongo::MongoClient>(L, 1, kMetaName);
+    if (client) client->ReleaseFromPool();
+    return 0;
+}
+
+int l_client_from_pooled(lua_State* L) {
+    void* raw_client = lua_touserdata(L, 1);
+    if (!raw_client) { lua_pushnil(L); lua_pushstring(L, "raw client pointer required"); return 2; }
+    auto* client = mongo::MongoClient::FromPooled(raw_client);
+    if (!client) { lua_pushnil(L); lua_pushstring(L, "failed to wrap pooled client"); return 2; }
+    auto** ud = NewUserdata<mongo::MongoClient>(L, kMetaName);
+    *ud = client;
+    return 1;
+}
+
 int l_client_get_database_names_with_opts(lua_State* L) {
     auto* client = GetUserdata<mongo::MongoClient>(L, 1, kMetaName);
     auto* opts = lua_isnoneornil(L, 2) ? nullptr
@@ -584,6 +602,8 @@ const luaL_Reg kLib[] = {
     {"client_set_ssl_opts", l_client_set_ssl_opts},
     {"client_set_error_api", l_client_set_error_api},
     {"client_reset", l_client_reset},
+    {"client_release_from_pool", l_client_release_from_pool},
+    {"client_from_pooled", l_client_from_pooled},
     {"client_get_database", l_client_get_database},
     {"client_get_default_database", l_client_get_default_database},
     {"client_get_collection", l_client_get_collection},

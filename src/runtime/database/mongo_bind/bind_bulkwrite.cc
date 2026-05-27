@@ -37,8 +37,10 @@ int l_bulkwrite_append_insert_one(lua_State* L) {
     const char* ns = luaL_checkstring(L, 2);
     auto* doc = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
     if (!bw || !doc) { lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2; }
+    auto* ins_opts = lua_isnoneornil(L, 4) ? nullptr
+                    : GetUserdata<mongo::MongoBulkWriteInsertOneOpts>(L, 4, "mongoc.bulk_write_insert_one_opts");
     mongo::MongoError error;
-    bool ok = bw->AppendInsertOne(ns, *doc, nullptr, &error);
+    bool ok = bw->AppendInsertOne(ns, *doc, ins_opts, &error);
     lua_pushboolean(L, ok);
     if (!ok) lua_pushstring(L, error.Message());
     else lua_pushnil(L);
@@ -54,7 +56,9 @@ int l_bulkwrite_append_update_one(lua_State* L) {
         lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2;
     }
     mongo::MongoError error;
-    bool ok = bw->AppendUpdateOne(ns, *filter, *update, nullptr, &error);
+    auto* upd_opts = lua_isnoneornil(L, 5) ? nullptr
+                    : GetUserdata<mongo::MongoBulkWriteUpdateOneOpts>(L, 5, "mongoc.bulk_write_update_one_opts");
+    bool ok = bw->AppendUpdateOne(ns, *filter, *update, upd_opts, &error);
     lua_pushboolean(L, ok);
     if (!ok) lua_pushstring(L, error.Message());
     else lua_pushnil(L);
@@ -67,7 +71,9 @@ int l_bulkwrite_append_delete_one(lua_State* L) {
     auto* filter = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
     if (!bw || !filter) { lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2; }
     mongo::MongoError error;
-    bool ok = bw->AppendDeleteOne(ns, *filter, nullptr, &error);
+    auto* del_opts = lua_isnoneornil(L, 4) ? nullptr
+                    : GetUserdata<mongo::MongoBulkWriteDeleteOneOpts>(L, 4, "mongoc.bulk_write_delete_one_opts");
+    bool ok = bw->AppendDeleteOne(ns, *filter, del_opts, &error);
     lua_pushboolean(L, ok);
     if (!ok) lua_pushstring(L, error.Message());
     else lua_pushnil(L);
@@ -83,7 +89,9 @@ int l_bulkwrite_append_update_many(lua_State* L) {
         lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2;
     }
     mongo::MongoError error;
-    bool ok = bw->AppendUpdateMany(ns, *filter, *update, nullptr, &error);
+    auto* upm_opts = lua_isnoneornil(L, 5) ? nullptr
+                    : GetUserdata<mongo::MongoBulkWriteUpdateManyOpts>(L, 5, "mongoc.bulk_write_update_many_opts");
+    bool ok = bw->AppendUpdateMany(ns, *filter, *update, upm_opts, &error);
     lua_pushboolean(L, ok);
     if (!ok) lua_pushstring(L, error.Message());
     else lua_pushnil(L);
@@ -99,7 +107,9 @@ int l_bulkwrite_append_replace_one(lua_State* L) {
         lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2;
     }
     mongo::MongoError error;
-    bool ok = bw->AppendReplaceOne(ns, *filter, *replacement, nullptr, &error);
+    auto* rep_opts = lua_isnoneornil(L, 5) ? nullptr
+                    : GetUserdata<mongo::MongoBulkWriteReplaceOneOpts>(L, 5, "mongoc.bulk_write_replace_one_opts");
+    bool ok = bw->AppendReplaceOne(ns, *filter, *replacement, rep_opts, &error);
     lua_pushboolean(L, ok);
     if (!ok) lua_pushstring(L, error.Message());
     else lua_pushnil(L);
@@ -112,7 +122,9 @@ int l_bulkwrite_append_delete_many(lua_State* L) {
     auto* filter = GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
     if (!bw || !filter) { lua_pushboolean(L, false); lua_pushstring(L, "invalid args"); return 2; }
     mongo::MongoError error;
-    bool ok = bw->AppendDeleteMany(ns, *filter, nullptr, &error);
+    auto* dem_opts = lua_isnoneornil(L, 4) ? nullptr
+                    : GetUserdata<mongo::MongoBulkWriteDeleteManyOpts>(L, 4, "mongoc.bulk_write_delete_many_opts");
+    bool ok = bw->AppendDeleteMany(ns, *filter, dem_opts, &error);
     lua_pushboolean(L, ok);
     if (!ok) lua_pushstring(L, error.Message());
     else lua_pushnil(L);
@@ -123,7 +135,9 @@ int l_bulkwrite_execute(lua_State* L) {
     auto* bw = GetUserdata<mongo::MongoBulkWrite>(L, 1, kMetaName);
     if (!bw) { lua_pushnil(L); lua_pushstring(L, "invalid bulk write"); return 2; }
 
-    auto ret = bw->Execute(nullptr);
+    auto* opts = lua_isnoneornil(L, 2) ? nullptr
+                : GetUserdata<mongo::MongoBulkWriteOpts>(L, 2, "mongoc.bulk_write_opts");
+    auto ret = bw->Execute(opts);
 
     if (ret.exception) {
         mongo::MongoError error;

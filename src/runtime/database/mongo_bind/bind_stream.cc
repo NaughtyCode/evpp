@@ -89,6 +89,54 @@ int l_stream_new_tls(lua_State* L) {
     return 1;
 }
 
+int l_stream_new_gridfs(lua_State* L) {
+    void* gridfs_file = lua_touserdata(L, 1);
+    auto* s = mongo::MongoStream::NewGridFs(gridfs_file);
+    if (!s) { lua_pushnil(L); lua_pushstring(L, "stream creation failed"); return 2; }
+    auto** ud = NewUserdata<mongo::MongoStream>(L, kMetaName);
+    *ud = s;
+    return 1;
+}
+
+int l_stream_new_tls_openssl(lua_State* L) {
+    auto* base = GetUserdata<mongo::MongoStream>(L, 1, kMetaName);
+    const char* host = luaL_checkstring(L, 2);
+    void* ssl_opts = lua_touserdata(L, 3);
+    int client = lua_toboolean(L, 4) != 0 ? 1 : 0;
+    if (!base) { lua_pushnil(L); lua_pushstring(L, "invalid base stream"); return 2; }
+    auto* s = mongo::MongoStream::NewTlsOpenssl(base, host, ssl_opts, client);
+    if (!s) { lua_pushnil(L); lua_pushstring(L, "stream creation failed"); return 2; }
+    auto** ud = NewUserdata<mongo::MongoStream>(L, kMetaName);
+    *ud = s;
+    return 1;
+}
+
+int l_stream_new_tls_secure_channel(lua_State* L) {
+    auto* base = GetUserdata<mongo::MongoStream>(L, 1, kMetaName);
+    const char* host = luaL_checkstring(L, 2);
+    void* ssl_opts = lua_touserdata(L, 3);
+    int client = lua_toboolean(L, 4) != 0 ? 1 : 0;
+    if (!base) { lua_pushnil(L); lua_pushstring(L, "invalid base stream"); return 2; }
+    auto* s = mongo::MongoStream::NewTlsSecureChannel(base, host, ssl_opts, client);
+    if (!s) { lua_pushnil(L); lua_pushstring(L, "stream creation failed"); return 2; }
+    auto** ud = NewUserdata<mongo::MongoStream>(L, kMetaName);
+    *ud = s;
+    return 1;
+}
+
+int l_stream_new_tls_secure_transport(lua_State* L) {
+    auto* base = GetUserdata<mongo::MongoStream>(L, 1, kMetaName);
+    const char* host = luaL_checkstring(L, 2);
+    void* ssl_opts = lua_touserdata(L, 3);
+    int client = lua_toboolean(L, 4) != 0 ? 1 : 0;
+    if (!base) { lua_pushnil(L); lua_pushstring(L, "invalid base stream"); return 2; }
+    auto* s = mongo::MongoStream::NewTlsSecureTransport(base, host, ssl_opts, client);
+    if (!s) { lua_pushnil(L); lua_pushstring(L, "stream creation failed"); return 2; }
+    auto** ud = NewUserdata<mongo::MongoStream>(L, kMetaName);
+    *ud = s;
+    return 1;
+}
+
 // ── Non-owning stream accessors ───────────────────────────────────────────
 
 int l_stream_get_base_stream(lua_State* L) {
@@ -254,6 +302,19 @@ int l_stream_tls_handshake(lua_State* L) {
     return 2;
 }
 
+int l_stream_tls_handshake_block(lua_State* L) {
+    auto* s = GetUserdata<mongo::MongoStream>(L, 1, kMetaName);
+    const char* host = luaL_checkstring(L, 2);
+    int32_t timeout = static_cast<int32_t>(luaL_checkinteger(L, 3));
+    if (!s) { lua_pushboolean(L, false); lua_pushstring(L, "invalid stream"); return 2; }
+    mongo::MongoError error;
+    bool ok = s->TlsHandshakeBlock(host, timeout, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) lua_pushstring(L, error.Message() ? error.Message() : "TLS handshake failed");
+    else lua_pushnil(L);
+    return 2;
+}
+
 // ── File / Socket / Raw accessors ─────────────────────────────────────────
 
 int l_stream_get_file_fd(lua_State* L) {
@@ -314,6 +375,10 @@ const luaL_Reg kLib[] = {
     {"stream_new_file_for_path", l_stream_new_file_for_path},
     {"stream_new_socket", l_stream_new_socket},
     {"stream_new_tls", l_stream_new_tls},
+    {"stream_new_gridfs", l_stream_new_gridfs},
+    {"stream_new_tls_openssl", l_stream_new_tls_openssl},
+    {"stream_new_tls_secure_channel", l_stream_new_tls_secure_channel},
+    {"stream_new_tls_secure_transport", l_stream_new_tls_secure_transport},
     {"stream_destroy", l_stream_destroy},
     {"stream_get_base_stream", l_stream_get_base_stream},
     {"stream_get_tls_stream", l_stream_get_tls_stream},
@@ -329,6 +394,7 @@ const luaL_Reg kLib[] = {
     {"stream_timed_out", l_stream_timed_out},
     {"stream_should_retry", l_stream_should_retry},
     {"stream_tls_handshake", l_stream_tls_handshake},
+    {"stream_tls_handshake_block", l_stream_tls_handshake_block},
     {"stream_get_file_fd", l_stream_get_file_fd},
     {"stream_get_socket", l_stream_get_socket},
     {"stream_get_raw", l_stream_get_raw},

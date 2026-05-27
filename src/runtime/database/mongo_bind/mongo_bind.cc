@@ -24,6 +24,12 @@
 #include "runtime/database/mongo_bind/bind_bulk_operation.h"
 #include "runtime/database/mongo_bind/bind_bulkwrite.h"
 #include "runtime/database/mongo_bind/bind_bulk_write_opts.h"
+#include "runtime/database/mongo_bind/bind_bulk_write_insert_one_opts.h"
+#include "runtime/database/mongo_bind/bind_bulk_write_update_one_opts.h"
+#include "runtime/database/mongo_bind/bind_bulk_write_update_many_opts.h"
+#include "runtime/database/mongo_bind/bind_bulk_write_replace_one_opts.h"
+#include "runtime/database/mongo_bind/bind_bulk_write_delete_one_opts.h"
+#include "runtime/database/mongo_bind/bind_bulk_write_delete_many_opts.h"
 #include "runtime/database/mongo_bind/bind_bulk_write_result.h"
 #include "runtime/database/mongo_bind/bind_bulk_write_exception.h"
 #include "runtime/database/mongo_bind/bind_server_api.h"
@@ -72,6 +78,12 @@ void ExportMongo(ScriptVM& vm) {
     RegisterMongoBulkOperationMeta(L);
     RegisterMongoBulkWriteMeta(L);
     RegisterMongoBulkWriteOptsMeta(L);
+    RegisterMongoBulkWriteInsertOneOptsMeta(L);
+    RegisterMongoBulkWriteUpdateOneOptsMeta(L);
+    RegisterMongoBulkWriteUpdateManyOptsMeta(L);
+    RegisterMongoBulkWriteReplaceOneOptsMeta(L);
+    RegisterMongoBulkWriteDeleteOneOptsMeta(L);
+    RegisterMongoBulkWriteDeleteManyOptsMeta(L);
     RegisterMongoBulkWriteResultMeta(L);
     RegisterMongoBulkWriteExceptionMeta(L);
     RegisterMongoServerApiMeta(L);
@@ -175,6 +187,12 @@ void ExportMongo(ScriptVM& vm) {
     AddToModule(L, GetMongoBulkOperationLib());
     AddToModule(L, GetMongoBulkWriteLib());
     AddToModule(L, GetMongoBulkWriteOptsLib());
+    AddToModule(L, GetMongoBulkWriteInsertOneOptsLib());
+    AddToModule(L, GetMongoBulkWriteUpdateOneOptsLib());
+    AddToModule(L, GetMongoBulkWriteUpdateManyOptsLib());
+    AddToModule(L, GetMongoBulkWriteReplaceOneOptsLib());
+    AddToModule(L, GetMongoBulkWriteDeleteOneOptsLib());
+    AddToModule(L, GetMongoBulkWriteDeleteManyOptsLib());
     AddToModule(L, GetMongoBulkWriteResultLib());
     AddToModule(L, GetMongoBulkWriteExceptionLib());
     AddToModule(L, GetMongoServerApiLib());

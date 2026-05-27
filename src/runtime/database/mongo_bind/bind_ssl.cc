@@ -143,6 +143,13 @@ int l_ssl_opts_get_raw(lua_State* L) {
     return 1;
 }
 
+int l_ssl_opts_get_default(lua_State* L) {
+    const void* def = mongo::MongoSslOpts::GetDefault();
+    if (def) lua_pushlightuserdata(L, const_cast<void*>(def));
+    else lua_pushnil(L);
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"ssl_opts_new", l_ssl_opts_new},
     {"ssl_opts_destroy", l_ssl_opts_destroy},
@@ -161,6 +168,7 @@ const luaL_Reg kLib[] = {
     {"ssl_opts_set_allow_invalid_hostname", l_ssl_opts_set_allow_invalid_hostname},
     {"ssl_opts_get_allow_invalid_hostname", l_ssl_opts_get_allow_invalid_hostname},
     {"ssl_opts_get_raw", l_ssl_opts_get_raw},
+    {"ssl_opts_get_default", l_ssl_opts_get_default},
     {nullptr, nullptr},
 };
 

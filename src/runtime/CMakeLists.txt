@@ -232,6 +232,12 @@ set(MONGO_BIND_SOURCES
     ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_operation.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_operation.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_bulkwrite.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulkwrite.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_opts.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_insert_one_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_insert_one_opts.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_update_one_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_update_one_opts.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_update_many_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_update_many_opts.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_replace_one_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_replace_one_opts.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_delete_one_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_delete_one_opts.h
+    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_delete_many_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_delete_many_opts.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_result.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_result.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_exception.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_exception.h
     ${RUNTIME_DIR}/database/mongo_bind/bind_server_api.cc ${RUNTIME_DIR}/database/mongo_bind/bind_server_api.h
