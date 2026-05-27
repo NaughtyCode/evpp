@@ -32,7 +32,7 @@ server.on_connect = function(conn)
 end
 ```
 
-引擎内部最接近"实体存储"的结构是 `VMCustomPtrStore`（`src/runtime/vm/custom_ptr_store.h`），它是对 `lua_State` 内嵌 `void*` 数组的薄封装：提供 Set/Get/Push/Find/Contains 等操作，按 1-based 索引访问，支持 Reserve/Capacity 管理。但**它不提供任何语义**——不过是一个带索引的指针袋。
+引擎内部**不存在任何形式的实体存储**。`VMCustomPtrStore`（`src/runtime/vm/custom_ptr_store.h`）是 C++ 子系统对象注册表——它将 C++ 基础设施对象（PhysicsSystem*、PhysicsThread*、PhysicsWorld*、PhysicsScriptVM*）注册到 `lua_State` 内部数组中，使 Lua 绑定回调可以通过固定索引（如 `kPhysPtrSystem = 1`）检索这些 C++ 指针。它的设计目的是 **C++ 模块间的依赖注入**（避免通过全局单例访问），而非游戏实体的存储。与实体模型无关。
 
 #### 根因分析
 
@@ -802,7 +802,7 @@ loop->RunInLoop([del_ctx] { delete del_ctx; });  // 延迟 delete
 | 配置管理 | ★★★☆☆ | 热通知缺失 — Reload 形同虚设 |
 | 数据库 | ★★★☆☆ | ORM、缓存、多后端、cursor 泄漏、队列满静默丢弃 |
 | 物理 | ★★☆☆☆ | 结果未接入游戏对象和网络同步 |
-| **实体模型** | ★☆☆☆☆ | 无，仅 void* 数组 |
+| **实体模型** | ☆☆☆☆☆ | 无任何形式的实体存储或抽象 |
 | **消息分帧** | ★☆☆☆☆ | 无，原始字节流直传 Lua |
 | **多 VM 架构** | ★★☆☆☆ | 物理/DB 有独立 VM，业务层无 |
 | **测试** | ★☆☆☆☆ | 仅 evpp 网络层，0 个 engine 层测试 |
