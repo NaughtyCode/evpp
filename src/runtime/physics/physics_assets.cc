@@ -692,11 +692,7 @@ AssetLoadResult AssetLoader::LoadScene(const std::string& json_path,
 				}
 			}
 			if (!found_a || !found_b) {
-				std::fprintf(stderr,
-							 "AssetLoader: constraint '%s' -> '%s': "
-							 "referenced body not found\n",
-							 con.body_a.c_str(),
-							 con.body_b.c_str());
+				ENGINE_LOG_ERROR(GetLogger(), "AssetLoader: constraint '{}' -> '{}': referenced body not found", con.body_a.c_str(), 							 con.body_b.c_str());
 				continue;  // skip broken constraints
 			}
 
@@ -758,10 +754,7 @@ AssetLoadResult AssetLoader::LoadScene(const std::string& json_path,
 					++result.constraints_loaded;
 				}
 			} else {
-				std::fprintf(stderr,
-							 "AssetLoader: unknown constraint type '%s'. "
-							 "Supported: hinge, spring, slider, fixed\n",
-							 con.type.c_str());
+				ENGINE_LOG_ERROR(GetLogger(), "AssetLoader: unknown constraint type '{}'. Supported: hinge, spring, slider, fixed", con.type.c_str());
 			}
 		}
 	}

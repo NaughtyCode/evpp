@@ -39,24 +39,18 @@ DatabaseService::~DatabaseService() = default;
 
 bool DatabaseService::Initialize(const DbServiceConfig& config, const mongo::MongoUri& uri) {
 	if (running_.load(std::memory_order_acquire)) {
-		std::fprintf(stderr, "DatabaseService: already initialized\n");
+		ENGINE_LOG_WARN(GetLogger(), "DatabaseService: already initialized\n");
 		return false;
 	}
 
 	// ── Validation (design §4: Initialize preconditions) ───────────────
 	if (config.thread_pool.thread_count < 1) {
-		std::fprintf(stderr,
-					 "DatabaseService: thread_count must be >= 1 (got %d)\n",
-					 config.thread_pool.thread_count);
+		ENGINE_LOG_ERROR(GetLogger(), "DatabaseService: thread_count must be >= 1 (got {})\n", config.thread_pool.thread_count);
 		return false;
 	}
 
 	if (config.connection_pool.max_pool_size < config.thread_pool.thread_count) {
-		std::fprintf(stderr,
-					 "DatabaseService: max_pool_size (%d) < thread_count (%d), "
-					 "Pop() may timeout\n",
-					 config.connection_pool.max_pool_size,
-					 config.thread_pool.thread_count);
+		ENGINE_LOG_ERROR(GetLogger(), "DatabaseService: max_pool_size ({}) < thread_count ({}), Pop() may timeout", config.connection_pool.max_pool_size, 					 config.thread_pool.thread_count);
 	}
 
 	config_ = config;
@@ -82,7 +76,7 @@ bool DatabaseService::Initialize(const DbServiceConfig& config, const mongo::Mon
 	// SetMaxSize must be called BEFORE any Pop() — design §3.5 constraint.
 	pool_.reset(mongo::MongoClientPool::New(pooled_uri));
 	if (!pool_) {
-		std::fprintf(stderr, "DatabaseService: failed to create MongoClientPool\n");
+		ENGINE_LOG_ERROR(GetLogger(), "DatabaseService: failed to create MongoClientPool");
 		return false;
 	}
 	pool_->SetMaxSize(static_cast<uint32_t>(config_.connection_pool.max_pool_size));
@@ -93,7 +87,7 @@ bool DatabaseService::Initialize(const DbServiceConfig& config, const mongo::Mon
 	for (int i = 0; i < n; ++i) {
 		auto thread = std::make_unique<DBThread>(i, config_);
 		if (!thread->Start(*pool_)) {
-			std::fprintf(stderr, "DatabaseService: failed to start DBThread[%d]\n", i);
+			ENGINE_LOG_ERROR(GetLogger(), "DatabaseService: failed to start DBThread[{}]", i);
 			// Rollback: stop already-started threads, destroy pool.
 			for (int j = 0; j < i; ++j) {
 				threads_[j]->Stop();

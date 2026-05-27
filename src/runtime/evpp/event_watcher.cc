@@ -152,8 +152,7 @@ bool PipeEventWatcher::DoInit() {
 
 		ScopedSocket listener(::socket(AF_INET, SOCK_STREAM, 0));
 		if (listener.fd == INVALID_SOCKET) {
-			std::fprintf(
-				stderr, "[PipeEventWatcher] socket() failed, WSA err=%d\n", ::WSAGetLastError());
+			ENGINE_LOG_ERROR(engine::GetLogger(), ""[PipeEventWatcher] socket() failed, WSA err={}\n"", ::WSAGetLastError());
 			goto failed;
 		}
 
@@ -164,41 +163,33 @@ bool PipeEventWatcher::DoInit() {
 		addr.sin_port = 0;
 
 		if (::bind(listener.fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
-			std::fprintf(
-				stderr, "[PipeEventWatcher] bind() failed, WSA err=%d\n", ::WSAGetLastError());
+			ENGINE_LOG_ERROR(engine::GetLogger(), ""[PipeEventWatcher] bind() failed, WSA err={}\n"", ::WSAGetLastError());
 			goto failed;
 		}
 		if (::listen(listener.fd, 1) < 0) {
-			std::fprintf(
-				stderr, "[PipeEventWatcher] listen() failed, WSA err=%d\n", ::WSAGetLastError());
+			ENGINE_LOG_ERROR(engine::GetLogger(), ""[PipeEventWatcher] listen() failed, WSA err={}\n"", ::WSAGetLastError());
 			goto failed;
 		}
 
 		socklen_t addrlen = sizeof(addr);
 		if (::getsockname(listener.fd, reinterpret_cast<struct sockaddr*>(&addr), &addrlen) < 0) {
-			std::fprintf(stderr,
-						 "[PipeEventWatcher] getsockname() failed, WSA err=%d\n",
-						 ::WSAGetLastError());
+			ENGINE_LOG_ERROR(GetLogger(), "[PipeEventWatcher] getsockname() failed, WSA err={}", ::WSAGetLastError());
 			goto failed;
 		}
 
 		ScopedSocket writer(::socket(AF_INET, SOCK_STREAM, 0));
 		if (writer.fd == INVALID_SOCKET) {
-			std::fprintf(stderr,
-						 "[PipeEventWatcher] socket(writer) failed, WSA err=%d\n",
-						 ::WSAGetLastError());
+			ENGINE_LOG_ERROR(GetLogger(), "[PipeEventWatcher] socket(writer) failed, WSA err={}", ::WSAGetLastError());
 			goto failed;
 		}
 		if (::connect(writer.fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
-			std::fprintf(
-				stderr, "[PipeEventWatcher] connect() failed, WSA err=%d\n", ::WSAGetLastError());
+			ENGINE_LOG_ERROR(engine::GetLogger(), ""[PipeEventWatcher] connect() failed, WSA err={}\n"", ::WSAGetLastError());
 			goto failed;
 		}
 
 		ScopedSocket reader(::accept(listener.fd, NULL, NULL));
 		if (reader.fd == INVALID_SOCKET) {
-			std::fprintf(
-				stderr, "[PipeEventWatcher] accept() failed, WSA err=%d\n", ::WSAGetLastError());
+			ENGINE_LOG_ERROR(engine::GetLogger(), ""[PipeEventWatcher] accept() failed, WSA err={}\n"", ::WSAGetLastError());
 			goto failed;
 		}
 
@@ -210,8 +201,7 @@ bool PipeEventWatcher::DoInit() {
 #else
 	if (evutil_socketpair(AF_UNIX, SOCK_STREAM, 0, pipe_) < 0) {
 		int err = EVPP_ERRNO;
-		std::fprintf(
-			stderr, "[PipeEventWatcher] socketpair() failed, errno=%d %s\n", err, strerror(err));
+		ENGINE_LOG_ERROR(engine::GetLogger(), ""[PipeEventWatcher] socketpair() failed, errno={} {}\n"", err, strerror(err));
 		ENGINE_LOG_ERROR(
 			engine::GetLogger(), "create socketpair ERROR errno={} {}", err, strerror(err));
 		goto failed;
@@ -220,7 +210,7 @@ bool PipeEventWatcher::DoInit() {
 
 	if (evutil_make_socket_nonblocking(pipe_[0]) < 0 ||
 		evutil_make_socket_nonblocking(pipe_[1]) < 0) {
-		std::fprintf(stderr, "[PipeEventWatcher] evutil_make_socket_nonblocking() failed\n");
+		ENGINE_LOG_ERROR(GetLogger(), "[PipeEventWatcher] evutil_make_socket_nonblocking() failed\n");
 		goto failed;
 	}
 

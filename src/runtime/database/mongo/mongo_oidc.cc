@@ -133,11 +133,11 @@ mongoc_oidc_credential_t* oidc_trampoline(mongoc_oidc_callback_params_t* params)
 		cred = ctx->fn(wrapper);
 	} catch (const std::exception& e) {
 		// Do not let exceptions unwind through C stack frames
-		std::fprintf(stderr, "[mongo_oidc] exception in OIDC callback: %s\n", e.what());
+		ENGINE_LOG_ERROR(GetLogger(), "[mongo_oidc] exception in OIDC callback: {}", e.what());
 		return nullptr;
 	} catch (...) {
 		// Do not let exceptions unwind through C stack frames
-		std::fprintf(stderr, "[mongo_oidc] unknown exception in OIDC callback\n");
+		ENGINE_LOG_ERROR(GetLogger(), "[mongo_oidc] unknown exception in OIDC callback\n");
 		return nullptr;
 	}
 	if (!cred) return nullptr;

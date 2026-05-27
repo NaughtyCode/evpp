@@ -8,9 +8,9 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
-#include <iostream>
 #include <unordered_map>
 
+#include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
 
 namespace engine {
@@ -678,27 +678,39 @@ std::vector<TimerId> TimerManager::active_timers() const {
 	return result;
 }
 
-void TimerManager::dump_state() const {
-	auto s = stats();
-	std::cout << "=== GameTimerLib State Dump ===\n";
-	std::cout << "  Total updates:       " << s.total_updates << "\n";
-	std::cout << "  Avg update time:     " << s.avg_update_time_us << " us\n";
-	std::cout << "  Time scale:          " << s.time_scale << "\n";
-	std::cout << "  Suspended:           " << (s.suspended ? "yes" : "no") << "\n";
-	std::cout << "  HRTimers (active):   " << s.active_hrtimers << " / " << s.total_hrtimers
-			  << "\n";
-	std::cout << "  Wheel timers:        " << s.active_wheel_timers << " / " << s.total_wheel_timers
-			  << "\n";
-	std::cout << "  Alarms (active):     " << s.active_alarms << " / " << s.total_alarms << "\n";
-	std::cout << "  HRTimer fired:       " << s.hrtimer_stats.total_expired << "\n";
-	std::cout << "  Wheel fired:         " << s.wheel_stats.total_expired << "\n";
-	std::cout << "  HRTimer avg latency: " << s.hrtimer_stats.avg_latency_us() << " us\n";
-	std::cout << "  Wheel avg latency:   " << s.wheel_stats.avg_latency_us() << " us\n";
-	std::cout << "  Next HR expiry:      " << hrtimer_mgr_->next_expiry().count()
-			  << " ns from epoch\n";
-	std::cout << "  Next wheel expiry:   " << wheel_->next_expiry_ms() << " ms jiffy\n";
-	std::cout << "  Clock source:        " << clock_mgr_.current_source()->name() << "\n";
-	std::cout << "================================\n";
-}
+	void TimerManager::dump_state() const {
+		auto s = stats();
+		ENGINE_LOG_INFO(GetLogger(),
+			"=== GameTimerLib State Dump ===\n"
+			"  Total updates:       {}\n"
+			"  Avg update time:     {} us\n"
+			"  Time scale:          {}\n"
+			"  Suspended:           {}\n"
+			"  HRTimers (active):   {} / {}\n"
+			"  Wheel timers:        {} / {}\n"
+			"  Alarms (active):     {} / {}\n"
+			"  HRTimer fired:       {}\n"
+			"  Wheel fired:         {}\n"
+			"  HRTimer avg latency: {} us\n"
+			"  Wheel avg latency:   {} us\n"
+			"  Next HR expiry:      {} ns from epoch\n"
+			"  Next wheel expiry:   {} ms jiffy\n"
+			"  Clock source:        {}\n"
+			"================================",
+			s.total_updates,
+			s.avg_update_time_us,
+			s.time_scale,
+			(s.suspended ? "yes" : "no"),
+			s.active_hrtimers, s.total_hrtimers,
+			s.active_wheel_timers, s.total_wheel_timers,
+			s.active_alarms, s.total_alarms,
+			s.hrtimer_stats.total_expired,
+			s.wheel_stats.total_expired,
+			s.hrtimer_stats.avg_latency_us(),
+			s.wheel_stats.avg_latency_us(),
+			hrtimer_mgr_->next_expiry().count(),
+			wheel_->next_expiry_ms(),
+			clock_mgr_.current_source()->name());
+	}
 
 }  // namespace engine
