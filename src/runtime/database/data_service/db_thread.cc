@@ -17,6 +17,7 @@
 #include "runtime/database/mongo/mongo_error.h"
 #include "runtime/database/mongo/mongo_forward.h"
 #include "runtime/database/mongo_bind/mongo_bind.h"
+#include "runtime/script/import_bind.h"
 
 namespace engine {
 
@@ -241,8 +242,9 @@ void DBThread::EnqueueResponse(DbResponse&& resp) {
 //           package.loaded.mongoc = mongoc
 //           package.loaded.bson   = bson
 //      e. ExportDbRuntime — register db_get_client / db_get_pool globals.
-//      f. SetImportPath — configure require() search order (R12):
+//      f. SetImportPath — configure import search paths (R12):
 //           db_scripts_dir first, then runtime_scripts_dir.
+//      f2. ExportImport — register the import() Lua global function.
 //      g. If auto_load: DoDirectory(runtime) → DoDirectory(db_scripts).
 //      h. InitScript().
 //      i. Set healthy_ = true.
@@ -302,6 +304,9 @@ void DBThread::EventLoop() {
 		// 2f. Configure import path — db_scripts_dir searched first (R12)
 		script_vm_.SetImportPath(config_.script.db_scripts_dir + ";" +
 								 config_.script.runtime_scripts_dir);
+
+		// 2f2. Register the import() Lua global so scripts can use import("module")
+		ExportImport(script_vm_);
 
 		// 2g. Load scripts: runtime first (shared), then db_service (can override) (R12)
 		if (config_.script.auto_load) {
