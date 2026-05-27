@@ -212,6 +212,7 @@ void ExportMongo(ScriptVM& vm) {
     AddToModule(L, GetMongoSocketLib());
     AddToModule(L, GetMongoStructuredLogOptsLib());
     AddToModule(L, GetMongoStructuredLogEntryLib());
+    AddToModule(L, GetMongoLogLib());
     AddToModule(L, GetMongoOidcCredentialLib());
     AddToModule(L, GetMongoOidcCallbackParamsLib());
     AddToModule(L, GetMongoOidcCallbackLib());

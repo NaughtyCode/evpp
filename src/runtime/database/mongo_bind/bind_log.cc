@@ -214,6 +214,44 @@ const luaL_Reg kEntryLib[] = {
     {nullptr, nullptr},
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MongoLog static methods
+// ═══════════════════════════════════════════════════════════════════════════
+
+int l_log_level_to_string(lua_State* L) {
+    auto level = static_cast<mongo::MongoLogLevel>(luaL_checkinteger(L, 1));
+    const char* name = mongo::MongoLog::LevelToString(level);
+    if (name) lua_pushstring(L, name);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_log_trace_enable(lua_State* L) {
+    mongo::MongoLog::TraceEnable();
+    return 0;
+}
+
+int l_log_trace_disable(lua_State* L) {
+    mongo::MongoLog::TraceDisable();
+    return 0;
+}
+
+int l_log_default_handler(lua_State* L) {
+    auto level = static_cast<mongo::MongoLogLevel>(luaL_checkinteger(L, 1));
+    const char* domain = luaL_checkstring(L, 2);
+    const char* message = luaL_checkstring(L, 3);
+    mongo::MongoLog::DefaultHandler(level, domain, message);
+    return 0;
+}
+
+const luaL_Reg kLogLib[] = {
+    {"log_level_to_string", l_log_level_to_string},
+    {"log_trace_enable", l_log_trace_enable},
+    {"log_trace_disable", l_log_trace_disable},
+    {"log_default_handler", l_log_default_handler},
+    {nullptr, nullptr},
+};
+
 } // namespace
 
 // ── Metatable registration functions ───────────────────────────────────────
@@ -230,6 +268,7 @@ void RegisterMongoStructuredLogEntryMeta(lua_State* L) {
 
 const luaL_Reg* GetMongoStructuredLogOptsLib()  { return kOptsLib; }
 const luaL_Reg* GetMongoStructuredLogEntryLib() { return kEntryLib; }
+const luaL_Reg* GetMongoLogLib()                { return kLogLib; }
 
 } // namespace script
 } // namespace engine

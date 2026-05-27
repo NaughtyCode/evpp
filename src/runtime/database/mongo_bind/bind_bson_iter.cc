@@ -266,6 +266,15 @@ int l_bson_iter_init_find_case(lua_State* L) {
     return 1;
 }
 
+int l_bson_iter_init_find_wlen(lua_State* L) {
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    const char* key = luaL_checkstring(L, 3);
+    auto keylen = static_cast<int>(luaL_checkinteger(L, 4));
+    lua_pushboolean(L, iter && doc && iter->InitFindWLen(*doc, key, keylen));
+    return 1;
+}
+
 int l_bson_iter_init_from_data(lua_State* L) {
     auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
     size_t len;
@@ -458,6 +467,16 @@ int l_bson_iter_as_time_t(lua_State* L) {
     return 1;
 }
 
+int l_bson_iter_as_timeval(lua_State* L) {
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
+    if (!iter) { lua_pushinteger(L, 0); lua_pushinteger(L, 0); return 2; }
+    struct timeval tv;
+    iter->AsTimeval(&tv);
+    lua_pushinteger(L, static_cast<lua_Integer>(tv.tv_sec));
+    lua_pushinteger(L, static_cast<lua_Integer>(tv.tv_usec));
+    return 2;
+}
+
 int l_bson_iter_binary_equal(lua_State* L) {
     auto* a = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
     auto* b = GetUserdata<mongo::BsonIter>(L, 2, kMetaName);
@@ -507,6 +526,7 @@ const luaL_Reg kLib[] = {
     {"iter_as_array", l_bson_iter_as_array},
     {"iter_as_timestamp", l_bson_iter_as_timestamp},
     {"iter_as_time_t", l_bson_iter_as_time_t},
+    {"iter_as_timeval", l_bson_iter_as_timeval},
     {"iter_as_int64_coerce", l_bson_iter_as_int64_coerce},
     {"iter_as_double_coerce", l_bson_iter_as_double_coerce},
     {"iter_as_code", l_bson_iter_as_code},
@@ -519,6 +539,7 @@ const luaL_Reg kLib[] = {
     {"iter_find_wlen", l_bson_iter_find_wlen},
     {"iter_init_find", l_bson_iter_init_find},
     {"iter_init_find_case", l_bson_iter_init_find_case},
+    {"iter_init_find_wlen", l_bson_iter_init_find_wlen},
     {"iter_init_from_data", l_bson_iter_init_from_data},
     {"iter_key_len", l_bson_iter_key_len},
     {"iter_dup_utf8", l_bson_iter_dup_utf8},

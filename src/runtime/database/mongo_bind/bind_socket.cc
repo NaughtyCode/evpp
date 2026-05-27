@@ -12,6 +12,7 @@
 
 #include <bson/bson.h>
 
+#include "runtime/database/mongo/mongo_iovec.h"
 #include "runtime/database/mongo/mongo_socket.h"
 
 namespace engine {
@@ -107,6 +108,32 @@ int l_socket_get_name_info(lua_State* L) {
     return 1;
 }
 
+int l_socket_get_sock_name(lua_State* L) {
+    auto* s = GetUserdata<mongo::MongoSocket>(L, 1, kMetaName);
+    if (!s) { lua_pushnil(L); lua_pushstring(L, "invalid socket"); return 2; }
+    struct sockaddr_storage addr;
+    memset(&addr, 0, sizeof(addr));
+    int addrlen = sizeof(addr);
+    int rc = s->GetSockName(reinterpret_cast<struct sockaddr*>(&addr), &addrlen);
+    if (rc != 0) { lua_pushnil(L); lua_pushstring(L, "getsockname failed"); return 2; }
+    char ip[INET6_ADDRSTRLEN];
+    int port = 0;
+    if (addr.ss_family == AF_INET) {
+        auto* sa = reinterpret_cast<struct sockaddr_in*>(&addr);
+        inet_ntop(AF_INET, &sa->sin_addr, ip, sizeof(ip));
+        port = ntohs(sa->sin_port);
+    } else if (addr.ss_family == AF_INET6) {
+        auto* sa6 = reinterpret_cast<struct sockaddr_in6*>(&addr);
+        inet_ntop(AF_INET6, &sa6->sin6_addr, ip, sizeof(ip));
+        port = ntohs(sa6->sin6_port);
+    } else {
+        lua_pushnil(L); lua_pushstring(L, "unknown address family"); return 2;
+    }
+    lua_pushstring(L, ip);
+    lua_pushinteger(L, port);
+    return 2;
+}
+
 int l_socket_get_error(lua_State* L) {
     auto* s = GetUserdata<mongo::MongoSocket>(L, 1, kMetaName);
     lua_pushinteger(L, s ? s->GetError() : 0);
@@ -140,6 +167,28 @@ int l_socket_send(lua_State* L) {
     int64_t expire_at = static_cast<int64_t>(luaL_checkinteger(L, 3));
     if (!s) { lua_pushnil(L); lua_pushstring(L, "invalid socket"); return 2; }
     ssize_t sent = s->SendData(data, len, expire_at);
+    lua_pushinteger(L, static_cast<lua_Integer>(sent));
+    return 1;
+}
+
+int l_socket_sendv(lua_State* L) {
+    auto* s = GetUserdata<mongo::MongoSocket>(L, 1, kMetaName);
+    if (!s) { lua_pushnil(L); lua_pushstring(L, "invalid socket"); return 2; }
+    luaL_checktype(L, 2, LUA_TTABLE);
+    int64_t expire_at = static_cast<int64_t>(luaL_checkinteger(L, 3));
+    int n = static_cast<int>(luaL_len(L, 2));
+    std::vector<mongo::MongoIovec> iov(static_cast<size_t>(n));
+    std::vector<std::vector<char>> buffers(static_cast<size_t>(n));
+    for (int i = 0; i < n; ++i) {
+        lua_rawgeti(L, 2, i + 1);
+        size_t len;
+        const char* data = luaL_checklstring(L, -1, &len);
+        buffers[i].assign(data, data + len);
+        iov[i].iov_base = buffers[i].data();
+        iov[i].iov_len = len;
+        lua_pop(L, 1);
+    }
+    ssize_t sent = s->SendvData(iov.data(), static_cast<size_t>(n), expire_at);
     lua_pushinteger(L, static_cast<lua_Integer>(sent));
     return 1;
 }
@@ -218,10 +267,12 @@ const luaL_Reg kLib[] = {
     {"socket_close", l_socket_close},
     {"socket_connect", l_socket_connect},
     {"socket_get_name_info", l_socket_get_name_info},
+    {"socket_get_sock_name", l_socket_get_sock_name},
     {"socket_get_error", l_socket_get_error},
     {"socket_listen", l_socket_listen},
     {"socket_receive", l_socket_receive},
     {"socket_send", l_socket_send},
+    {"socket_sendv", l_socket_sendv},
     {"socket_set_sockopt", l_socket_set_sockopt},
     {"socket_check_closed", l_socket_check_closed},
     {"socket_get_raw", l_socket_get_raw},

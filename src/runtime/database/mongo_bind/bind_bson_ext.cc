@@ -720,12 +720,77 @@ int l_str_casecmp(lua_State* L) {
     return 1;
 }
 
+int l_str_ascii_strtoll(lua_State* L) {
+    const char* str = luaL_checkstring(L, 1);
+    auto base = static_cast<int>(luaL_optinteger(L, 2, 0));
+    lua_pushinteger(L, static_cast<lua_Integer>(
+        mongo::BsonStrUtil::AsciiStrtoll(str, nullptr, base)));
+    return 1;
+}
+
+int l_str_isspace(lua_State* L) {
+    auto c = static_cast<int>(luaL_checkinteger(L, 1));
+    lua_pushboolean(L, mongo::BsonStrUtil::Isspace(c));
+    return 1;
+}
+
 int l_keys_uint32_to_string(lua_State* L) {
     auto val = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     const char* strptr = nullptr;
     char buf[16];
     mongo::BsonKeys::Uint32ToString(val, &strptr, buf, sizeof(buf));
     lua_pushstring(L, strptr ? strptr : buf);
+    return 1;
+}
+
+int l_keys_get(lua_State* L) {
+    const char* name = luaL_checkstring(L, 1);
+    struct Entry { const char* name; const char* value; };
+    static const Entry kTable[] = {
+        {"oid", mongo::BsonKeys::kOid},
+        {"set", mongo::BsonKeys::kSet},
+        {"unset", mongo::BsonKeys::kUnset},
+        {"inc", mongo::BsonKeys::kInc},
+        {"push", mongo::BsonKeys::kPush},
+        {"pull", mongo::BsonKeys::kPull},
+        {"gte", mongo::BsonKeys::kGte},
+        {"lte", mongo::BsonKeys::kLte},
+        {"gt", mongo::BsonKeys::kGt},
+        {"lt", mongo::BsonKeys::kLt},
+        {"ne", mongo::BsonKeys::kNe},
+        {"in", mongo::BsonKeys::kIn},
+        {"nin", mongo::BsonKeys::kNin},
+        {"exists", mongo::BsonKeys::kExists},
+        {"regex", mongo::BsonKeys::kRegex},
+        {"options", mongo::BsonKeys::kOptions},
+        {"and", mongo::BsonKeys::kAnd},
+        {"or", mongo::BsonKeys::kOr},
+        {"nor", mongo::BsonKeys::kNor},
+        {"not", mongo::BsonKeys::kNot},
+        {"size", mongo::BsonKeys::kSize},
+        {"type", mongo::BsonKeys::kType},
+        {"all", mongo::BsonKeys::kAll},
+        {"elem_match", mongo::BsonKeys::kElemMatch},
+        {"slice", mongo::BsonKeys::kSlice},
+        {"search", mongo::BsonKeys::kSearch},
+        {"language", mongo::BsonKeys::kLanguage},
+        {"text", mongo::BsonKeys::kText},
+        {"comment", mongo::BsonKeys::kComment},
+        {"bits", mongo::BsonKeys::kBits},
+        {"near_sphere", mongo::BsonKeys::kNearSphere},
+        {"max_distance", mongo::BsonKeys::kMaxDistance},
+        {"min_distance", mongo::BsonKeys::kMinDistance},
+        {"geometry", mongo::BsonKeys::kGeometry},
+        {"unique_docs", mongo::BsonKeys::kUniqueDocs},
+        {nullptr, nullptr},
+    };
+    for (const Entry* e = kTable; e->name; ++e) {
+        if (strcmp(name, e->name) == 0) {
+            lua_pushstring(L, e->value);
+            return 1;
+        }
+    }
+    lua_pushnil(L);
     return 1;
 }
 
@@ -743,7 +808,10 @@ const luaL_Reg kExtLib[] = {
     {"str_ncpy",              l_str_ncpy},
     {"str_nlen",              l_str_nlen},
     {"str_casecmp",           l_str_casecmp},
+    {"str_ascii_strtoll",     l_str_ascii_strtoll},
+    {"str_isspace",           l_str_isspace},
     {"keys_uint32_to_string", l_keys_uint32_to_string},
+    {"keys_get",              l_keys_get},
     {nullptr, nullptr},
 };
 

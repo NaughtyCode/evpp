@@ -989,6 +989,29 @@ int l_client_encryption_decrypt(lua_State* L) {
     return 2;
 }
 
+int l_client_encryption_create_encrypted_collection(lua_State* L) {
+    auto* enc = GetUserdata<mongo::MongoClientEncryption>(L, 1, kCeMeta);
+    void* database = lua_touserdata(L, 2);
+    const char* name = luaL_checkstring(L, 3);
+    auto* in_opts = lua_isnoneornil(L, 4) ? nullptr
+                    : GetUserdata<mongo::BsonDocument>(L, 4, "bson.doc");
+    auto* out_opts = GetUserdata<mongo::BsonDocument>(L, 5, "bson.doc");
+    const char* kms_provider = luaL_checkstring(L, 6);
+    auto* masterkey = lua_isnoneornil(L, 7) ? nullptr
+                      : GetUserdata<mongo::BsonDocument>(L, 7, "bson.doc");
+    if (!enc || !out_opts) { lua_pushnil(L); lua_pushstring(L, "invalid args"); return 2; }
+    mongo::MongoError error;
+    void* coll = enc->CreateEncryptedCollection(database, name, in_opts, out_opts,
+                                                kms_provider, masterkey, &error);
+    if (!coll) {
+        lua_pushnil(L);
+        lua_pushstring(L, error.Message());
+        return 2;
+    }
+    lua_pushlightuserdata(L, coll);
+    return 1;
+}
+
 int l_client_encryption_get_crypt_shared_version(lua_State* L) {
     auto* enc = GetUserdata<mongo::MongoClientEncryption>(L, 1, kCeMeta);
     if (!enc) { lua_pushnil(L); return 1; }
@@ -1021,6 +1044,7 @@ const luaL_Reg kCeLib[] = {
     {"client_encryption_encrypt", l_client_encryption_encrypt},
     {"client_encryption_encrypt_expression", l_client_encryption_encrypt_expression},
     {"client_encryption_decrypt", l_client_encryption_decrypt},
+    {"client_encryption_create_encrypted_collection", l_client_encryption_create_encrypted_collection},
     {"client_encryption_get_crypt_shared_version", l_client_encryption_get_crypt_shared_version},
     {"client_encryption_get_raw", l_client_encryption_get_raw},
     {nullptr, nullptr},

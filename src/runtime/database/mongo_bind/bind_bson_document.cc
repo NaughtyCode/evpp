@@ -255,6 +255,18 @@ int l_bson_doc_append_decimal128(lua_State* L) {
     return 1;
 }
 
+int l_bson_doc_append_timeval(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    auto tv_sec = static_cast<long>(luaL_checkinteger(L, 3));
+    auto tv_usec = static_cast<long>(luaL_checkinteger(L, 4));
+    struct timeval tv;
+    tv.tv_sec = tv_sec;
+    tv.tv_usec = tv_usec;
+    lua_pushboolean(L, doc && doc->AppendTimeval(key, &tv));
+    return 1;
+}
+
 // ── Copy / utility ─────────────────────────────────────────────────────
 
 int l_bson_doc_copy(lua_State* L) {
@@ -703,6 +715,7 @@ const luaL_Reg kLib[] = {
     {"append_decimal128", l_bson_doc_append_decimal128},
     {"append_dbref", l_bson_doc_append_dbref},
     {"append_timet", l_bson_doc_append_timet},
+    {"append_timeval", l_bson_doc_append_timeval},
     {"append_regex_wlen", l_bson_doc_append_regex_wlen},
     {"append_value", l_bson_doc_append_value},
     {"append_iter", l_bson_doc_append_iter},

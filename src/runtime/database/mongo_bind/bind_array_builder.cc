@@ -120,6 +120,18 @@ int l_array_builder_append_binary(lua_State* L) {
     return 1;
 }
 
+int l_array_builder_append_binary_uninit(lua_State* L) {
+    auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
+    auto subtype = static_cast<int>(luaL_checkinteger(L, 2));
+    auto len = static_cast<uint32_t>(luaL_checkinteger(L, 3));
+    uint8_t* data_out = nullptr;
+    bool ok = builder && builder->AppendBinaryUninit(subtype, &data_out, len);
+    lua_pushboolean(L, ok);
+    if (ok && data_out) lua_pushlightuserdata(L, data_out);
+    else lua_pushnil(L);
+    return 2;
+}
+
 int l_array_builder_append_regex(lua_State* L) {
     auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
     const char* regex = luaL_checkstring(L, 2);
@@ -236,6 +248,17 @@ int l_array_builder_append_time_t(lua_State* L) {
     return 1;
 }
 
+int l_array_builder_append_timeval(lua_State* L) {
+    auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
+    auto tv_sec = static_cast<long>(luaL_checkinteger(L, 2));
+    auto tv_usec = static_cast<long>(luaL_checkinteger(L, 3));
+    struct timeval tv;
+    tv.tv_sec = tv_sec;
+    tv.tv_usec = tv_usec;
+    lua_pushboolean(L, builder && builder->AppendTimeval(&tv));
+    return 1;
+}
+
 int l_array_builder_append_document_begin(lua_State* L) {
     auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
     auto* subdoc = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
@@ -298,6 +321,7 @@ const luaL_Reg kLib[] = {
     {"array_builder_append_array", l_array_builder_append_array},
     {"array_builder_append_datetime", l_array_builder_append_datetime},
     {"array_builder_append_binary", l_array_builder_append_binary},
+    {"array_builder_append_binary_uninit", l_array_builder_append_binary_uninit},
     {"array_builder_append_regex", l_array_builder_append_regex},
     {"array_builder_append_code", l_array_builder_append_code},
     {"array_builder_append_minkey", l_array_builder_append_minkey},
@@ -312,6 +336,7 @@ const luaL_Reg kLib[] = {
     {"array_builder_append_iter", l_array_builder_append_iter},
     {"array_builder_append_db_pointer", l_array_builder_append_db_pointer},
     {"array_builder_append_time_t", l_array_builder_append_time_t},
+    {"array_builder_append_timeval", l_array_builder_append_timeval},
     {"array_builder_append_document_begin", l_array_builder_append_document_begin},
     {"array_builder_append_document_end", l_array_builder_append_document_end},
     {"array_builder_append_value", l_array_builder_append_value},
