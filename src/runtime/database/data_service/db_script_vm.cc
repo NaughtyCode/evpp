@@ -91,6 +91,11 @@ int l_db_get_client(lua_State* L) {
 int l_db_get_pool(lua_State* L) {
     auto& vm = *static_cast<DBScriptVM*>(lua_touserdata(L, lua_upvalueindex(1)));
     auto* pool = vm.GetMongoClientPool();
+    if (!pool) {
+        lua_pushnil(L);
+        lua_pushstring(L, "MongoClientPool not available");
+        return 2;
+    }
     lua_pushlightuserdata(L, static_cast<void*>(pool));
     return 1;
 }

@@ -165,8 +165,9 @@ void DatabaseService::Shutdown() {
 // collection for cache locality.
 
 int DatabaseService::NextThreadIndex() {
-    return next_thread_.fetch_add(1, std::memory_order_relaxed) %
-           static_cast<int>(threads_.size());
+    int n = static_cast<int>(threads_.size());
+    if (n == 0) return 0;
+    return next_thread_.fetch_add(1, std::memory_order_relaxed) % n;
 }
 
 bool DatabaseService::SendRequest(DbRequest&& request) {

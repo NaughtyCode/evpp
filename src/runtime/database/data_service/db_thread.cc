@@ -50,6 +50,22 @@ std::string SerializeCursor(mongo::MongoCursor* cursor, int32_t skip) {
     return result;
 }
 
+// Returns true if the JSON was valid. On parse failure (non-empty input
+// producing an empty BSON document), sets the error on *resp and returns
+// false.  Empty input is treated as valid — callers validate emptiness
+// separately with more specific error messages.
+bool ValidateJsonParse(const std::string& json_str,
+                       const mongo::BsonDocument& doc,
+                       const char* field_name,
+                       DbResponse* resp) {
+    if (!json_str.empty() && doc.Empty()) {
+        resp->success = false;
+        resp->error_message = std::string("invalid JSON in ") + field_name;
+        return false;
+    }
+    return true;
+}
+
 } // namespace
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -169,12 +185,21 @@ std::unique_ptr<DbResponse> DBThread::DequeueResponse() {
 // response's request_id is logged at WARN level for diagnostics.
 
 void DBThread::EnqueueResponse(DbResponse&& resp) {
+    // Drop oldest responses while the queue is at capacity.  The retry
+    // counter guards against a theoretical infinite loop when size_approx()
+    // overcounts and try_dequeue keeps failing — in practice size_approx()
+    // is reliable within a small epsilon, so the limit is never hit.
+    int retries = 0;
     while (response_queue_.size_approx() >=
-           static_cast<size_t>(config_.thread_pool.response_queue_size)) {
+               static_cast<size_t>(config_.thread_pool.response_queue_size) &&
+           retries < 5) {
         DbResponse dropped;
-        response_queue_.try_dequeue(dropped);
-        ENGINE_LOG_WARN(logger_, "DBThread[{}]: response queue full, dropped response [id={}]",
-                        index_, dropped.request_id);
+        if (response_queue_.try_dequeue(dropped)) {
+            ENGINE_LOG_WARN(logger_,
+                "DBThread[{}]: response queue full, dropped response [id={}]",
+                index_, dropped.request_id);
+        }
+        ++retries;
     }
     response_queue_.enqueue(std::move(resp));
 }
@@ -360,10 +385,10 @@ void DBThread::EventLoop() {
             }
         }
     } catch (const std::exception& e) {
-        ENGINE_LOG_ERROR(logger_, "DBThread[{}]: init phase exception: {}",
+        ENGINE_LOG_ERROR(logger_, "DBThread[{}]: exception in event loop: {}",
                          index_, e.what());
     } catch (...) {
-        ENGINE_LOG_ERROR(logger_, "DBThread[{}]: init phase unknown exception",
+        ENGINE_LOG_ERROR(logger_, "DBThread[{}]: unknown exception in event loop",
                          index_);
     }
 
@@ -472,8 +497,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
         // kCommand uses client_->CommandSimple(db_name, ...) directly,
         // so no standalone db handle is needed. All other CRUD ops need
         // a collection handle obtained from the client.
-        bool need_coll = (req.operation != DbOperation::kCommand &&
-                          req.operation != DbOperation::kExecuteScript);
+        bool need_coll = (req.operation != DbOperation::kCommand);
 
         if (need_coll && !req.collection.empty()) {
             coll = client_->GetCollection(req.database.c_str(), req.collection.c_str());
@@ -513,6 +537,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
         case DbOperation::kFind: {
             auto filter = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
+            if (!ValidateJsonParse(req.bson_data, filter, "bson_data", &resp)) break;
             auto* cursor = coll->FindWithOpts(filter, nullptr, nullptr);
             if (req.limit > 0) cursor->SetLimit(req.limit);
             resp.result_data = SerializeCursor(cursor, req.skip);
@@ -525,6 +550,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
         case DbOperation::kFindOne: {
             auto filter = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
+            if (!ValidateJsonParse(req.bson_data, filter, "bson_data", &resp)) break;
             auto* cursor = coll->FindWithOpts(filter, nullptr, nullptr);
             cursor->SetLimit(1);
             mongo::BsonDocument doc;
@@ -543,6 +569,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             }
             auto doc = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
+            if (!ValidateJsonParse(req.bson_data, doc, "bson_data", &resp)) break;
             mongo::BsonDocument reply;
             mongo::MongoError err;
             resp.success = coll->InsertOne(doc, nullptr, &reply, &err);
@@ -569,13 +596,20 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 
             auto arr = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
+            if (!ValidateJsonParse(req.bson_data, arr, "bson_data", &resp)) break;
             mongo::BsonIter iter(arr);
             while (iter.Next()) {
                 uint32_t len = 0;
                 const uint8_t* data = nullptr;
                 iter.AsDocument(&len, &data);
                 docs.push_back(mongo::BsonDocument(data, len));
-                doc_ptrs.push_back(&docs.back());
+            }
+
+            // Rebuild doc_ptrs after the loop — docs may have reallocated
+            // during push_back, invalidating earlier &docs.back() pointers.
+            doc_ptrs.reserve(docs.size());
+            for (auto& d : docs) {
+                doc_ptrs.push_back(&d);
             }
 
             if (!doc_ptrs.empty()) {
@@ -585,9 +619,9 @@ void DBThread::ProcessRequest(const DbRequest& req) {
                                                 nullptr, &reply, &err);
                 if (resp.success) {
                     int64_t inserted = static_cast<int64_t>(doc_ptrs.size());
-                    mongo::BsonIter iter;
-                    if (iter.InitFind(reply, "n")) {
-                        inserted = iter.AsInt64();
+                    mongo::BsonIter reply_iter;
+                    if (reply_iter.InitFind(reply, "n")) {
+                        inserted = reply_iter.AsInt64();
                     }
                     resp.result_data = "{\"inserted_count\":" +
                                        std::to_string(inserted) + "}";
@@ -607,8 +641,10 @@ void DBThread::ProcessRequest(const DbRequest& req) {
         case DbOperation::kUpdateOne: {
             auto filter = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
+            if (!ValidateJsonParse(req.bson_data, filter, "bson_data", &resp)) break;
             auto update = mongo::BsonDocument::NewFromJson(
                 req.bson_data2.c_str(), req.bson_data2.size());
+            if (!ValidateJsonParse(req.bson_data2, update, "bson_data2", &resp)) break;
             mongo::BsonDocument reply;
             mongo::MongoError err;
             resp.success = coll->UpdateOne(filter, update, nullptr, &reply, &err);
@@ -628,8 +664,10 @@ void DBThread::ProcessRequest(const DbRequest& req) {
         case DbOperation::kUpdateMany: {
             auto filter = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
+            if (!ValidateJsonParse(req.bson_data, filter, "bson_data", &resp)) break;
             auto update = mongo::BsonDocument::NewFromJson(
                 req.bson_data2.c_str(), req.bson_data2.size());
+            if (!ValidateJsonParse(req.bson_data2, update, "bson_data2", &resp)) break;
             mongo::BsonDocument reply;
             mongo::MongoError err;
             resp.success = coll->UpdateMany(filter, update, nullptr, &reply, &err);
@@ -649,6 +687,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
         case DbOperation::kDeleteOne: {
             auto selector = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
+            if (!ValidateJsonParse(req.bson_data, selector, "bson_data", &resp)) break;
             mongo::BsonDocument reply;
             mongo::MongoError err;
             resp.success = coll->DeleteOne(selector, nullptr, &reply, &err);
@@ -675,6 +714,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
         case DbOperation::kDeleteMany: {
             auto selector = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
+            if (!ValidateJsonParse(req.bson_data, selector, "bson_data", &resp)) break;
             mongo::BsonDocument reply;
             mongo::MongoError err;
             resp.success = coll->DeleteMany(selector, nullptr, &reply, &err);
@@ -695,6 +735,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
         case DbOperation::kCount: {
             auto filter = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
+            if (!ValidateJsonParse(req.bson_data, filter, "bson_data", &resp)) break;
             mongo::BsonDocument reply;
             mongo::MongoError err;
             int64_t count = coll->CountDocuments(filter, nullptr, nullptr,
@@ -725,6 +766,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             }
             auto pipeline = mongo::BsonDocument::NewFromJson(
                 pipe_json.c_str(), pipe_json.size());
+            if (!ValidateJsonParse(pipe_json, pipeline, "bson_data", &resp)) break;
             auto* cursor = coll->Aggregate(pipeline, nullptr, nullptr);
             resp.result_data = SerializeCursor(cursor, 0);
             cursor->Destroy();
@@ -745,6 +787,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             }
             auto command = mongo::BsonDocument::NewFromJson(
                 req.bson_data.c_str(), req.bson_data.size());
+            if (!ValidateJsonParse(req.bson_data, command, "bson_data", &resp)) break;
             mongo::BsonDocument reply;
             mongo::MongoError err;
             resp.success = client_->CommandSimple(req.database.c_str(), command,
