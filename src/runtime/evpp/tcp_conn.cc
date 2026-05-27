@@ -1,5 +1,7 @@
 #include "runtime/evpp/tcp_conn.h"
 
+#include <chrono>
+
 #include "runtime/evpp/event_loop.h"
 #include "runtime/evpp/fd_channel.h"
 #include "runtime/evpp/inner_pre.h"
@@ -116,6 +118,27 @@ void TCPConn::Send(const void* data, size_t len) {
 	Send(Slice(static_cast<const char*>(data), len));
 }
 
+void TCPConn::Send(const void* data, size_t len, MessagePriority priority) {
+	if (status_ != kConnected) {
+		ENGINE_LOG_WARN(engine::GetLogger(), "Send dropped: connection {} not connected", id_);
+		return;
+	}
+
+	uint32_t allowed = rate_limiter_.Consume(static_cast<uint32_t>(len));
+	if (allowed == 0) {
+		pending_messages_.push({priority, std::string(static_cast<const char*>(data), len),
+								std::chrono::duration_cast<std::chrono::nanoseconds>(
+									std::chrono::steady_clock::now().time_since_epoch()).count()});
+		return;
+	}
+
+	if (loop_->IsInLoopThread()) {
+		SendInLoop(data, allowed);
+		return;
+	}
+	Send(Slice(static_cast<const char*>(data), allowed));
+}
+
 void TCPConn::Send(Buffer* buf) {
 	if (status_ != kConnected) {
 		return;
@@ -205,7 +228,6 @@ void TCPConn::HandleRead() {
 		msg_fn_(shared_from_this(), &input_buffer_);
 	} else if (n == 0) {
 		if (type() == kOutgoing) {
-			// This is an outgoing connection, we own it and it's done. so close it
 			ENGINE_LOG_TRACE(engine::GetLogger(),
 							 "this={} fd={}. We read 0 bytes and close the socket.",
 							 (void*) this,
@@ -213,8 +235,6 @@ void TCPConn::HandleRead() {
 			status_ = kDisconnecting;
 			HandleClose();
 		} else {
-			// Fix the half-closing problem : https://github.com/chenshuo/muduo/pull/117
-
 			chan_->DisableReadEvent();
 			if (close_delay_.IsZero()) {
 				ENGINE_LOG_TRACE(engine::GetLogger(),
@@ -225,9 +245,6 @@ void TCPConn::HandleRead() {
 								 close_delay_.Seconds());
 				DelayClose();
 			} else {
-				// This is an incoming connection, we need to preserve the
-				// connection for a while so that we can reply to it.
-				// And we set a timer to close the connection eventually.
 				ENGINE_LOG_TRACE(engine::GetLogger(),
 								 "this={} channel (fd={}) DisableReadEvent. And set a timer to "
 								 "delay close this TCPConn, delay time {}s",
@@ -237,7 +254,7 @@ void TCPConn::HandleRead() {
 				delay_close_timer_ = loop_->RunAfter(
 					close_delay_,
 					std::bind(&TCPConn::DelayClose,
-							  shared_from_this()));	 // TODO leave it to user layer close.
+							  shared_from_this()));  // TODO leave it to user layer close.
 			}
 		}
 	} else {
@@ -266,7 +283,18 @@ void TCPConn::HandleWrite() {
 		if (output_buffer_.length() == 0) {
 			chan_->DisableWriteEvent();
 
-			if (write_complete_fn_) {
+			// Drain priority queue before firing write-complete callback
+			while (!pending_messages_.empty()) {
+				PendingMessage msg = pending_messages_.top();
+				pending_messages_.pop();
+				SendInLoop(msg.data.data(), msg.data.size());
+				if (output_buffer_.length() > 0) {
+					chan_->EnableWriteEvent();
+					break;
+				}
+			}
+
+			if (write_complete_fn_ && pending_messages_.empty()) {
 				loop_->QueueInLoop(std::bind(write_complete_fn_, shared_from_this()));
 			}
 		}

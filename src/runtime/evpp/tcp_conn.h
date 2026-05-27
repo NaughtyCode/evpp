@@ -1,11 +1,14 @@
 #pragma once
 
 #include <atomic>
+#include <queue>
+#include <vector>
 
 #include "runtime/evpp/any.h"
 #include "runtime/evpp/buffer.h"
 #include "runtime/evpp/duration.h"
 #include "runtime/evpp/inner_pre.h"
+#include "runtime/evpp/rate_limiter.h"
 #include "runtime/evpp/slice.h"
 #include "runtime/evpp/tcp_callbacks.h"
 
@@ -51,6 +54,7 @@ class EVPP_EXPORT TCPConn : public std::enable_shared_from_this<TCPConn> {
 		Send(s, strlen(s));
 	}
 	void Send(const void* d, size_t dlen);
+	void Send(const void* d, size_t dlen, MessagePriority priority);
 	void Send(const std::string& d);
 	void Send(const Slice& message);
 	void Send(Buffer* buf);
@@ -145,6 +149,13 @@ class EVPP_EXPORT TCPConn : public std::enable_shared_from_this<TCPConn> {
 
 	void SetHighWaterMarkCallback(const HighWaterMarkCallback& cb, size_t mark);
 
+	void SetRateLimit(uint32_t max_bytes_per_sec) {
+		rate_limiter_.SetRate(max_bytes_per_sec);
+	}
+	uint32_t rate_limit() const {
+		return rate_limiter_.max_bytes_per_sec();
+	}
+
 	protected:
 	friend class TCPClient;
 	friend class TCPServer;
@@ -176,6 +187,19 @@ class EVPP_EXPORT TCPConn : public std::enable_shared_from_this<TCPConn> {
 	void SendInLoop(const void* data, size_t len);
 	void SendStringInLoop(const std::string& message);
 
+	struct PendingMessage {
+		MessagePriority priority;
+		std::string data;
+		int64_t enqueue_time;
+
+		bool operator<(const PendingMessage& other) const {
+			if (priority != other.priority) {
+				return static_cast<int>(priority) > static_cast<int>(other.priority);
+			}
+			return enqueue_time > other.enqueue_time;
+		}
+	};
+
 	private:
 	EventLoop* loop_;
 	int fd_;
@@ -205,5 +229,8 @@ class EVPP_EXPORT TCPConn : public std::enable_shared_from_this<TCPConn> {
 	WriteCompleteCallback write_complete_fn_;  // This will be called to the user application layer
 	HighWaterMarkCallback high_water_mark_fn_;	// This will be called to the user application layer
 	CloseCallback close_fn_;  // This will be called to TCPClient or TCPServer
+
+	std::priority_queue<PendingMessage> pending_messages_;
+	RateLimiter rate_limiter_;
 };
 }
