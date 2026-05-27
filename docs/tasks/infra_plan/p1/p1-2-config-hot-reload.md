@@ -32,9 +32,9 @@ No observer/callback pattern exists in the config system. The design assumed con
 
 ## Implementation Steps
 
-### Step 1: Define Reload Notification Interface
+### Step 1: Add Reload Notification to Existing ConfigManager
 
-**File**: `src/runtime/config/config_manager.h`
+**File**: `src/runtime/config/config.h` (existing — `ConfigManager` defined at line 184)
 
 ```cpp
 /* Callback type for config reload notifications */
@@ -70,7 +70,7 @@ private:
 
 ### Step 2: Implement Callback Invocation
 
-**File**: `src/runtime/config/config_manager.cc`
+**File**: `src/runtime/config/config.cc`
 
 ```cpp
 bool ConfigManager::Reload() {

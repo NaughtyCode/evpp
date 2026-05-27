@@ -6,7 +6,7 @@ Reduce the ExportMongo maintenance burden from 246 manual registration points (8
 
 ## Current State
 
-`mongo_bind.cc` — `ExportMongo()` function (254 lines) contains:
+`mongo_bind/mongo_bind.cc` — `ExportMongo()` function (254 lines) contains:
 
 ```cpp
 /* 82 metatable registrations: */
@@ -75,7 +75,7 @@ MONGOC_TYPE(cursor, Cursor,
 
 ### Step 2: Generate RegisterMeta from X-macro
 
-**File**: `src/runtime/database/mongo_bind.cc`
+**File**: `src/runtime/database/mongo_bind/mongo_bind.cc`
 
 ```cpp
 /* Auto-generate all metatable registrations: */

@@ -39,7 +39,7 @@ local ok, err, result = collection:update_one(filter, update)
 
 ### Step 2: Update All Binding Functions
 
-**Files**: `bind_collection.cc`, `bind_cursor.cc`, `bind_database.cc`, etc.
+**Files**: `src/runtime/database/mongo_bind/bind_collection.cc`, `bind_cursor.cc`, `bind_database.cc`, etc.
 
 For each function:
 1. Ensure `lua_pushboolean(L, success)` is first return value

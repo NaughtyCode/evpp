@@ -59,7 +59,7 @@ struct DbResponse {
 
 ### Step 2: Log Warnings on Queue Full
 
-**File**: `src/runtime/database/db_thread.cc`
+**File**: `src/runtime/database/data_service/db_thread.cc`
 
 ```cpp
 bool DBThread::EnqueueRequest(DbRequestPtr request) {
@@ -75,7 +75,7 @@ bool DBThread::EnqueueRequest(DbRequestPtr request) {
 
 ### Step 3: Generate Dropped Response
 
-**File**: `src/runtime/database/database_service.cc`
+**File**: `src/runtime/database/data_service/database_service.cc`
 
 ```cpp
 bool DatabaseService::SendRequest(DbRequestPtr request) {
@@ -101,7 +101,7 @@ bool DatabaseService::SendRequest(DbRequestPtr request) {
 
 ### Step 4: Add Backpressure Metrics
 
-**File**: `src/runtime/database/database_service.h`
+**File**: `src/runtime/database/data_service/database_service.h`
 
 ```cpp
 struct DatabaseMetrics {
@@ -119,7 +119,7 @@ Update metrics on enqueue/dequeue/drop.
 
 ### Step 5: Add Lua-Side Status Handling
 
-**File**: `src/runtime/script/db_service_main_bind.cc`
+**File**: `src/runtime/database/data_service/db_service_main_bind.cc`
 
 ```cpp
 /* Update db_send_request binding to return richer status info */

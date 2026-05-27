@@ -41,7 +41,7 @@ Scale of the duplication:
 
 ~80% of the binding code is duplicated patterns.
 
-MongoDB bindings (46 files) already use `bind_util.h` templates (`GetUserdata<T>`/`NewUserdata<T>`) successfully. The network layer should adopt the same approach.
+MongoDB bindings (46 files) already use `src/runtime/database/mongo_bind/bind_util.h` templates (`GetUserdata<T>`/`NewUserdata<T>`) successfully. The network layer should adopt the same approach — either by moving `bind_util.h` to a shared location (`src/runtime/script/`) or creating a network-specific version there.
 
 ## Root Cause
 
@@ -49,9 +49,10 @@ Network bindings were written before the `bind_util.h` template pattern was esta
 
 ## Implementation Steps
 
-### Step 1: Extend bind_util.h for Network Contexts
+### Step 1: Move/Extend bind_util.h for Network Contexts
 
-**File**: `src/runtime/script/bind_util.h`
+**Existing file**: `src/runtime/database/mongo_bind/bind_util.h` (current location, MongoDB-specific)
+**Target file**: `src/runtime/script/bind_util.h` (new shared location for both DB and network layers)
 
 Add a generic Lua userdata wrapper for network context objects:
 

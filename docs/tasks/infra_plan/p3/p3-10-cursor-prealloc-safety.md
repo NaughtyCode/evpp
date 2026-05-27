@@ -2,11 +2,11 @@
 
 ## Objective
 
-Fix the unsafe pre-allocation pattern in `l_cursor_next` (`bind_cursor.cc:40`) where a `BsonDocument` is allocated before calling `cursor->Next()` — requiring manual cleanup on failure.
+Fix the unsafe pre-allocation pattern in `l_cursor_next` (`mongo_bind/bind_cursor.cc:40`) where a `BsonDocument` is allocated before calling `cursor->Next()` — requiring manual cleanup on failure.
 
 ## Current State
 
-`bind_cursor.cc:40` — `l_cursor_next` pre-allocates a `BsonDocument` and then calls `cursor->Next()`:
+`mongo_bind/bind_cursor.cc:40` — `l_cursor_next` pre-allocates a `BsonDocument` and then calls `cursor->Next()`:
 
 ```cpp
 int l_cursor_next(lua_State* L) {
@@ -25,13 +25,13 @@ int l_cursor_next(lua_State* L) {
 }
 ```
 
-This pattern is repeated in `bind_collection.cc` multiple times. If an exception occurs between `new` and `delete`, or if a future maintainer adds an early return, `doc` leaks.
+This pattern is repeated in `mongo_bind/bind_collection.cc` multiple times. If an exception occurs between `new` and `delete`, or if a future maintainer adds an early return, `doc` leaks.
 
 ## Implementation Steps
 
 ### Step 1: Use unique_ptr for Automatic Cleanup
 
-**File**: `src/runtime/database/bind_cursor.cc`
+**File**: `src/runtime/database/mongo_bind/bind_cursor.cc`
 
 ```cpp
 int l_cursor_next(lua_State* L) {

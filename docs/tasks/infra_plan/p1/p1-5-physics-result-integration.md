@@ -6,18 +6,18 @@ Wire up the physics simulation results (currently fetched but discarded) to the 
 
 ## Current State
 
-`engine.cc:432-436` explicitly comments out the physics result integration:
+`engine.cc:432-441` fetches physics results but does nothing with them:
 
 ```cpp
-/* engine.cc:432-436 */
-/* Fetch physics results — currently discarded */
-// auto physics_results = PhysicsEngineBridge::Instance().FetchResult();
-// if (physics_results.has_value()) {
-//     /* Apply transforms to game objects — "would go here" */
-// }
+/* engine.cc:432-441 — FetchResult is called but result is unused */
+auto result = PhysicsEngineBridge::Instance().FetchResult(fc, 5);
+if (result) {
+    // [D17.5] Game object state update from result->transforms would go here
+    // [D17.7] Network sync construction from result->diff_packets would go here
+}
 ```
 
-`PhysicsEngineBridge` computes transforms, collision events, and diff packets in the physics thread, transfers them via SPSC queue to the main thread, but the main thread fetches and discards them. The physics pipeline is fully functional but its output is disconnected.
+`PhysicsEngineBridge` computes transforms, collision events, and diff packets in the physics thread, transfers them via SPSC queue to the main thread. `FetchResult` is called and returns valid data, but the result is discarded — no game objects exist to receive the transforms. The physics pipeline is fully functional but its output is disconnected.
 
 ## Root Cause
 
