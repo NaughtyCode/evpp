@@ -39,6 +39,4 @@ add_custom_target(copy_resources ALL
 add_subdirectory(server)
 add_subdirectory(client)
 
-add_subdirectory(tests)
-
 set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT GameServer)

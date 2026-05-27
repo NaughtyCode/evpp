@@ -285,18 +285,6 @@ add_custom_command(TARGET GameClient POST_BUILD
     COMMENT "Copying GameClient.dll to bin/"
 )
 
-# ── Examples ────────────────────────────────────────────────────────────
-
-option(CLIENT_BUILD_EXAMPLES "Build GameClient example programs" ON)
-if(CLIENT_BUILD_EXAMPLES)
-    add_executable(client_example ${ENGINE_ROOT}/tests/game_client/basic_demo.c)
-    set_source_files_properties(${ENGINE_ROOT}/tests/game_client/basic_demo.c
-        PROPERTIES LANGUAGE CXX)
-    target_include_directories(client_example PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    set_target_properties(client_example PROPERTIES FOLDER "client")
-    target_link_libraries(client_example GameClient)
-endif()
-
 # ── Install ─────────────────────────────────────────────────────────────
 
 install(TARGETS GameClient
