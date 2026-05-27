@@ -19,6 +19,7 @@ ENGINE_API void ExportTimer(ScriptVM& vm);
 ENGINE_API void ExportNet(ScriptVM& vm);
 ENGINE_API void ExportMsgPack(ScriptVM& vm);
 ENGINE_API void ExportMongo(ScriptVM& vm);
+ENGINE_API void ExportDbService(ScriptVM& vm);
 
 // Shutdown: cancel all Lua-owned objects, release Lua references.
 // Call before destroying the ScriptVM.

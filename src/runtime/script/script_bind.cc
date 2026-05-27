@@ -9,6 +9,7 @@
 #include "runtime/script/import_bind.h"
 #if defined(ENGINE_MONGODB_ENABLED)
 #include "runtime/database/mongo_bind/mongo_bind.h"
+#include "runtime/database/data_service/db_service_bind.h"
 #endif
 #include "runtime/vm/vm.h"
 
@@ -26,6 +27,7 @@ void ExportAll(ScriptVM& vm) {
     { ENGINE_PROFILE_SCRIPT_EXPORT("import"); engine::ExportImport(vm); }
 #if defined(ENGINE_MONGODB_ENABLED)
     { ENGINE_PROFILE_SCRIPT_EXPORT("mongo");  ExportMongo(vm);  }
+    { ENGINE_PROFILE_SCRIPT_EXPORT("db_service"); ExportDbService(vm); }
 #endif
 
     ENGINE_LOG_INFO(logger, "ScriptBind: all APIs exported");
