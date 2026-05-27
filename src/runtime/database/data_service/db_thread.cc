@@ -608,6 +608,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
             if (!ParseJsonDoc(req.bson_data, "bson_data", &arr, &resp)) break;
             mongo::BsonIter iter(arr);
             while (iter.Next()) {
+                if (iter.Type() != 3) continue;  // skip non-document elements (BSON_TYPE_DOCUMENT)
                 uint32_t len = 0;
                 const uint8_t* data = nullptr;
                 iter.AsDocument(&len, &data);
