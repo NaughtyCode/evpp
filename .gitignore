@@ -1,0 +1,8 @@
+
+artifacts/*
+build/*
+
+build-shared/*
+build-nodebug/*
+build-release/*
+

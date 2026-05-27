@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "assetRoot": "..",
+  "render": {
+    "width": 1024,
+    "height": 1024,
+    "nearPlane": 0.01,
+    "mode": "full",
+    "counterClockwise": true,
+    "visualizeDepth": true
+  },
+  "camera": {
+    "position": [0, 0, 0],
+    "direction": [0, 0, 1],
+    "viewProjection": [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1
+    ],
+    "rowMajor": false
+  },
+  "assets": {
+    "models": [
+      { "id": "spot", "file": "spot.obj", "normalize": true },
+      { "id": "teapot", "file": "teapot.obj", "normalize": true },
+      { "id": "suzanne", "file": "suzanne.obj", "normalize": true },
+      { "id": "woody", "file": "woody.obj", "normalize": true },
+      { "id": "cube", "file": "cube.obj", "normalize": true },
+      { "id": "pyramid", "file": "pyramid.obj", "normalize": true },
+      { "id": "octahedron", "file": "octahedron.obj", "normalize": true }
+    ]
+  },
+  "instances": [
+    {
+      "name": "spot-left",
+      "mesh": "spot",
+      "transform": {
+        "translation": [-0.52, -0.18, 0.20],
+        "scale": 0.72,
+        "yawRadians": 0.55,
+        "rollRadians": -0.10
+      },
+      "backfaceCull": false
+    },
+    {
+      "name": "teapot-right",
+      "mesh": "teapot",
+      "transform": {
+        "translation": [0.42, -0.20, 0.00],
+        "scale": 0.58,
+        "yawRadians": -0.38,
+        "rollRadians": 0.04
+      },
+      "backfaceCull": false
+    },
+    {
+      "name": "suzanne-top",
+      "mesh": "suzanne",
+      "transform": {
+        "translation": [-0.18, 0.38, -0.24],
+        "scale": 0.48,
+        "yawRadians": 0.92,
+        "rollRadians": 0.16
+      },
+      "backfaceCull": false
+    },
+    {
+      "name": "woody-top-right",
+      "mesh": "woody",
+      "transform": {
+        "translation": [0.58, 0.36, 0.36],
+        "scale": 0.52,
+        "yawRadians": -0.78,
+        "rollRadians": -0.12
+      },
+      "backfaceCull": false
+    },
+    {
+      "name": "cube-bottom-left",
+      "mesh": "cube",
+      "transform": {
+        "translation": [-0.72, -0.56, 0.62],
+        "scale": 0.34,
+        "yawRadians": 0.25,
+        "rollRadians": -0.08
+      },
+      "backfaceCull": false
+    },
+    {
+      "name": "pyramid-bottom-center",
+      "mesh": "pyramid",
+      "transform": {
+        "translation": [0.00, -0.58, 0.44],
+        "scale": 0.38,
+        "yawRadians": -0.55,
+        "rollRadians": 0.10
+      },
+      "backfaceCull": false
+    },
+    {
+      "name": "octahedron-bottom-right",
+      "mesh": "octahedron",
+      "transform": {
+        "translation": [0.72, -0.54, 0.58],
+        "scale": 0.32,
+        "yawRadians": 0.65,
+        "rollRadians": 0.30
+      },
+      "backfaceCull": false
+    }
+  ]
+}
