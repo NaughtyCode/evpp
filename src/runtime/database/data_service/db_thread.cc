@@ -576,9 +576,14 @@ void DBThread::ProcessRequest(const DbRequest& req) {
                 resp.error_message = "failed to create find cursor";
                 break;
             }
-            resp.result_data = SerializeCursor(cursor, 0);
+            try {
+                resp.result_data = SerializeCursor(cursor, 0);
+                resp.success = true;
+            } catch (...) {
+                cursor->Destroy();
+                throw;
+            }
             cursor->Destroy();
-            resp.success = true;
             break;
         }
 
@@ -592,11 +597,16 @@ void DBThread::ProcessRequest(const DbRequest& req) {
                 resp.error_message = "failed to create find cursor";
                 break;
             }
-            cursor->SetLimit(1);
-            mongo::BsonDocument doc;
-            if (cursor->Next(&doc)) resp.result_data = doc.ToJson();
+            try {
+                cursor->SetLimit(1);
+                mongo::BsonDocument doc;
+                if (cursor->Next(&doc)) resp.result_data = doc.ToJson();
+                resp.success = true;
+            } catch (...) {
+                cursor->Destroy();
+                throw;
+            }
             cursor->Destroy();
-            resp.success = true;
             break;
         }
 
@@ -805,9 +815,14 @@ void DBThread::ProcessRequest(const DbRequest& req) {
                 resp.error_message = "failed to create aggregate cursor";
                 break;
             }
-            resp.result_data = SerializeCursor(cursor, 0);
+            try {
+                resp.result_data = SerializeCursor(cursor, 0);
+                resp.success = true;
+            } catch (...) {
+                cursor->Destroy();
+                throw;
+            }
             cursor->Destroy();
-            resp.success = true;
             break;
         }
 
