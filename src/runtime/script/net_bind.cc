@@ -77,8 +77,7 @@ void ShutdownNetBindings() {
 	// and release pending HTTP callback refs.
 	ShutdownHttpBindings();
 
-	// TCP client instances are cleaned up by Lua GC (__gc metamethod).
-	// We do not maintain a global client map.
+	ShutdownClientBindings();
 
 	ShutdownServerBindings();
 	ShutdownUdpServerBindings();

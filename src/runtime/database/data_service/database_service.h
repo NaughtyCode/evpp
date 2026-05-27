@@ -3,6 +3,7 @@
 #if defined(ENGINE_MONGODB_ENABLED)
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -122,6 +123,35 @@ class ENGINE_API DatabaseService {
 		return config_;
 	}
 
+	// ── Backpressure metrics (thread-safe via std::atomic) ────────────
+
+	uint64_t GetTotalEnqueued() const {
+		return total_enqueued_.load(std::memory_order_relaxed);
+	}
+	uint64_t GetTotalDropped() const {
+		return total_dropped_.load(std::memory_order_relaxed);
+	}
+	uint64_t GetTotalCompleted() const {
+		return total_completed_.load(std::memory_order_relaxed);
+	}
+	uint64_t GetTotalErrors() const {
+		return total_errors_.load(std::memory_order_relaxed);
+	}
+
+	// Called by DBThread after successful enqueue / completion / error.
+	void RecordEnqueue() {
+		total_enqueued_.fetch_add(1, std::memory_order_relaxed);
+	}
+	void RecordDropped() {
+		total_dropped_.fetch_add(1, std::memory_order_relaxed);
+	}
+	void RecordCompleted() {
+		total_completed_.fetch_add(1, std::memory_order_relaxed);
+	}
+	void RecordError() {
+		total_errors_.fetch_add(1, std::memory_order_relaxed);
+	}
+
 	private:
 	DatabaseService();
 
@@ -145,6 +175,12 @@ class ENGINE_API DatabaseService {
 	// PollResponse, so no concurrent access. Restarts from 0 on each scan
 	// to avoid bias toward low-index threads.
 	int poll_cursor_ = 0;
+
+	// Backpressure metrics (atomic for thread-safe increment across threads)
+	std::atomic<uint64_t> total_enqueued_{0};
+	std::atomic<uint64_t> total_dropped_{0};
+	std::atomic<uint64_t> total_completed_{0};
+	std::atomic<uint64_t> total_errors_{0};
 };
 
 }  // namespace engine

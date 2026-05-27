@@ -29,6 +29,10 @@ Entity* EntityManager::GetEntity(EntityId id) {
 void EntityManager::DestroyEntity(EntityId id) {
 	auto it = entities_.find(id);
 	if (it == entities_.end()) return;
+	uint32_t body_id = it->second->GetPhysicsBodyId();
+	if (body_id != Entity::kInvalidBodyId) {
+		body_to_entity_.erase(body_id);
+	}
 	it->second->Destroy();
 	entities_.erase(it);
 }
@@ -39,6 +43,7 @@ void EntityManager::DestroyAll() {
 	}
 	entities_.clear();
 	conn_to_entity_.clear();
+	body_to_entity_.clear();
 }
 
 Entity* EntityManager::FindByConnection(const evpp::TCPConnPtr& conn) {
@@ -76,6 +81,20 @@ size_t EntityManager::ActiveCount() const {
 		}
 	}
 	return count;
+}
+
+Entity* EntityManager::FindByPhysicsBodyId(uint32_t body_id) {
+	auto it = body_to_entity_.find(body_id);
+	if (it == body_to_entity_.end()) return nullptr;
+	return GetEntity(it->second);
+}
+
+void EntityManager::RegisterPhysicsBodyBinding(uint32_t body_id, EntityId id) {
+	body_to_entity_[body_id] = id;
+}
+
+void EntityManager::UnregisterPhysicsBodyBinding(uint32_t body_id) {
+	body_to_entity_.erase(body_id);
 }
 
 }  // namespace entity

@@ -177,7 +177,13 @@ bool DatabaseService::SendRequest(DbRequest&& request) {
 	if (threads_.empty()) return false;
 
 	int idx = NextThreadIndex();
-	return threads_[idx]->EnqueueRequest(std::move(request));
+	bool ok = threads_[idx]->EnqueueRequest(std::move(request));
+	if (ok) {
+		RecordEnqueue();
+	} else {
+		RecordDropped();
+	}
+	return ok;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

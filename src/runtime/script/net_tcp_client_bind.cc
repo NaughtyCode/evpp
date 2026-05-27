@@ -7,7 +7,9 @@
 #endif
 
 #include <memory>
+#include <mutex>
 #include <string>
+#include <unordered_map>
 
 #include <runtime/evpp/buffer.h>
 #include <runtime/evpp/event_loop.h>
@@ -17,6 +19,7 @@
 #include "runtime/config/limits.h"
 #include "runtime/core/log/log.h"
 #include "runtime/engine/engine.h"
+#include "runtime/script/bind_util.h"
 #include "runtime/network/length_prefixed_codec.h"
 
 extern "C" {
@@ -43,61 +46,21 @@ struct ClientCtx {
 
 const char* kClientMetaName = "net.client.instance";
 
-// ── Internal helpers ─────────────────────────────────────────────────
+// Global tracking for active client connections — enables explicit
+// shutdown without relying on Lua GC.
+std::mutex g_client_ctxs_mutex;
+std::unordered_map<evpp::TCPClient*, ClientCtx*> g_client_ctxs;
 
-// Get ClientCtx* from the light userdata stored at _ctx in the instance table.
-ClientCtx* GetClientCtxFromTable(lua_State* L, int idx) {
-	lua_getfield(L, idx, "_ctx");
-	auto* ctx = static_cast<ClientCtx*>(lua_touserdata(L, -1));
-	lua_pop(L, 1);
-	return ctx;
+void RegisterClientCtx(ClientCtx* ctx) {
+	std::lock_guard<std::mutex> lock(g_client_ctxs_mutex);
+	g_client_ctxs[ctx->client.get()] = ctx;
 }
 
-// Call a no-arg method on the Lua instance by name.
-void CallClientMethod(lua_State* L, int instance_ref, const char* method) {
-	if (!L || instance_ref == LUA_NOREF) return;
-	lua_rawgeti(L, LUA_REGISTRYINDEX, instance_ref);
-	if (lua_isnil(L, -1)) {
-		lua_pop(L, 1);
-		return;
-	}
-	lua_getfield(L, -1, method);
-	if (!lua_isfunction(L, -1)) {
-		lua_pop(L, 2);
-		return;
-	}
-	lua_insert(L, -2);	// inst, func �?func, inst (self)
-	if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
-		auto* logger = GetLogger();
-		ENGINE_LOG_ERROR(logger, "[net.client] {} error: {}", method, lua_tostring(L, -1));
-		lua_pop(L, 1);
-	}
+void UnregisterClientCtx(ClientCtx* ctx) {
+	std::lock_guard<std::mutex> lock(g_client_ctxs_mutex);
+	g_client_ctxs.erase(ctx->client.get());
 }
 
-// Call a one-string-arg method on the Lua instance by name.
-void CallClientMethodStr(lua_State* L,
-						 int instance_ref,
-						 const char* method,
-						 const std::string& arg) {
-	if (!L || instance_ref == LUA_NOREF) return;
-	lua_rawgeti(L, LUA_REGISTRYINDEX, instance_ref);
-	if (lua_isnil(L, -1)) {
-		lua_pop(L, 1);
-		return;
-	}
-	lua_getfield(L, -1, method);
-	if (!lua_isfunction(L, -1)) {
-		lua_pop(L, 2);
-		return;
-	}
-	lua_insert(L, -2);	// func, inst
-	lua_pushlstring(L, arg.data(), arg.size());	 // func, inst, data
-	if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
-		auto* logger = GetLogger();
-		ENGINE_LOG_ERROR(logger, "[net.client] {} error: {}", method, lua_tostring(L, -1));
-		lua_pop(L, 1);
-	}
-}
 
 // ── l_net_client_connect(addr) �?instance_table ──
 int l_net_client_connect(lua_State* L) {
@@ -115,15 +78,7 @@ int l_net_client_connect(lua_State* L) {
 	ctx->L = L;
 
 	// Build Lua class instance table
-	lua_newtable(L);  // t
-
-	// Store light userdata (ClientCtx*) as _ctx
-	lua_pushlightuserdata(L, ctx);	// t, lud
-	lua_setfield(L, -2, "_ctx");  // t
-
-	// Apply metatable with methods and __gc
-	luaL_getmetatable(L, kClientMetaName);	// t, mt
-	lua_setmetatable(L, -2);  // t
+	PushInstanceTable(L, ctx, kClientMetaName);  // t
 
 	// Ref instance table in registry for callbacks
 	lua_pushvalue(L, -1);  // t, t
@@ -133,6 +88,7 @@ int l_net_client_connect(lua_State* L) {
 	auto name = std::string("lua_client_") + std::to_string(reinterpret_cast<uintptr_t>(ctx));
 	ctx->client = std::make_unique<evpp::TCPClient>(loop, addr, name);
 	ctx->client->set_auto_reconnect(false);
+	RegisterClientCtx(ctx);
 
 	auto* L_ptr = L;
 	int inst_ref = ctx->instance_ref;
@@ -145,7 +101,7 @@ int l_net_client_connect(lua_State* L) {
 			ctx_ptr->is_connected = true;
 			auto* logger = GetLogger();
 			ENGINE_LOG_INFO(logger, "[net.client] connected: remote=[{}]", conn->remote_addr());
-			CallClientMethod(L_ptr, inst_ref, "on_connect");
+			CallInstMethod(L_ptr, inst_ref, "on_connect");
 		} else {
 			ctx_ptr->is_connected = false;
 			auto* logger = GetLogger();
@@ -157,8 +113,9 @@ int l_net_client_connect(lua_State* L) {
 			// already be freed.
 			bool already_disposed = ctx_ptr->disposed;
 			ctx_ptr->disposed = true;
+			UnregisterClientCtx(ctx_ptr);
 
-			CallClientMethod(L_ptr, inst_ref, "on_close");
+			CallInstMethod(L_ptr, inst_ref, "on_close");
 
 			if (!already_disposed) {
 				if (inst_ref != LUA_NOREF) {
@@ -184,7 +141,7 @@ int l_net_client_connect(lua_State* L) {
 			if (ctx_ptr->disposed) return;
 			auto messages = ctx_ptr->codec.Decode(buf);
 			for (const auto& data : messages) {
-				CallClientMethodStr(L_ptr, inst_ref, "on_message", data);
+				CallInstMethodStr(L_ptr, inst_ref, "on_message", data);
 			}
 		});
 
@@ -197,7 +154,7 @@ int l_net_client_connect(lua_State* L) {
 
 // ── client:send(data) ────────────────────────────────────────────────────
 int l_client_send(lua_State* L) {
-	auto* ctx = GetClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "client: invalid context");
 	if (ctx->disposed) return luaL_error(L, "client: closed");
 
@@ -224,13 +181,14 @@ int l_client_send(lua_State* L) {
 
 // ── client:disconnect() �?bool ───────────────────────────────────────────
 int l_client_disconnect(lua_State* L) {
-	auto* ctx = GetClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
 		lua_pushboolean(L, 0);
 		return 1;
 	}
 
 	ctx->disposed = true;
+	UnregisterClientCtx(ctx);
 
 	// Null out _ctx in the instance table to prevent use-after-free
 	// from subsequent method calls after the deferred delete runs.
@@ -266,7 +224,7 @@ int l_client_disconnect(lua_State* L) {
 
 // ── client:is_connected() �?bool ─────────────────────────────────────────
 int l_client_is_connected(lua_State* L) {
-	auto* ctx = GetClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
 		lua_pushboolean(L, 0);
 		return 1;
@@ -279,11 +237,12 @@ int l_client_is_connected(lua_State* L) {
 
 // ── __gc metamethod ──────────────────────────────────────────────────────
 int l_client_gc(lua_State* L) {
-	auto* ctx = GetClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) return 0;
 
 	ctx->disposed = true;
 	ctx->is_connected = false;
+	UnregisterClientCtx(ctx);
 
 	// Null out _ctx to prevent use-after-free from subsequent accesses
 	// (though the table is being collected, methods may still be callable
@@ -315,7 +274,7 @@ int l_client_gc(lua_State* L) {
 
 // ── client:set_on_connect(callback) ────────────────────────────────────────
 int l_client_set_on_connect(lua_State* L) {
-	auto* ctx = GetClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "client: invalid context");
 	if (ctx->disposed) return luaL_error(L, "client: closed");
 	lua_settop(L, 2);
@@ -328,7 +287,7 @@ int l_client_set_on_connect(lua_State* L) {
 
 // ── client:set_on_message(callback) ───────────────────────────────────────
 int l_client_set_on_message(lua_State* L) {
-	auto* ctx = GetClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "client: invalid context");
 	if (ctx->disposed) return luaL_error(L, "client: closed");
 	lua_settop(L, 2);
@@ -341,7 +300,7 @@ int l_client_set_on_message(lua_State* L) {
 
 // ── client:set_on_close(callback) ─────────────────────────────────────────
 int l_client_set_on_close(lua_State* L) {
-	auto* ctx = GetClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "client: invalid context");
 	if (ctx->disposed) return luaL_error(L, "client: closed");
 	lua_settop(L, 2);
@@ -378,23 +337,51 @@ const luaL_Reg kClientFunctions[] = {
 void RegisterClientMetaTable(lua_State* L) {
 	if (!L) return;
 
-	// Register metatable for instance methods and __gc.
-	// kClientMethods are set on the metatable itself; __index points back
-	// to the metatable so instance:method() lookups hit it directly.
-	luaL_newmetatable(L, kClientMetaName);	// mt
-	lua_pushvalue(L, -1);  // mt, mt
-	lua_setfield(L, -2, "__index");	 // mt.__index = mt
-	luaL_setfuncs(L, kClientMethods, 0);  // mt
-	lua_pushcfunction(L, l_client_gc);	// mt, gc
-	lua_setfield(L, -2, "__gc");  // mt
-	lua_pop(L, 1);	// (empty)
+	RegisterInstanceMeta(L, kClientMetaName, kClientMethods, l_client_gc);
 }
 
 void PushClientLibrary(lua_State* L) {
 	if (!L) return;
 
 	// net.client table (static functions only: connect)
-	luaL_newlib(L, kClientFunctions);  // client
+	PushLibrary(L, kClientFunctions);  // client
+}
+
+void ShutdownClientBindings() {
+	// Step 1: Snapshot all active contexts under lock.
+	std::vector<ClientCtx*> ctxs;
+	{
+		std::lock_guard<std::mutex> lock(g_client_ctxs_mutex);
+		ctxs.reserve(g_client_ctxs.size());
+		for (auto& [client, ctx] : g_client_ctxs) {
+			ctxs.push_back(ctx);
+		}
+		g_client_ctxs.clear();
+	}
+
+	// Step 2: Dispose each client, close connection, unref, clear
+	// callbacks, and queue deletion on the event loop.
+	for (auto* ctx : ctxs) {
+		ctx->disposed = true;
+
+		if (ctx->client) {
+			ctx->client->SetConnectionCallback(evpp::ConnectionCallback());
+			ctx->client->SetMessageCallback(evpp::MessageCallback());
+			ctx->client->Disconnect();
+		}
+
+		if (ctx->instance_ref != LUA_NOREF && ctx->L) {
+			luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->instance_ref);
+			ctx->instance_ref = LUA_NOREF;
+		}
+
+		auto* loop = Engine::Instance().GetEventLoop();
+		if (loop) {
+			loop->RunInLoop([ctx] { delete ctx; });
+		} else {
+			delete ctx;
+		}
+	}
 }
 
 }  // namespace script

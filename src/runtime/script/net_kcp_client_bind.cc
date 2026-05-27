@@ -14,6 +14,7 @@
 
 #include "runtime/core/log/log.h"
 #include "runtime/engine/engine.h"
+#include "runtime/script/bind_util.h"
 
 extern "C" {
 #include "lauxlib.h"
@@ -38,15 +39,6 @@ struct KcpClientCtx {
 
 const char* kKcpClientMetaName = "net.kcp_client.instance";
 
-// ── Internal helpers ─────────────────────────────────────────────────
-
-KcpClientCtx* GetKcpClientCtxFromTable(lua_State* L, int idx) {
-	lua_getfield(L, idx, "_ctx");
-	auto* ctx = static_cast<KcpClientCtx*>(lua_touserdata(L, -1));
-	lua_pop(L, 1);
-	return ctx;
-}
-
 // ── net.kcp_client.new([conv]) → instance_table ────────────────────
 // Creates an unconnected instance — useful when KCP tuning is needed
 // before calling instance:connect().
@@ -65,13 +57,7 @@ int l_kcp_client_new(lua_State* L) {
 	ctx->client = std::make_unique<evpp::kcp::sync::Client>();
 	ctx->client->SetKcpConv(conv);
 
-	lua_newtable(L);
-
-	lua_pushlightuserdata(L, ctx);
-	lua_setfield(L, -2, "_ctx");
-
-	luaL_getmetatable(L, kKcpClientMetaName);
-	lua_setmetatable(L, -2);
+	PushInstanceTable(L, ctx, kKcpClientMetaName);
 
 	return 1;
 }
@@ -100,13 +86,7 @@ int l_kcp_client_connect_static(lua_State* L) {
 	auto* ctx = new KcpClientCtx();
 	ctx->conv = conv;
 
-	lua_newtable(L);
-
-	lua_pushlightuserdata(L, ctx);
-	lua_setfield(L, -2, "_ctx");
-
-	luaL_getmetatable(L, kKcpClientMetaName);
-	lua_setmetatable(L, -2);
+	PushInstanceTable(L, ctx, kKcpClientMetaName);
 
 	ctx->client = std::make_unique<evpp::kcp::sync::Client>();
 	if (!ctx->client->Connect(host, port, conv)) {
@@ -135,7 +115,7 @@ int l_kcp_client_connect_static(lua_State* L) {
 // Connects an instance created via new() (applying any tuning set
 // before this call).
 int l_kcp_client_connect(lua_State* L) {
-	auto* ctx = GetKcpClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_client: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_client: closed");
 	if (ctx->connected) {
@@ -175,7 +155,7 @@ int l_kcp_client_connect(lua_State* L) {
 
 // ── instance:send(data) → bool ─────────────────────────────────────
 int l_kcp_client_send(lua_State* L) {
-	auto* ctx = GetKcpClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_client: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_client: closed");
 
@@ -194,7 +174,7 @@ int l_kcp_client_send(lua_State* L) {
 
 // ── instance:do_request(data, timeout_ms) → string ─────────────────
 int l_kcp_client_do_request(lua_State* L) {
-	auto* ctx = GetKcpClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_client: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_client: closed");
 
@@ -216,7 +196,7 @@ int l_kcp_client_do_request(lua_State* L) {
 
 // ── instance:close() ───────────────────────────────────────────────
 int l_kcp_client_close(lua_State* L) {
-	auto* ctx = GetKcpClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
 		lua_pushboolean(L, 0);
 		return 1;
@@ -236,7 +216,7 @@ int l_kcp_client_close(lua_State* L) {
 
 // ── instance:is_connected() → bool ─────────────────────────────────
 int l_kcp_client_is_connected(lua_State* L) {
-	auto* ctx = GetKcpClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
 		lua_pushboolean(L, 0);
 		return 1;
@@ -248,7 +228,7 @@ int l_kcp_client_is_connected(lua_State* L) {
 // ── instance:set_kcp_nodelay(nodelay, interval, resend, nc) ───────
 // Must be called before connect().
 int l_kcp_client_set_kcp_nodelay(lua_State* L) {
-	auto* ctx = GetKcpClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_client: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_client: closed");
 	int nodelay = static_cast<int>(luaL_checkinteger(L, 2));
@@ -261,7 +241,7 @@ int l_kcp_client_set_kcp_nodelay(lua_State* L) {
 
 // ── instance:set_kcp_wnd_size(sndwnd, rcvwnd) ─────────────────────
 int l_kcp_client_set_kcp_wnd_size(lua_State* L) {
-	auto* ctx = GetKcpClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_client: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_client: closed");
 	int sndwnd = static_cast<int>(luaL_checkinteger(L, 2));
@@ -272,7 +252,7 @@ int l_kcp_client_set_kcp_wnd_size(lua_State* L) {
 
 // ── instance:set_kcp_mtu(mtu) ─────────────────────────────────────
 int l_kcp_client_set_kcp_mtu(lua_State* L) {
-	auto* ctx = GetKcpClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_client: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_client: closed");
 	int mtu = static_cast<int>(luaL_checkinteger(L, 2));
@@ -282,7 +262,7 @@ int l_kcp_client_set_kcp_mtu(lua_State* L) {
 
 // ── instance:set_kcp_conv(conv) ────────────────────────────────────
 int l_kcp_client_set_kcp_conv(lua_State* L) {
-	auto* ctx = GetKcpClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_client: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_client: closed");
 	lua_Integer c = luaL_checkinteger(L, 2);
@@ -296,7 +276,7 @@ int l_kcp_client_set_kcp_conv(lua_State* L) {
 
 // ── __gc metamethod ────────────────────────────────────────────────
 int l_kcp_client_gc(lua_State* L) {
-	auto* ctx = GetKcpClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) return 0;
 
 	ctx->disposed = true;
@@ -378,19 +358,13 @@ const luaL_Reg kKcpClientFunctions[] = {
 void RegisterKcpClientMetaTable(lua_State* L) {
 	if (!L) return;
 
-	luaL_newmetatable(L, kKcpClientMetaName);
-	lua_pushvalue(L, -1);
-	lua_setfield(L, -2, "__index");
-	luaL_setfuncs(L, kKcpClientMethods, 0);
-	lua_pushcfunction(L, l_kcp_client_gc);
-	lua_setfield(L, -2, "__gc");
-	lua_pop(L, 1);
+	RegisterInstanceMeta(L, kKcpClientMetaName, kKcpClientMethods, l_kcp_client_gc);
 }
 
 void PushKcpClientLibrary(lua_State* L) {
 	if (!L) return;
 
-	luaL_newlib(L, kKcpClientFunctions);
+	PushLibrary(L, kKcpClientFunctions);
 }
 
 }  // namespace script

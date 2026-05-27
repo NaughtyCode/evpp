@@ -17,6 +17,7 @@
 
 #include "runtime/core/log/log.h"
 #include "runtime/engine/engine.h"
+#include "runtime/script/bind_util.h"
 #include "runtime/script/net_lifetime.h"
 
 extern "C" {
@@ -53,15 +54,6 @@ std::unordered_set<UdpServerCtx*> g_udp_server_ctxs;
 /* Lifetime guard: prevents RunInLoop callbacks from accessing a freed
  * lua_State during shutdown. See net_lifetime.h for the pattern. */
 static NetAliveGuard g_udp_alive;
-
-// ── Internal helpers ─────────────────────────────────────────────────
-
-UdpServerCtx* GetUdpServerCtxFromTable(lua_State* L, int idx) {
-	lua_getfield(L, idx, "_ctx");
-	auto* ctx = static_cast<UdpServerCtx*>(lua_touserdata(L, -1));
-	lua_pop(L, 1);
-	return ctx;
-}
 
 // ── Bind the MessageHandler ─────────────────────────────────────────
 // ctx is guaranteed to be alive while the handler runs because
@@ -198,14 +190,7 @@ int l_udp_server_listen(lua_State* L) {
 		return 2;
 	}
 
-	// Build Lua class instance table
-	lua_newtable(L);
-
-	lua_pushlightuserdata(L, ctx);
-	lua_setfield(L, -2, "_ctx");
-
-	luaL_getmetatable(L, kUdpServerMetaName);
-	lua_setmetatable(L, -2);
+	PushInstanceTable(L, ctx, kUdpServerMetaName);
 
 	lua_pushvalue(L, -1);
 	ctx->instance_ref = luaL_ref(L, LUA_REGISTRYINDEX);
@@ -240,7 +225,7 @@ int l_udp_server_listen(lua_State* L) {
 
 // ── server:stop() → bool ───────────────────────────────────────────
 int l_udp_server_stop(lua_State* L) {
-	auto* ctx = GetUdpServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<UdpServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
 		lua_pushboolean(L, 0);
 		return 1;
@@ -257,7 +242,7 @@ int l_udp_server_stop(lua_State* L) {
 
 // ── server:pause() ─────────────────────────────────────────────────
 int l_udp_server_pause(lua_State* L) {
-	auto* ctx = GetUdpServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<UdpServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "udp_server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "udp_server: closed");
 	ctx->server->Pause();
@@ -266,7 +251,7 @@ int l_udp_server_pause(lua_State* L) {
 
 // ── server:continue() ──────────────────────────────────────────────
 int l_udp_server_continue(lua_State* L) {
-	auto* ctx = GetUdpServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<UdpServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "udp_server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "udp_server: closed");
 	ctx->server->Continue();
@@ -275,7 +260,7 @@ int l_udp_server_continue(lua_State* L) {
 
 // ── server:is_running() → bool ─────────────────────────────────────
 int l_udp_server_is_running(lua_State* L) {
-	auto* ctx = GetUdpServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<UdpServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
 		lua_pushboolean(L, 0);
 		return 1;
@@ -286,7 +271,7 @@ int l_udp_server_is_running(lua_State* L) {
 
 // ── server:set_on_message(callback) ────────────────────────────────
 int l_udp_server_set_on_message(lua_State* L) {
-	auto* ctx = GetUdpServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<UdpServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "udp_server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "udp_server: closed");
 
@@ -323,7 +308,7 @@ int l_udp_server_set_on_message(lua_State* L) {
 
 // ── __gc metamethod ────────────────────────────────────────────────
 int l_udp_server_gc(lua_State* L) {
-	auto* ctx = GetUdpServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<UdpServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) return 0;
 
 	ReleaseUdpServer(L, ctx);
@@ -356,21 +341,14 @@ const luaL_Reg kUdpServerFunctions[] = {
 void RegisterUdpServerMetaTable(lua_State* L) {
 	if (!L) return;
 
-	// Register metatable for instance methods and __gc
-	luaL_newmetatable(L, kUdpServerMetaName);
-	lua_pushvalue(L, -1);
-	lua_setfield(L, -2, "__index");	 // mt.__index = mt
-	luaL_setfuncs(L, kUdpServerMethods, 0);
-	lua_pushcfunction(L, l_udp_server_gc);
-	lua_setfield(L, -2, "__gc");
-	lua_pop(L, 1);
+	RegisterInstanceMeta(L, kUdpServerMetaName, kUdpServerMethods, l_udp_server_gc);
 }
 
 void PushUdpServerLibrary(lua_State* L) {
 	if (!L) return;
 
 	// net.udp_server table (static functions only: listen)
-	luaL_newlib(L, kUdpServerFunctions);
+	PushLibrary(L, kUdpServerFunctions);
 }
 
 void ShutdownUdpServerBindings() {

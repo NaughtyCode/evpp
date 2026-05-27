@@ -7,6 +7,7 @@
 #include "runtime/script/entity_bind.h"
 #include "runtime/script/msgpack_bind.h"
 #include "runtime/script/net_bind.h"
+#include "runtime/script/space_bind.h"
 #include "runtime/script/timer_bind.h"
 #if defined(ENGINE_MONGODB_ENABLED)
 #include "runtime/database/data_service/db_service_main_bind.h"
@@ -40,6 +41,10 @@ void ExportAll(ScriptVM& vm) {
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("msgpack");
 		ExportMsgPack(vm);
+	}
+	{
+		ENGINE_PROFILE_SCRIPT_EXPORT("space");
+		ExportSpace(vm);
 	}
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("import");

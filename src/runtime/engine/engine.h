@@ -3,8 +3,10 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <runtime/evpp/invoke_timer.h>
 
@@ -19,6 +21,13 @@ class SignalEventWatcher;
 namespace engine {
 
 class ScriptVM;
+class ScriptReloader;
+struct PhysicsFrameResult;
+
+// Callback invoked each frame with physics simulation results.
+// Registered by the game layer to consume transforms, collision events,
+// and diff packets produced by the physics thread.
+using PhysicsResultHandler = std::function<void(const PhysicsFrameResult&)>;
 
 class ENGINE_API Engine {
 	public:
@@ -100,6 +109,10 @@ class ENGINE_API Engine {
 		return loop_;
 	}
 
+	// Register a callback to consume physics results each frame.
+	// When set, Engine::FrameLoop invokes this after FetchResult.
+	void SetPhysicsResultHandler(PhysicsResultHandler handler);
+
 	private:
 	void FrameLoop();
 
@@ -117,7 +130,10 @@ class ENGINE_API Engine {
 
 	float fixed_delta_time_{0.01667f};	// physics fixed timestep (from PhysicsConfig or default)
 
+	PhysicsResultHandler physics_result_handler_;
+
 	std::unique_ptr<ScriptVM> script_vm_;
+	std::unique_ptr<ScriptReloader> script_reloader_;
 
 	// Standalone-mode resources (owned, created in Start, destroyed in Cleanup).
 	std::unique_ptr<evpp::SignalEventWatcher> sigint_watcher_;

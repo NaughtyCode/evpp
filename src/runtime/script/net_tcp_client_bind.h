@@ -15,5 +15,9 @@ ENGINE_API void RegisterClientMetaTable(lua_State* L);
 // Table contains: connect
 ENGINE_API void PushClientLibrary(lua_State* L);
 
+// Close all active TCP client connections, cancel callbacks, and free
+// context objects. Called during engine shutdown.
+ENGINE_API void ShutdownClientBindings();
+
 }  // namespace script
 }  // namespace engine

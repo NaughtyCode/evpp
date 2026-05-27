@@ -1,9 +1,22 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <memory>
 #include <string>
 
 namespace engine {
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DbRequestStatus — lifecycle status of a database request
+// ══════════════════════════════════════════════════════════════════════════════
+
+enum class DbRequestStatus : uint8_t {
+	kEnqueued,   // Successfully placed in queue
+	kCompleted,  // Execution completed (success or error)
+	kDropped,    // Queue full — request discarded
+	kTimeout,    // Request exceeded timeout
+};
 
 // ══════════════════════════════════════════════════════════════════════════════
 // DbOperation — CRUD + script execution operations
@@ -93,6 +106,7 @@ struct DbRequest {
 
 struct DbResponse {
 	uint64_t request_id = 0;  // matches DbRequest::request_id
+	DbRequestStatus status = DbRequestStatus::kEnqueued;
 	bool success = false;
 	uint32_t error_code = 0;  // MongoDB error code (0 on success)
 	std::string error_message;

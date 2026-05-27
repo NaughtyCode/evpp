@@ -126,9 +126,7 @@ void PhysicsThread::Stop() {
 
 	// Signal thread to exit
 	running_.store(false, std::memory_order_release);
-
-	// Send wakeup tick to unblock the event loop
-	command_queue_.enqueue(PhysicsCommand::MakeTick(TickArgs{0, 0.0f}));
+	cv_.notify_one();  // wake EventLoop from wait (no fake tick needed)
 
 	// Join thread
 	if (thread_ && thread_->joinable()) {
@@ -213,7 +211,9 @@ bool PhysicsThread::EnqueueCommand(PhysicsCommand cmd) {
 		return false;
 	}
 
-	return command_queue_.enqueue(std::move(cmd));
+	bool enqueued = command_queue_.enqueue(std::move(cmd));
+	cv_.notify_one();  // wake EventLoop from wait
+	return enqueued;
 }
 
 //============================================================================
@@ -271,8 +271,13 @@ void PhysicsThread::EventLoop() {
 		bool got = command_queue_.try_dequeue(cmd);
 
 		if (!got) {
-			std::this_thread::sleep_for(std::chrono::microseconds(50000));	// 50ms
-			continue;  // timeout — check running_ flag
+			// Wait with timeout as safety net for missed signals.
+			std::unique_lock<std::mutex> lock(cv_mutex_);
+			cv_.wait_for(lock, std::chrono::milliseconds(50), [this]() {
+				return !running_.load(std::memory_order_acquire) ||
+				       command_queue_.size_approx() > 0;
+			});
+			continue;
 		}
 
 		{

@@ -77,6 +77,11 @@ public:
 	void UnbindConnection();
 	evpp::TCPConnPtr GetConnection() const { return connection_; }
 
+	// Physics body linkage
+	void SetPhysicsBodyId(uint32_t body_id) { physics_body_id_ = body_id; }
+	uint32_t GetPhysicsBodyId() const { return physics_body_id_; }
+	bool HasPhysicsBody() const { return physics_body_id_ != kInvalidBodyId; }
+
 	// Timer ownership — timers are auto-cancelled on Destroy.
 	// The callback should capture EntityId and check EntityManager for safety.
 	void AddOwnedTimer(TimerId id);
@@ -101,6 +106,9 @@ private:
 
 	// Lua component name → registry ref
 	std::unordered_map<std::string, int> lua_components_;
+
+	static constexpr uint32_t kInvalidBodyId = UINT32_MAX;
+	uint32_t physics_body_id_ = kInvalidBodyId;
 };
 
 }  // namespace entity

@@ -20,6 +20,7 @@
 #include "runtime/core/log/log.h"
 #include "runtime/engine/engine.h"
 #include "runtime/network/length_prefixed_codec.h"
+#include "runtime/script/bind_util.h"
 
 extern "C" {
 #include "lauxlib.h"
@@ -59,70 +60,8 @@ const char* kConnMetaName = "net.server.conn.instance";
 // Normal operations (send, close, stop, set_on_*) never touch this set.
 std::unordered_set<ServerCtx*> g_server_ctxs;
 
-// ── Internal helpers ─────────────────────────────────────────────────
-
-ServerCtx* GetServerCtxFromTable(lua_State* L, int idx) {
-	lua_getfield(L, idx, "_ctx");
-	auto* ctx = static_cast<ServerCtx*>(lua_touserdata(L, -1));
-	lua_pop(L, 1);
-	return ctx;
-}
-
-ConnCtx* GetConnCtxFromTable(lua_State* L, int idx) {
-	lua_getfield(L, idx, "_ctx");
-	auto* ctx = static_cast<ConnCtx*>(lua_touserdata(L, -1));
-	lua_pop(L, 1);
-	return ctx;
-}
 
 // ── Callback dispatchers ─────────────────────────────────────────────
-
-// Call inst:method(str) �?for conn.on_message(self, data), conn.on_close(self, addr)
-void CallInstMethodStr(lua_State* L, int inst_ref, const char* method, const std::string& arg) {
-	if (!L || inst_ref == LUA_NOREF) return;
-	lua_rawgeti(L, LUA_REGISTRYINDEX, inst_ref);
-	if (lua_isnil(L, -1)) {
-		lua_pop(L, 1);
-		return;
-	}
-	lua_getfield(L, -1, method);
-	if (!lua_isfunction(L, -1)) {
-		lua_pop(L, 2);
-		return;
-	}
-	lua_insert(L, -2);	// func, inst
-	lua_pushlstring(L, arg.data(), arg.size());	 // func, inst, str
-	if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
-		auto* logger = GetLogger();
-		ENGINE_LOG_ERROR(logger, "[net.server] {} error: {}", method, lua_tostring(L, -1));
-		lua_pop(L, 1);
-	}
-}
-
-// Call inst:method(table, str) �?for server.on_connect(self, conn, addr),
-// server.on_message(self, conn, data), server.on_close(self, conn, addr)
-void CallInstMethodTableStr(
-	lua_State* L, int inst_ref, const char* method, int table_ref, const std::string& arg) {
-	if (!L || inst_ref == LUA_NOREF) return;
-	lua_rawgeti(L, LUA_REGISTRYINDEX, inst_ref);
-	if (lua_isnil(L, -1)) {
-		lua_pop(L, 1);
-		return;
-	}
-	lua_getfield(L, -1, method);
-	if (!lua_isfunction(L, -1)) {
-		lua_pop(L, 2);
-		return;
-	}
-	lua_insert(L, -2);	// func, inst
-	lua_rawgeti(L, LUA_REGISTRYINDEX, table_ref);  // func, inst, table
-	lua_pushlstring(L, arg.data(), arg.size());	 // func, inst, table, str
-	if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
-		auto* logger = GetLogger();
-		ENGINE_LOG_ERROR(logger, "[net.server] {} error: {}", method, lua_tostring(L, -1));
-		lua_pop(L, 1);
-	}
-}
 
 // Check whether a method on an instance table is a function.
 bool HasMethod(lua_State* L, int inst_ref, const char* method) {
@@ -140,7 +79,7 @@ bool HasMethod(lua_State* L, int inst_ref, const char* method) {
 // ── Connection methods ───────────────────────────────────────────────
 
 int l_conn_send(lua_State* L) {
-	auto* ctx = GetConnCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ConnCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "conn: invalid context");
 	if (ctx->disposed) return luaL_error(L, "conn: closed");
 
@@ -165,7 +104,7 @@ int l_conn_send(lua_State* L) {
 }
 
 int l_conn_close(lua_State* L) {
-	auto* ctx = GetConnCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ConnCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
 		lua_pushboolean(L, 0);
 		return 1;
@@ -203,7 +142,7 @@ int l_conn_close(lua_State* L) {
 }
 
 int l_conn_set_on_message(lua_State* L) {
-	auto* ctx = GetConnCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ConnCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "conn: invalid context");
 	if (ctx->disposed) return luaL_error(L, "conn: closed");
 	lua_settop(L, 2);
@@ -215,7 +154,7 @@ int l_conn_set_on_message(lua_State* L) {
 }
 
 int l_conn_set_on_close(lua_State* L) {
-	auto* ctx = GetConnCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ConnCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "conn: invalid context");
 	if (ctx->disposed) return luaL_error(L, "conn: closed");
 	lua_settop(L, 2);
@@ -227,7 +166,7 @@ int l_conn_set_on_close(lua_State* L) {
 }
 
 int l_conn_is_connected(lua_State* L) {
-	auto* ctx = GetConnCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ConnCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
 		lua_pushboolean(L, 0);
 		return 1;
@@ -237,7 +176,7 @@ int l_conn_is_connected(lua_State* L) {
 }
 
 int l_conn_gc(lua_State* L) {
-	auto* ctx = GetConnCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ConnCtx>(L, 1);
 	if (!ctx || ctx->disposed) return 0;
 
 	ctx->disposed = true;
@@ -267,7 +206,7 @@ int l_conn_gc(lua_State* L) {
 // ── Server methods ───────────────────────────────────────────────────
 
 int l_server_stop(lua_State* L) {
-	auto* ctx = GetServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
 		lua_pushboolean(L, 0);
 		return 1;
@@ -309,7 +248,7 @@ int l_server_stop(lua_State* L) {
 }
 
 int l_server_set_on_connect(lua_State* L) {
-	auto* ctx = GetServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "server: closed");
 	lua_settop(L, 2);
@@ -321,7 +260,7 @@ int l_server_set_on_connect(lua_State* L) {
 }
 
 int l_server_set_on_close(lua_State* L) {
-	auto* ctx = GetServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "server: closed");
 	lua_settop(L, 2);
@@ -333,7 +272,7 @@ int l_server_set_on_close(lua_State* L) {
 }
 
 int l_server_set_on_message(lua_State* L) {
-	auto* ctx = GetServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "server: closed");
 	lua_settop(L, 2);
@@ -345,7 +284,7 @@ int l_server_set_on_message(lua_State* L) {
 }
 
 int l_server_gc(lua_State* L) {
-	auto* ctx = GetServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<ServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) return 0;
 
 	ctx->disposed = true;
@@ -390,14 +329,7 @@ int l_net_server_listen(lua_State* L) {
 	auto* ctx = new ServerCtx();
 	ctx->L = L;
 
-	// Build Lua class instance table
-	lua_newtable(L);  // t
-
-	lua_pushlightuserdata(L, ctx);	// t, lud
-	lua_setfield(L, -2, "_ctx");  // t
-
-	luaL_getmetatable(L, kServerMetaName);	// t, mt
-	lua_setmetatable(L, -2);  // t
+	PushInstanceTable(L, ctx, kServerMetaName);  // t
 
 	lua_pushvalue(L, -1);  // t, t
 	ctx->instance_ref = luaL_ref(L, LUA_REGISTRYINDEX);	 // t
@@ -428,14 +360,7 @@ int l_net_server_listen(lua_State* L) {
 				conn_ctx->server_inst_ref = server_inst_ref;
 				conn_ctx->codec = &ctx_ptr->codec;
 
-				// Build Lua conn instance table
-				lua_newtable(L_ptr);  // ct
-
-				lua_pushlightuserdata(L_ptr, conn_ctx);	 // ct, lud
-				lua_setfield(L_ptr, -2, "_ctx");  // ct
-
-				luaL_getmetatable(L_ptr, kConnMetaName);  // ct, mt
-				lua_setmetatable(L_ptr, -2);  // ct
+				PushInstanceTable(L_ptr, conn_ctx, kConnMetaName);  // ct
 
 				lua_pushvalue(L_ptr, -1);  // ct, ct
 				conn_ctx->instance_ref = luaL_ref(L_ptr,
@@ -592,24 +517,12 @@ const luaL_Reg kServerFunctions[] = {
 
 void RegisterConnMetaTable(lua_State* L) {
 	if (!L) return;
-	luaL_newmetatable(L, kConnMetaName);  // mt
-	lua_pushvalue(L, -1);  // mt, mt
-	lua_setfield(L, -2, "__index");	 // mt.__index = mt
-	luaL_setfuncs(L, kConnMethods, 0);	// mt
-	lua_pushcfunction(L, l_conn_gc);  // mt, gc
-	lua_setfield(L, -2, "__gc");  // mt
-	lua_pop(L, 1);
+	RegisterInstanceMeta(L, kConnMetaName, kConnMethods, l_conn_gc);
 }
 
 void RegisterServerMetaTable(lua_State* L) {
 	if (!L) return;
-	luaL_newmetatable(L, kServerMetaName);	// mt
-	lua_pushvalue(L, -1);  // mt, mt
-	lua_setfield(L, -2, "__index");	 // mt.__index = mt
-	luaL_setfuncs(L, kServerMethods, 0);  // mt
-	lua_pushcfunction(L, l_server_gc);	// mt, gc
-	lua_setfield(L, -2, "__gc");  // mt
-	lua_pop(L, 1);
+	RegisterInstanceMeta(L, kServerMetaName, kServerMethods, l_server_gc);
 }
 
 // ======================================================================
@@ -618,7 +531,7 @@ void RegisterServerMetaTable(lua_State* L) {
 
 void PushServerLibrary(lua_State* L) {
 	if (!L) return;
-	luaL_newlib(L, kServerFunctions);
+	PushLibrary(L, kServerFunctions);
 }
 
 void ShutdownServerBindings() {

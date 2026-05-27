@@ -17,6 +17,7 @@
 
 #include "runtime/core/log/log.h"
 #include "runtime/engine/engine.h"
+#include "runtime/script/bind_util.h"
 #include "runtime/script/net_lifetime.h"
 
 extern "C" {
@@ -49,15 +50,6 @@ std::unordered_set<KcpServerCtx*> g_kcp_server_ctxs;
 /* Lifetime guard: prevents RunInLoop callbacks from accessing a freed
  * lua_State during shutdown. See net_lifetime.h for the pattern. */
 static NetAliveGuard g_kcp_alive;
-
-// ── Internal helpers ─────────────────────────────────────────────────
-
-KcpServerCtx* GetKcpServerCtxFromTable(lua_State* L, int idx) {
-	lua_getfield(L, idx, "_ctx");
-	auto* ctx = static_cast<KcpServerCtx*>(lua_touserdata(L, -1));
-	lua_pop(L, 1);
-	return ctx;
-}
 
 // ── Bind the MessageHandler ─────────────────────────────────────────
 void BindKcpMessageHandler(KcpServerCtx* ctx) {
@@ -186,14 +178,7 @@ int l_kcp_server_listen(lua_State* L) {
 		return 2;
 	}
 
-	// Build Lua class instance table
-	lua_newtable(L);
-
-	lua_pushlightuserdata(L, ctx);
-	lua_setfield(L, -2, "_ctx");
-
-	luaL_getmetatable(L, kKcpServerMetaName);
-	lua_setmetatable(L, -2);
+	PushInstanceTable(L, ctx, kKcpServerMetaName);
 
 	lua_pushvalue(L, -1);
 	ctx->instance_ref = luaL_ref(L, LUA_REGISTRYINDEX);
@@ -227,7 +212,7 @@ int l_kcp_server_listen(lua_State* L) {
 
 // ── server:stop() → bool ───────────────────────────────────────────
 int l_kcp_server_stop(lua_State* L) {
-	auto* ctx = GetKcpServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
 		lua_pushboolean(L, 0);
 		return 1;
@@ -244,7 +229,7 @@ int l_kcp_server_stop(lua_State* L) {
 
 // ── server:pause() ─────────────────────────────────────────────────
 int l_kcp_server_pause(lua_State* L) {
-	auto* ctx = GetKcpServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_server: closed");
 	ctx->server->Pause();
@@ -253,7 +238,7 @@ int l_kcp_server_pause(lua_State* L) {
 
 // ── server:continue() ──────────────────────────────────────────────
 int l_kcp_server_continue(lua_State* L) {
-	auto* ctx = GetKcpServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_server: closed");
 	ctx->server->Continue();
@@ -262,7 +247,7 @@ int l_kcp_server_continue(lua_State* L) {
 
 // ── server:is_running() → bool ─────────────────────────────────────
 int l_kcp_server_is_running(lua_State* L) {
-	auto* ctx = GetKcpServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
 		lua_pushboolean(L, 0);
 		return 1;
@@ -273,7 +258,7 @@ int l_kcp_server_is_running(lua_State* L) {
 
 // ── server:set_on_message(callback) ────────────────────────────────
 int l_kcp_server_set_on_message(lua_State* L) {
-	auto* ctx = GetKcpServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_server: closed");
 
@@ -305,7 +290,7 @@ int l_kcp_server_set_on_message(lua_State* L) {
 
 // ── server:set_kcp_nodelay(nodelay, interval, resend, nc) ──────────
 int l_kcp_server_set_kcp_nodelay(lua_State* L) {
-	auto* ctx = GetKcpServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_server: closed");
 	int nodelay = static_cast<int>(luaL_checkinteger(L, 2));
@@ -318,7 +303,7 @@ int l_kcp_server_set_kcp_nodelay(lua_State* L) {
 
 // ── server:set_kcp_wnd_size(sndwnd, rcvwnd) ───────────────────────
 int l_kcp_server_set_kcp_wnd_size(lua_State* L) {
-	auto* ctx = GetKcpServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_server: closed");
 	int sndwnd = static_cast<int>(luaL_checkinteger(L, 2));
@@ -329,7 +314,7 @@ int l_kcp_server_set_kcp_wnd_size(lua_State* L) {
 
 // ── server:set_kcp_mtu(mtu) ───────────────────────────────────────
 int l_kcp_server_set_kcp_mtu(lua_State* L) {
-	auto* ctx = GetKcpServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_server: closed");
 	int mtu = static_cast<int>(luaL_checkinteger(L, 2));
@@ -339,7 +324,7 @@ int l_kcp_server_set_kcp_mtu(lua_State* L) {
 
 // ── server:set_session_timeout(timeout_ms) ─────────────────────────
 int l_kcp_server_set_session_timeout(lua_State* L) {
-	auto* ctx = GetKcpServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_server: closed");
 	lua_Integer t = luaL_checkinteger(L, 2);
@@ -352,7 +337,7 @@ int l_kcp_server_set_session_timeout(lua_State* L) {
 
 // ── __gc metamethod ────────────────────────────────────────────────
 int l_kcp_server_gc(lua_State* L) {
-	auto* ctx = GetKcpServerCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) return 0;
 
 	ReleaseKcpServer(L, ctx);
@@ -389,19 +374,13 @@ const luaL_Reg kKcpServerFunctions[] = {
 void RegisterKcpServerMetaTable(lua_State* L) {
 	if (!L) return;
 
-	luaL_newmetatable(L, kKcpServerMetaName);
-	lua_pushvalue(L, -1);
-	lua_setfield(L, -2, "__index");
-	luaL_setfuncs(L, kKcpServerMethods, 0);
-	lua_pushcfunction(L, l_kcp_server_gc);
-	lua_setfield(L, -2, "__gc");
-	lua_pop(L, 1);
+	RegisterInstanceMeta(L, kKcpServerMetaName, kKcpServerMethods, l_kcp_server_gc);
 }
 
 void PushKcpServerLibrary(lua_State* L) {
 	if (!L) return;
 
-	luaL_newlib(L, kKcpServerFunctions);
+	PushLibrary(L, kKcpServerFunctions);
 }
 
 void ShutdownKcpServerBindings() {

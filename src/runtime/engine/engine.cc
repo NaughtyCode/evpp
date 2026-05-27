@@ -31,8 +31,13 @@
 #endif
 #include "runtime/physics/physics_engine_bridge.h"
 #include "runtime/profiler/profiler_core.h"
+#include "runtime/vm/coroutine_scheduler.h"
+#include "runtime/vm/script_reloader.h"
 #include "runtime/profiler/profiler_events.h"
 #include "runtime/script/script_bind.h"
+#include "runtime/space/connection_router.h"
+#include "runtime/space/space_manager.h"
+#include "runtime/space/space_message.h"
 #include "runtime/vm/sandbox.h"
 #include "runtime/vm/vm.h"
 
@@ -207,6 +212,27 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	}
 	script::ExportAll(*script_vm_);
 
+	// Initialize coroutine scheduler (async.lua support)
+	CoroutineScheduler::Instance().Init(script_vm_->GetState());
+
+	// Initialize script hot-reload
+	{
+		std::string reload_root =
+			std::filesystem::path(runtime_cfg.scripts_dir).parent_path().string();
+		if (reload_root.empty()) reload_root = ".";
+		script_reloader_ = std::make_unique<ScriptReloader>();
+		script_reloader_->SetTarget(script_vm_.get(), {reload_root});
+		script_reloader_->SetReloadCallback(
+			[](const std::string& file, bool success) {
+				auto* logger = GetLogger();
+				if (success) {
+					ENGINE_LOG_INFO(logger, "hot-reload OK: {}", file);
+				} else {
+					ENGINE_LOG_ERROR(logger, "hot-reload FAILED: {}", file);
+				}
+			});
+	}
+
 	last_frame_time_ = std::chrono::steady_clock::now();
 	last_work_time_ = last_frame_time_;
 
@@ -267,6 +293,11 @@ void Engine::Start() {
 	running_ = true;
 	last_frame_time_ = std::chrono::steady_clock::now();
 	last_work_time_ = last_frame_time_;
+
+	// Start hot-reload file watcher on the reloader's own thread.
+	if (script_reloader_) {
+		script_reloader_->Start();
+	}
 
 #if defined(ENGINE_MONGODB_ENABLED) && !defined(NDEBUG)
 	// ── DB Service smoke test: SendRequest → PollResponse ──────────
@@ -378,6 +409,11 @@ void Engine::Cleanup() {
 		frame_timer_.reset();
 	}
 
+	// Stop hot-reload file watcher before touching the Lua VM.
+	if (script_reloader_) {
+		script_reloader_->Stop();
+	}
+
 	if (script_vm_) {
 		script::ShutdownNetBindings();
 	}
@@ -456,13 +492,24 @@ void Engine::FrameLoop() {
 		}
 	}  // ScriptUpdate slice ends
 
+	// Resume runnable coroutines. Limit to 5ms per frame to avoid
+	// starving the main loop when many coroutines are active.
+	CoroutineScheduler::Instance().Update(5);
+
+	// Update all active Spaces (per-space VM update).
+	space::SpaceManager::Instance().ForEachSpace([&](space::Space& sp) {
+		sp.Update(static_cast<int64_t>(elapsed.count()));
+	});
+
+	// Deliver pending cross-space messages.
+	space::SpaceMessageRouter::Instance().ProcessPending();
+
 	// [D17.4] Fetch physics result for this frame
 	{
 		ENGINE_PROFILE_PHYSICS_FETCH(fc);
 		auto result = PhysicsEngineBridge::Instance().FetchResult(fc, 5);
-		if (result) {
-			// [D17.5] Game object state update from result->transforms would go here
-			// [D17.7] Network sync construction from result->diff_packets would go here
+		if (result && physics_result_handler_) {
+			physics_result_handler_(*result);
 		}
 	}  // PhysicsFetch slice ends
 
@@ -481,6 +528,10 @@ void Engine::FrameLoop() {
 			last_slow_frame_log_ = fc;
 		}
 	}
+}
+
+void Engine::SetPhysicsResultHandler(PhysicsResultHandler handler) {
+	physics_result_handler_ = std::move(handler);
 }
 
 }  // namespace engine

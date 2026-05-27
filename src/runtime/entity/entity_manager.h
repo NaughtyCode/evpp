@@ -34,6 +34,11 @@ public:
 	void RegisterConnectionBinding(const evpp::TCPConn* raw_conn, EntityId id);
 	void UnregisterConnectionBinding(const evpp::TCPConn* raw_conn);
 
+	// Physics body lookup
+	Entity* FindByPhysicsBodyId(uint32_t body_id);
+	void RegisterPhysicsBodyBinding(uint32_t body_id, EntityId id);
+	void UnregisterPhysicsBodyBinding(uint32_t body_id);
+
 	// Iteration
 	void ForEachActive(std::function<void(Entity&)> callback);
 	size_t Count() const;
@@ -45,6 +50,7 @@ private:
 
 	std::unordered_map<EntityId, std::unique_ptr<Entity>> entities_;
 	std::unordered_map<const evpp::TCPConn*, EntityId> conn_to_entity_;
+	std::unordered_map<uint32_t, EntityId> body_to_entity_;
 	SequentialIdAllocator id_allocator_;
 };
 

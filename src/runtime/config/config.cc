@@ -193,6 +193,7 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 	}
 
 	ENGINE_LOG_INFO(logger, "ConfigManager: config reloaded");
+	NotifyReloadCallbacks();
 	return true;
 }
 
@@ -331,6 +332,41 @@ bool ConfigManager::ReloadMongoDbConfigs() {
 	}
 
 	return dev_ok && public_ok;
+}
+
+int ConfigManager::RegisterReloadCallback(ReloadCallback callback) {
+	std::lock_guard<std::shared_mutex> lock(callbacks_mutex_);
+	int id = next_callback_id_++;
+	callbacks_.emplace_back(id, std::move(callback));
+	return id;
+}
+
+void ConfigManager::UnregisterReloadCallback(int id) {
+	std::lock_guard<std::shared_mutex> lock(callbacks_mutex_);
+	callbacks_.erase(
+		std::remove_if(callbacks_.begin(), callbacks_.end(),
+					   [id](const auto& pair) { return pair.first == id; }),
+		callbacks_.end());
+}
+
+void ConfigManager::NotifyReloadCallbacks() {
+	if (reloading_.exchange(true)) return;  // prevent re-entrant reload
+
+	std::shared_lock<std::shared_mutex> lock(callbacks_mutex_);
+	auto* logger = GetLogger();
+	for (auto& [id, callback] : callbacks_) {
+		try {
+			callback();
+		} catch (const std::exception& e) {
+			ENGINE_LOG_ERROR(logger,
+							 "ConfigManager: reload callback #{} failed: {}", id, e.what());
+		} catch (...) {
+			ENGINE_LOG_ERROR(logger,
+							 "ConfigManager: reload callback #{} failed: unknown exception", id);
+		}
+	}
+
+	reloading_.store(false);
 }
 
 void ConfigManager::LoadMongoDbConfigsFromServer() {

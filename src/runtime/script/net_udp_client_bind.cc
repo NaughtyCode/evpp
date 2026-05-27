@@ -15,6 +15,7 @@
 
 #include "runtime/core/log/log.h"
 #include "runtime/engine/engine.h"
+#include "runtime/script/bind_util.h"
 
 extern "C" {
 #include "runtime/config/limits.h"
@@ -38,15 +39,6 @@ struct UdpClientCtx {
 
 const char* kUdpClientMetaName = "net.udp_client.instance";
 
-// ── Internal helpers ─────────────────────────────────────────────────
-
-UdpClientCtx* GetUdpClientCtxFromTable(lua_State* L, int idx) {
-	lua_getfield(L, idx, "_ctx");
-	auto* ctx = static_cast<UdpClientCtx*>(lua_touserdata(L, -1));
-	lua_pop(L, 1);
-	return ctx;
-}
-
 // ── l_udp_client_connect(host, port) → instance_table ──
 int l_udp_client_connect(lua_State* L) {
 	const char* host = luaL_checkstring(L, 1);
@@ -61,16 +53,7 @@ int l_udp_client_connect(lua_State* L) {
 
 	auto* ctx = new UdpClientCtx();
 
-	// Build Lua class instance table
-	lua_newtable(L);
-
-	// Store light userdata (UdpClientCtx*) as _ctx
-	lua_pushlightuserdata(L, ctx);
-	lua_setfield(L, -2, "_ctx");
-
-	// Apply metatable with methods and __gc
-	luaL_getmetatable(L, kUdpClientMetaName);
-	lua_setmetatable(L, -2);
+	PushInstanceTable(L, ctx, kUdpClientMetaName);
 
 	// Create SyncUDPClient and connect
 	ctx->client = std::make_unique<evpp::udp::sync::Client>();
@@ -98,7 +81,7 @@ int l_udp_client_connect(lua_State* L) {
 
 // ── instance:send(data) → bool ─────────────────────────────────────────
 int l_udp_client_send(lua_State* L) {
-	auto* ctx = GetUdpClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<UdpClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "udp_client: invalid context");
 	if (ctx->disposed) return luaL_error(L, "udp_client: closed");
 
@@ -117,7 +100,7 @@ int l_udp_client_send(lua_State* L) {
 
 // ── instance:do_request(data, timeout_ms) → string ─────────────────────
 int l_udp_client_do_request(lua_State* L) {
-	auto* ctx = GetUdpClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<UdpClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "udp_client: invalid context");
 	if (ctx->disposed) return luaL_error(L, "udp_client: closed");
 
@@ -139,7 +122,7 @@ int l_udp_client_do_request(lua_State* L) {
 
 // ── instance:close() ────────────────────────────────────────────────────
 int l_udp_client_close(lua_State* L) {
-	auto* ctx = GetUdpClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<UdpClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
 		lua_pushboolean(L, 0);
 		return 1;
@@ -159,7 +142,7 @@ int l_udp_client_close(lua_State* L) {
 
 // ── instance:is_connected() → bool ─────────────────────────────────────
 int l_udp_client_is_connected(lua_State* L) {
-	auto* ctx = GetUdpClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<UdpClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
 		lua_pushboolean(L, 0);
 		return 1;
@@ -170,7 +153,7 @@ int l_udp_client_is_connected(lua_State* L) {
 
 // ── __gc metamethod ────────────────────────────────────────────────────
 int l_udp_client_gc(lua_State* L) {
-	auto* ctx = GetUdpClientCtxFromTable(L, 1);
+	auto* ctx = GetCtxFromTable<UdpClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) return 0;
 
 	ctx->disposed = true;
@@ -273,21 +256,14 @@ const luaL_Reg kUdpClientFunctions[] = {
 void RegisterUdpClientMetaTable(lua_State* L) {
 	if (!L) return;
 
-	// Register metatable for instance methods and __gc
-	luaL_newmetatable(L, kUdpClientMetaName);
-	lua_pushvalue(L, -1);
-	lua_setfield(L, -2, "__index");	 // mt.__index = mt
-	luaL_setfuncs(L, kUdpClientMethods, 0);
-	lua_pushcfunction(L, l_udp_client_gc);
-	lua_setfield(L, -2, "__gc");
-	lua_pop(L, 1);
+	RegisterInstanceMeta(L, kUdpClientMetaName, kUdpClientMethods, l_udp_client_gc);
 }
 
 void PushUdpClientLibrary(lua_State* L) {
 	if (!L) return;
 
 	// net.udp_client table (static functions: connect, do_request, send_to)
-	luaL_newlib(L, kUdpClientFunctions);
+	PushLibrary(L, kUdpClientFunctions);
 }
 
 }  // namespace script

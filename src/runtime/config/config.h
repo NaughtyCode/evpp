@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <mutex>
 #include <shared_mutex>
 #include <string>
@@ -186,8 +187,22 @@ class ENGINE_API ConfigManager {
 	public:
 	static ConfigManager& Instance();
 
+	/* Callback type for config reload notifications.
+	 * Callbacks MUST NOT throw — exceptions are caught and logged. */
+	using ReloadCallback = std::function<void()>;
+
 	ConfigManager(const ConfigManager&) = delete;
 	ConfigManager& operator=(const ConfigManager&) = delete;
+
+	// ── Reload notification ──────────────────────────────────────────
+
+	/* Register a callback to be invoked after each successful Reload().
+	 * Returns a registration ID for later unregistration.
+	 * Callbacks are invoked in registration order. */
+	int RegisterReloadCallback(ReloadCallback callback);
+
+	/* Unregister a previously registered callback by ID. */
+	void UnregisterReloadCallback(int id);
 
 	// ── From JSON strings (text) ─────────────────────────────────────
 
@@ -291,6 +306,9 @@ class ENGINE_API ConfigManager {
 	// any referenced mongodb config files.
 	void LoadMongoDbConfigsFromServer();
 
+	// Notify all registered reload callbacks. Called after successful Reload().
+	void NotifyReloadCallbacks();
+
 	mutable std::shared_mutex config_mutex_;
 	RuntimeConfig runtime_config_;
 	ClientConfig client_config_;
@@ -301,6 +319,12 @@ class ENGINE_API ConfigManager {
 	MongoDbConfig mongo_public_config_;
 	bool mongo_dev_loaded_ = false;
 	bool mongo_public_loaded_ = false;
+
+	// Reload notification
+	mutable std::shared_mutex callbacks_mutex_;
+	std::vector<std::pair<int, ReloadCallback>> callbacks_;
+	int next_callback_id_ = 1;
+	std::atomic<bool> reloading_{false};
 };
 
 }  // namespace engine

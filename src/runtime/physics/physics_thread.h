@@ -18,8 +18,10 @@ before including this header."
 
 #include <atomic>
 #include <concurrentqueue.h>
+#include <condition_variable>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -235,6 +237,11 @@ class PhysicsThread {
 	// Each queue has exactly one producer and one consumer.
 	moodycamel::ConcurrentQueue<PhysicsCommand> command_queue_;	 // [SPSC] MT -> PT
 	moodycamel::ConcurrentQueue<PhysicsFrameResult> result_queue_;	// [SPSC] PT -> MT
+
+	// Condition variable for waking EventLoop on command enqueue.
+	// Replaces the 50ms poll-sleep for near-zero dispatch latency.
+	std::mutex cv_mutex_;
+	std::condition_variable cv_;
 
 	// Atomic flags (acquire/release semantics, lock-free)
 	std::atomic<bool> running_{false};	// [ATOM] MT writes, PT reads

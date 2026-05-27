@@ -204,6 +204,8 @@ std::unique_ptr<DbResponse> DBThread::DequeueResponse() {
 // response's request_id is logged at WARN level for diagnostics.
 
 void DBThread::EnqueueResponse(DbResponse&& resp) {
+	resp.status = DbRequestStatus::kCompleted;
+
 	// Drop oldest responses while the queue is at capacity.  The retry
 	// counter guards against a theoretical infinite loop when size_approx()
 	// overcounts and try_dequeue keeps failing — in practice size_approx()
