@@ -1,0 +1,4 @@
+claude --dangerously-skip-permissions
+
+infra_plan:
+. 按 ./docs/tasks/task_items/infra_task1.txt 执行任务
