@@ -25,7 +25,7 @@ int l_net_server_listen(lua_State* L) {
 ```
 
 Affected files (all 6 protocol bindings have `luaL_error` calls, but risk is concentrated): 
-- **Active leak risk**: `net_tcp_server_bind.cc`, `net_tcp_client_bind.cc` (RAII `std::string` on stack at `luaL_error` call sites in `l_*_listen`)
+- **Active leak risk**: `net_tcp_server_bind.cc` (`l_net_server_listen` creates `std::string name` on line 393 before `luaL_error` calls at lines 524-535 for `Init()`/`Start()` failures). TCP client `l_net_client_connect` also creates `std::string name` (line 130) but has no `luaL_error` after that point — no leak risk.
 - **Safe (raw pointer validation only)**: `net_kcp_server_bind.cc`, `net_kcp_client_bind.cc`, `net_udp_server_bind.cc`, `net_udp_client_bind.cc`
 
 ## Root Cause
@@ -47,7 +47,7 @@ An audit of all 6 binding files reveals that the risk is concentrated, not unifo
 
 **Real risk (concentrated in `l_*_listen` functions):** The `l_net_server_listen` function (and analogous functions in other bindings) constructs a `std::string name` for the server name on the stack, then calls `luaL_error` on `Init()`/`Start()` failure. The code already does `delete ctx` before `luaL_error`, so the heap-allocated `ServerCtx` is properly freed — but `name`'s destructor is **not** called by `longjmp`, leaking its internal heap buffer (~30 bytes per error path). The KCP and UDP server bindings avoid this by not constructing a `std::string` before their `luaL_error` calls.
 
-**Verdict:** Fix the `l_*_listen` functions in TCP server/client bindings (the only bindings using `std::string` for server naming). The other `luaL_error` call sites can be fixed opportunistically with the `LuaError` helper for consistency, but are not actively leaking.
+**Verdict:** Fix the `l_net_server_listen` function in TCP server binding (the only binding using `std::string` for server naming before `luaL_error` calls). TCP client `l_net_client_connect` creates `std::string name` at line 130 but has no `luaL_error` calls after that point — it is safe. KCP/UDP server bindings avoid the issue by not constructing a `std::string` before their `luaL_error` calls. The other `luaL_error` call sites can be fixed opportunistically with the `LuaError` helper for consistency, but are not actively leaking.
 
 ## Implementation Steps
 

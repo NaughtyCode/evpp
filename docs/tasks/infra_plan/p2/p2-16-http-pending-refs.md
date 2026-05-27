@@ -6,7 +6,7 @@ Replace the O(n) `std::find`-based pending ref removal in `HandleHttpResponse` w
 
 ## Current State
 
-`net_http_bind.cc:82` — `HandleHttpResponse` uses `std::find` on a `std::vector<int>` to locate and remove a pending reference:
+`net_http_bind.cc:81` — `HandleHttpResponse` uses `std::find` on a `std::vector<int>` (`g_http_pending_refs`) to locate and remove a pending reference:
 
 ```cpp
 auto it = std::find(pending_refs_.begin(), pending_refs_.end(), ref);

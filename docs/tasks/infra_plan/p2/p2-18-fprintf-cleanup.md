@@ -11,8 +11,8 @@ Three independent diagnostic channels exist:
 | Channel | Location | Count | Problem |
 |---------|----------|-------|---------|
 | Quill log | `ENGINE_LOG_*` macros | primary | Correct system — timestamps, levels, rotation |
-| fprintf(stderr) | 14 files (4 DB layer) | 76+ | No timestamps, no levels, bypasses Quill |
-| std::cout | `timer_manager.cc:664-682` | ~15 | Third channel — only TimerManager DumpStats |
+| fprintf(stderr) | 13 files (4 DB layer) | 70 | No timestamps, no levels, bypasses Quill |
+| std::cout | `timer_manager.cc:664-682` | 16 | Third channel — only TimerManager DumpStats |
 
 Output from three channels is interleaved in terminal with no unified format. Debugging requires correlating three separate output sources.
 

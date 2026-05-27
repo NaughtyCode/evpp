@@ -11,7 +11,7 @@ Four `abort()` calls exist:
 | Location | Trigger | Severity |
 |----------|---------|----------|
 | `vm.cc:20` | `luaL_newstate()` returns nullptr | P2 |
-| `engine.cc:54` | `GetScriptVM()` called before `Init()` | P2 |
+| `engine.cc:53` | `GetScriptVM()` called before `Init()` | P2 |
 | `event_loop.cc:38` | `event_base_new()` fails | P2 |
 | `event_loop.cc:196` | `event_reinit()` fails in `AfterFork()` | P2 |
 

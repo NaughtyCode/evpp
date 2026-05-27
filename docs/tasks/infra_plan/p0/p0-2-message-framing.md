@@ -19,9 +19,9 @@ Network data → libevent → TCPConn::HandleRead()
 `NextAllString()` is called at 3 locations:
 | Location | Protocol |
 |----------|----------|
-| `net_tcp_server_bind.cc:499` | TCP Server |
-| `net_tcp_client_bind.cc:173` | TCP Client |
-| `tcp_conn.cc:108` | TCP Conn SendStringInLoop |
+| `net_tcp_server_bind.cc:505` | TCP Server |
+| `net_tcp_client_bind.cc:182` | TCP Client |
+| `tcp_conn.cc:128` | TCP Conn SendStringInLoop |
 
 Consequences:
 - TCP sticky packets: Lua receives concatenated messages
@@ -32,8 +32,8 @@ Consequences:
 
 Two pre-existing Buffer issues must be addressed:
 
-1. **`buffer.h:121`** — `Reserve()` has a stale `// TODO add the implementation logic here` comment but actually calls `grow()` — functionally correct. The TODO comment should be removed and an optimization audit done (the current grow-then-copy may be replaceable with a more efficient realloc pattern).
-2. **`buffer.h:141`** — Byte order: `AppendInt16`/`AppendInt32` already use `htons`/`htonl` correctly. Only `AppendInt64`/`PrependInt64` use a custom `evppbswap_64` macro that should be replaced with `htonll` for consistency.
+1. **`buffer.h:122`** — `Reserve()` has a stale `// TODO add the implementation logic here` comment but actually calls `grow()` — functionally correct. The TODO comment should be removed and an optimization audit done (the current grow-then-copy may be replaceable with a more efficient realloc pattern).
+2. **`buffer.h:142`** — Byte order: `AppendInt16`/`AppendInt32` already use `htons`/`htonl` correctly. Only `AppendInt64`/`PrependInt64` use a custom `evppbswap_64` macro that should be replaced with `htonll` for consistency.
 
 ## Root Cause
 
@@ -55,7 +55,7 @@ Without framing:
 **Fix 1 — Remove stale TODO, audit Reserve()** (line ~122):
 `Reserve()` already calls `grow()` and is functionally correct. Remove the stale `// TODO add the implementation logic here` comment. Optionally optimize the grow strategy (currently calls `grow()` which allocates, copies, and frees — could use `realloc` for potential in-place expansion).
 
-**Fix 2 — Fix int64 byte order** (line ~141):
+**Fix 2 — Fix int64 byte order** (line ~142):
 `AppendInt16`/`AppendInt32`/`PrependInt16`/`PrependInt32` already use `htons`/`htonl`/`ntohs`/`ntohl` correctly. Only `AppendInt64`/`PrependInt64` use a custom `evppbswap_64` macro — replace with standard `htonll`/`ntohll` for consistency.
 
 ### Step 2: Implement LengthPrefixedCodec
@@ -140,7 +140,7 @@ std::vector<std::string> LengthPrefixedCodec::Decode(Buffer* buffer) {
 Replace the current `buf->NextAllString()` pattern:
 
 ```cpp
-/* Before (line ~499): */
+/* Before (line ~505): */
 std::string data = buf->NextAllString();
 CallInstMethodStr(L, conn_ref, "on_message", data);
 

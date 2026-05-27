@@ -7,7 +7,7 @@ Unify compiler warning configurations so that Windows builds are not a "zero war
 ## Current State
 
 - **UNIX**: `-Wall -Wextra -Wshadow -Wcast-qual -Wcast-align -Wwrite-strings -Wsign-compare -Wfloat-equal`
-- **MSVC**: 11 `/wd` flags disabling nearly all common warnings
+- **MSVC**: 12 `/wd` flags disabling nearly all common warnings
 
 A bug that produces warnings on Linux is completely silent on Windows.
 

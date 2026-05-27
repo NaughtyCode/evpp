@@ -6,7 +6,7 @@ Add explicit TCP client connection shutdown with global tracking (mirroring the 
 
 ## Current State
 
-`ShutdownNetBindings()` (`net_bind.cc:79-88`) explicitly skips TCP client connections:
+`ShutdownNetBindings()` (`net_bind.cc:75-86`) explicitly skips TCP client connections:
 
 ```cpp
 void ShutdownNetBindings() {
