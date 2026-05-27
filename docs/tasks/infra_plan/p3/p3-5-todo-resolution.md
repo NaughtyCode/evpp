@@ -16,7 +16,7 @@ Resolve all 18 documented TODO/FIXME/HACK/XXX markers, prioritizing those that d
 | `connector.cc:149` | EVUTIL_ERR_CONNECT_RETRIABLE not handled | P3 |
 | `dns_resolver.h:14` | IPv6 DNS not implemented | P3 |
 | `dns_resolver.cc:276` | dns_req_ freeing not verified | P3 |
-| `event_loop.cc:320` | Test code missing for Functor | P3 |
+| `event_loop.cc:318` | Test code missing for Functor | P3 |
 | `udp/udp_server.cc:224` | recvmmsg perf optimization | P3 |
 
 ## Implementation Steps
@@ -25,7 +25,7 @@ Resolve all 18 documented TODO/FIXME/HACK/XXX markers, prioritizing those that d
 
 1. **buffer.h:122**: Remove stale TODO on functional Reserve() — covered in P3-7
 2. **buffer.h:142**: Fix int64 byte order (use htonll instead of evppbswap_64) — covered in P3-7
-3. **dns_resolver.cc:276**: Verify dns_req_ freeing — covered in P2-22
+3. **dns_resolver.cc:276**: Verify dns_req_ freeing — `evdns_base_free()` cancels all outstanding requests; confirm dns_req_ does not need explicit free, then replace TODO with explanatory comment
 4. **http/http_server.cc:304,323**: Graceful shutdown — covered in P3-11
 5. **connector.cc:149**: Handle EVUTIL_ERR_CONNECT_RETRIABLE — covered in P3-12
 

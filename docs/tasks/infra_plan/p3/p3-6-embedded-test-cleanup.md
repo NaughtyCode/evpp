@@ -6,13 +6,13 @@ Remove the database smoke test embedded in `Engine::Start()` and move it to a pr
 
 ## Current State
 
-`engine.cc:249-279` contains a DB service smoke test embedded in production code:
+`engine.cc:248-278` contains a DB service smoke test embedded in production code (under `#if defined(ENGINE_MONGODB_ENABLED) && !defined(NDEBUG)`):
 
 ```cpp
-/* #if !defined(NDEBUG) */
-/* DB Service smoke test — sends a test request and polls for result */
+/* #if defined(ENGINE_MONGODB_ENABLED) && !defined(NDEBUG) */
+/* DB Service smoke test — sends a test request and polls for result  */
 /* Uses shared_ptr self-referencing InvokeTimerPtr pattern for polling */
-/* If callback never fires, shared_ptr cycle never breaks → leak */
+/* If callback never fires, shared_ptr cycle never breaks → leak       */
 /* #endif */
 ```
 
@@ -42,7 +42,7 @@ TEST(DatabaseSmokeTest, BasicInsertAndFind) {
 
 **File**: `src/runtime/engine/engine.cc`
 
-Delete lines 249-279 (the `#if !defined(NDEBUG)` block containing the smoke test).
+Delete lines 248-278 (the `#if defined(ENGINE_MONGODB_ENABLED) && !defined(NDEBUG)` block containing the smoke test).
 
 ### Step 3: Remove self-referencing shared_ptr Pattern
 
@@ -64,6 +64,6 @@ public:
 1. DB smoke test code removed from `engine.cc`
 2. Equivalent test exists in `src/tests/integration/db_smoke_test.cc`
 3. Production `Engine::Start()` contains no test logic
-4. `#if !defined(NDEBUG)` test guard removed from engine.cc
+4. `#if defined(ENGINE_MONGODB_ENABLED) && !defined(NDEBUG)` test guard block removed from engine.cc
 5. CI runs the new integration test
 6. New test is properly categorized in `src/tests/integration/` (not mixed with production code)

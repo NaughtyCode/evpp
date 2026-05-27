@@ -260,7 +260,7 @@ print(info.name, info.id, info.player_count)
 - Engine integration: ~40 lines
 - Lua binding: ~80 lines
 - Tests: ~200 lines C++ + ~100 lines Lua
-- **Total**: ~700 lines
+- **Total**: ~790 lines
 
 ## Risks
 

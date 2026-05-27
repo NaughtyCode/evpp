@@ -19,27 +19,27 @@ Plans are organized by priority level matching the deficiency analysis:
 
 | ID | Plan | Category | Est. Effort |
 |----|------|----------|-------------|
-| P0-1 | [Entity Model — Entity/Actor/GameObject Abstraction](p0/p0-1-entity-model.md) | Core Architecture | ~1500 LOC C++ + Lua |
+| P0-1 | [Entity Model — Entity/Actor/GameObject Abstraction](p0/p0-1-entity-model.md) | Core Architecture | ~1700 LOC C++ + Lua |
 | P0-2 | [Message Framing Protocol — LengthPrefixedCodec](p0/p0-2-message-framing.md) | Network | ~490 LOC C++ |
-| P0-3 | [Test Infrastructure](p0/p0-3-test-infrastructure.md) | Quality | ~2000 LOC |
-| P0-4 | [luaL_error Exception Safety — Prevent C++ Destructor Bypass](p0/p0-4-lual-error-safety.md) | Script Binding | ~200 LOC |
-| P0-5 | [Message/Payload Size Limits — DoS Prevention](p0/p0-5-message-size-limits.md) | Security | ~100 LOC |
-| P0-6 | [Cross-thread RunInLoop Lifetime Safety](p0/p0-6-runinloop-safety.md) | Concurrency | ~300 LOC |
-| P0-7 | [Lua Sandbox — Replace luaL_openlibs with Whitelist](p0/p0-7-lua-sandbox.md) | Security | ~150 LOC |
+| P0-3 | [Test Infrastructure](p0/p0-3-test-infrastructure.md) | Quality | ~9,500 LOC |
+| P0-4 | [luaL_error Exception Safety — Prevent C++ Destructor Bypass](p0/p0-4-lual-error-safety.md) | Script Binding | ~300 LOC |
+| P0-5 | [Message/Payload Size Limits — DoS Prevention](p0/p0-5-message-size-limits.md) | Security | ~200 LOC |
+| P0-6 | [Cross-thread RunInLoop Lifetime Safety](p0/p0-6-runinloop-safety.md) | Concurrency | ~400 LOC |
+| P0-7 | [Lua Sandbox — Replace luaL_openlibs with Whitelist](p0/p0-7-lua-sandbox.md) | Security | ~200 LOC |
 
 ## P1 — First Milestone (9 plans)
 
 | ID | Plan | Category | Est. Effort |
 |----|------|----------|-------------|
 | P1-1 | [Binding Boilerplate Elimination — Unify Network Binding Patterns](p1/p1-1-binding-boilerplate.md) | Code Quality | ~800 LOC |
-| P1-2 | [Config Hot-Reload Notification Mechanism](p1/p1-2-config-hot-reload.md) | Config | ~200 LOC |
+| P1-2 | [Config Hot-Reload Notification Mechanism](p1/p1-2-config-hot-reload.md) | Config | ~300 LOC |
 | P1-3 | [TCP Client Explicit Shutdown](p1/p1-3-tcp-client-shutdown.md) | Network | ~150 LOC |
 | P1-4 | [PhysicsThread EventLoop — Replace 50ms Poll-Sleep with condition_variable](p1/p1-4-physics-cv-wakeup.md) | Physics | ~100 LOC |
-| P1-5 | [Physics Result Integration — Connect Physics Output to Game Layer](p1/p1-5-physics-result-integration.md) | Physics | ~300 LOC |
-| P1-6 | [Database Backpressure Notification](p1/p1-6-db-backpressure.md) | Database | ~150 LOC |
+| P1-5 | [Physics Result Integration — Connect Physics Output to Game Layer](p1/p1-5-physics-result-integration.md) | Physics | ~250 LOC |
+| P1-6 | [Database Backpressure Notification](p1/p1-6-db-backpressure.md) | Database | ~170 LOC |
 | P1-7 | [Lua Coroutine Integration](p1/p1-7-coroutine-integration.md) | Script | ~500 LOC |
-| P1-8 | [Hot-Reload System — File Watch + Validate + Rollback](p1/p1-8-hot-reload.md) | Script | ~400 LOC |
-| P1-9 | [Entity-Connection Binding — Multi-VM Architecture](p1/p1-9-multi-vm-architecture.md) | Core Architecture | ~600 LOC |
+| P1-8 | [Hot-Reload System — File Watch + Validate + Rollback](p1/p1-8-hot-reload.md) | Script | ~500 LOC |
+| P1-9 | [Entity-Connection Binding — Multi-VM Architecture](p1/p1-9-multi-vm-architecture.md) | Core Architecture | ~790 LOC |
 
 ## P2 — Production Readiness (23 plans)
 
@@ -51,9 +51,9 @@ Plans are organized by priority level matching the deficiency analysis:
 | P2-4 | [Authentication Framework](p2/p2-4-auth-framework.md) | Security | ~500 LOC |
 | P2-5 | [Monitoring Metrics + Admin HTTP Endpoint](p2/p2-5-monitoring-admin.md) | Observability | ~400 LOC |
 | P2-6 | [Windows Signal Handling](p2/p2-6-windows-signals.md) | Platform | ~50 LOC |
-| P2-7 | [Compiler Warning Configuration Unification (UNIX/MSVC)](p2/p2-7-compiler-warnings.md) | Build | ~30 LOC |
-| P2-8 | [evpp Release Build Thread Safety Checks](p2/p2-8-evpp-release-safety.md) | Concurrency | ~100 LOC |
-| P2-9 | [msgpack Encode Size/Depth Limits](p2/p2-9-msgpack-limits.md) | Security | ~50 LOC |
+| P2-7 | [Compiler Warning Configuration Unification (UNIX/MSVC)](p2/p2-7-compiler-warnings.md) | Build | ~120 LOC |
+| P2-8 | [evpp Release Build Thread Safety Checks](p2/p2-8-evpp-release-safety.md) | Concurrency | ~165 LOC |
+| P2-9 | [msgpack Encode Size/Depth Limits](p2/p2-9-msgpack-limits.md) | Security | ~210 LOC |
 | P2-10 | [Lua Error Dispatch Strategy Unification](p2/p2-10-lua-error-dispatch.md) | Script | ~200 LOC |
 | P2-11 | [RunInLoop — weak_ptr/shared_ptr Migration from Delayed Delete](p2/p2-11-runinloop-smart-ptr.md) | Concurrency | ~300 LOC |
 | P2-12 | [Global Variable Ownership Tracking + ClearCache Cleanup](p2/p2-12-global-tracking.md) | Script | ~200 LOC |
@@ -80,12 +80,12 @@ Plans are organized by priority level matching the deficiency analysis:
 | P3-5 | [TODO/FIXME/HACK Resolution](p3/p3-5-todo-resolution.md) | Code Quality | ~200 LOC |
 | P3-6 | [Embedded Test Code Cleanup — Remove DB Smoke Test from engine.cc](p3/p3-6-embedded-test-cleanup.md) | Code Quality | ~50 LOC |
 | P3-7 | [Buffer Cleanup — Remove Stale TODO + Fix int64 Endian](p3/p3-7-buffer-fixes.md) | Network | ~30 LOC |
-| P3-8 | [Engine::Cleanup Lifecycle Order Documentation + Assertions](p3/p3-8-cleanup-lifecycle-docs.md) | Reliability | ~30 LOC |
+| P3-8 | [Engine::Cleanup Lifecycle Order Documentation + Assertions](p3/p3-8-cleanup-lifecycle-docs.md) | Reliability | ~110 LOC |
 | P3-9 | [MongoDB Binding Return Value Unification](p3/p3-9-mongo-return-unification.md) | Database | ~200 LOC |
 | P3-10 | [Cursor Pre-allocation Pattern Safety](p3/p3-10-cursor-prealloc-safety.md) | Database | ~80 LOC |
 | P3-11 | [HTTP Graceful Shutdown Implementation](p3/p3-11-http-graceful-shutdown.md) | Network | ~100 LOC |
 | P3-12 | [Connector Retry/Reconnection Logic](p3/p3-12-connector-retry.md) | Network | ~100 LOC |
-| P3-13 | [Remaining Minor Fixes](p3/p3-13-remaining-minor-fixes.md) — send() return value, circular import detection, config schema validation, scene path config | Misc | ~160 LOC |
+| P3-13 | [Remaining Minor Fixes](p3/p3-13-remaining-minor-fixes.md) — send() return value, circular import detection, config schema validation, scene path config | Misc | ~360 LOC |
 
 ---
 
@@ -108,7 +108,7 @@ P1-5 (Physics Result Integration) ── depends on P0-1 ───────�
 P1-6 (DB Backpressure) ──────────────────────────────────────┐│││││││││││││││
 P1-7 (Coroutine Integration) ───────────────────────────────┐││││││││││││││││
 P1-8 (Hot-Reload System) ── depends on P1-2 ───────────────┐│││││││││││││││││
-P1-9 (Multi-VM Architecture) ── depends on P0-1 ──────────┐││││││││││││││││││
+P1-9 (Multi-VM Architecture) ── depends on P0-1, P0-6 ────────┐││││││││││││││││││
                                                            │││││││││││││││││││
 P2-* (Production Readiness) ── most depend on P0/P1 ─────┐│││││││││││││││││││
 P3-* (Continuous Improvement) ── can proceed in parallel  ││││││││││││││││││││

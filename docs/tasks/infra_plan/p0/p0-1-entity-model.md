@@ -243,7 +243,7 @@ When enabled, `on_connect` receives an Entity instead of a raw ConnCtx.
 - C++ implementation: ~600 lines
 - Lua binding: ~300 lines
 - Tests: ~200 lines C++ + ~200 lines Lua
-- **Total**: ~1500 lines
+- **Total**: ~1700 lines
 
 ## Risks
 

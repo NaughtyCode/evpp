@@ -144,7 +144,7 @@ src/tests/
 │   ├── length_prefixed_codec_test.cc  # Encode/decode, sticky/fragmented packets
 │   ├── msgpack_codec_test.cc      # Encode depth/size checks, type roundtrips
 │   ├── event_loop_test.cc         # RunInLoop ordering, drain-on-shutdown
-│   ├── connector_test.cc          # Connect, retry, backoff, timeout
+│   ├── connector_retry_test.cc    # Connect, retry, backoff, timeout
 │   ├── entity_test.cc             # Lifecycle, attributes, components, timers
 │   ├── space_test.cc              # VM isolation, entity routing, cross-space messaging
 │   ├── net_lifetime_test.cc       # NetAliveGuard, PendingRefTracker
@@ -617,7 +617,7 @@ Git Push → Pre-commit Hook (static analysis, < 30s)
 | 11 | `lual_error_safety_test.cc` | 6-8 | P0-4 exception safety |
 | 12 | `physics_thread_test.cc` | 8-10 | P1-4 + P1-5 |
 | 13 | `coroutine_scheduler_test.cc` | 8-10 | P1-7 coroutines |
-| 14 | `connector_test.cc` | 6-8 | P3-12 retry logic |
+| 14 | `connector_retry_test.cc` | 6-8 | P3-12 retry logic |
 | 15 | `script_reloader_test.cc` | 8-10 | P1-8 hot-reload |
 | 16 | `space_test.cc` | 8-10 | P1-9 multi-VM |
 
