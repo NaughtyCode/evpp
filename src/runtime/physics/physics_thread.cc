@@ -28,7 +28,7 @@ PhysicsThread::~PhysicsThread() {
 }
 
 //============================================================================
-// CreatePhysicsLogger â€” map PhysicsLogConfig to engine::LogConfig [D7][D8]
+// CreatePhysicsLogger â€?map PhysicsLogConfig to engine::LogConfig [D7][D8]
 //============================================================================
 
 quill::Logger* PhysicsThread::CreatePhysicsLogger(const PhysicsLogConfig& log_config) {
@@ -138,7 +138,7 @@ void PhysicsThread::Stop() {
 }
 
 //============================================================================
-// Recover â€” restart physics thread after a crash [D21]
+// Recover â€?restart physics thread after a crash [D21]
 //============================================================================
 
 bool PhysicsThread::Recover(const std::string& saved_state) {
@@ -156,7 +156,7 @@ bool PhysicsThread::Recover(const std::string& saved_state) {
 	bool ok =
 		Start(physics_config_, threading_config_, thresholds_config_, log_config_, assets_path_);
 	if (!ok) {
-		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: recovery failed â€” Start() returned false");
+		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: recovery failed â€?Start() returned false");
 		return false;
 	}
 
@@ -168,7 +168,7 @@ bool PhysicsThread::Recover(const std::string& saved_state) {
 	}
 	if (!healthy_.load(std::memory_order_acquire)) {
 		PHYSICS_LOG_ERROR(logger_,
-						  "PhysicsThread: recovery failed â€” "
+						  "PhysicsThread: recovery failed â€?"
 						  "world did not become healthy after restart");
 		return false;
 	}
@@ -177,7 +177,7 @@ bool PhysicsThread::Recover(const std::string& saved_state) {
 	if (!saved_state.empty()) {
 		if (!world_.RestoreState(saved_state)) {
 			PHYSICS_LOG_ERROR(logger_,
-							  "PhysicsThread: recovery â€” "
+							  "PhysicsThread: recovery â€?"
 							  "state restoration failed");
 			return false;
 		}
@@ -228,8 +228,17 @@ std::unique_ptr<PhysicsFrameResult> PhysicsThread::TryDequeueResult() {
 	return nullptr;
 }
 
+void PhysicsThread::NotifyResult() {
+	result_cv_.notify_one();
+}
+
+void PhysicsThread::WaitForResult(std::chrono::milliseconds timeout) {
+	std::unique_lock<std::mutex> lock(result_cv_mutex_);
+	result_cv_.wait_for(lock, timeout);
+}
+
 //============================================================================
-// VerifyIsPhysicsThread â€” runtime guard for PT-only code
+// VerifyIsPhysicsThread â€?runtime guard for PT-only code
 //============================================================================
 
 void PhysicsThread::VerifyIsPhysicsThread() const {
@@ -243,7 +252,7 @@ void PhysicsThread::VerifyIsPhysicsThread() const {
 }
 
 //============================================================================
-// EventLoop â€” runs on the dedicated physics thread
+// EventLoop â€?runs on the dedicated physics thread
 //============================================================================
 
 void PhysicsThread::EventLoop() {
@@ -306,7 +315,7 @@ void PhysicsThread::EventLoop() {
 				}
 				case CommandType::Tick: {
 					auto& args = std::get<TickArgs>(cmd.args);
-					// delta=0 is wakeup sentinel â€” skip simulation
+					// delta=0 is wakeup sentinel â€?skip simulation
 					if (args.delta_time > 0.0f) {
 						PhysicsFrameResult result = world_.Step(args.delta_time, args.frame_id);
 
@@ -319,6 +328,7 @@ void PhysicsThread::EventLoop() {
 						{
 							ENGINE_PROFILE_PHYSICS_RESULT_ENQUEUE();
 							result_queue_.enqueue(std::move(result));
+							result_cv_.notify_one();
 						}  // ResultEnqueue slice ends
 
 						// Frame pile-up protection [D23]: drop oldest if over limit
@@ -340,7 +350,7 @@ void PhysicsThread::EventLoop() {
 				PHYSICS_LOG_ERROR(logger_, "PhysicsThread: exception in event loop: {}", e.what());
 				healthy_.store(false, std::memory_order_release);
 				running_.store(false, std::memory_order_release);
-				break;	// exit event loop â€” world may be in corrupted state
+				break;	// exit event loop â€?world may be in corrupted state
 			} catch (...) {
 				PHYSICS_LOG_ERROR(logger_, "PhysicsThread: unknown exception in event loop");
 				healthy_.store(false, std::memory_order_release);

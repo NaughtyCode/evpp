@@ -117,6 +117,9 @@ class PhysicsThread {
 	/// Thread: MT. Dequeues from SPSC lock-free queue, thread-safe.
 	std::unique_ptr<PhysicsFrameResult> TryDequeueResult();
 
+	void NotifyResult();
+	void WaitForResult(std::chrono::milliseconds timeout);
+
 	// ── Health and status queries ────────────────────────────────────
 	//
 	/// Whether the physics thread has crashed [D21]. Reads std::atomic<bool>.
@@ -242,6 +245,9 @@ class PhysicsThread {
 	// Replaces the 50ms poll-sleep for near-zero dispatch latency.
 	std::mutex cv_mutex_;
 	std::condition_variable cv_;
+
+	std::mutex result_cv_mutex_;
+	std::condition_variable result_cv_;
 
 	// Atomic flags (acquire/release semantics, lock-free)
 	std::atomic<bool> running_{false};	// [ATOM] MT writes, PT reads

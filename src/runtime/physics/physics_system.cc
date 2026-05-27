@@ -5,7 +5,6 @@
 
 #include <chrono>
 #include <cstdio>
-#include <thread>
 
 #include <Jolt/Math/Quat.h>
 #include <Jolt/Math/Vec3.h>
@@ -240,28 +239,23 @@ void PhysicsSystem::Tick(uint64_t frame_id, float delta_time) {
 //============================================================================
 
 std::optional<PhysicsFrameResult> PhysicsSystem::FetchResult(uint64_t frame_id, int timeout_ms) {
-	auto start = std::chrono::steady_clock::now();
+	auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
 
 	while (true) {
 		auto result = physics_thread_.TryDequeueResult();
 		if (result) {
-			// Check frame_id match [D20]
 			if (result->frame_id == frame_id) {
 				return std::move(*result);
 			}
-			// Mismatched frame — could be from a previous run; discard
-			// (in practice shouldn't happen if Tick/Fetch are paired)
 		}
 
-		// Timeout check
 		auto now = std::chrono::steady_clock::now();
-		auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
-		if (elapsed >= timeout_ms) {
+		if (now >= deadline) {
 			return std::nullopt;
 		}
 
-		// Brief sleep to avoid busy-wait
-		std::this_thread::sleep_for(std::chrono::microseconds(100));
+		physics_thread_.WaitForResult(
+			std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now));
 	}
 }
 
