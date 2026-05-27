@@ -112,6 +112,27 @@ int l_db_set_read_concern(lua_State* L) {
     return 0;
 }
 
+int l_db_get_read_prefs(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    if (!db || !db->GetReadPrefs()) lua_pushnil(L);
+    else lua_pushlightuserdata(L, const_cast<void*>(db->GetReadPrefs()));
+    return 1;
+}
+
+int l_db_get_write_concern(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    if (!db || !db->GetWriteConcern()) lua_pushnil(L);
+    else lua_pushlightuserdata(L, const_cast<void*>(db->GetWriteConcern()));
+    return 1;
+}
+
+int l_db_get_read_concern(lua_State* L) {
+    auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
+    if (!db || !db->GetReadConcern()) lua_pushnil(L);
+    else lua_pushlightuserdata(L, const_cast<void*>(db->GetReadConcern()));
+    return 1;
+}
+
 int l_db_watch(lua_State* L) {
     auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
     auto* pipeline = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
@@ -362,6 +383,9 @@ const luaL_Reg kLib[] = {
     {"db_set_read_prefs", l_db_set_read_prefs},
     {"db_set_write_concern", l_db_set_write_concern},
     {"db_set_read_concern", l_db_set_read_concern},
+    {"db_get_read_prefs", l_db_get_read_prefs},
+    {"db_get_write_concern", l_db_get_write_concern},
+    {"db_get_read_concern", l_db_get_read_concern},
     {"db_watch", l_db_watch},
     {"db_get_collection_names", l_db_get_collection_names},
     {"db_has_collection", l_db_has_collection},

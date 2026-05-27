@@ -203,6 +203,7 @@ const luaL_Reg kLib[] = {
     {"cursor_set_server_id", l_cursor_set_server_id},
     {"cursor_has_error", l_cursor_has_error},
     {"cursor_error_document", l_cursor_error_document},
+    {"cursor_get_host", l_cursor_get_host},
     {nullptr, nullptr},
 };
 

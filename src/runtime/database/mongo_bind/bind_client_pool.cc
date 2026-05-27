@@ -39,6 +39,21 @@ int l_pool_new(lua_State* L) {
     return 1;
 }
 
+int l_pool_new_with_error(lua_State* L) {
+    const char* uri_str = luaL_checkstring(L, 1);
+    auto uri = mongo::MongoUri::New(uri_str);
+    mongo::MongoError error;
+    auto* pool = mongo::MongoClientPool::New(uri, &error);
+    if (!pool) {
+        lua_pushnil(L);
+        lua_pushstring(L, error.Message());
+        return 2;
+    }
+    auto** ud = NewUserdata<mongo::MongoClientPool>(L, kMetaName);
+    *ud = pool;
+    return 1;
+}
+
 int l_pool_destroy(lua_State* L) { l_pool_gc(L); return 0; }
 
 int l_pool_pop(lua_State* L) {
@@ -149,6 +164,7 @@ int l_pool_set_oidc_callback(lua_State* L) {
 
 const luaL_Reg kLib[] = {
     {"pool_new", l_pool_new},
+    {"pool_new_with_error", l_pool_new_with_error},
     {"pool_destroy", l_pool_destroy},
     {"pool_pop", l_pool_pop},
     {"pool_try_pop", l_pool_try_pop},

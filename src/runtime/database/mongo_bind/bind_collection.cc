@@ -199,6 +199,27 @@ int l_coll_set_read_concern(lua_State* L) {
     return 0;
 }
 
+int l_coll_get_read_prefs(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    if (!coll || !coll->GetReadPrefs()) lua_pushnil(L);
+    else lua_pushlightuserdata(L, const_cast<void*>(coll->GetReadPrefs()));
+    return 1;
+}
+
+int l_coll_get_write_concern(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    if (!coll || !coll->GetWriteConcern()) lua_pushnil(L);
+    else lua_pushlightuserdata(L, const_cast<void*>(coll->GetWriteConcern()));
+    return 1;
+}
+
+int l_coll_get_read_concern(lua_State* L) {
+    auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
+    if (!coll || !coll->GetReadConcern()) lua_pushnil(L);
+    else lua_pushlightuserdata(L, const_cast<void*>(coll->GetReadConcern()));
+    return 1;
+}
+
 int l_coll_watch(lua_State* L) {
     auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
     auto* pipeline = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
@@ -585,6 +606,9 @@ const luaL_Reg kLib[] = {
     {"coll_set_read_prefs", l_coll_set_read_prefs},
     {"coll_set_write_concern", l_coll_set_write_concern},
     {"coll_set_read_concern", l_coll_set_read_concern},
+    {"coll_get_read_prefs", l_coll_get_read_prefs},
+    {"coll_get_write_concern", l_coll_get_write_concern},
+    {"coll_get_read_concern", l_coll_get_read_concern},
     {"coll_watch", l_coll_watch},
     {"coll_find_and_modify", l_coll_find_and_modify},
     {"coll_create_index", l_coll_create_index},

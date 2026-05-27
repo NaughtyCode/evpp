@@ -29,8 +29,10 @@ int l_session_destroy(lua_State* L) { l_session_gc(L); return 0; }
 int l_session_start_transaction(lua_State* L) {
     auto* session = GetUserdata<mongo::MongoSession>(L, 1, kMetaName);
     if (!session) { lua_pushboolean(L, false); return 1; }
+    auto* opts = lua_isnoneornil(L, 2) ? nullptr
+                 : GetUserdata<mongo::MongoTransactionOpts>(L, 2, "mongoc.transaction_opts");
     mongo::MongoError error;
-    bool ok = session->StartTransaction(nullptr, &error);
+    bool ok = session->StartTransaction(opts, &error);
     lua_pushboolean(L, ok);
     if (!ok) lua_pushstring(L, error.Message());
     else lua_pushnil(L);
@@ -40,8 +42,10 @@ int l_session_start_transaction(lua_State* L) {
 int l_session_commit_transaction(lua_State* L) {
     auto* session = GetUserdata<mongo::MongoSession>(L, 1, kMetaName);
     if (!session) { lua_pushboolean(L, false); lua_pushstring(L, "no session"); return 2; }
+    auto* reply = lua_isnoneornil(L, 2) ? nullptr
+                  : GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
     mongo::MongoError error;
-    bool ok = session->CommitTransaction(nullptr, &error);
+    bool ok = session->CommitTransaction(reply, &error);
     lua_pushboolean(L, ok);
     if (!ok) lua_pushstring(L, error.Message());
     else lua_pushnil(L);

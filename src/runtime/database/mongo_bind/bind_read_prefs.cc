@@ -5,6 +5,8 @@
 
 #include <new>
 
+#include <bson/bson.h>
+#include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_settings.h"
 
 namespace engine {
@@ -94,6 +96,30 @@ int l_read_prefs_set_hedge(lua_State* L) {
     return 0;
 }
 
+int l_read_prefs_get_tags(lua_State* L) {
+    auto* prefs = GetUserdata<mongo::MongoReadPrefs>(L, 1, kMetaName);
+    if (!prefs) { lua_pushnil(L); return 1; }
+    auto* raw = static_cast<const bson_t*>(prefs->GetTags());
+    if (!raw) { lua_pushnil(L); return 1; }
+    auto* doc = new (std::nothrow) mongo::BsonDocument(bson_get_data(raw), raw->len);
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+    *ud = doc;
+    return 1;
+}
+
+int l_read_prefs_get_hedge(lua_State* L) {
+    auto* prefs = GetUserdata<mongo::MongoReadPrefs>(L, 1, kMetaName);
+    if (!prefs) { lua_pushnil(L); return 1; }
+    auto* raw = static_cast<const bson_t*>(prefs->GetHedge());
+    if (!raw) { lua_pushnil(L); return 1; }
+    auto* doc = new (std::nothrow) mongo::BsonDocument(bson_get_data(raw), raw->len);
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+    *ud = doc;
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"read_prefs_new", l_read_prefs_new},
     {"read_prefs_destroy", l_read_prefs_destroy},
@@ -104,6 +130,8 @@ const luaL_Reg kLib[] = {
     {"read_prefs_set_tags", l_read_prefs_set_tags},
     {"read_prefs_add_tag", l_read_prefs_add_tag},
     {"read_prefs_set_hedge", l_read_prefs_set_hedge},
+    {"read_prefs_get_tags", l_read_prefs_get_tags},
+    {"read_prefs_get_hedge", l_read_prefs_get_hedge},
     {"read_prefs_copy", l_read_prefs_copy},
     {"read_prefs_is_valid", l_read_prefs_is_valid},
     {nullptr, nullptr},

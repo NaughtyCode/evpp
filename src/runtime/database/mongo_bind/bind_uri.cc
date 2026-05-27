@@ -5,6 +5,8 @@
 
 #include <new>
 
+#include <bson/bson.h>
+
 #include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_uri.h"
 #include "runtime/database/mongo/mongo_error.h"
@@ -388,6 +390,33 @@ int l_uri_get_read_concern(lua_State* L) {
     return 1;
 }
 
+int l_uri_get_hosts(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    const void* raw = uri->GetHosts();
+    if (raw) lua_pushlightuserdata(L, const_cast<void*>(raw));
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_uri_get_options(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    const void* raw = uri->GetOptions();
+    if (raw) lua_pushlightuserdata(L, const_cast<void*>(raw));
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_uri_get_credentials(lua_State* L) {
+    auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
+    if (!uri) { lua_pushnil(L); return 1; }
+    const void* raw = uri->GetCredentials();
+    if (raw) lua_pushlightuserdata(L, const_cast<void*>(raw));
+    else lua_pushnil(L);
+    return 1;
+}
+
 int l_uri_option_is_int32(lua_State* L) {
     const char* key = luaL_checkstring(L, 1);
     lua_pushboolean(L, mongo::MongoUri::OptionIsInt32(key));
@@ -397,6 +426,26 @@ int l_uri_option_is_int32(lua_State* L) {
 int l_uri_option_is_bool(lua_State* L) {
     const char* key = luaL_checkstring(L, 1);
     lua_pushboolean(L, mongo::MongoUri::OptionIsBool(key));
+    return 1;
+}
+
+int l_uri_option_is_int64(lua_State* L) {
+    const char* key = luaL_checkstring(L, 1);
+    lua_pushboolean(L, mongo::MongoUri::OptionIsInt64(key));
+    return 1;
+}
+
+int l_uri_option_is_utf8(lua_State* L) {
+    const char* key = luaL_checkstring(L, 1);
+    lua_pushboolean(L, mongo::MongoUri::OptionIsUtf8(key));
+    return 1;
+}
+
+int l_uri_unescape(lua_State* L) {
+    const char* escaped = luaL_checkstring(L, 1);
+    char* unescaped = mongo::MongoUri::Unescape(escaped);
+    if (unescaped) lua_pushstring(L, unescaped);
+    else lua_pushnil(L);
     return 1;
 }
 
@@ -444,8 +493,14 @@ const luaL_Reg kLib[] = {
     {"uri_get_read_prefs", l_uri_get_read_prefs},
     {"uri_get_write_concern", l_uri_get_write_concern},
     {"uri_get_read_concern", l_uri_get_read_concern},
+    {"uri_get_hosts", l_uri_get_hosts},
+    {"uri_get_options", l_uri_get_options},
+    {"uri_get_credentials", l_uri_get_credentials},
     {"uri_option_is_int32", l_uri_option_is_int32},
     {"uri_option_is_bool", l_uri_option_is_bool},
+    {"uri_option_is_int64", l_uri_option_is_int64},
+    {"uri_option_is_utf8", l_uri_option_is_utf8},
+    {"uri_unescape", l_uri_unescape},
     {nullptr, nullptr},
 };
 

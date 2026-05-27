@@ -71,6 +71,28 @@ int l_file_opts_set_metadata(lua_State* L) {
     return 0;
 }
 
+int l_file_opts_get_filename(lua_State* L) {
+    auto* opts = GetUserdata<mongo::MongoGridFsFileOpts>(L, 1, kFileOptsMeta);
+    const char* s = opts ? opts->GetFilename() : nullptr;
+    if (s) lua_pushstring(L, s);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_file_opts_get_content_type(lua_State* L) {
+    auto* opts = GetUserdata<mongo::MongoGridFsFileOpts>(L, 1, kFileOptsMeta);
+    const char* s = opts ? opts->GetContentType() : nullptr;
+    if (s) lua_pushstring(L, s);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_file_opts_get_chunk_size(lua_State* L) {
+    auto* opts = GetUserdata<mongo::MongoGridFsFileOpts>(L, 1, kFileOptsMeta);
+    lua_pushinteger(L, opts ? opts->GetChunkSize() : 0);
+    return 1;
+}
+
 const luaL_Reg kFileOptsLib[] = {
     {"gridfs_file_opts_new", l_file_opts_new},
     {"gridfs_file_opts_destroy", l_file_opts_destroy},
@@ -79,6 +101,9 @@ const luaL_Reg kFileOptsLib[] = {
     {"gridfs_file_opts_set_chunk_size", l_file_opts_set_chunk_size},
     {"gridfs_file_opts_set_aliases", l_file_opts_set_aliases},
     {"gridfs_file_opts_set_metadata", l_file_opts_set_metadata},
+    {"gridfs_file_opts_get_filename", l_file_opts_get_filename},
+    {"gridfs_file_opts_get_content_type", l_file_opts_get_content_type},
+    {"gridfs_file_opts_get_chunk_size", l_file_opts_get_chunk_size},
     {nullptr, nullptr},
 };
 
@@ -140,6 +165,33 @@ int l_file_get_metadata(lua_State* L) {
     auto* doc = new (std::nothrow) mongo::BsonDocument();
     if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
     file->GetMetadata(doc);
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
+    *ud = doc;
+    return 1;
+}
+
+int l_file_get_content_type(lua_State* L) {
+    auto* file = GetUserdata<mongo::MongoGridFsFile>(L, 1, kFileMeta);
+    const char* s = file ? file->GetContentType() : nullptr;
+    if (s) lua_pushstring(L, s);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_file_get_md5(lua_State* L) {
+    auto* file = GetUserdata<mongo::MongoGridFsFile>(L, 1, kFileMeta);
+    const char* s = file ? file->GetMd5() : nullptr;
+    if (s) lua_pushstring(L, s);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_file_get_aliases(lua_State* L) {
+    auto* file = GetUserdata<mongo::MongoGridFsFile>(L, 1, kFileMeta);
+    if (!file) { lua_pushnil(L); return 1; }
+    auto* doc = new (std::nothrow) mongo::BsonDocument();
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    file->GetAliases(doc);
     auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
     *ud = doc;
     return 1;
@@ -233,6 +285,49 @@ int l_file_set_metadata_doc(lua_State* L) {
     return 0;
 }
 
+int l_file_set_md5(lua_State* L) {
+    auto* file = GetUserdata<mongo::MongoGridFsFile>(L, 1, kFileMeta);
+    if (file) file->SetMd5(luaL_checkstring(L, 2));
+    return 0;
+}
+
+int l_file_set_aliases(lua_State* L) {
+    auto* file = GetUserdata<mongo::MongoGridFsFile>(L, 1, kFileMeta);
+    auto* aliases = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
+    if (file && aliases) file->SetAliases(*aliases);
+    return 0;
+}
+
+int l_file_set_id(lua_State* L) {
+    auto* file = GetUserdata<mongo::MongoGridFsFile>(L, 1, kFileMeta);
+    if (!file) { lua_pushboolean(L, false); return 1; }
+    mongo::MongoError error;
+    lua_pushboolean(L, file->SetId(lua_touserdata(L, 2), &error));
+    return 1;
+}
+
+int l_file_tell(lua_State* L) {
+    auto* file = GetUserdata<mongo::MongoGridFsFile>(L, 1, kFileMeta);
+    lua_pushinteger(L, file ? file->Tell() : 0);
+    return 1;
+}
+
+int l_file_error(lua_State* L) {
+    auto* file = GetUserdata<mongo::MongoGridFsFile>(L, 1, kFileMeta);
+    if (!file) { lua_pushboolean(L, false); lua_pushnil(L); return 2; }
+    mongo::MongoError error;
+    bool has_error = file->Error(&error);
+    lua_pushboolean(L, has_error);
+    if (has_error) {
+        const char* msg = error.Message();
+        if (msg) lua_pushstring(L, msg);
+        else lua_pushstring(L, "unknown error");
+    } else {
+        lua_pushnil(L);
+    }
+    return 2;
+}
+
 const luaL_Reg kFileLib[] = {
     {"gridfs_file_destroy", l_file_destroy},
     {"gridfs_file_get_filename", l_file_get_filename},
@@ -241,6 +336,9 @@ const luaL_Reg kFileLib[] = {
     {"gridfs_file_get_upload_date", l_file_get_upload_date},
     {"gridfs_file_get_id", l_file_get_id},
     {"gridfs_file_get_metadata", l_file_get_metadata},
+    {"gridfs_file_get_content_type", l_file_get_content_type},
+    {"gridfs_file_get_md5", l_file_get_md5},
+    {"gridfs_file_get_aliases", l_file_get_aliases},
     {"gridfs_file_readv", l_file_readv},
     {"gridfs_file_writev", l_file_writev},
     {"gridfs_file_save", l_file_save},
@@ -249,6 +347,11 @@ const luaL_Reg kFileLib[] = {
     {"gridfs_file_set_filename", l_file_set_filename},
     {"gridfs_file_set_content_type", l_file_set_content_type},
     {"gridfs_file_set_metadata", l_file_set_metadata_doc},
+    {"gridfs_file_set_md5", l_file_set_md5},
+    {"gridfs_file_set_aliases", l_file_set_aliases},
+    {"gridfs_file_set_id", l_file_set_id},
+    {"gridfs_file_tell", l_file_tell},
+    {"gridfs_file_error", l_file_error},
     {nullptr, nullptr},
 };
 
@@ -287,9 +390,26 @@ int l_file_list_next(lua_State* L) {
     return 1;
 }
 
+int l_file_list_error(lua_State* L) {
+    auto* list = GetUserdata<mongo::MongoGridFsFileList>(L, 1, kFileListMeta);
+    if (!list) { lua_pushboolean(L, false); lua_pushnil(L); return 2; }
+    mongo::MongoError error;
+    bool has_error = list->Error(&error);
+    lua_pushboolean(L, has_error);
+    if (has_error) {
+        const char* msg = error.Message();
+        if (msg) lua_pushstring(L, msg);
+        else lua_pushstring(L, "unknown error");
+    } else {
+        lua_pushnil(L);
+    }
+    return 2;
+}
+
 const luaL_Reg kFileListLib[] = {
     {"gridfs_file_list_destroy", l_file_list_destroy},
     {"gridfs_file_list_next", l_file_list_next},
+    {"gridfs_file_list_error", l_file_list_error},
     {nullptr, nullptr},
 };
 
@@ -315,6 +435,19 @@ int l_gridfs_new_file(lua_State* L) {
     if (!gridfs) { lua_pushnil(L); return 1; }
     auto* file = gridfs->NewFile(opts);
     if (!file) { lua_pushnil(L); return 1; }
+    auto** ud = NewUserdata<mongo::MongoGridFsFile>(L, kFileMeta);
+    *ud = file;
+    return 1;
+}
+
+int l_gridfs_new_file_from_stream(lua_State* L) {
+    auto* gridfs = GetUserdata<mongo::MongoGridFs>(L, 1, kGridFsMeta);
+    void* stream = lua_touserdata(L, 2);
+    auto* opts = lua_isnoneornil(L, 3) ? nullptr
+                 : GetUserdata<mongo::MongoGridFsFileOpts>(L, 3, kFileOptsMeta);
+    if (!gridfs) { lua_pushnil(L); lua_pushstring(L, "invalid gridfs"); return 2; }
+    auto* file = gridfs->NewFileFromStream(stream, opts);
+    if (!file) { lua_pushnil(L); lua_pushstring(L, "new_file_from_stream failed"); return 2; }
     auto** ud = NewUserdata<mongo::MongoGridFsFile>(L, kFileMeta);
     *ud = file;
     return 1;
@@ -389,6 +522,7 @@ int l_gridfs_remove_by_filename(lua_State* L) {
 const luaL_Reg kGridFsLib[] = {
     {"gridfs_destroy", l_gridfs_destroy},
     {"gridfs_new_file", l_gridfs_new_file},
+    {"gridfs_new_file_from_stream", l_gridfs_new_file_from_stream},
     {"gridfs_find_one_by_filename", l_gridfs_find_one_by_filename},
     {"gridfs_find_one_with_opts", l_gridfs_find_one_with_opts},
     {"gridfs_find_with_opts", l_gridfs_find_with_opts},
@@ -451,6 +585,24 @@ int l_bucket_open_upload_stream(lua_State* L) {
     return 2;
 }
 
+int l_bucket_open_upload_stream_with_id(lua_State* L) {
+    auto* bucket = GetUserdata<mongo::MongoGridFsBucket>(L, 1, kBucketMeta);
+    void* file_id = lua_touserdata(L, 2);
+    const char* filename = luaL_checkstring(L, 3);
+    auto* opts = lua_isnoneornil(L, 4) ? nullptr
+                 : GetUserdata<mongo::BsonDocument>(L, 4, "bson.doc");
+    if (!bucket) { lua_pushnil(L); lua_pushstring(L, "invalid bucket"); return 2; }
+    mongo::MongoError error;
+    void* stream = bucket->OpenUploadStreamWithId(file_id, filename, opts, &error);
+    if (!stream) {
+        lua_pushnil(L);
+        lua_pushstring(L, error.Message());
+        return 2;
+    }
+    lua_pushlightuserdata(L, stream);
+    return 1;
+}
+
 int l_bucket_open_download_stream(lua_State* L) {
     auto* bucket = GetUserdata<mongo::MongoGridFsBucket>(L, 1, kBucketMeta);
     void* file_id = lua_touserdata(L, 2); // bson_value_t*
@@ -464,6 +616,66 @@ int l_bucket_open_download_stream(lua_State* L) {
     }
     lua_pushlightuserdata(L, stream);
     return 1;
+}
+
+int l_bucket_upload_from_stream(lua_State* L) {
+    auto* bucket = GetUserdata<mongo::MongoGridFsBucket>(L, 1, kBucketMeta);
+    const char* filename = luaL_checkstring(L, 2);
+    void* source_stream = lua_touserdata(L, 3);
+    auto* opts = lua_isnoneornil(L, 4) ? nullptr
+                 : GetUserdata<mongo::BsonDocument>(L, 4, "bson.doc");
+    if (!bucket) { lua_pushboolean(L, false); lua_pushnil(L); return 2; }
+    mongo::MongoError error;
+    void* file_id_out = nullptr;
+    bool ok = bucket->UploadFromStream(filename, source_stream, opts, &file_id_out, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) {
+        const char* msg = error.Message();
+        if (msg) lua_pushstring(L, msg);
+        else lua_pushstring(L, "upload error");
+    } else {
+        lua_pushnil(L);
+    }
+    return 2;
+}
+
+int l_bucket_upload_from_stream_with_id(lua_State* L) {
+    auto* bucket = GetUserdata<mongo::MongoGridFsBucket>(L, 1, kBucketMeta);
+    void* file_id = lua_touserdata(L, 2);
+    const char* filename = luaL_checkstring(L, 3);
+    void* source_stream = lua_touserdata(L, 4);
+    auto* opts = lua_isnoneornil(L, 5) ? nullptr
+                 : GetUserdata<mongo::BsonDocument>(L, 5, "bson.doc");
+    if (!bucket) { lua_pushboolean(L, false); lua_pushnil(L); return 2; }
+    mongo::MongoError error;
+    bool ok = bucket->UploadFromStreamWithId(file_id, filename, source_stream, opts, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) {
+        const char* msg = error.Message();
+        if (msg) lua_pushstring(L, msg);
+        else lua_pushstring(L, "upload error");
+    } else {
+        lua_pushnil(L);
+    }
+    return 2;
+}
+
+int l_bucket_download_to_stream(lua_State* L) {
+    auto* bucket = GetUserdata<mongo::MongoGridFsBucket>(L, 1, kBucketMeta);
+    void* file_id = lua_touserdata(L, 2);
+    void* destination = lua_touserdata(L, 3);
+    if (!bucket) { lua_pushboolean(L, false); lua_pushnil(L); return 2; }
+    mongo::MongoError error;
+    bool ok = bucket->DownloadToStream(file_id, destination, &error);
+    lua_pushboolean(L, ok);
+    if (!ok) {
+        const char* msg = error.Message();
+        if (msg) lua_pushstring(L, msg);
+        else lua_pushstring(L, "download error");
+    } else {
+        lua_pushnil(L);
+    }
+    return 2;
 }
 
 int l_bucket_delete_by_id(lua_State* L) {
@@ -488,13 +700,41 @@ int l_bucket_find(lua_State* L) {
     return 1;
 }
 
+int l_bucket_stream_error(lua_State* L) {
+    void* stream = lua_touserdata(L, 1);
+    if (!stream) { lua_pushboolean(L, false); lua_pushnil(L); return 2; }
+    mongo::MongoError error;
+    bool has_error = mongo::MongoGridFsBucket::StreamError(stream, &error);
+    lua_pushboolean(L, has_error);
+    if (has_error) {
+        const char* msg = error.Message();
+        if (msg) lua_pushstring(L, msg);
+        else lua_pushstring(L, "stream error");
+    } else {
+        lua_pushnil(L);
+    }
+    return 2;
+}
+
+int l_bucket_abort_upload(lua_State* L) {
+    void* stream = lua_touserdata(L, 1);
+    lua_pushboolean(L, stream && mongo::MongoGridFsBucket::AbortUpload(stream));
+    return 1;
+}
+
 const luaL_Reg kBucketLib[] = {
     {"gridfs_bucket_new", l_bucket_new},
     {"gridfs_bucket_destroy", l_bucket_destroy},
     {"gridfs_bucket_open_upload_stream", l_bucket_open_upload_stream},
+    {"gridfs_bucket_open_upload_stream_with_id", l_bucket_open_upload_stream_with_id},
     {"gridfs_bucket_open_download_stream", l_bucket_open_download_stream},
+    {"gridfs_bucket_upload_from_stream", l_bucket_upload_from_stream},
+    {"gridfs_bucket_upload_from_stream_with_id", l_bucket_upload_from_stream_with_id},
+    {"gridfs_bucket_download_to_stream", l_bucket_download_to_stream},
     {"gridfs_bucket_delete_by_id", l_bucket_delete_by_id},
     {"gridfs_bucket_find", l_bucket_find},
+    {"gridfs_bucket_stream_error", l_bucket_stream_error},
+    {"gridfs_bucket_abort_upload", l_bucket_abort_upload},
     {nullptr, nullptr},
 };
 
