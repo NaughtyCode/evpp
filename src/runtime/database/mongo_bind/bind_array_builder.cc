@@ -251,6 +251,39 @@ int l_array_builder_append_document_end(lua_State* L) {
     return 1;
 }
 
+int l_array_builder_append_value(lua_State* L) {
+    auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
+    void* bson_value = lua_touserdata(L, 2);
+    lua_pushboolean(L, builder && bson_value && builder->AppendValue(bson_value));
+    return 1;
+}
+
+int l_array_builder_append_array_from_vector(lua_State* L) {
+    auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 2, "bson.iter");
+    lua_pushboolean(L, builder && iter && builder->AppendArrayFromVector(*iter));
+    return 1;
+}
+
+int l_array_builder_append_array_builder_begin(lua_State* L) {
+    auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
+    if (!builder) { lua_pushnil(L); lua_pushstring(L, "invalid builder"); return 2; }
+    void* child = nullptr;
+    if (!builder->AppendArrayBuilderBegin(&child)) {
+        lua_pushnil(L); lua_pushstring(L, "append array builder failed"); return 2;
+    }
+    lua_pushlightuserdata(L, child);
+    return 1;
+}
+
+int l_array_builder_append_array_builder_end(lua_State* L) {
+    auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
+    void* child = lua_touserdata(L, 2);
+    lua_pushboolean(L, builder && child &&
+                    mongo::BsonArrayBuilder::AppendArrayBuilderEnd(builder, child));
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"array_builder_new", l_array_builder_new},
     {"array_builder_destroy", l_array_builder_destroy},
@@ -281,6 +314,10 @@ const luaL_Reg kLib[] = {
     {"array_builder_append_time_t", l_array_builder_append_time_t},
     {"array_builder_append_document_begin", l_array_builder_append_document_begin},
     {"array_builder_append_document_end", l_array_builder_append_document_end},
+    {"array_builder_append_value", l_array_builder_append_value},
+    {"array_builder_append_array_from_vector", l_array_builder_append_array_from_vector},
+    {"array_builder_append_array_builder_begin", l_array_builder_append_array_builder_begin},
+    {"array_builder_append_array_builder_end", l_array_builder_append_array_builder_end},
     {nullptr, nullptr},
 };
 

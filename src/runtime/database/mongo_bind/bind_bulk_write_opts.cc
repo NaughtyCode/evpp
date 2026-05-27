@@ -78,6 +78,13 @@ int l_bulk_write_opts_set_server_id(lua_State* L) {
     return 0;
 }
 
+int l_bulk_write_opts_set_comment(lua_State* L) {
+    auto* opts = GetUserdata<mongo::MongoBulkWriteOpts>(L, 1, kMetaName);
+    void* comment = lua_touserdata(L, 2);
+    if (opts) opts->SetComment(comment);
+    return 0;
+}
+
 const luaL_Reg kLib[] = {
     {"bulk_write_opts_new", l_bulk_write_opts_new},
     {"bulk_write_opts_destroy", l_bulk_write_opts_destroy},
@@ -88,6 +95,7 @@ const luaL_Reg kLib[] = {
     {"bulk_write_opts_set_verbose_results", l_bulk_write_opts_set_verbose_results},
     {"bulk_write_opts_set_extra", l_bulk_write_opts_set_extra},
     {"bulk_write_opts_set_server_id", l_bulk_write_opts_set_server_id},
+    {"bulk_write_opts_set_comment", l_bulk_write_opts_set_comment},
     {nullptr, nullptr},
 };
 

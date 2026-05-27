@@ -466,6 +466,27 @@ int l_bson_iter_binary_equal(lua_State* L) {
     return 1;
 }
 
+int l_bson_iter_key_unsafe(lua_State* L) {
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
+    if (!iter) { lua_pushnil(L); return 1; }
+    const char* key = iter->KeyUnsafe();
+    if (key) lua_pushstring(L, key);
+    else lua_pushnil(L);
+    return 1;
+}
+
+int l_bson_iter_init_from_data_at_offset(lua_State* L) {
+    auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
+    size_t len;
+    const char* data_str = luaL_checklstring(L, 2, &len);
+    auto offset = static_cast<uint32_t>(luaL_checkinteger(L, 3));
+    auto keylen = static_cast<uint32_t>(luaL_checkinteger(L, 4));
+    if (!iter) { lua_pushboolean(L, false); return 1; }
+    lua_pushboolean(L, iter->InitFromDataAtOffset(
+        reinterpret_cast<const uint8_t*>(data_str), len, offset, keylen));
+    return 1;
+}
+
 const luaL_Reg kLib[] = {
     {"iter_new", l_bson_iter_new},
     {"iter_next", l_bson_iter_next},
@@ -515,6 +536,8 @@ const luaL_Reg kLib[] = {
     {"iter_overwrite_decimal128", l_bson_iter_overwrite_decimal128},
     {"iter_overwrite_binary", l_bson_iter_overwrite_binary},
     {"iter_binary_equal", l_bson_iter_binary_equal},
+    {"iter_key_unsafe", l_bson_iter_key_unsafe},
+    {"iter_init_from_data_at_offset", l_bson_iter_init_from_data_at_offset},
     {nullptr, nullptr},
 };
 

@@ -365,6 +365,40 @@ int l_bson_doc_append_array_end(lua_State* L) {
     return 1;
 }
 
+int l_bson_doc_append_array_unsafe_begin(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    auto* child = new (std::nothrow) mongo::BsonDocument();
+    if (!child) { lua_pushnil(L); lua_pushstring(L, "allocation failure"); return 2; }
+    if (!doc || !doc->AppendArrayUnsafeBegin(key, child)) {
+        delete child;
+        lua_pushboolean(L, false);
+        return 1;
+    }
+    auto** ud = NewUserdata<mongo::BsonDocument>(L, kMetaName);
+    *ud = child;
+    return 1;
+}
+
+int l_bson_doc_append_array_builder_begin(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    const char* key = luaL_checkstring(L, 2);
+    if (!doc) { lua_pushnil(L); lua_pushstring(L, "invalid document"); return 2; }
+    void* builder = nullptr;
+    if (!doc->AppendArrayBuilderBegin(key, &builder)) {
+        lua_pushnil(L); lua_pushstring(L, "append array builder failed"); return 2;
+    }
+    lua_pushlightuserdata(L, builder);
+    return 1;
+}
+
+int l_bson_doc_append_array_builder_end(lua_State* L) {
+    auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    void* builder = lua_touserdata(L, 2);
+    lua_pushboolean(L, doc && builder && mongo::BsonDocument::AppendArrayBuilderEnd(doc, builder));
+    return 1;
+}
+
 // ── Additional append methods ──────────────────────────────────────────
 
 int l_bson_doc_append_code_with_scope(lua_State* L) {
@@ -631,6 +665,13 @@ int l_bson_doc_as_relaxed_extended_json(lua_State* L) {
     return 1;
 }
 
+int l_bson_doc_steal(lua_State* L) {
+    auto* dst = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
+    auto* src = GetUserdata<mongo::BsonDocument>(L, 2, kMetaName);
+    if (dst && src) mongo::BsonDocument::Steal(*dst, *src);
+    return 0;
+}
+
 const luaL_Reg kLib[] = {
     {"new", l_bson_doc_new},
     {"destroy", l_bson_doc_destroy},
@@ -671,6 +712,9 @@ const luaL_Reg kLib[] = {
     {"append_document_end", l_bson_doc_append_document_end},
     {"append_array_begin", l_bson_doc_append_array_begin},
     {"append_array_end", l_bson_doc_append_array_end},
+    {"append_array_unsafe_begin", l_bson_doc_append_array_unsafe_begin},
+    {"append_array_builder_begin", l_bson_doc_append_array_builder_begin},
+    {"append_array_builder_end", l_bson_doc_append_array_builder_end},
     {"count_keys", l_bson_doc_count_keys},
     {"has_field", l_bson_doc_has_field},
     {"empty", l_bson_doc_empty},
@@ -693,6 +737,7 @@ const luaL_Reg kLib[] = {
     {"init_from_json", l_bson_doc_init_from_json},
     {"validate", l_bson_doc_validate},
     {"validate_with_error_and_offset", l_bson_doc_validate_with_error_and_offset},
+    {"steal", l_bson_doc_steal},
     {nullptr, nullptr},
 };
 
