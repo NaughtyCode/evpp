@@ -32,6 +32,17 @@
 #include "runtime/database/mongo_bind/bind_host_list.h"
 #include "runtime/database/mongo_bind/bind_ssl.h"
 #include "runtime/database/mongo_bind/bind_gridfs.h"
+#include "runtime/database/mongo_bind/bind_index_model.h"
+#include "runtime/database/mongo_bind/bind_topology.h"
+#include "runtime/database/mongo_bind/bind_bson_vector.h"
+#include "runtime/database/mongo_bind/bind_bson_ext.h"
+#include "runtime/database/mongo_bind/bind_stream.h"
+#include "runtime/database/mongo_bind/bind_socket.h"
+#include "runtime/database/mongo_bind/bind_log.h"
+#include "runtime/database/mongo_bind/bind_oidc.h"
+#include "runtime/database/mongo_bind/bind_encryption.h"
+#include "runtime/database/mongo_bind/bind_apm.h"
+#include "runtime/database/mongo_bind/bind_misc.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {
@@ -73,6 +84,55 @@ void ExportMongo(ScriptVM& vm) {
     RegisterMongoGridFsFileListMeta(L);
     RegisterMongoGridFsMeta(L);
     RegisterMongoGridFsBucketMeta(L);
+    RegisterMongoIndexModelMeta(L);
+    RegisterMongoServerDescriptionMeta(L);
+    RegisterMongoTopologyDescriptionMeta(L);
+    RegisterBsonVectorInt8ConstViewMeta(L);
+    RegisterBsonVectorInt8ViewMeta(L);
+    RegisterBsonVectorFloat32ConstViewMeta(L);
+    RegisterBsonVectorFloat32ViewMeta(L);
+    RegisterBsonVectorPackedBitConstViewMeta(L);
+    RegisterBsonVectorPackedBitViewMeta(L);
+    RegisterBsonContextMeta(L);
+    RegisterBsonStringMeta(L);
+    RegisterBsonJsonReaderMeta(L);
+    RegisterBsonJsonDataReaderMeta(L);
+    RegisterBsonReaderMeta(L);
+    RegisterBsonWriterMeta(L);
+    RegisterBsonJsonOptsMeta(L);
+    RegisterBsonValueMeta(L);
+    RegisterMongoStreamMeta(L);
+    RegisterMongoSocketMeta(L);
+    RegisterMongoStructuredLogOptsMeta(L);
+    RegisterMongoStructuredLogEntryMeta(L);
+    RegisterMongoOidcCredentialMeta(L);
+    RegisterMongoOidcCallbackParamsMeta(L);
+    RegisterMongoOidcCallbackMeta(L);
+    RegisterMongoAutoEncryptionOptsMeta(L);
+    RegisterMongoClientEncryptionOptsMeta(L);
+    RegisterMongoClientEncryptionEncryptOptsMeta(L);
+    RegisterMongoClientEncryptionEncryptRangeOptsMeta(L);
+    RegisterMongoClientEncryptionEncryptTextPrefixOptsMeta(L);
+    RegisterMongoClientEncryptionEncryptTextSuffixOptsMeta(L);
+    RegisterMongoClientEncryptionEncryptTextSubstringOptsMeta(L);
+    RegisterMongoClientEncryptionEncryptTextOptsMeta(L);
+    RegisterMongoClientEncryptionDatakeyOptsMeta(L);
+    RegisterMongoClientEncryptionRewrapManyDatakeyResultMeta(L);
+    RegisterMongoClientEncryptionMeta(L);
+    RegisterMongoApmCommandStartedEventMeta(L);
+    RegisterMongoApmCommandSucceededEventMeta(L);
+    RegisterMongoApmCommandFailedEventMeta(L);
+    RegisterMongoApmServerChangedEventMeta(L);
+    RegisterMongoApmServerOpeningEventMeta(L);
+    RegisterMongoApmServerClosedEventMeta(L);
+    RegisterMongoApmTopologyChangedEventMeta(L);
+    RegisterMongoApmTopologyOpeningEventMeta(L);
+    RegisterMongoApmTopologyClosedEventMeta(L);
+    RegisterMongoApmServerHeartbeatStartedEventMeta(L);
+    RegisterMongoApmServerHeartbeatSucceededEventMeta(L);
+    RegisterMongoApmServerHeartbeatFailedEventMeta(L);
+    RegisterMongoApmCallbacksMeta(L);
+    RegisterMongoOptionalMeta(L);
 
     // ── Build "bson" module ───────────────────────────────────────────
     BeginModule(L);
@@ -80,6 +140,21 @@ void ExportMongo(ScriptVM& vm) {
     AddToModule(L, GetBsonIterLib());
     AddToModule(L, GetOidLib());
     AddToModule(L, GetBsonArrayBuilderLib());
+    AddToModule(L, GetBsonContextLib());
+    AddToModule(L, GetBsonStringLib());
+    AddToModule(L, GetBsonJsonReaderLib());
+    AddToModule(L, GetBsonJsonDataReaderLib());
+    AddToModule(L, GetBsonReaderLib());
+    AddToModule(L, GetBsonWriterLib());
+    AddToModule(L, GetBsonJsonOptsLib());
+    AddToModule(L, GetBsonValueLib());
+    AddToModule(L, GetBsonVectorInt8ConstViewLib());
+    AddToModule(L, GetBsonVectorInt8ViewLib());
+    AddToModule(L, GetBsonVectorFloat32ConstViewLib());
+    AddToModule(L, GetBsonVectorFloat32ViewLib());
+    AddToModule(L, GetBsonVectorPackedBitConstViewLib());
+    AddToModule(L, GetBsonVectorPackedBitViewLib());
+    AddToModule(L, GetBsonExtLib());
     EndModule(L, "bson");
 
     // ── Build "mongoc" module ─────────────────────────────────────────
@@ -112,9 +187,45 @@ void ExportMongo(ScriptVM& vm) {
     AddToModule(L, GetMongoGridFsFileListLib());
     AddToModule(L, GetMongoGridFsLib());
     AddToModule(L, GetMongoGridFsBucketLib());
+    AddToModule(L, GetMongoIndexModelLib());
+    AddToModule(L, GetMongoServerDescriptionLib());
+    AddToModule(L, GetMongoTopologyDescriptionLib());
+    AddToModule(L, GetMongoStreamLib());
+    AddToModule(L, GetMongoSocketLib());
+    AddToModule(L, GetMongoStructuredLogOptsLib());
+    AddToModule(L, GetMongoStructuredLogEntryLib());
+    AddToModule(L, GetMongoOidcCredentialLib());
+    AddToModule(L, GetMongoOidcCallbackParamsLib());
+    AddToModule(L, GetMongoOidcCallbackLib());
+    AddToModule(L, GetMongoAutoEncryptionOptsLib());
+    AddToModule(L, GetMongoClientEncryptionOptsLib());
+    AddToModule(L, GetMongoClientEncryptionEncryptOptsLib());
+    AddToModule(L, GetMongoClientEncryptionEncryptRangeOptsLib());
+    AddToModule(L, GetMongoClientEncryptionEncryptTextPrefixOptsLib());
+    AddToModule(L, GetMongoClientEncryptionEncryptTextSuffixOptsLib());
+    AddToModule(L, GetMongoClientEncryptionEncryptTextSubstringOptsLib());
+    AddToModule(L, GetMongoClientEncryptionEncryptTextOptsLib());
+    AddToModule(L, GetMongoClientEncryptionDatakeyOptsLib());
+    AddToModule(L, GetMongoClientEncryptionRewrapManyDatakeyResultLib());
+    AddToModule(L, GetMongoClientEncryptionLib());
+    AddToModule(L, GetMongoApmCommandStartedEventLib());
+    AddToModule(L, GetMongoApmCommandSucceededEventLib());
+    AddToModule(L, GetMongoApmCommandFailedEventLib());
+    AddToModule(L, GetMongoApmServerChangedEventLib());
+    AddToModule(L, GetMongoApmServerOpeningEventLib());
+    AddToModule(L, GetMongoApmServerClosedEventLib());
+    AddToModule(L, GetMongoApmTopologyChangedEventLib());
+    AddToModule(L, GetMongoApmTopologyOpeningEventLib());
+    AddToModule(L, GetMongoApmTopologyClosedEventLib());
+    AddToModule(L, GetMongoApmServerHeartbeatStartedEventLib());
+    AddToModule(L, GetMongoApmServerHeartbeatSucceededEventLib());
+    AddToModule(L, GetMongoApmServerHeartbeatFailedEventLib());
+    AddToModule(L, GetMongoApmCallbacksLib());
+    AddToModule(L, GetMongoOptionalLib());
+    AddToModule(L, GetMongoMiscLib());
     EndModule(L, "mongoc");
 
-    ENGINE_LOG_INFO(GetLogger(), "[mongo] Lua bindings registered ({} types)", 33);
+    ENGINE_LOG_INFO(GetLogger(), "[mongo] Lua bindings registered ({} types)", 82);
 }
 
 } // namespace script
