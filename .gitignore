@@ -128,3 +128,5 @@ build_server/*
 build_*/*
 
 */CMakeFiles/*
+artifacts/build2/*
+
