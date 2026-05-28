@@ -36,7 +36,6 @@ RpcResponse RpcServer::HandleRequest(const RpcRequest& request) {
 	// invocation happens outside the lock (handlers may block).
 	RpcServiceHandler service_handler;
 	RpcMethodHandler method_handler;
-	bool has_service = false;
 	bool has_method = false;
 
 	{
@@ -51,7 +50,6 @@ RpcResponse RpcServer::HandleRequest(const RpcRequest& request) {
 				std::string("service not found: ") + request.header.service);
 		}
 
-		has_service = true;
 		auto& entry = it->second;
 
 		auto mit = entry.method_handlers.find(request.header.method);
@@ -67,7 +65,10 @@ RpcResponse RpcServer::HandleRequest(const RpcRequest& request) {
 	// Invoke handler outside the lock — handler may block (e.g., the Lua
 	// bind defer-to-main-thread pattern).  Captured std::function copies
 	// keep the handler alive even if the service is unregistered mid-call.
-	if (!has_service || !has_method) {
+	//
+	// has_service is always true here (we returned early inside the lock
+	// if the service was not found).  Only has_method can be false.
+	if (!has_method) {
 		return RpcResponse::Error(request.header.msgid, 405,
 			std::string("method not found: ") + request.header.method);
 	}
@@ -84,6 +85,11 @@ RpcResponse RpcServer::HandleRequest(const RpcRequest& request) {
 						 request.header.service, request.header.method, e.what());
 		return RpcResponse::Error(request.header.msgid, 500,
 			std::string("handler error: ") + e.what());
+	} catch (...) {
+		auto* logger = GetLogger();
+		ENGINE_LOG_ERROR(logger, "RpcServer: unknown exception in [{}].[{}]",
+						 request.header.service, request.header.method);
+		return RpcResponse::Error(request.header.msgid, 500, "unknown handler error");
 	}
 }
 

@@ -589,8 +589,21 @@ void UpdateRpcBindings(ScriptVM& vm) {
 
 		for (auto& req : batch) {
 			// Check time budget — stop processing if we've used >5ms.
-			if (std::chrono::steady_clock::now() - budget_start >= kMaxBudget)
+			// Re-enqueue remaining items so their promises are NOT
+			// destroyed (which would throw future_error in the
+			// waiting transport thread).
+			if (std::chrono::steady_clock::now() - budget_start >= kMaxBudget) {
+				std::vector<std::unique_ptr<PendingRpcCall>> leftover(
+					std::make_move_iterator(batch.begin() + (&req - batch.data())),
+					std::make_move_iterator(batch.end()));
+				{
+					std::lock_guard<std::mutex> lock(ctx->queue_mutex);
+					ctx->pending.insert(ctx->pending.end(),
+						std::make_move_iterator(leftover.begin()),
+						std::make_move_iterator(leftover.end()));
+				}
 				return;
+			}
 
 			std::string result = R"({"error":"service not found"})";
 
@@ -657,10 +670,18 @@ void ShutdownRpcBindings(ScriptVM& vm) {
 		}
 	}
 
-	// Client cleanup: RpcClient::~RpcClient fulfills pending promises.
+	// Client cleanup: RpcClient::~RpcClient fulfills pending promises
+	// and destroys the send callback lambda (which captures cb_ref but
+	// does NOT call luaL_unref — that's our responsibility here).
 	for (auto* ctx : clients) {
 		if (ctx->disposed) continue;
 		ctx->disposed = true;
+
+		if (ctx->send_cb_ref != LUA_NOREF) {
+			luaL_unref(L, LUA_REGISTRYINDEX, ctx->send_cb_ref);
+			ctx->send_cb_ref = LUA_NOREF;
+		}
+
 		ctx->client.reset();
 
 		if (ctx->instance_ref != LUA_NOREF) {

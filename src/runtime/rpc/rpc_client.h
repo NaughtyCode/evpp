@@ -31,6 +31,13 @@ public:
 	// Called by the transport layer to serialise and transmit a request.
 	// Receives the full RpcRequest — the transport decides how to encode
 	// it (msgpack, JSON, length-prefixed binary, etc.).
+	//
+	// THREAD SAFETY: The callback is invoked synchronously from the
+	// thread that calls Call/CallAsync/CallSync.  If these are called
+	// from the Lua main thread, the callback runs on the main thread
+	// and may safely access the Lua state.  Calling RpcClient from
+	// other threads requires a thread-safe transport callback that
+	// does NOT touch the Lua VM directly.
 	using SendCallback = std::function<void(RpcRequest)>;
 
 	RpcClient() = default;
