@@ -11,17 +11,15 @@ namespace engine {
 namespace script {
 namespace {
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoOidcCredential
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoOidcCredential
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kCredMeta = "mongoc.oidc_credential";
 
 int l_oidc_cred_gc(lua_State* L) {
 	auto* cred = GetUserdata<mongo::MongoOidcCredential>(L, 1, kCredMeta);
 	if (cred) {
 		cred->Destroy();
-		delete cred;
+		MEM_DELETE(cred);
 	}
 	*CheckUserdata<mongo::MongoOidcCredential>(L, 1, kCredMeta) = nullptr;
 	return 0;
@@ -128,15 +126,13 @@ const luaL_Reg kCredLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoOidcCallbackParams
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoOidcCallbackParams
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kParamsMeta = "mongoc.oidc_callback_params";
 
 int l_oidc_params_gc(lua_State* L) {
 	auto* p = GetUserdata<mongo::MongoOidcCallbackParams>(L, 1, kParamsMeta);
-	delete p;
+	MEM_DELETE(p);
 	*CheckUserdata<mongo::MongoOidcCallbackParams>(L, 1, kParamsMeta) = nullptr;
 	return 0;
 }
@@ -149,7 +145,7 @@ int l_oidc_params_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* p = new (std::nothrow) mongo::MongoOidcCallbackParams(raw);
+	auto* p = MEM_NEW_NOTHROW(mongo::MongoOidcCallbackParams, raw);
 	if (!p) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -241,10 +237,8 @@ const luaL_Reg kParamsLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoOidcCallback
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoOidcCallback
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kCbMeta = "mongoc.oidc_callback";
 
 int l_oidc_cb_gc(lua_State* L) {

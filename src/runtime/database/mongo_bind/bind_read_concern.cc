@@ -15,13 +15,13 @@ const char* kMetaName = "mongoc.read_concern";
 
 int l_read_concern_gc(lua_State* L) {
 	auto* concern = GetUserdata<mongo::MongoReadConcern>(L, 1, kMetaName);
-	delete concern;
+	MEM_DELETE(concern);
 	*CheckUserdata<mongo::MongoReadConcern>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
 
 int l_read_concern_new(lua_State* L) {
-	auto* concern = new (std::nothrow) mongo::MongoReadConcern();
+	auto* concern = MEM_NEW_NOTHROW(mongo::MongoReadConcern);
 	if (!concern) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -65,7 +65,7 @@ int l_read_concern_copy(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* copy = new (std::nothrow) mongo::MongoReadConcern(concern->Copy());
+	auto* copy = MEM_NEW_NOTHROW(mongo::MongoReadConcern, concern->Copy());
 	if (!copy) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

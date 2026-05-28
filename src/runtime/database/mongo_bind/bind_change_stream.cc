@@ -20,7 +20,7 @@ const char* kMetaName = "mongoc.change_stream";
 int l_change_stream_gc(lua_State* L) {
 	auto* stream = GetUserdata<mongo::MongoChangeStream>(L, 1, kMetaName);
 	if (stream) stream->Destroy();
-	delete stream;
+	MEM_DELETE(stream);
 	*CheckUserdata<mongo::MongoChangeStream>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
@@ -36,7 +36,7 @@ int l_change_stream_next(lua_State* L) {
 		lua_pushboolean(L, false);
 		return 1;
 	}
-	auto* doc = new (std::nothrow) mongo::BsonDocument();
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -67,8 +67,7 @@ int l_change_stream_get_resume_token(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = new (std::nothrow)
-		mongo::BsonDocument(mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

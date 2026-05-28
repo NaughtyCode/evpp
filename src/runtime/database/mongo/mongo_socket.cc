@@ -1,29 +1,28 @@
 #if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo/mongo_socket.h"
+#include "runtime/core/mem/mem.h"
 
 #include <new>
 
 #include "runtime/database/mongo/mongo_iovec.h"
+#include "runtime/core/mem/mem.h"
 
 #include <mongoc/mongoc.h>
 
 namespace engine {
 namespace mongo {
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoSocket
-// ═══════════════════════════════════════════════════════════════════════
-
 struct MongoSocket::Impl {
 	mongoc_socket_t* sock = nullptr;
 };
 
 MongoSocket* MongoSocket::New(int domain, int type, int protocol) {
-	auto* s = new MongoSocket();
+	auto* s = MEM_NEW(MongoSocket);
 	s->impl_->sock = mongoc_socket_new(domain, type, protocol);
 	if (!s->impl_->sock) {
-		delete s;
+		MEM_DELETE(s);
 		return nullptr;
 	}
 	return s;
@@ -39,14 +38,14 @@ MongoSocket::~MongoSocket() {
 }
 
 void MongoSocket::Destroy() {
-	delete this;
+	MEM_DELETE(this);
 }
 
 MongoSocket* MongoSocket::Accept(int64_t expire_at) {
 	if (!impl_ || !impl_->sock) return nullptr;
 	auto* raw = mongoc_socket_accept(impl_->sock, expire_at);
 	if (!raw) return nullptr;
-	auto* result = new (std::nothrow) MongoSocket();
+	auto* result = MEM_NEW_NOTHROW(MongoSocket);
 	if (!result) {
 		mongoc_socket_destroy(raw);
 		return nullptr;

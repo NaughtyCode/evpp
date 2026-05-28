@@ -17,10 +17,8 @@ namespace engine {
 namespace script {
 namespace {
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Metatable name constants
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// Metatable name constants
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kMetaCmdStarted = "mongoc.apm_cmd_started";
 const char* kMetaCmdSucceeded = "mongoc.apm_cmd_succeeded";
 const char* kMetaCmdFailed = "mongoc.apm_cmd_failed";
@@ -35,10 +33,8 @@ const char* kMetaHbSucceeded = "mongoc.apm_hb_succeeded";
 const char* kMetaHbFailed = "mongoc.apm_hb_failed";
 const char* kMetaCallbacks = "mongoc.apm_callbacks";
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Helper: create a BsonDocument from a raw bson_t* (returns userdata on Lua stack)
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// Helper: create a BsonDocument from a raw bson_t* (returns userdata on Lua stack)
+// ══════════════════════════════════════════════════════════════════════════�?
 void PushBsonDocument(lua_State* L, const void* raw_bson) {
 	if (!raw_bson) {
 		lua_pushnil(L);
@@ -46,7 +42,7 @@ void PushBsonDocument(lua_State* L, const void* raw_bson) {
 	}
 	const auto* b = static_cast<const bson_t*>(raw_bson);
 	const uint8_t* data = bson_get_data(b);
-	auto* doc = new (std::nothrow) mongo::BsonDocument(data, b->len);
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, data, b->len);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -56,13 +52,11 @@ void PushBsonDocument(lua_State* L, const void* raw_bson) {
 	*ud = doc;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoApmCommandStartedEvent
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoApmCommandStartedEvent
+// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_cmd_started_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmCommandStartedEvent>(L, 1, kMetaCmdStarted);
-	delete ev;
+	MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmCommandStartedEvent>(L, 1, kMetaCmdStarted) = nullptr;
 	return 0;
 }
@@ -75,7 +69,7 @@ int l_apm_cmd_started_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = new (std::nothrow) mongo::MongoApmCommandStartedEvent(raw);
+	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmCommandStartedEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -191,13 +185,11 @@ const luaL_Reg kCmdStartedLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoApmCommandSucceededEvent
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoApmCommandSucceededEvent
+// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_cmd_succeeded_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmCommandSucceededEvent>(L, 1, kMetaCmdSucceeded);
-	delete ev;
+	MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmCommandSucceededEvent>(L, 1, kMetaCmdSucceeded) = nullptr;
 	return 0;
 }
@@ -210,7 +202,7 @@ int l_apm_cmd_succeeded_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = new (std::nothrow) mongo::MongoApmCommandSucceededEvent(raw);
+	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmCommandSucceededEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -333,13 +325,11 @@ const luaL_Reg kCmdSucceededLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoApmCommandFailedEvent
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoApmCommandFailedEvent
+// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_cmd_failed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmCommandFailedEvent>(L, 1, kMetaCmdFailed);
-	delete ev;
+	MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmCommandFailedEvent>(L, 1, kMetaCmdFailed) = nullptr;
 	return 0;
 }
@@ -352,7 +342,7 @@ int l_apm_cmd_failed_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = new (std::nothrow) mongo::MongoApmCommandFailedEvent(raw);
+	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmCommandFailedEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -491,13 +481,11 @@ const luaL_Reg kCmdFailedLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoApmServerChangedEvent
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoApmServerChangedEvent
+// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_server_changed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerChangedEvent>(L, 1, kMetaServerChanged);
-	delete ev;
+	MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmServerChangedEvent>(L, 1, kMetaServerChanged) = nullptr;
 	return 0;
 }
@@ -510,7 +498,7 @@ int l_apm_server_changed_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = new (std::nothrow) mongo::MongoApmServerChangedEvent(raw);
+	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmServerChangedEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -576,13 +564,11 @@ const luaL_Reg kServerChangedLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoApmServerOpeningEvent
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoApmServerOpeningEvent
+// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_server_opening_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerOpeningEvent>(L, 1, kMetaServerOpening);
-	delete ev;
+	MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmServerOpeningEvent>(L, 1, kMetaServerOpening) = nullptr;
 	return 0;
 }
@@ -595,7 +581,7 @@ int l_apm_server_opening_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = new (std::nothrow) mongo::MongoApmServerOpeningEvent(raw);
+	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmServerOpeningEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -647,13 +633,11 @@ const luaL_Reg kServerOpeningLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoApmServerClosedEvent
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoApmServerClosedEvent
+// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_server_closed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerClosedEvent>(L, 1, kMetaServerClosed);
-	delete ev;
+	MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmServerClosedEvent>(L, 1, kMetaServerClosed) = nullptr;
 	return 0;
 }
@@ -666,7 +650,7 @@ int l_apm_server_closed_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = new (std::nothrow) mongo::MongoApmServerClosedEvent(raw);
+	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmServerClosedEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -718,13 +702,11 @@ const luaL_Reg kServerClosedLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoApmTopologyChangedEvent
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoApmTopologyChangedEvent
+// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_topology_changed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmTopologyChangedEvent>(L, 1, kMetaTopologyChanged);
-	delete ev;
+	MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmTopologyChangedEvent>(L, 1, kMetaTopologyChanged) = nullptr;
 	return 0;
 }
@@ -737,7 +719,7 @@ int l_apm_topology_changed_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = new (std::nothrow) mongo::MongoApmTopologyChangedEvent(raw);
+	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmTopologyChangedEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -796,13 +778,11 @@ const luaL_Reg kTopologyChangedLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoApmTopologyOpeningEvent
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoApmTopologyOpeningEvent
+// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_topology_opening_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmTopologyOpeningEvent>(L, 1, kMetaTopologyOpening);
-	delete ev;
+	MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmTopologyOpeningEvent>(L, 1, kMetaTopologyOpening) = nullptr;
 	return 0;
 }
@@ -815,7 +795,7 @@ int l_apm_topology_opening_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = new (std::nothrow) mongo::MongoApmTopologyOpeningEvent(raw);
+	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmTopologyOpeningEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -860,13 +840,11 @@ const luaL_Reg kTopologyOpeningLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoApmTopologyClosedEvent
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoApmTopologyClosedEvent
+// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_topology_closed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmTopologyClosedEvent>(L, 1, kMetaTopologyClosed);
-	delete ev;
+	MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmTopologyClosedEvent>(L, 1, kMetaTopologyClosed) = nullptr;
 	return 0;
 }
@@ -879,7 +857,7 @@ int l_apm_topology_closed_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = new (std::nothrow) mongo::MongoApmTopologyClosedEvent(raw);
+	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmTopologyClosedEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -924,13 +902,11 @@ const luaL_Reg kTopologyClosedLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoApmServerHeartbeatStartedEvent
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoApmServerHeartbeatStartedEvent
+// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_hb_started_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerHeartbeatStartedEvent>(L, 1, kMetaHbStarted);
-	delete ev;
+	MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmServerHeartbeatStartedEvent>(L, 1, kMetaHbStarted) = nullptr;
 	return 0;
 }
@@ -943,7 +919,7 @@ int l_apm_hb_started_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = new (std::nothrow) mongo::MongoApmServerHeartbeatStartedEvent(raw);
+	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmServerHeartbeatStartedEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -987,13 +963,11 @@ const luaL_Reg kHbStartedLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoApmServerHeartbeatSucceededEvent
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoApmServerHeartbeatSucceededEvent
+// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_hb_succeeded_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerHeartbeatSucceededEvent>(L, 1, kMetaHbSucceeded);
-	delete ev;
+	MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmServerHeartbeatSucceededEvent>(L, 1, kMetaHbSucceeded) = nullptr;
 	return 0;
 }
@@ -1006,7 +980,7 @@ int l_apm_hb_succeeded_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = new (std::nothrow) mongo::MongoApmServerHeartbeatSucceededEvent(raw);
+	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmServerHeartbeatSucceededEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -1068,13 +1042,11 @@ const luaL_Reg kHbSucceededLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoApmServerHeartbeatFailedEvent
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoApmServerHeartbeatFailedEvent
+// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_hb_failed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerHeartbeatFailedEvent>(L, 1, kMetaHbFailed);
-	delete ev;
+	MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmServerHeartbeatFailedEvent>(L, 1, kMetaHbFailed) = nullptr;
 	return 0;
 }
@@ -1087,7 +1059,7 @@ int l_apm_hb_failed_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = new (std::nothrow) mongo::MongoApmServerHeartbeatFailedEvent(raw);
+	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmServerHeartbeatFailedEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -1154,19 +1126,17 @@ const luaL_Reg kHbFailedLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoApmCallbacks
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoApmCallbacks
+// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_callbacks_gc(lua_State* L) {
 	auto* cb = GetUserdata<mongo::MongoApmCallbacks>(L, 1, kMetaCallbacks);
-	delete cb;
+	MEM_DELETE(cb);
 	*CheckUserdata<mongo::MongoApmCallbacks>(L, 1, kMetaCallbacks) = nullptr;
 	return 0;
 }
 
 int l_apm_callbacks_new(lua_State* L) {
-	auto* cb = new (std::nothrow) mongo::MongoApmCallbacks();
+	auto* cb = MEM_NEW_NOTHROW(mongo::MongoApmCallbacks);
 	if (!cb) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -1205,10 +1175,8 @@ const luaL_Reg kCallbacksLib[] = {
 
 }  // namespace
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Metatable registration
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// Metatable registration
+// ══════════════════════════════════════════════════════════════════════════�?
 void RegisterMongoApmCommandStartedEventMeta(lua_State* L) {
 	RegisterMetatable(L, kMetaCmdStarted, nullptr, l_apm_cmd_started_gc);
 }
@@ -1261,10 +1229,8 @@ void RegisterMongoApmCallbacksMeta(lua_State* L) {
 	RegisterMetatable(L, kMetaCallbacks, nullptr, l_apm_callbacks_gc);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Lib accessors
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// Lib accessors
+// ══════════════════════════════════════════════════════════════════════════�?
 const luaL_Reg* GetMongoApmCommandStartedEventLib() {
 	return kCmdStartedLib;
 }

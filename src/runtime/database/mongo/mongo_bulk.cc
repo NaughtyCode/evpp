@@ -1,10 +1,14 @@
 #if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo/mongo_bulk.h"
+#include "runtime/core/mem/mem.h"
 
 #include "runtime/database/mongo/mongo_bson.h"
+#include "runtime/core/mem/mem.h"
 #include "runtime/database/mongo/mongo_error.h"
+#include "runtime/core/mem/mem.h"
 #include "runtime/database/mongo/mongo_settings.h"
+#include "runtime/core/mem/mem.h"
 
 #include <mongoc/mongoc.h>
 
@@ -16,10 +20,10 @@ struct MongoBulkOperation::Impl {
 };
 
 MongoBulkOperation* MongoBulkOperation::New(bool ordered) {
-	auto* op = new MongoBulkOperation();
+	auto* op = MEM_NEW(MongoBulkOperation);
 	op->impl_->bulk = mongoc_bulk_operation_new(ordered);
 	if (!op->impl_->bulk) {
-		delete op;
+		MEM_DELETE(op);
 		return nullptr;
 	}
 	return op;
@@ -36,7 +40,7 @@ void MongoBulkOperation::Destroy() {
 		mongoc_bulk_operation_destroy(impl_->bulk);
 		impl_->bulk = nullptr;
 	}
-	delete this;
+	MEM_DELETE(this);
 }
 
 void MongoBulkOperation::Insert(const BsonDocument& document) {

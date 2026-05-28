@@ -16,13 +16,13 @@ const char* kMetaName = "mongoc.find_and_modify_opts";
 
 int l_find_and_modify_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoFindAndModifyOpts>(L, 1, kMetaName);
-	delete opts;
+	MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoFindAndModifyOpts>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
 
 int l_find_and_modify_new(lua_State* L) {
-	auto* opts = new (std::nothrow) mongo::MongoFindAndModifyOpts();
+	auto* opts = MEM_NEW_NOTHROW(mongo::MongoFindAndModifyOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -52,7 +52,7 @@ int l_find_and_modify_get_sort(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = new (std::nothrow) mongo::BsonDocument();
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -78,7 +78,7 @@ int l_find_and_modify_get_update(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = new (std::nothrow) mongo::BsonDocument();
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -104,7 +104,7 @@ int l_find_and_modify_get_fields(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = new (std::nothrow) mongo::BsonDocument();
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -168,7 +168,7 @@ int l_find_and_modify_get_extra(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = new (std::nothrow) mongo::BsonDocument();
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

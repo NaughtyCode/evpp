@@ -202,7 +202,7 @@ class Server::RecvThread {
 	}
 
 	bool Run() {
-		thread_.reset(new std::thread(std::bind(&Server::RecvingLoop, server_, this)));
+		thread_.reset(MEM_NEW(std::thread, std::bind(&Server::RecvingLoop, server_, this)));
 		return true;
 	}
 
@@ -263,7 +263,7 @@ Server::~Server() {
 }
 
 bool Server::Init(int port) {
-	RecvThreadPtr t(new RecvThread(this));
+	RecvThreadPtr t(MEM_NEW(RecvThread, this));
 	if (!t->Listen(port)) {
 		return false;
 	}
@@ -461,7 +461,7 @@ void Server::RecvingLoop(RecvThread* th) {
 				int n = session->Recv(kcp_buf, sizeof(kcp_buf));
 				if (n < 0) break;  // no more complete messages
 
-				MessagePtr msg(new Message(session->conv(), n));
+				MessagePtr msg(MEM_NEW(Message, session->conv(), n));
 				msg->Write(kcp_buf, n);
 				msg->set_remote_addr(*sock::sockaddr_cast(&from_addr));
 

@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <typeinfo>
 
+#include "runtime/core/mem/mem.h"
+
 namespace evpp {
 
 // A variant type that can hold any other type.
@@ -36,11 +38,11 @@ class Any {
 	Any() : content_(nullptr) {
 	}
 	~Any() {
-		delete content_;
+		MEM_DELETE(content_);
 	}
 
 	template <typename ValueType>
-	explicit Any(const ValueType& value) : content_(new Holder<ValueType>(value)) {
+	explicit Any(const ValueType& value) : content_(MEM_NEW(Holder<ValueType>, value)) {
 	}
 
 	Any(const Any& other) : content_(other.content_ ? other.content_->clone() : nullptr) {
@@ -107,7 +109,7 @@ class Any {
 		}
 
 		virtual PlaceHolder* clone() const {
-			return new Holder(held_);
+			return MEM_NEW(Holder, held_);
 		}
 
 		ValueType held_;

@@ -39,7 +39,7 @@ struct UdpClientCtx {
 
 const char* kUdpClientMetaName = "net.udp_client.instance";
 
-// ── l_udp_client_connect(host, port) → instance_table ──
+// ── l_udp_client_connect(host, port) �?instance_table ──
 int l_udp_client_connect(lua_State* L) {
 	const char* host = luaL_checkstring(L, 1);
 	lua_Integer port64 = luaL_checkinteger(L, 2);
@@ -51,7 +51,7 @@ int l_udp_client_connect(lua_State* L) {
 	}
 	int port = static_cast<int>(port64);
 
-	auto* ctx = new UdpClientCtx();
+	auto* ctx = MEM_NEW(UdpClientCtx);
 
 	PushInstanceTable(L, ctx, kUdpClientMetaName);
 
@@ -64,7 +64,7 @@ int l_udp_client_connect(lua_State* L) {
 		// Null _ctx before delete so __gc won't read a dangling pointer
 		lua_pushnil(L);
 		lua_setfield(L, -2, "_ctx");
-		delete ctx;
+		MEM_DELETE(ctx);
 		lua_pop(L, 1);
 		lua_pushnil(L);
 		lua_pushfstring(L, "udp connect failed: %s:%d", host, port);
@@ -79,7 +79,7 @@ int l_udp_client_connect(lua_State* L) {
 	return 1;
 }
 
-// ── instance:send(data) → bool ─────────────────────────────────────────
+// ── instance:send(data) �?bool ─────────────────────────────────────────
 int l_udp_client_send(lua_State* L) {
 	auto* ctx = GetCtxFromTable<UdpClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "udp_client: invalid context");
@@ -98,7 +98,7 @@ int l_udp_client_send(lua_State* L) {
 	return 1;
 }
 
-// ── instance:do_request(data, timeout_ms) → string ─────────────────────
+// ── instance:do_request(data, timeout_ms) �?string ─────────────────────
 int l_udp_client_do_request(lua_State* L) {
 	auto* ctx = GetCtxFromTable<UdpClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "udp_client: invalid context");
@@ -134,13 +134,13 @@ int l_udp_client_close(lua_State* L) {
 	lua_setfield(L, 1, "_ctx");
 
 	ctx->client->Close();
-	delete ctx;
+	MEM_DELETE(ctx);
 
 	lua_pushboolean(L, 1);
 	return 1;
 }
 
-// ── instance:is_connected() → bool ─────────────────────────────────────
+// ── instance:is_connected() �?bool ─────────────────────────────────────
 int l_udp_client_is_connected(lua_State* L) {
 	auto* ctx = GetCtxFromTable<UdpClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
@@ -162,12 +162,12 @@ int l_udp_client_gc(lua_State* L) {
 	lua_setfield(L, 1, "_ctx");
 
 	ctx->client->Close();
-	delete ctx;
+	MEM_DELETE(ctx);
 
 	return 0;
 }
 
-// ── Static: net.udp_client.do_request(host, port, data, timeout_ms) → string ──
+// ── Static: net.udp_client.do_request(host, port, data, timeout_ms) �?string ──
 int l_udp_client_do_request_static(lua_State* L) {
 	const char* host = luaL_checkstring(L, 1);
 	if (!*host) {
@@ -195,7 +195,7 @@ int l_udp_client_do_request_static(lua_State* L) {
 	return 1;
 }
 
-// ── Static: net.udp_client.send_to(host, port, data) → bool ────────────
+// ── Static: net.udp_client.send_to(host, port, data) �?bool ────────────
 int l_udp_client_send_to(lua_State* L) {
 	const char* host = luaL_checkstring(L, 1);
 	if (!*host) {

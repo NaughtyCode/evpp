@@ -36,7 +36,7 @@ DNSResolver::~DNSResolver() {
 	// If the DNS request was cancelled, the libevent callback won't fire,
 	// so we must clean up the callback argument ourselves.
 	if (evdns_cb_arg_) {
-		delete evdns_cb_arg_;
+		MEM_DELETE(evdns_cb_arg_);
 		evdns_cb_arg_ = nullptr;
 	}
 }
@@ -110,7 +110,7 @@ void DNSResolver::Cancel() {
 	}
 #endif
 	if (evdns_cb_arg_) {
-		delete evdns_cb_arg_;
+		MEM_DELETE(evdns_cb_arg_);
 		evdns_cb_arg_ = nullptr;
 	}
 	if (timer_) {
@@ -126,7 +126,7 @@ void DNSResolver::AsyncWait() {
 					 (void*) this,
 					 std::hash<std::thread::id>{}(std::this_thread::get_id()),
 					 (void*) this);
-	timer_.reset(new TimerEventWatcher(loop_, std::bind(&DNSResolver::OnTimeout, this), timeout_));
+	timer_.reset(MEM_NEW(TimerEventWatcher, loop_, std::bind(&DNSResolver::OnTimeout, this), timeout_));
 	timer_->SetCancelCallback(std::bind(&DNSResolver::OnCanceled, this));
 	timer_->Init();
 	timer_->AsyncWait();
@@ -143,7 +143,7 @@ void DNSResolver::OnTimeout() {
 	dns_req_ = nullptr;
 #endif
 	if (evdns_cb_arg_) {
-		delete evdns_cb_arg_;
+		MEM_DELETE(evdns_cb_arg_);
 		evdns_cb_arg_ = nullptr;
 	}
 	ClearTimer();
@@ -163,7 +163,7 @@ void DNSResolver::OnCanceled() {
 	}
 #endif
 	if (evdns_cb_arg_) {
-		delete evdns_cb_arg_;
+		MEM_DELETE(evdns_cb_arg_);
 		evdns_cb_arg_ = nullptr;
 	}
 }
@@ -199,7 +199,7 @@ void DNSResolver::AsyncDNSResolve() {
 								 holder.release());  // transfer ownership to C callback
 	if (!dns_req_) {
 		ENGINE_LOG_ERROR(engine::GetLogger(), "evdns_getaddrinfo failed.");
-		delete evdns_cb_arg_;
+		MEM_DELETE(evdns_cb_arg_);
 		evdns_cb_arg_ = nullptr;
 		evdns_base_free(dnsbase_, 0);
 		dnsbase_ = nullptr;
@@ -286,7 +286,7 @@ void DNSResolver::OnResolved(int errcode, struct addrinfo* addr, void* arg) {
 	// from within the callback chain, and must not double-delete pp.
 	(*pp)->evdns_cb_arg_ = nullptr;
 	(*pp)->OnResolved(errcode, addr);
-	delete pp;
+	MEM_DELETE(pp);
 }
 #endif
 

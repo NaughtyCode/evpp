@@ -9,7 +9,7 @@ struct event* event_new(struct event_base* base,
 						void (*cb)(int, short, void*),
 						void* arg) {
 	struct event* ev;
-	ev = (struct event*) malloc(sizeof(struct event));
+	ev = (struct event*) MEM_MALLOC(sizeof(struct event));
 
 	if (ev == nullptr) {
 		return nullptr;
@@ -22,7 +22,7 @@ struct event* event_new(struct event_base* base,
 
 void event_free(struct event* ev) {
 	evpp::EventDel(ev);
-	free(ev);
+	MEM_FREE(ev);
 }
 
 

@@ -77,11 +77,11 @@ EventLoop::~EventLoop() {
 	if (pending_functors_) {
 		Functor* f = nullptr;
 		while (pending_functors_->pop(f)) {
-			delete f;
+			MEM_DELETE(f);
 		}
 	}
 #endif
-	delete pending_functors_;
+	MEM_DELETE(pending_functors_);
 	pending_functors_ = nullptr;
 }
 
@@ -90,11 +90,11 @@ void EventLoop::Init() {
 	status_.store(kInitializing);
 #ifdef H_HAVE_BOOST
 	const size_t kPendingFunctorCount = 1024 * 16;
-	this->pending_functors_ = new boost::lockfree::queue<Functor*>(kPendingFunctorCount);
+	this->pending_functors_ = MEM_NEW(boost::lockfree::queue<Functor*>, kPendingFunctorCount);
 #elif defined(H_HAVE_CAMERON314_CONCURRENTQUEUE)
-	this->pending_functors_ = new moodycamel::ConcurrentQueue<Functor>();
+	this->pending_functors_ = MEM_NEW(moodycamel::ConcurrentQueue<Functor>);
 #else
-	this->pending_functors_ = new std::vector<Functor>();
+	this->pending_functors_ = MEM_NEW(std::vector<Functor>);
 #endif
 
 	tid_ = std::this_thread::get_id();	// The default thread id
@@ -106,7 +106,7 @@ void EventLoop::Init() {
 
 void EventLoop::InitNotifyPipeWatcher() {
 	// Initialized task queue notify pipe watcher
-	watcher_.reset(new PipeEventWatcher(this, std::bind(&EventLoop::DoPendingFunctors, this)));
+	watcher_.reset(MEM_NEW(PipeEventWatcher, this, std::bind(&EventLoop::DoPendingFunctors, this)));
 	int rc = watcher_->Init();
 	if (!rc) {
 		if (auto* l = engine::GetLogger()) {
@@ -286,7 +286,7 @@ void EventLoop::QueueInLoop(const Functor& cb) {
 	++pending_functor_count_;
 	{
 #ifdef H_HAVE_BOOST
-		auto f = new Functor(cb);
+		auto f = MEM_NEW(Functor, cb);
 		while (!pending_functors_->push(f)) {
 		}
 #elif defined(H_HAVE_CAMERON314_CONCURRENTQUEUE)
@@ -327,7 +327,7 @@ void EventLoop::QueueInLoop(Functor&& cb) {
 	++pending_functor_count_;
 	{
 #ifdef H_HAVE_BOOST
-		auto f = new Functor(std::move(cb));  // Deleted by consumer in DoPendingFunctors
+		auto f = MEM_NEW(Functor, std::move(cb));  // Deleted by consumer in DoPendingFunctors
 		while (!pending_functors_->push(f)) {
 		}
 #elif defined(H_HAVE_CAMERON314_CONCURRENTQUEUE)
@@ -374,7 +374,7 @@ void EventLoop::DoPendingFunctors() {
 	Functor* f = nullptr;
 	while (pending_functors_->pop(f)) {
 		(*f)();
-		delete f;
+		MEM_DELETE(f);
 		--pending_functor_count_;
 	}
 #elif defined(H_HAVE_CAMERON314_CONCURRENTQUEUE)

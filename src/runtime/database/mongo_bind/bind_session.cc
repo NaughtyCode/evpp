@@ -155,8 +155,7 @@ int l_session_get_cluster_time_raw(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = new (std::nothrow)
-		mongo::BsonDocument(mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -179,8 +178,7 @@ int l_session_get_session_id_raw(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = new (std::nothrow)
-		mongo::BsonDocument(mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

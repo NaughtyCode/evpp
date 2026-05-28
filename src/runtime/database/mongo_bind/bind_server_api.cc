@@ -15,14 +15,13 @@ const char* kMetaName = "mongoc.server_api";
 
 int l_server_api_gc(lua_State* L) {
 	auto* api = GetUserdata<mongo::MongoServerApi>(L, 1, kMetaName);
-	delete api;
+	MEM_DELETE(api);
 	*CheckUserdata<mongo::MongoServerApi>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
 
 int l_server_api_new(lua_State* L) {
-	auto* api = new (std::nothrow)
-		mongo::MongoServerApi(mongo::MongoServerApi::New(mongo::MongoServerApi::kV1));
+	auto* api = MEM_NEW_NOTHROW(mongo::MongoServerApi, mongo::MongoServerApi::New(mongo::MongoServerApi::kV1));
 	if (!api) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -45,7 +44,7 @@ int l_server_api_copy(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* copy = new (std::nothrow) mongo::MongoServerApi(api->Copy());
+	auto* copy = MEM_NEW_NOTHROW(mongo::MongoServerApi, api->Copy());
 	if (!copy) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

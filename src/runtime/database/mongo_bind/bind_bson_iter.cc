@@ -19,7 +19,7 @@ const char* kMetaName = "bson.iter";
 
 int l_bson_iter_gc(lua_State* L) {
 	auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
-	delete iter;
+	MEM_DELETE(iter);
 	*CheckUserdata<mongo::BsonIter>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
@@ -30,7 +30,7 @@ int l_bson_iter_new(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* iter = new (std::nothrow) mongo::BsonIter(*doc);
+	auto* iter = MEM_NEW_NOTHROW(mongo::BsonIter, *doc);
 	if (!iter) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -134,7 +134,7 @@ int l_bson_iter_recurse(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* sub = new (std::nothrow) mongo::BsonIter(iter->Recurse());
+	auto* sub = MEM_NEW_NOTHROW(mongo::BsonIter, iter->Recurse());
 	if (!sub) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -179,7 +179,7 @@ int l_bson_iter_as_document(lua_State* L) {
 	uint32_t len;
 	const uint8_t* data;
 	iter->AsDocument(&len, &data);
-	auto* doc = new (std::nothrow) mongo::BsonDocument(data, len);
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, data, len);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -200,7 +200,7 @@ int l_bson_iter_as_array(lua_State* L) {
 	uint32_t len;
 	const uint8_t* data;
 	iter->AsArray(&len, &data);
-	auto* doc = new (std::nothrow) mongo::BsonDocument(data, len);
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, data, len);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -298,7 +298,7 @@ int l_bson_iter_find_descendant(lua_State* L) {
 		lua_pushboolean(L, false);
 		return 1;
 	}
-	auto* desc = new (std::nothrow) mongo::BsonIter();
+	auto* desc = MEM_NEW_NOTHROW(mongo::BsonIter);
 	if (!desc) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "allocation failure");
@@ -307,7 +307,7 @@ int l_bson_iter_find_descendant(lua_State* L) {
 	}
 	bool ok = iter->FindDescendant(dotkey, desc);
 	if (!ok) {
-		delete desc;
+		MEM_DELETE(desc);
 		lua_pushboolean(L, false);
 		return 1;
 	}
@@ -549,7 +549,7 @@ int l_bson_iter_as_code_with_scope(lua_State* L) {
 	}
 	uint32_t code_len = 0;
 	const char* code_cstr = nullptr;
-	auto* scope = new (std::nothrow) mongo::BsonDocument();
+	auto* scope = MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!scope) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -558,7 +558,7 @@ int l_bson_iter_as_code_with_scope(lua_State* L) {
 	}
 	iter->AsCodeWithScope(&code_len, &code_cstr, scope);
 	if (!code_cstr) {
-		delete scope;
+		MEM_DELETE(scope);
 		lua_pushnil(L);
 		return 1;
 	}

@@ -1,6 +1,7 @@
 #if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo/mongo_session.h"
+#include "runtime/core/mem/mem.h"
 
 #include <cstdio>
 
@@ -8,17 +9,20 @@
 #include "runtime/core/log/log_macros.h"
 
 #include "runtime/database/mongo/mongo_bson.h"
+#include "runtime/core/mem/mem.h"
 #include "runtime/database/mongo/mongo_error.h"
+#include "runtime/core/mem/mem.h"
 #include "runtime/database/mongo/mongo_settings.h"
+#include "runtime/core/mem/mem.h"
 
 #include <mongoc/mongoc.h>
 
 namespace engine {
 namespace mongo {
 
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════�?
 // MongoTransactionOpts
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════�?
 
 struct MongoTransactionOpts::Impl {
 	mongoc_transaction_opt_t* opts = nullptr;
@@ -101,9 +105,9 @@ const void* MongoTransactionOpts::RawTransactionOpts() const {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════�?
 // MongoSessionOpts
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════�?
 
 struct MongoSessionOpts::Impl {
 	mongoc_session_opt_t* opts = nullptr;
@@ -175,9 +179,9 @@ const void* MongoSessionOpts::RawSessionOpts() const {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════�?
 // MongoSession
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════�?
 
 struct MongoSession::Impl {
 	mongoc_client_session_t* session = nullptr;
@@ -193,7 +197,7 @@ MongoSession::~MongoSession() {
 }
 
 void MongoSession::Destroy() {
-	delete this;
+	MEM_DELETE(this);
 }
 
 bool MongoSession::StartTransaction(const MongoTransactionOpts* opts, MongoError* error) {
@@ -287,11 +291,11 @@ const void* MongoSession::GetTransactionOptsRaw() const {
 }
 
 MongoSession* MongoSession::CreateEmpty() {
-	return new MongoSession();
+	return MEM_NEW(MongoSession);
 }
 
 void MongoSession::Destroy(MongoSession* session) {
-	delete session;
+	MEM_DELETE(session);
 }
 
 namespace {

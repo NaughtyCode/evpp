@@ -12,21 +12,19 @@ namespace engine {
 namespace script {
 namespace {
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoStructuredLogOpts
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoStructuredLogOpts
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kOptsMeta = "mongoc.structured_log_opts";
 
 int l_log_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoStructuredLogOpts>(L, 1, kOptsMeta);
-	delete opts;
+	MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoStructuredLogOpts>(L, 1, kOptsMeta) = nullptr;
 	return 0;
 }
 
 int l_log_opts_new(lua_State* L) {
-	auto* opts = new (std::nothrow) mongo::MongoStructuredLogOpts();
+	auto* opts = MEM_NEW_NOTHROW(mongo::MongoStructuredLogOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -165,15 +163,13 @@ const luaL_Reg kOptsLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoStructuredLogEntry
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoStructuredLogEntry
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kEntryMeta = "mongoc.structured_log_entry";
 
 int l_log_entry_gc(lua_State* L) {
 	auto* e = GetUserdata<mongo::MongoStructuredLogEntry>(L, 1, kEntryMeta);
-	delete e;
+	MEM_DELETE(e);
 	*CheckUserdata<mongo::MongoStructuredLogEntry>(L, 1, kEntryMeta) = nullptr;
 	return 0;
 }
@@ -186,7 +182,7 @@ int l_log_entry_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* e = new (std::nothrow) mongo::MongoStructuredLogEntry(raw);
+	auto* e = MEM_NEW_NOTHROW(mongo::MongoStructuredLogEntry, raw);
 	if (!e) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -209,7 +205,7 @@ int l_log_entry_message_as_bson(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = new (std::nothrow) mongo::BsonDocument();
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -258,10 +254,8 @@ const luaL_Reg kEntryLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoLog static methods
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoLog static methods
+// ══════════════════════════════════════════════════════════════════════════�?
 int l_log_level_to_string(lua_State* L) {
 	auto level = static_cast<mongo::MongoLogLevel>(luaL_checkinteger(L, 1));
 	const char* name = mongo::MongoLog::LevelToString(level);

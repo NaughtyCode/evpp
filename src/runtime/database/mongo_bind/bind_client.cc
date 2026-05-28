@@ -26,7 +26,7 @@ const char* kMetaName = "mongoc.client";
 int l_client_gc(lua_State* L) {
 	auto* client = GetUserdata<mongo::MongoClient>(L, 1, kMetaName);
 	if (client) client->Destroy();
-	delete client;
+	MEM_DELETE(client);
 	*CheckUserdata<mongo::MongoClient>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
@@ -162,7 +162,7 @@ int l_client_command_simple(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -269,7 +269,7 @@ int l_client_get_uri(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* uri = new (std::nothrow) mongo::MongoUri(client->GetUri());
+	auto* uri = MEM_NEW_NOTHROW(mongo::MongoUri, client->GetUri());
 	if (!uri) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -359,7 +359,7 @@ int l_client_command_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -395,7 +395,7 @@ int l_client_read_command_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -428,7 +428,7 @@ int l_client_write_command_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -464,7 +464,7 @@ int l_client_read_write_command_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -499,7 +499,7 @@ int l_client_command_simple_with_server_id(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -668,7 +668,7 @@ int l_client_get_gridfs(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	// Return as lightuserdata â€” caller wraps with gridfs binding if available
+	// Return as lightuserdata â€?caller wraps with gridfs binding if available
 	lua_pushlightuserdata(L, raw_gridfs);
 	return 1;
 }
@@ -739,7 +739,7 @@ int l_client_server_descriptions_destroy_all(lua_State* L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
 	auto n = static_cast<size_t>(luaL_checkinteger(L, 2));
 	if (n == 0) return 0;
-	void** sds = new (std::nothrow) void*[n];
+	void** sds = MEM_NEW_ARR_NOTHROW(void*, n);
 	if (!sds) return 0;
 	for (size_t i = 0; i < n; ++i) {
 		lua_rawgeti(L, 1, static_cast<int>(i + 1));
@@ -747,7 +747,7 @@ int l_client_server_descriptions_destroy_all(lua_State* L) {
 		lua_pop(L, 1);
 	}
 	mongo::MongoClient::ServerDescriptionsDestroyAll(sds, n);
-	delete[] sds;
+	MEM_DELETE_ARR(sds);
 	return 0;
 }
 
@@ -790,7 +790,7 @@ int l_client_get_crypt_shared_version(lua_State* L) {
 }
 
 int l_client_set_usleep_impl(lua_State* L) {
-	// Not directly usable from Lua â€” requires C function pointer
+	// Not directly usable from Lua â€?requires C function pointer
 	return 0;
 }
 

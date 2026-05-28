@@ -22,14 +22,14 @@ class EVPP_EXPORT Buffer {
 		  read_index_(reserved_prepend_size),
 		  write_index_(reserved_prepend_size),
 		  reserved_prepend_size_(reserved_prepend_size), max_capacity_(256 * 1024) {
-		buffer_ = new char[capacity_];
+		buffer_ = MEM_NEW_ARR(char, capacity_);
 		assert(length() == 0);
 		assert(WritableBytes() == initial_size);
 		assert(PrependableBytes() == reserved_prepend_size);
 	}
 
 	~Buffer() {
-		delete[] buffer_;
+		MEM_DELETE_ARR(buffer_);
 		buffer_ = nullptr;
 		capacity_ = 0;
 	}
@@ -53,7 +53,7 @@ class EVPP_EXPORT Buffer {
 
 	Buffer& operator=(Buffer&& rhs) noexcept {
 		if (this != &rhs) {
-			delete[] buffer_;
+			MEM_DELETE_ARR(buffer_);
 			buffer_ = rhs.buffer_;
 			capacity_ = rhs.capacity_;
 			read_index_ = rhs.read_index_;
@@ -482,12 +482,12 @@ class EVPP_EXPORT Buffer {
 				n = (capacity_ << 1) + len;
 			}
 			size_t m = length();
-			char* d = new char[n];
+			char* d = MEM_NEW_ARR(char, n);
 			memcpy(d + reserved_prepend_size_, begin() + read_index_, m);
 			write_index_ = m + reserved_prepend_size_;
 			read_index_ = reserved_prepend_size_;
 			capacity_ = n;
-			delete[] buffer_;
+			MEM_DELETE_ARR(buffer_);
 			buffer_ = d;
 		} else {
 			// move readable data to the front, make space inside buffer

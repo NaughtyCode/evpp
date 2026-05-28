@@ -1,13 +1,18 @@
 #if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo/mongo_client_pool.h"
+#include "runtime/core/mem/mem.h"
 
 #include <cstdint>
 
 #include "runtime/database/mongo/mongo_client.h"
+#include "runtime/core/mem/mem.h"
 #include "runtime/database/mongo/mongo_error.h"
+#include "runtime/core/mem/mem.h"
 #include "runtime/database/mongo/mongo_server_api.h"
+#include "runtime/core/mem/mem.h"
 #include "runtime/database/mongo/mongo_uri.h"
+#include "runtime/core/mem/mem.h"
 
 #include <mongoc/mongoc.h>
 
@@ -19,22 +24,22 @@ struct MongoClientPool::Impl {
 };
 
 MongoClientPool* MongoClientPool::New(const MongoUri& uri) {
-	auto* pool = new MongoClientPool();
+	auto* pool = MEM_NEW(MongoClientPool);
 	pool->impl_->pool = mongoc_client_pool_new(static_cast<const mongoc_uri_t*>(uri.RawUri()));
 	if (!pool->impl_->pool) {
-		delete pool;
+		MEM_DELETE(pool);
 		return nullptr;
 	}
 	return pool;
 }
 
 MongoClientPool* MongoClientPool::New(const MongoUri& uri, MongoError* error) {
-	auto* pool = new MongoClientPool();
+	auto* pool = MEM_NEW(MongoClientPool);
 	pool->impl_->pool = mongoc_client_pool_new_with_error(
 		static_cast<const mongoc_uri_t*>(uri.RawUri()),
 		error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 	if (!pool->impl_->pool) {
-		delete pool;
+		MEM_DELETE(pool);
 		return nullptr;
 	}
 	return pool;

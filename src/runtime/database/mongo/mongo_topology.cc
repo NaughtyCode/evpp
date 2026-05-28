@@ -1,21 +1,21 @@
 #if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo/mongo_topology.h"
+#include "runtime/core/mem/mem.h"
 
 #include <new>
 
 #include "runtime/database/mongo/mongo_host_list.h"
+#include "runtime/core/mem/mem.h"
 #include "runtime/database/mongo/mongo_settings.h"
+#include "runtime/core/mem/mem.h"
 
 #include <mongoc/mongoc.h>
 
 namespace engine {
 namespace mongo {
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoServerDescription
-// ═══════════════════════════════════════════════════════════════════════
-
 MongoServerDescription::MongoServerDescription(void* raw) : sd_(raw) {
 }
 
@@ -35,7 +35,7 @@ const MongoHostList* MongoServerDescription::Host() const {
 		const auto* raw_host =
 			mongoc_server_description_host(static_cast<const mongoc_server_description_t*>(sd_));
 		if (!raw_host) return nullptr;
-		auto* wrapper = new MongoHostList();
+		auto* wrapper = MEM_NEW(MongoHostList);
 		// Copy host data into the wrapper
 		auto* dst = static_cast<mongoc_host_list_t*>(wrapper->Raw());
 		memcpy(dst, raw_host, sizeof(mongoc_host_list_t));
@@ -80,7 +80,7 @@ MongoServerDescription* MongoServerDescription::NewCopy(const MongoServerDescrip
 	auto* raw_copy = mongoc_server_description_new_copy(
 		static_cast<const mongoc_server_description_t*>(other->sd_));
 	if (!raw_copy) return nullptr;
-	auto* result = new (std::nothrow) MongoServerDescription(raw_copy);
+	auto* result = MEM_NEW_NOTHROW(MongoServerDescription, raw_copy);
 	if (!result) {
 		mongoc_server_description_destroy(raw_copy);
 		return nullptr;
@@ -101,10 +101,7 @@ void* MongoServerDescription::Raw() const {
 	return sd_;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoTopologyDescription
-// ═══════════════════════════════════════════════════════════════════════
-
 MongoTopologyDescription::MongoTopologyDescription(void* raw) : td_(raw) {
 }
 
@@ -154,7 +151,7 @@ MongoServerDescription** MongoTopologyDescription::GetServers(size_t* n) const {
 		if (!result[i]) {
 			for (size_t j = 0; j < i; ++j) {
 				result[j]->DestroyCopy();
-				delete result[j];
+				MEM_DELETE(result[j]);
 			}
 			bson_free(result);
 			bson_free(raw_servers);
@@ -172,7 +169,7 @@ MongoTopologyDescription* MongoTopologyDescription::NewCopy(const MongoTopologyD
 	auto* raw_copy = mongoc_topology_description_new_copy(
 		static_cast<const mongoc_topology_description_t*>(other->td_));
 	if (!raw_copy) return nullptr;
-	auto* result = new (std::nothrow) MongoTopologyDescription(raw_copy);
+	auto* result = MEM_NEW_NOTHROW(MongoTopologyDescription, raw_copy);
 	if (!result) {
 		mongoc_topology_description_destroy(raw_copy);
 		return nullptr;

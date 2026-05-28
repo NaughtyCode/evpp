@@ -35,7 +35,7 @@ ConnPtr ConnPool::Get(EventLoop* loop) {
 
 	ConnPtr c;
 	if (it->second.empty()) {
-		c.reset(new Conn(this, loop));
+		c.reset(MEM_NEW(Conn, this, loop));
 		return c;
 	}
 

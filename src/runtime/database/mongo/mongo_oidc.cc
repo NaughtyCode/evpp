@@ -5,6 +5,7 @@
 #include <cstdio>
 
 #include "runtime/core/log/log.h"
+#include "runtime/core/mem/mem.h"
 #include "runtime/core/log/log_macros.h"
 
 #include <mongoc/mongoc.h>
@@ -12,18 +13,18 @@
 namespace engine {
 namespace mongo {
 
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════�?
 // MongoOidcCredential::Impl (needed by MongoOidcCallbackParams)
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════�?
 
 struct MongoOidcCredential::Impl {
 	mongoc_oidc_credential_t* cred = nullptr;
 	bool owned = true;
 };
 
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════�?
 // MongoOidcCallbackParams
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════�?
 
 MongoOidcCallbackParams::MongoOidcCallbackParams(void* raw_params) : params_(raw_params) {
 }
@@ -52,21 +53,21 @@ MongoOidcCredential* MongoOidcCallbackParams::CancelWithTimeout() {
 	auto* raw = mongoc_oidc_callback_params_cancel_with_timeout(
 		static_cast<mongoc_oidc_callback_params_t*>(params_));
 	if (!raw) return nullptr;
-	auto* cred = new MongoOidcCredential();
+	auto* cred = MEM_NEW(MongoOidcCredential);
 	cred->impl_->owned = false;
 	cred->impl_->cred = raw;
 	return cred;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════�?
 // MongoOidcCredential
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════�?
 
 MongoOidcCredential* MongoOidcCredential::New(const char* access_token) {
-	auto* c = new MongoOidcCredential();
+	auto* c = MEM_NEW(MongoOidcCredential);
 	c->impl_->cred = mongoc_oidc_credential_new(access_token);
 	if (!c->impl_->cred) {
-		delete c;
+		MEM_DELETE(c);
 		return nullptr;
 	}
 	return c;
@@ -74,10 +75,10 @@ MongoOidcCredential* MongoOidcCredential::New(const char* access_token) {
 
 MongoOidcCredential* MongoOidcCredential::NewWithExpiresIn(const char* access_token,
 														   int64_t expires_in) {
-	auto* c = new MongoOidcCredential();
+	auto* c = MEM_NEW(MongoOidcCredential);
 	c->impl_->cred = mongoc_oidc_credential_new_with_expires_in(access_token, expires_in);
 	if (!c->impl_->cred) {
-		delete c;
+		MEM_DELETE(c);
 		return nullptr;
 	}
 	return c;
@@ -116,9 +117,9 @@ void* MongoOidcCredential::ReleaseRaw() {
 	return nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════�?
 // MongoOidcCallback
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════�?
 
 namespace {
 
@@ -145,7 +146,7 @@ mongoc_oidc_credential_t* oidc_trampoline(mongoc_oidc_callback_params_t* params)
 	}
 	if (!cred) return nullptr;
 	auto* raw = static_cast<mongoc_oidc_credential_t*>(cred->ReleaseRaw());
-	delete cred;
+	MEM_DELETE(cred);
 	return raw;
 }
 
@@ -161,13 +162,13 @@ MongoOidcCallback* MongoOidcCallback::New(MongoOidcCallbackFn fn) {
 }
 
 MongoOidcCallback* MongoOidcCallback::NewWithUserData(MongoOidcCallbackFn fn, void* user_data) {
-	auto* c = new MongoOidcCallback();
+	auto* c = MEM_NEW(MongoOidcCallback);
 	c->impl_->ctx = std::make_shared<OidcCtx>();
 	c->impl_->ctx->fn = std::move(fn);
 	c->impl_->ctx->user_data = user_data;
 	c->impl_->cb = mongoc_oidc_callback_new_with_user_data(oidc_trampoline, c->impl_->ctx.get());
 	if (!c->impl_->cb) {
-		delete c;
+		MEM_DELETE(c);
 		return nullptr;
 	}
 	return c;
@@ -183,7 +184,7 @@ MongoOidcCallback::~MongoOidcCallback() {
 }
 
 void MongoOidcCallback::Destroy() {
-	delete this;
+	MEM_DELETE(this);
 }
 
 void* MongoOidcCallback::GetUserData() const {

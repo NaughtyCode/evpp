@@ -12,13 +12,13 @@ namespace evpp {
 
 EventWatcher::EventWatcher(struct event_base* evbase, const Handler& handler)
 	: evbase_(evbase), attached_(false), handler_(handler) {
-	event_ = new event;
+	event_ = MEM_NEW(event);
 	memset(event_, 0, sizeof(struct event));
 }
 
 EventWatcher::EventWatcher(struct event_base* evbase, Handler&& handler)
 	: evbase_(evbase), attached_(false), handler_(std::move(handler)) {
-	event_ = new event;
+	event_ = MEM_NEW(event);
 	memset(event_, 0, sizeof(struct event));
 }
 
@@ -85,7 +85,7 @@ void EventWatcher::FreeEvent() {
 			attached_ = false;
 		}
 
-		delete (event_);
+		MEM_DELETE(event_);
 		event_ = nullptr;
 	}
 }

@@ -33,6 +33,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "runtime/core/mem/mem.h"
 #include "runtime/core/timer/alarm_timer.h"
 #include "runtime/core/timer/clock_source.h"
 #include "runtime/core/timer/hr_timer.h"
@@ -294,13 +295,13 @@ class TimerManager {
 		~TimerEntry() {
 			switch (kind) {
 			case Kind::kHrTimer:
-				delete hrtimer;
+				MEM_DELETE(hrtimer);
 				break;
 			case Kind::kWheelTimer:
-				delete wheel_timer;
+				MEM_DELETE(wheel_timer);
 				break;
 			case Kind::kAlarm:
-				delete alarm;
+				MEM_DELETE(alarm);
 				break;
 			}
 		}

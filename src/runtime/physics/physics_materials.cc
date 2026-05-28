@@ -2,6 +2,8 @@
 
 #include "runtime/physics/physics_materials.h"
 
+#include "runtime/core/mem/mem.h"
+
 #include <vector>
 
 #include <glaze/glaze.hpp>
@@ -36,7 +38,7 @@ bool MaterialTable::LoadFromJson(const std::string& json) {
 void MaterialTable::Register(const std::vector<MaterialEntry>& entries) {
 	for (const auto& entry : entries) {
 		auto mat = JPH::Ref<PhysicsMaterialSimple>(
-			new PhysicsMaterialSimple(entry.name, entry.friction, entry.restitution));
+			MEM_NEW(PhysicsMaterialSimple, entry.name, entry.friction, entry.restitution));
 		materials_[entry.name] = mat;  // Ref<Derived> → RefConst<Derived>
 		owned_[entry.name] = std::move(mat);  // hold ownership
 	}

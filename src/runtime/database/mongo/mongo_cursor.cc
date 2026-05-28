@@ -1,9 +1,12 @@
 #if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo/mongo_cursor.h"
+#include "runtime/core/mem/mem.h"
 
 #include "runtime/database/mongo/mongo_bson.h"
+#include "runtime/core/mem/mem.h"
 #include "runtime/database/mongo/mongo_error.h"
+#include "runtime/core/mem/mem.h"
 
 #include <mongoc/mongoc.h>
 
@@ -92,7 +95,7 @@ MongoCursor* MongoCursor::Clone() const {
 	if (!impl_ || !impl_->cursor) return nullptr;
 	mongoc_cursor_t* cloned = mongoc_cursor_clone(impl_->cursor);
 	if (!cloned) return nullptr;
-	auto* result = new MongoCursor();
+	auto* result = MEM_NEW(MongoCursor);
 	result->SetCursor(cloned);
 	return result;
 }
@@ -130,7 +133,7 @@ MongoCursor* MongoCursor::NewFromCommandReplyWithOpts(void* client,
 		bson_copy(static_cast<const bson_t*>(reply.RawBson())),
 		opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr);
 	if (!cursor) return nullptr;
-	auto* result = new MongoCursor();
+	auto* result = MEM_NEW(MongoCursor);
 	result->SetCursor(cursor);
 	return result;
 }

@@ -22,20 +22,20 @@ namespace script {
 namespace {
 
 // ============================================================================
-// Part 1: MongoOptional â€” proper class with metatable
+// Part 1: MongoOptional â€?proper class with metatable
 // ============================================================================
 
 const char* kOptionalMeta = "mongoc.optional";
 
 int l_optional_gc(lua_State* L) {
 	auto* opt = GetUserdata<mongo::MongoOptional>(L, 1, kOptionalMeta);
-	delete opt;
+	MEM_DELETE(opt);
 	*CheckUserdata<mongo::MongoOptional>(L, 1, kOptionalMeta) = nullptr;
 	return 0;
 }
 
 int l_optional_new(lua_State* L) {
-	auto* opt = new (std::nothrow) mongo::MongoOptional();
+	auto* opt = MEM_NEW_NOTHROW(mongo::MongoOptional);
 	if (!opt) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -110,7 +110,7 @@ const luaL_Reg kOptionalLib[] = {
 };
 
 // ============================================================================
-// Part 2: Static utility module â€” mongo_flags.h
+// Part 2: Static utility module â€?mongo_flags.h
 // ============================================================================
 
 int l_insert_flags_none(lua_State* L) {
@@ -373,26 +373,26 @@ int l_mongo_system_is_initialized(lua_State* L) {
 }
 
 // ============================================================================
-// kMiscLib â€” all static utility functions (no metatable, added to module)
+// kMiscLib â€?all static utility functions (no metatable, added to module)
 // ============================================================================
 
 const luaL_Reg kMiscLib[] = {
-	// mongo_flags.h â€” insert flags
+	// mongo_flags.h â€?insert flags
 	{"insert_flags_none", l_insert_flags_none},
 	{"insert_flags_continue_on_error", l_insert_flags_continue_on_error},
 	{"insert_flags_no_validate", l_insert_flags_no_validate},
 
-	// mongo_flags.h â€” update flags
+	// mongo_flags.h â€?update flags
 	{"update_flags_none", l_update_flags_none},
 	{"update_flags_upsert", l_update_flags_upsert},
 	{"update_flags_multi_update", l_update_flags_multi_update},
 	{"update_flags_no_validate", l_update_flags_no_validate},
 
-	// mongo_flags.h â€” remove flags
+	// mongo_flags.h â€?remove flags
 	{"remove_flags_none", l_remove_flags_none},
 	{"remove_flags_single_remove", l_remove_flags_single_remove},
 
-	// mongo_flags.h â€” query flags
+	// mongo_flags.h â€?query flags
 	{"query_flags_none", l_query_flags_none},
 	{"query_flags_tailable_cursor", l_query_flags_tailable_cursor},
 	{"query_flags_secondary_ok", l_query_flags_secondary_ok},
@@ -402,7 +402,7 @@ const luaL_Reg kMiscLib[] = {
 	{"query_flags_exhaust", l_query_flags_exhaust},
 	{"query_flags_partial", l_query_flags_partial},
 
-	// mongo_flags.h â€” opcodes
+	// mongo_flags.h â€?opcodes
 	{"opcode_reply", l_opcode_reply},
 	{"opcode_update", l_opcode_update},
 	{"opcode_insert", l_opcode_insert},

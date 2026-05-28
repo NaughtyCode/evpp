@@ -18,13 +18,13 @@ const char* kMetaName = "mongoc.bulk_write_result";
 
 int l_bulk_write_result_gc(lua_State* L) {
 	auto* result = GetUserdata<mongo::MongoBulkWriteResult>(L, 1, kMetaName);
-	delete result;
+	MEM_DELETE(result);
 	*CheckUserdata<mongo::MongoBulkWriteResult>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
 
 int l_bulk_write_result_new(lua_State* L) {
-	auto* result = new (std::nothrow) mongo::MongoBulkWriteResult();
+	auto* result = MEM_NEW_NOTHROW(mongo::MongoBulkWriteResult);
 	if (!result) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -88,7 +88,7 @@ int l_bwr_insert_results(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = new (std::nothrow) mongo::BsonDocument(bson_get_data(raw), raw->len);
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, bson_get_data(raw), raw->len);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -111,7 +111,7 @@ int l_bwr_update_results(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = new (std::nothrow) mongo::BsonDocument(bson_get_data(raw), raw->len);
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, bson_get_data(raw), raw->len);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -134,7 +134,7 @@ int l_bwr_delete_results(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = new (std::nothrow) mongo::BsonDocument(bson_get_data(raw), raw->len);
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, bson_get_data(raw), raw->len);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

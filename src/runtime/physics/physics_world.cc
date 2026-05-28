@@ -3,6 +3,8 @@
 #define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/physics_world.h"
 
+#include "runtime/core/mem/mem.h"
+
 #include <cmath>
 #include <cstdio>
 
@@ -186,7 +188,7 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 	// ── Step 1-3: One-time Jolt registration (program-global) ──────────
 	if (!s_jolt_registered_.exchange(true)) {
 		JPH::RegisterDefaultAllocator();  // Step 1
-		JPH::Factory::sInstance = new JPH::Factory();  // Step 2
+		JPH::Factory::sInstance = MEM_NEW(JPH::Factory);  // Step 2
 		JPH::RegisterTypes();  // Step 3
 		PHYSICS_LOG_INFO(logger_, "JoltPhysics registered (allocator, factory, types)");
 	}

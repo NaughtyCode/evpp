@@ -5,7 +5,7 @@
 
 namespace evpp {
 
-EventLoopThread::EventLoopThread() : event_loop_(new EventLoop) {
+EventLoopThread::EventLoopThread() : event_loop_(MEM_NEW(EventLoop)) {
 	ENGINE_LOG_TRACE(
 		engine::GetLogger(), "this={} loop={}", (void*) this, (void*) event_loop_.get());
 }
@@ -23,7 +23,7 @@ bool EventLoopThread::Start(bool wait_thread_started, Functor pre, Functor post)
 
 	assert(thread_.get() == nullptr);
 	try {
-		thread_.reset(new std::thread(std::bind(&EventLoopThread::Run, this, pre, post)));
+		thread_.reset(MEM_NEW(std::thread, std::bind(&EventLoopThread::Run, this, pre, post)));
 	} catch (const std::system_error& e) {
 		ENGINE_LOG_ERROR(engine::GetLogger(),
 						 "EventLoopThread::Start failed to create thread: {} code={}",

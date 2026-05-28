@@ -39,9 +39,9 @@ Request::Request(EventLoop* loop,
 		uri_ = "/";
 		host_ = http_url;
 #if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL)
-		conn_.reset(new Conn(loop, host_, port_, false, timeout));
+		conn_.reset(MEM_NEW(Conn, loop, host_, port_, false, timeout));
 #else
-		conn_.reset(new Conn(loop, host_, port_, timeout));
+		conn_.reset(MEM_NEW(Conn, loop, host_, port_, timeout));
 #endif
 		return;
 	}
@@ -65,17 +65,17 @@ Request::Request(EventLoop* loop,
 	if (port_ < 0) {
 		port_ = enable_ssl ? 443 : 80;
 	}
-	conn_.reset(new Conn(loop, host_, port_, enable_ssl, timeout));
+	conn_.reset(MEM_NEW(Conn, loop, host_, port_, enable_ssl, timeout));
 #else
 	if (port_ < 0) {
 		port_ = 80;
 	}
-	conn_.reset(new Conn(loop, host_, port_, timeout));
+	conn_.reset(MEM_NEW(Conn, loop, host_, port_, timeout));
 #endif
 	evhttp_uri_free(evuri);
 #else
 	URLParser p(http_url);
-	conn_.reset(new Conn(loop, p.host, p.port, timeout));
+	conn_.reset(MEM_NEW(Conn, loop, p.host, p.port, timeout));
 	if (p.query.empty()) {
 		uri_ = p.path;
 	} else {
@@ -176,7 +176,7 @@ failed:
 		conn_.reset();
 	}
 
-	std::shared_ptr<Response> response(new Response(this, nullptr));
+	std::shared_ptr<Response> response(MEM_NEW(Response, this, nullptr));
 	handler_(response);
 }
 
@@ -220,7 +220,7 @@ void Request::HandleResponse(struct evhttp_request* r) {
 							r->response_code,
 							retried_,
 							retry_number_);
-			std::shared_ptr<Response> response(new Response(this, r));
+			std::shared_ptr<Response> response(MEM_NEW(Response, this, r));
 
 			//Recycling the http Connection object
 			if (pool_) {
@@ -271,7 +271,7 @@ void Request::HandleResponse(struct evhttp_request* r) {
 	}
 #endif
 	// Eventually this Request failed
-	std::shared_ptr<Response> response(new Response(this, r));
+	std::shared_ptr<Response> response(MEM_NEW(Response, this, r));
 
 	// Recycling the http Connection object
 	if (pool_) {

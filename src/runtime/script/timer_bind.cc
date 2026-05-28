@@ -75,7 +75,7 @@ void call_lua_callback(lua_State* L, int ref) {
 // Lua C functions for the "timer" module
 //-----------------------------------------------------------------
 
-// timer.timeout(ms, callback) â†’ timer_id
+// timer.timeout(ms, callback) â†?timer_id
 int l_timer_timeout(lua_State* L) {
 	int64_t ms = luaL_checkinteger(L, 1);
 	luaL_checktype(L, 2, LUA_TFUNCTION);
@@ -104,7 +104,7 @@ int l_timer_timeout(lua_State* L) {
 			// timer:cancel() which destroys the HrTimerNode (and this
 			// lambda's capture storage).  The local keep prevents the
 			// shared_ptr<Ctx> refcount from hitting zero until we return.
-			// Read keep->ref *after* the callback â€” the callback may call
+			// Read keep->ref *after* the callback â€?the callback may call
 			// timer:cancel() which sets ref to LUA_NOREF and calls
 			// luaL_unref.  A stale snapshot would double-unref.
 			auto keep = ctx;
@@ -136,7 +136,7 @@ int l_timer_timeout(lua_State* L) {
 	return 1;
 }
 
-// timer.interval(ms, callback) â†’ timer_id
+// timer.interval(ms, callback) â†?timer_id
 int l_timer_interval(lua_State* L) {
 	int64_t ms = luaL_checkinteger(L, 1);
 	luaL_checktype(L, 2, LUA_TFUNCTION);
@@ -194,7 +194,7 @@ int l_timer_interval(lua_State* L) {
 	return 1;
 }
 
-// timer.cancel(timer_id) â†’ true / nil+errmsg
+// timer.cancel(timer_id) â†?true / nil+errmsg
 int l_timer_cancel(lua_State* L) {
 	TimerId id = static_cast<TimerId>(luaL_checkinteger(L, 1));
 
@@ -246,7 +246,7 @@ void ExportTimer(ScriptVM& vm) {
 	if (!L) return;
 
 	// Create per-VM timer state and store in the Lua registry.
-	auto* state = new TimerBindState();
+	auto* state = MEM_NEW(TimerBindState);
 	lua_pushlightuserdata(L, state);
 	lua_setfield(L, LUA_REGISTRYINDEX, "__TimerBindState");
 
@@ -269,13 +269,13 @@ void ShutdownTimerBindings(ScriptVM& vm) {
 
 	if (state->ctxs.empty()) {
 		ENGINE_LOG_DEBUG(logger, "ScriptBind: no active timer bindings to shut down");
-		delete state;
+		MEM_DELETE(state);
 		lua_pushnil(L);
 		lua_setfield(L, LUA_REGISTRYINDEX, "__TimerBindState");
 		return;
 	}
 
-	// Collect IDs first â€” destroy_timer may fire callbacks synchronously,
+	// Collect IDs first â€?destroy_timer may fire callbacks synchronously,
 	// which would invalidate iterators if we traversed the map directly.
 	// Loop until no more timers remain: a Lua callback invoked during
 	// shutdown could create new timers, which would otherwise leak.
@@ -307,7 +307,7 @@ void ShutdownTimerBindings(ScriptVM& vm) {
 	ENGINE_LOG_INFO(logger, "ScriptBind: shut down [{}] timer binding(s)", count);
 
 	// Release the per-VM state.
-	delete state;
+	MEM_DELETE(state);
 	lua_pushnil(L);
 	lua_setfield(L, LUA_REGISTRYINDEX, "__TimerBindState");
 }

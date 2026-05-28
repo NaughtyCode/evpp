@@ -87,6 +87,27 @@ frame_timer fires
 | Reliability | KCP (ikcp.c) | Reliable UDP transport |
 | Profiling | Perfetto | System-wide tracing |
 
+## Memory Allocation
+
+All dynamic memory allocation and deallocation must go through the `MEM_*` wrapper macros defined in `src/runtime/core/mem/mem.h`. Raw `new`, `delete`, `delete[]`, `malloc`, `free`, `calloc`, and `realloc` are forbidden in production runtime code.
+
+| Macro | Replaces | Usage |
+|---|---|---|
+| `MEM_NEW(T, ...)` | `new T(...)` | Single-object heap allocation |
+| `MEM_DELETE(ptr)` | `delete ptr` | Single-object deallocation |
+| `MEM_NEW_ARR(T, n)` | `new T[n]` | Array allocation |
+| `MEM_DELETE_ARR(ptr)` | `delete[] ptr` | Array deallocation |
+| `MEM_MALLOC(size)` | `malloc(size)` | C-style uninitialized allocation |
+| `MEM_FREE(ptr)` | `free(ptr)` | C-style deallocation |
+| `MEM_CALLOC(n, size)` | `calloc(n, size)` | C-style zero-initialized allocation |
+| `MEM_REALLOC(ptr, size)` | `realloc(ptr, size)` | C-style reallocation |
+| `MEM_NEW_NOTHROW(T, ...)` | `new (std::nothrow) T(...)` | Non-throwing allocation (returns nullptr on failure) |
+| `MEM_NEW_ARR_NOTHROW(T, n)` | `new (std::nothrow) T[n]` | Non-throwing array allocation |
+
+**What must NOT be wrapped**: Third-party library free/destroy functions (`SSL_CTX_free`, `bson_free`, `event_base_free`, `mongoc_*_destroy`, etc.) — these are external API calls, not raw memory deallocation.
+
+**Smart pointers**: `std::make_unique<T>(...)` and `std::make_shared<T>(...)` remain the preferred idiomatic pattern and do not need wrapping. When constructing a smart pointer from a raw allocation, use `MEM_NEW`: `std::unique_ptr<T> ptr(MEM_NEW(T, args...))`.
+
 ## Project Structure
 
 ```

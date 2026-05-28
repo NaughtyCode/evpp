@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <new>
 
+#include "runtime/core/mem/mem.h"
+
 extern "C" {
 #include "lauxlib.h"
 #include "lua.h"

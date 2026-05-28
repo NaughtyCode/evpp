@@ -67,7 +67,7 @@ void BindMessageHandler(UdpServerCtx* ctx) {
 		if (msg_ref == LUA_NOREF) return;
 		if (!main_loop) return;
 
-		// Snapshot message data — the Message buffer may be reused by the
+		// Snapshot message data �?the Message buffer may be reused by the
 		// recv thread on the next iteration.
 		std::string data(msg->data(), msg->size());
 		std::string remote_ip = msg->remote_ip();
@@ -103,7 +103,7 @@ void BindMessageHandler(UdpServerCtx* ctx) {
 void ReleaseUdpServer(lua_State* L, UdpServerCtx* ctx) {
 	ctx->disposed = true;
 
-	// Remove from shutdown tracking BEFORE Stop() — Stop(true) waits for
+	// Remove from shutdown tracking BEFORE Stop() �?Stop(true) waits for
 	// recv threads.  A Lua callback queued during the wait could
 	// theoretically call server:stop() re-entrantly and hit the set.
 	g_udp_server_ctxs.erase(ctx);
@@ -132,7 +132,7 @@ void ReleaseUdpServer(lua_State* L, UdpServerCtx* ctx) {
 			if (old_inst_ref != LUA_NOREF) {
 				luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
 			}
-			delete ctx;
+			MEM_DELETE(ctx);
 			g_udp_alive.Release();
 		});
 	} else {
@@ -142,20 +142,20 @@ void ReleaseUdpServer(lua_State* L, UdpServerCtx* ctx) {
 		if (old_inst_ref != LUA_NOREF) {
 			luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
 		}
-		delete ctx;
+		MEM_DELETE(ctx);
 	}
 }
 
-// ── net.udp_server.listen(port_or_ports, on_message) → server_instance ─
+// ── net.udp_server.listen(port_or_ports, on_message) �?server_instance ─
 int l_udp_server_listen(lua_State* L) {
-	// Validate arg type before allocation — luaL_checkstring errors via
+	// Validate arg type before allocation �?luaL_checkstring errors via
 	// longjmp, which would leak ctx if we had already allocated it.
 	int arg1_type = lua_type(L, 1);
 	if (arg1_type != LUA_TNUMBER && arg1_type != LUA_TSTRING) {
 		return luaL_error(L, "expected number or string for port");
 	}
 
-	auto* ctx = new UdpServerCtx();
+	auto* ctx = MEM_NEW(UdpServerCtx);
 	ctx->L = L;
 
 	if (lua_gettop(L) >= 2 && lua_isfunction(L, 2)) {
@@ -166,11 +166,11 @@ int l_udp_server_listen(lua_State* L) {
 	ctx->server = std::make_unique<evpp::udp::Server>();
 
 	bool ok = false;
-	// Number → single port; string → pass through (handles "5353" and "53,5353")
+	// Number �?single port; string �?pass through (handles "5353" and "53,5353")
 	if (arg1_type == LUA_TNUMBER) {
 		lua_Integer port64 = luaL_checkinteger(L, 1);
 		if (port64 <= 0 || port64 > 65535) {
-			delete ctx;
+			MEM_DELETE(ctx);
 			return luaL_error(L, "port out of range");
 		}
 		int port = static_cast<int>(port64);
@@ -184,7 +184,7 @@ int l_udp_server_listen(lua_State* L) {
 		if (ctx->on_message_ref != LUA_NOREF) {
 			luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
 		}
-		delete ctx;
+		MEM_DELETE(ctx);
 		lua_pushnil(L);
 		lua_pushstring(L, "udp_server init failed");
 		return 2;
@@ -205,7 +205,7 @@ int l_udp_server_listen(lua_State* L) {
 		ctx->instance_ref = LUA_NOREF;
 		lua_pushnil(L);
 		lua_setfield(L, -2, "_ctx");  // null _ctx before delete
-		delete ctx;
+		MEM_DELETE(ctx);
 		lua_pop(L, 1);	// pop instance table
 		lua_pushnil(L);
 		lua_pushstring(L, "udp_server start failed");
@@ -223,7 +223,7 @@ int l_udp_server_listen(lua_State* L) {
 	return 1;  // return the server instance table
 }
 
-// ── server:stop() → bool ───────────────────────────────────────────
+// ── server:stop() �?bool ───────────────────────────────────────────
 int l_udp_server_stop(lua_State* L) {
 	auto* ctx = GetCtxFromTable<UdpServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
@@ -258,7 +258,7 @@ int l_udp_server_continue(lua_State* L) {
 	return 0;
 }
 
-// ── server:is_running() → bool ─────────────────────────────────────
+// ── server:is_running() �?bool ─────────────────────────────────────
 int l_udp_server_is_running(lua_State* L) {
 	auto* ctx = GetCtxFromTable<UdpServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
@@ -371,7 +371,7 @@ void ShutdownUdpServerBindings() {
 		ctx->disposed = true;
 		ctx->server->Stop(true);
 
-		/* Step 4: Direct cleanup — no RunInLoop deferral needed because
+		/* Step 4: Direct cleanup �?no RunInLoop deferral needed because
 		 * WaitDrain guarantees no callback is touching Lua state, and
 		 * TryAcquire=false guarantees no future callback will try. */
 		int old_msg_ref = ctx->on_message_ref.exchange(LUA_NOREF);
@@ -385,7 +385,7 @@ void ShutdownUdpServerBindings() {
 		if (old_inst_ref != LUA_NOREF && L_ptr) {
 			luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_inst_ref);
 		}
-		delete ctx;
+		MEM_DELETE(ctx);
 	}
 
 	if (!ctxs.empty()) {

@@ -90,7 +90,7 @@ int l_bulk_execute(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

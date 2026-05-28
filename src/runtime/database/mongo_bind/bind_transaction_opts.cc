@@ -16,13 +16,13 @@ const char* kMetaName = "mongoc.transaction_opts";
 
 int l_txn_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoTransactionOpts>(L, 1, kMetaName);
-	delete opts;
+	MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoTransactionOpts>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
 
 int l_txn_opts_new(lua_State* L) {
-	auto* opts = new (std::nothrow) mongo::MongoTransactionOpts();
+	auto* opts = MEM_NEW_NOTHROW(mongo::MongoTransactionOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -45,7 +45,7 @@ int l_txn_opts_clone(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* copy = new (std::nothrow) mongo::MongoTransactionOpts(opts->Clone());
+	auto* copy = MEM_NEW_NOTHROW(mongo::MongoTransactionOpts, opts->Clone());
 	if (!copy) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

@@ -92,7 +92,7 @@ std::string Client::DoRequest(const std::string& data, uint32_t timeout_ms) {
 	sock::SetTimeout(sockfd_, timeout_ms);
 
 	size_t buf_size = 1472;	 // The UDP max payload size
-	MessagePtr msg(new Message(sockfd_, buf_size));
+	MessagePtr msg(MEM_NEW(Message, sockfd_, buf_size));
 	socklen_t addrLen = sizeof(struct sockaddr_storage);
 	int readn =
 		::recvfrom(sockfd_, msg->WriteBegin(), buf_size, 0, msg->mutable_remote_addr(), &addrLen);

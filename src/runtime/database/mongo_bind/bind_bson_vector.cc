@@ -13,21 +13,19 @@ namespace engine {
 namespace script {
 namespace {
 
-// ═══════════════════════════════════════════════════════════════════════════
-// BsonVectorInt8ConstView
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// BsonVectorInt8ConstView
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kVi8cMeta = "bson.vector_int8_const";
 
 int l_vi8c_gc(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorInt8ConstView>(L, 1, kVi8cMeta);
-	delete v;
+	MEM_DELETE(v);
 	*CheckUserdata<mongo::BsonVectorInt8ConstView>(L, 1, kVi8cMeta) = nullptr;
 	return 0;
 }
 
 int l_vi8c_new(lua_State* L) {
-	auto* v = new (std::nothrow) mongo::BsonVectorInt8ConstView();
+	auto* v = MEM_NEW_NOTHROW(mongo::BsonVectorInt8ConstView);
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -99,21 +97,19 @@ const luaL_Reg kVi8cLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// BsonVectorInt8View
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// BsonVectorInt8View
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kVi8Meta = "bson.vector_int8";
 
 int l_vi8_gc(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorInt8View>(L, 1, kVi8Meta);
-	delete v;
+	MEM_DELETE(v);
 	*CheckUserdata<mongo::BsonVectorInt8View>(L, 1, kVi8Meta) = nullptr;
 	return 0;
 }
 
 int l_vi8_new(lua_State* L) {
-	auto* v = new (std::nothrow) mongo::BsonVectorInt8View();
+	auto* v = MEM_NEW_NOTHROW(mongo::BsonVectorInt8View);
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -178,7 +174,7 @@ int l_vi8_as_const(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* cv = new (std::nothrow) mongo::BsonVectorInt8ConstView(v->AsConst());
+	auto* cv = MEM_NEW_NOTHROW(mongo::BsonVectorInt8ConstView, v->AsConst());
 	if (!cv) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -214,21 +210,19 @@ const luaL_Reg kVi8Lib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// BsonVectorFloat32ConstView
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// BsonVectorFloat32ConstView
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kVf32cMeta = "bson.vector_float32_const";
 
 int l_vf32c_gc(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorFloat32ConstView>(L, 1, kVf32cMeta);
-	delete v;
+	MEM_DELETE(v);
 	*CheckUserdata<mongo::BsonVectorFloat32ConstView>(L, 1, kVf32cMeta) = nullptr;
 	return 0;
 }
 
 int l_vf32c_new(lua_State* L) {
-	auto* v = new (std::nothrow) mongo::BsonVectorFloat32ConstView();
+	auto* v = MEM_NEW_NOTHROW(mongo::BsonVectorFloat32ConstView);
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -304,21 +298,19 @@ const luaL_Reg kVf32cLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// BsonVectorFloat32View
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// BsonVectorFloat32View
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kVf32Meta = "bson.vector_float32";
 
 int l_vf32_gc(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorFloat32View>(L, 1, kVf32Meta);
-	delete v;
+	MEM_DELETE(v);
 	*CheckUserdata<mongo::BsonVectorFloat32View>(L, 1, kVf32Meta) = nullptr;
 	return 0;
 }
 
 int l_vf32_new(lua_State* L) {
-	auto* v = new (std::nothrow) mongo::BsonVectorFloat32View();
+	auto* v = MEM_NEW_NOTHROW(mongo::BsonVectorFloat32View);
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -396,7 +388,7 @@ int l_vf32_as_const(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* cv = new (std::nothrow) mongo::BsonVectorFloat32ConstView(v->AsConst());
+	auto* cv = MEM_NEW_NOTHROW(mongo::BsonVectorFloat32ConstView, v->AsConst());
 	if (!cv) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -432,21 +424,19 @@ const luaL_Reg kVf32Lib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// BsonVectorPackedBitConstView
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// BsonVectorPackedBitConstView
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kVpbMeta = "bson.vector_packedbit_const";
 
 int l_vpb_gc(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorPackedBitConstView>(L, 1, kVpbMeta);
-	delete v;
+	MEM_DELETE(v);
 	*CheckUserdata<mongo::BsonVectorPackedBitConstView>(L, 1, kVpbMeta) = nullptr;
 	return 0;
 }
 
 int l_vpb_new(lua_State* L) {
-	auto* v = new (std::nothrow) mongo::BsonVectorPackedBitConstView();
+	auto* v = MEM_NEW_NOTHROW(mongo::BsonVectorPackedBitConstView);
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -516,7 +506,7 @@ int l_vpb_unpack_bool(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* buf = new (std::nothrow) bool[count];
+	auto* buf = MEM_NEW_ARR_NOTHROW(bool, count);
 	if (!buf) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -532,7 +522,7 @@ int l_vpb_unpack_bool(lua_State* L) {
 	} else {
 		lua_pushnil(L);
 	}
-	delete[] buf;
+	MEM_DELETE_ARR(buf);
 	return 1;
 }
 
@@ -561,21 +551,19 @@ const luaL_Reg kVpbLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// BsonVectorPackedBitView
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// BsonVectorPackedBitView
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kVpbwMeta = "bson.vector_packedbit";
 
 int l_vpbw_gc(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorPackedBitView>(L, 1, kVpbwMeta);
-	delete v;
+	MEM_DELETE(v);
 	*CheckUserdata<mongo::BsonVectorPackedBitView>(L, 1, kVpbwMeta) = nullptr;
 	return 0;
 }
 
 int l_vpbw_new(lua_State* L) {
-	auto* v = new (std::nothrow) mongo::BsonVectorPackedBitView();
+	auto* v = MEM_NEW_NOTHROW(mongo::BsonVectorPackedBitView);
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -645,7 +633,7 @@ int l_vpbw_unpack_bool(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* buf = new (std::nothrow) bool[count];
+	auto* buf = MEM_NEW_ARR_NOTHROW(bool, count);
 	if (!buf) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -661,7 +649,7 @@ int l_vpbw_unpack_bool(lua_State* L) {
 	} else {
 		lua_pushnil(L);
 	}
-	delete[] buf;
+	MEM_DELETE_ARR(buf);
 	return 1;
 }
 
@@ -682,7 +670,7 @@ int l_vpbw_pack_bool(lua_State* L) {
 	}
 	auto count = static_cast<size_t>(luaL_len(L, 2));
 	auto offset = static_cast<size_t>(luaL_optinteger(L, 3, 0));
-	auto* buf = new (std::nothrow) bool[count];
+	auto* buf = MEM_NEW_ARR_NOTHROW(bool, count);
 	if (!buf) {
 		lua_pushboolean(L, false);
 		return 1;
@@ -693,7 +681,7 @@ int l_vpbw_pack_bool(lua_State* L) {
 		lua_pop(L, 1);
 	}
 	lua_pushboolean(L, v->PackBool(buf, count, offset));
-	delete[] buf;
+	MEM_DELETE_ARR(buf);
 	return 1;
 }
 
@@ -703,7 +691,7 @@ int l_vpbw_as_const(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* cv = new (std::nothrow) mongo::BsonVectorPackedBitConstView(v->AsConst());
+	auto* cv = MEM_NEW_NOTHROW(mongo::BsonVectorPackedBitConstView, v->AsConst());
 	if (!cv) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

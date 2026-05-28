@@ -60,7 +60,7 @@ void BindKcpMessageHandler(KcpServerCtx* ctx) {
 		if (msg_ref == LUA_NOREF) return;
 		if (!main_loop) return;
 
-		// Snapshot message data — the Message buffer may be reused by the
+		// Snapshot message data �?the Message buffer may be reused by the
 		// recv thread on the next iteration.
 		std::string data(msg->data(), msg->size());
 		std::string remote_ip = msg->remote_ip();
@@ -120,7 +120,7 @@ void ReleaseKcpServer(lua_State* L, KcpServerCtx* ctx) {
 			if (old_inst_ref != LUA_NOREF) {
 				luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
 			}
-			delete ctx;
+			MEM_DELETE(ctx);
 			g_kcp_alive.Release();
 		});
 	} else {
@@ -130,18 +130,18 @@ void ReleaseKcpServer(lua_State* L, KcpServerCtx* ctx) {
 		if (old_inst_ref != LUA_NOREF) {
 			luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
 		}
-		delete ctx;
+		MEM_DELETE(ctx);
 	}
 }
 
-// ── net.kcp_server.listen(port_or_ports, on_message) → server_instance ─
+// ── net.kcp_server.listen(port_or_ports, on_message) �?server_instance ─
 int l_kcp_server_listen(lua_State* L) {
 	int arg1_type = lua_type(L, 1);
 	if (arg1_type != LUA_TNUMBER && arg1_type != LUA_TSTRING) {
 		return luaL_error(L, "expected number or string for port");
 	}
 
-	auto* ctx = new KcpServerCtx();
+	auto* ctx = MEM_NEW(KcpServerCtx);
 	ctx->L = L;
 
 	if (lua_gettop(L) >= 2 && lua_isfunction(L, 2)) {
@@ -158,7 +158,7 @@ int l_kcp_server_listen(lua_State* L) {
 			if (ctx->on_message_ref != LUA_NOREF) {
 				luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
 			}
-			delete ctx;
+			MEM_DELETE(ctx);
 			return luaL_error(L, "port out of range");
 		}
 		int port = static_cast<int>(port64);
@@ -172,7 +172,7 @@ int l_kcp_server_listen(lua_State* L) {
 		if (ctx->on_message_ref != LUA_NOREF) {
 			luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
 		}
-		delete ctx;
+		MEM_DELETE(ctx);
 		lua_pushnil(L);
 		lua_pushstring(L, "kcp_server init failed");
 		return 2;
@@ -193,7 +193,7 @@ int l_kcp_server_listen(lua_State* L) {
 		ctx->instance_ref = LUA_NOREF;
 		lua_pushnil(L);
 		lua_setfield(L, -2, "_ctx");
-		delete ctx;
+		MEM_DELETE(ctx);
 		lua_pop(L, 1);
 		lua_pushnil(L);
 		lua_pushstring(L, "kcp_server start failed");
@@ -210,7 +210,7 @@ int l_kcp_server_listen(lua_State* L) {
 	return 1;
 }
 
-// ── server:stop() → bool ───────────────────────────────────────────
+// ── server:stop() �?bool ───────────────────────────────────────────
 int l_kcp_server_stop(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
@@ -245,7 +245,7 @@ int l_kcp_server_continue(lua_State* L) {
 	return 0;
 }
 
-// ── server:is_running() → bool ─────────────────────────────────────
+// ── server:is_running() �?bool ─────────────────────────────────────
 int l_kcp_server_is_running(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
@@ -403,7 +403,7 @@ void ShutdownKcpServerBindings() {
 		ctx->disposed = true;
 		ctx->server->Stop(true);
 
-		/* Step 4: Direct cleanup — no RunInLoop deferral needed because
+		/* Step 4: Direct cleanup �?no RunInLoop deferral needed because
 		 * WaitDrain guarantees no callback is touching Lua state, and
 		 * TryAcquire=false guarantees no future callback will try. */
 		int old_msg_ref = ctx->on_message_ref.exchange(LUA_NOREF);
@@ -417,7 +417,7 @@ void ShutdownKcpServerBindings() {
 		if (old_inst_ref != LUA_NOREF && L_ptr) {
 			luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_inst_ref);
 		}
-		delete ctx;
+		MEM_DELETE(ctx);
 	}
 
 	if (!ctxs.empty()) {

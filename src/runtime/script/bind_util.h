@@ -1,6 +1,7 @@
 #pragma once
 
 #include "runtime/core/engine_api.h"
+#include "runtime/core/mem/mem.h"
 
 #include <memory>
 #include <string>

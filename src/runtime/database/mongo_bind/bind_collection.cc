@@ -26,7 +26,7 @@ const char* kMetaName = "mongoc.collection";
 int l_coll_gc(lua_State* L) {
 	auto* coll = GetUserdata<mongo::MongoCollection>(L, 1, kMetaName);
 	if (coll) coll->Destroy();
-	delete coll;
+	MEM_DELETE(coll);
 	*CheckUserdata<mongo::MongoCollection>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
@@ -329,7 +329,7 @@ int l_coll_find_and_modify(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -361,7 +361,7 @@ int l_coll_create_index(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -612,7 +612,7 @@ int l_coll_command_simple(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -647,7 +647,7 @@ int l_coll_command_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -682,7 +682,7 @@ int l_coll_read_command_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -714,7 +714,7 @@ int l_coll_write_command_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -749,7 +749,7 @@ int l_coll_read_write_command_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -822,7 +822,7 @@ int l_coll_create_indexes_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);

@@ -15,13 +15,13 @@ const char* kMetaName = "mongoc.bulk_write_insert_one_opts";
 
 int l_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoBulkWriteInsertOneOpts>(L, 1, kMetaName);
-	delete opts;
+	MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoBulkWriteInsertOneOpts>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
 
 int l_opts_new(lua_State* L) {
-	auto* opts = new (std::nothrow) mongo::MongoBulkWriteInsertOneOpts();
+	auto* opts = MEM_NEW_NOTHROW(mongo::MongoBulkWriteInsertOneOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

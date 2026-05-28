@@ -16,21 +16,19 @@ namespace engine {
 namespace script {
 namespace {
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoGridFsFileOpts
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoGridFsFileOpts
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kFileOptsMeta = "mongoc.gridfs_file_opts";
 
 int l_file_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoGridFsFileOpts>(L, 1, kFileOptsMeta);
-	delete opts;
+	MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoGridFsFileOpts>(L, 1, kFileOptsMeta) = nullptr;
 	return 0;
 }
 
 int l_file_opts_new(lua_State* L) {
-	auto* opts = new (std::nothrow) mongo::MongoGridFsFileOpts();
+	auto* opts = MEM_NEW_NOTHROW(mongo::MongoGridFsFileOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -119,10 +117,8 @@ const luaL_Reg kFileOptsLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoGridFsFile
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoGridFsFile
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kFileMeta = "mongoc.gridfs_file";
 
 int l_file_gc(lua_State* L) {
@@ -171,7 +167,7 @@ int l_file_get_id(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = new (std::nothrow) mongo::BsonDocument();
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -190,7 +186,7 @@ int l_file_get_metadata(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = new (std::nothrow) mongo::BsonDocument();
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -229,7 +225,7 @@ int l_file_get_aliases(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = new (std::nothrow) mongo::BsonDocument();
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -429,10 +425,8 @@ const luaL_Reg kFileLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoGridFsFileList
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoGridFsFileList
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kFileListMeta = "mongoc.gridfs_file_list";
 
 int l_file_list_gc(lua_State* L) {
@@ -502,10 +496,8 @@ const luaL_Reg kFileListLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoGridFs (legacy)
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoGridFs (legacy)
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kGridFsMeta = "mongoc.gridfs";
 
 int l_gridfs_gc(lua_State* L) {
@@ -695,10 +687,8 @@ const luaL_Reg kGridFsLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoGridFsBucket (modern API)
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoGridFsBucket (modern API)
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kBucketMeta = "mongoc.gridfs_bucket";
 
 int l_bucket_gc(lua_State* L) {

@@ -82,6 +82,10 @@ source_group("thirdparty\\kcp" FILES ${KCP_SOURCES})
 set(EXPORT_HEADER ${RUNTIME_DIR}/core/engine_api.h)
 source_group("core" FILES ${EXPORT_HEADER})
 
+# ── Memory allocator wrapper ──────────────────────────────────────────
+set(MEM_SOURCES ${RUNTIME_DIR}/core/mem/mem.h)
+source_group("core\\mem" FILES ${MEM_SOURCES})
+
 # ── Log ────────────────────────────────────────────────────────────
 set(LOG_SOURCES
     ${RUNTIME_DIR}/core/log/log.cc ${RUNTIME_DIR}/core/log/log.h
@@ -352,6 +356,7 @@ set(SERVERENGINE_SOURCES
     ${PERFETTO_SOURCES}
     ${KCP_SOURCES}
     ${EXPORT_HEADER}
+    ${MEM_SOURCES}
     ${LOG_SOURCES}
     ${TIMER_SOURCES}
     ${CONFIG_SOURCES}

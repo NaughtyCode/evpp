@@ -16,15 +16,13 @@ namespace engine {
 namespace script {
 namespace {
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoServerDescription
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoServerDescription
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kSdMeta = "mongoc.server_description";
 
 int l_sd_gc(lua_State* L) {
 	auto* sd = GetUserdata<mongo::MongoServerDescription>(L, 1, kSdMeta);
-	delete sd;
+	MEM_DELETE(sd);
 	*CheckUserdata<mongo::MongoServerDescription>(L, 1, kSdMeta) = nullptr;
 	return 0;
 }
@@ -37,7 +35,7 @@ int l_sd_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* sd = new (std::nothrow) mongo::MongoServerDescription(raw);
+	auto* sd = MEM_NEW_NOTHROW(mongo::MongoServerDescription, raw);
 	if (!sd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -128,7 +126,7 @@ int l_sd_hello_response(lua_State* L) {
 	}
 	const uint8_t* data = bson_get_data(raw_bson);
 	uint32_t len = raw_bson->len;
-	auto* doc = new (std::nothrow) mongo::BsonDocument(data, len);
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, data, len);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -171,15 +169,13 @@ const luaL_Reg kSdLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MongoTopologyDescription
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// MongoTopologyDescription
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kTdMeta = "mongoc.topology_description";
 
 int l_td_gc(lua_State* L) {
 	auto* td = GetUserdata<mongo::MongoTopologyDescription>(L, 1, kTdMeta);
-	delete td;
+	MEM_DELETE(td);
 	*CheckUserdata<mongo::MongoTopologyDescription>(L, 1, kTdMeta) = nullptr;
 	return 0;
 }
@@ -192,7 +188,7 @@ int l_td_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* td = new (std::nothrow) mongo::MongoTopologyDescription(raw);
+	auto* td = MEM_NEW_NOTHROW(mongo::MongoTopologyDescription, raw);
 	if (!td) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

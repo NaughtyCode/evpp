@@ -1,5 +1,7 @@
 #pragma once
 
+#include "runtime/core/mem/mem.h"
+
 #if defined(ENGINE_MONGODB_ENABLED)
 
 

@@ -1,6 +1,7 @@
 #if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo/mongo_host_list.h"
+#include "runtime/core/mem/mem.h"
 
 #include <cstring>
 #include <mutex>
@@ -21,14 +22,14 @@ MongoHostList::MongoHostList() : impl_(std::make_unique<Impl>()) {
 }
 
 MongoHostList::~MongoHostList() {
-	if (impl_) delete impl_->next;
+	if (impl_) MEM_DELETE(impl_->next);
 }
 
 MongoHostList::MongoHostList(MongoHostList&&) noexcept = default;
 MongoHostList& MongoHostList::operator=(MongoHostList&& other) noexcept {
 	if (this != &other) {
 		if (impl_) {
-			delete impl_->next;
+			MEM_DELETE(impl_->next);
 			impl_->next = nullptr;
 		}
 		impl_ = std::move(other.impl_);
@@ -53,7 +54,7 @@ MongoHostList* MongoHostList::GetNext() const {
 	if (!impl_->entry.next) return nullptr;
 	std::call_once(impl_->next_once, [this]() {
 		auto* self = const_cast<MongoHostList*>(this);
-		self->impl_->next = new MongoHostList();
+		self->impl_->next = MEM_NEW(MongoHostList);
 		memcpy(&self->impl_->next->impl_->entry, impl_->entry.next, sizeof(mongoc_host_list_t));
 		self->impl_->next->impl_->entry.next = nullptr;
 	});

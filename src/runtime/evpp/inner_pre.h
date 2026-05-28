@@ -10,6 +10,7 @@
 #endif	// end of define __cplusplus
 
 #include "runtime/core/log/log.h"
+#include "runtime/core/mem/mem.h"
 #include "runtime/evpp/platform_config.h"
 #include "runtime/evpp/sockets.h"
 #include "runtime/evpp/sys_addrinfo.h"

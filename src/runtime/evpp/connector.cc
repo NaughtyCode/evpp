@@ -56,7 +56,7 @@ void Connector::Start() {
 					 StatusToString());
 	assert(loop_->IsInLoopThread());
 
-	timer_.reset(new TimerEventWatcher(
+	timer_.reset(MEM_NEW(TimerEventWatcher,
 		loop_, std::bind(&Connector::OnConnectTimeout, shared_from_this()), timeout_));
 	timer_->Init();
 	timer_->AsyncWait();
@@ -153,7 +153,7 @@ void Connector::Connect() {
 
 	status_ = kConnecting;
 
-	chan_.reset(new FdChannel(loop_, fd_, false, true));
+	chan_.reset(MEM_NEW(FdChannel,loop_, fd_, false, true));
 	ENGINE_LOG_TRACE(engine::GetLogger(),
 					 "this={} new FdChannel p={} fd={}",
 					 (void*) this,

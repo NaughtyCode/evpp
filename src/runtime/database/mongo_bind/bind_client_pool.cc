@@ -20,7 +20,7 @@ const char* kMetaName = "mongoc.pool";
 int l_pool_gc(lua_State* L) {
 	auto* pool = GetUserdata<mongo::MongoClientPool>(L, 1, kMetaName);
 	if (pool) pool->Destroy();
-	delete pool;
+	MEM_DELETE(pool);
 	*CheckUserdata<mongo::MongoClientPool>(L, 1, kMetaName) = nullptr;
 	return 0;
 }

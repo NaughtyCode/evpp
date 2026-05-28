@@ -1,19 +1,21 @@
 #if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo/mongo_encryption.h"
+#include "runtime/core/mem/mem.h"
 
 #include "runtime/database/mongo/mongo_bson.h"
+#include "runtime/core/mem/mem.h"
 #include "runtime/database/mongo/mongo_cursor.h"
+#include "runtime/core/mem/mem.h"
 #include "runtime/database/mongo/mongo_error.h"
+#include "runtime/core/mem/mem.h"
 
 #include <mongoc/mongoc.h>
 
 namespace engine {
 namespace mongo {
 
-// ═══════════════════════════════════════════════════════════════════════
 // KMS callback trampoline
-// ═══════════════════════════════════════════════════════════════════════
 
 namespace {
 
@@ -52,9 +54,7 @@ bool kms_cred_provider_trampoline(void* userdata,
 
 }  // namespace
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoAutoEncryptionOpts
-// ═══════════════════════════════════════════════════════════════════════
 
 struct MongoAutoEncryptionOpts::Impl {
 	mongoc_auto_encryption_opts_t* opts = nullptr;
@@ -156,9 +156,7 @@ void* MongoAutoEncryptionOpts::Raw() {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoClientEncryptionOpts
-// ═══════════════════════════════════════════════════════════════════════
 
 struct MongoClientEncryptionOpts::Impl {
 	mongoc_client_encryption_opts_t* opts = nullptr;
@@ -227,9 +225,7 @@ void* MongoClientEncryptionOpts::Raw() {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoClientEncryptionEncryptOpts
-// ═══════════════════════════════════════════════════════════════════════
 
 struct MongoClientEncryptionEncryptOpts::Impl {
 	mongoc_client_encryption_encrypt_opts_t* opts = nullptr;
@@ -299,9 +295,7 @@ void* MongoClientEncryptionEncryptOpts::Raw() {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoClientEncryptionEncryptRangeOpts
-// ═══════════════════════════════════════════════════════════════════════
 
 struct MongoClientEncryptionEncryptRangeOpts::Impl {
 	mongoc_client_encryption_encrypt_range_opts_t* opts = nullptr;
@@ -358,9 +352,7 @@ void* MongoClientEncryptionEncryptRangeOpts::Raw() {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoClientEncryptionEncryptTextPrefixOpts
-// ═══════════════════════════════════════════════════════════════════════
 
 struct MongoClientEncryptionEncryptTextPrefixOpts::Impl {
 	mongoc_client_encryption_encrypt_text_prefix_opts_t* opts = nullptr;
@@ -404,9 +396,7 @@ void* MongoClientEncryptionEncryptTextPrefixOpts::Raw() {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoClientEncryptionEncryptTextSuffixOpts
-// ═══════════════════════════════════════════════════════════════════════
 
 struct MongoClientEncryptionEncryptTextSuffixOpts::Impl {
 	mongoc_client_encryption_encrypt_text_suffix_opts_t* opts = nullptr;
@@ -450,9 +440,7 @@ void* MongoClientEncryptionEncryptTextSuffixOpts::Raw() {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoClientEncryptionEncryptTextSubstringOpts
-// ═══════════════════════════════════════════════════════════════════════
 
 struct MongoClientEncryptionEncryptTextSubstringOpts::Impl {
 	mongoc_client_encryption_encrypt_text_substring_opts_t* opts = nullptr;
@@ -502,9 +490,7 @@ void* MongoClientEncryptionEncryptTextSubstringOpts::Raw() {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoClientEncryptionEncryptTextOpts
-// ═══════════════════════════════════════════════════════════════════════
 
 struct MongoClientEncryptionEncryptTextOpts::Impl {
 	mongoc_client_encryption_encrypt_text_opts_t* opts = nullptr;
@@ -565,9 +551,7 @@ void* MongoClientEncryptionEncryptTextOpts::Raw() {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoClientEncryptionDatakeyOpts
-// ═══════════════════════════════════════════════════════════════════════
 
 struct MongoClientEncryptionDatakeyOpts::Impl {
 	mongoc_client_encryption_datakey_opts_t* opts = nullptr;
@@ -616,9 +600,7 @@ const void* MongoClientEncryptionDatakeyOpts::Raw() const {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoClientEncryptionRewrapManyDatakeyResult
-// ═══════════════════════════════════════════════════════════════════════
 
 struct MongoClientEncryptionRewrapManyDatakeyResult::Impl {
 	mongoc_client_encryption_rewrap_many_datakey_result_t* result = nullptr;
@@ -651,9 +633,7 @@ void* MongoClientEncryptionRewrapManyDatakeyResult::Raw() {
 	return impl_ ? impl_->result : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoClientEncryption
-// ═══════════════════════════════════════════════════════════════════════
 
 struct MongoClientEncryption::Impl {
 	mongoc_client_encryption_t* enc = nullptr;
@@ -661,12 +641,12 @@ struct MongoClientEncryption::Impl {
 
 MongoClientEncryption* MongoClientEncryption::New(MongoClientEncryptionOpts* opts,
 												  MongoError* error) {
-	auto* e = new MongoClientEncryption();
+	auto* e = MEM_NEW(MongoClientEncryption);
 	e->impl_->enc = mongoc_client_encryption_new(
 		opts ? static_cast<mongoc_client_encryption_opts_t*>(opts->Raw()) : nullptr,
 		error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 	if (!e->impl_->enc) {
-		delete e;
+		MEM_DELETE(e);
 		return nullptr;
 	}
 	return e;
@@ -683,7 +663,7 @@ void MongoClientEncryption::Destroy() {
 		mongoc_client_encryption_destroy(impl_->enc);
 		impl_->enc = nullptr;
 	}
-	delete this;
+	MEM_DELETE(this);
 }
 
 bool MongoClientEncryption::CreateDatakey(const char* kms_provider,
@@ -740,7 +720,7 @@ MongoCursor* MongoClientEncryption::GetKeys(MongoError* error) {
 	mongoc_cursor_t* cursor = mongoc_client_encryption_get_keys(
 		impl_->enc, error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 	if (!cursor) return nullptr;
-	auto* result = new MongoCursor();
+	auto* result = MEM_NEW(MongoCursor);
 	result->SetCursor(cursor);
 	return result;
 }

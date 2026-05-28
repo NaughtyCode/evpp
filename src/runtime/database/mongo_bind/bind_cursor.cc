@@ -1,4 +1,4 @@
-﻿#if defined(ENGINE_MONGODB_ENABLED)
+#if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo_bind/bind_cursor.h"
 
@@ -22,7 +22,7 @@ const char* kMetaName = "mongoc.cursor";
 int l_cursor_gc(lua_State* L) {
 	auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
 	if (cursor) cursor->Destroy();
-	delete cursor;
+	MEM_DELETE(cursor);
 	*CheckUserdata<mongo::MongoCursor>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
@@ -163,8 +163,7 @@ int l_cursor_current(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = new (std::nothrow)
-		mongo::BsonDocument(mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

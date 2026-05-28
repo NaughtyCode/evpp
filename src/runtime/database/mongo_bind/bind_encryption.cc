@@ -17,21 +17,19 @@ namespace engine {
 namespace script {
 namespace {
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 1. MongoAutoEncryptionOpts
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// 1. MongoAutoEncryptionOpts
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kAeoMeta = "mongoc.auto_encryption_opts";
 
 int l_auto_encrypt_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoAutoEncryptionOpts>(L, 1, kAeoMeta);
-	delete opts;
+	MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoAutoEncryptionOpts>(L, 1, kAeoMeta) = nullptr;
 	return 0;
 }
 
 int l_auto_encrypt_opts_new(lua_State* L) {
-	auto* opts = new (std::nothrow) mongo::MongoAutoEncryptionOpts();
+	auto* opts = MEM_NEW_NOTHROW(mongo::MongoAutoEncryptionOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -159,21 +157,19 @@ const luaL_Reg kAeoLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 2. MongoClientEncryptionOpts
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// 2. MongoClientEncryptionOpts
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kCeoMeta = "mongoc.client_encryption_opts";
 
 int l_client_encrypt_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionOpts>(L, 1, kCeoMeta);
-	delete opts;
+	MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoClientEncryptionOpts>(L, 1, kCeoMeta) = nullptr;
 	return 0;
 }
 
 int l_client_encrypt_opts_new(lua_State* L) {
-	auto* opts = new (std::nothrow) mongo::MongoClientEncryptionOpts();
+	auto* opts = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -252,21 +248,19 @@ const luaL_Reg kCeoLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 3. MongoClientEncryptionEncryptOpts
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// 3. MongoClientEncryptionEncryptOpts
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kEncMeta = "mongoc.encrypt_opts";
 
 int l_encrypt_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptOpts>(L, 1, kEncMeta);
-	delete opts;
+	MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoClientEncryptionEncryptOpts>(L, 1, kEncMeta) = nullptr;
 	return 0;
 }
 
 int l_encrypt_opts_new(lua_State* L) {
-	auto* opts = new (std::nothrow) mongo::MongoClientEncryptionEncryptOpts();
+	auto* opts = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -362,21 +356,19 @@ const luaL_Reg kEncLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 4. MongoClientEncryptionEncryptRangeOpts
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// 4. MongoClientEncryptionEncryptRangeOpts
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kErMeta = "mongoc.encrypt_range_opts";
 
 int l_encrypt_range_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptRangeOpts>(L, 1, kErMeta);
-	delete opts;
+	MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoClientEncryptionEncryptRangeOpts>(L, 1, kErMeta) = nullptr;
 	return 0;
 }
 
 int l_encrypt_range_opts_new(lua_State* L) {
-	auto* opts = new (std::nothrow) mongo::MongoClientEncryptionEncryptRangeOpts();
+	auto* opts = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptRangeOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -454,21 +446,19 @@ const luaL_Reg kErLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 5. MongoClientEncryptionEncryptTextPrefixOpts
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// 5. MongoClientEncryptionEncryptTextPrefixOpts
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kTpMeta = "mongoc.encrypt_text_prefix_opts";
 
 int l_encrypt_text_prefix_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptTextPrefixOpts>(L, 1, kTpMeta);
-	delete opts;
+	MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoClientEncryptionEncryptTextPrefixOpts>(L, 1, kTpMeta) = nullptr;
 	return 0;
 }
 
 int l_encrypt_text_prefix_opts_new(lua_State* L) {
-	auto* opts = new (std::nothrow) mongo::MongoClientEncryptionEncryptTextPrefixOpts();
+	auto* opts = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptTextPrefixOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -524,21 +514,19 @@ const luaL_Reg kTpLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 6. MongoClientEncryptionEncryptTextSuffixOpts
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// 6. MongoClientEncryptionEncryptTextSuffixOpts
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kTsMeta = "mongoc.encrypt_text_suffix_opts";
 
 int l_encrypt_text_suffix_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptTextSuffixOpts>(L, 1, kTsMeta);
-	delete opts;
+	MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoClientEncryptionEncryptTextSuffixOpts>(L, 1, kTsMeta) = nullptr;
 	return 0;
 }
 
 int l_encrypt_text_suffix_opts_new(lua_State* L) {
-	auto* opts = new (std::nothrow) mongo::MongoClientEncryptionEncryptTextSuffixOpts();
+	auto* opts = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptTextSuffixOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -594,21 +582,19 @@ const luaL_Reg kTsLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 7. MongoClientEncryptionEncryptTextSubstringOpts
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// 7. MongoClientEncryptionEncryptTextSubstringOpts
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kTssMeta = "mongoc.encrypt_text_substring_opts";
 
 int l_encrypt_text_substring_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptTextSubstringOpts>(L, 1, kTssMeta);
-	delete opts;
+	MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoClientEncryptionEncryptTextSubstringOpts>(L, 1, kTssMeta) = nullptr;
 	return 0;
 }
 
 int l_encrypt_text_substring_opts_new(lua_State* L) {
-	auto* opts = new (std::nothrow) mongo::MongoClientEncryptionEncryptTextSubstringOpts();
+	auto* opts = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptTextSubstringOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -672,21 +658,19 @@ const luaL_Reg kTssLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 8. MongoClientEncryptionEncryptTextOpts
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// 8. MongoClientEncryptionEncryptTextOpts
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kTxtMeta = "mongoc.encrypt_text_opts";
 
 int l_encrypt_text_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptTextOpts>(L, 1, kTxtMeta);
-	delete opts;
+	MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoClientEncryptionEncryptTextOpts>(L, 1, kTxtMeta) = nullptr;
 	return 0;
 }
 
 int l_encrypt_text_opts_new(lua_State* L) {
-	auto* opts = new (std::nothrow) mongo::MongoClientEncryptionEncryptTextOpts();
+	auto* opts = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptTextOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -773,21 +757,19 @@ const luaL_Reg kTxtLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 9. MongoClientEncryptionDatakeyOpts
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// 9. MongoClientEncryptionDatakeyOpts
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kDkMeta = "mongoc.datakey_opts";
 
 int l_datakey_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionDatakeyOpts>(L, 1, kDkMeta);
-	delete opts;
+	MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoClientEncryptionDatakeyOpts>(L, 1, kDkMeta) = nullptr;
 	return 0;
 }
 
 int l_datakey_opts_new(lua_State* L) {
-	auto* opts = new (std::nothrow) mongo::MongoClientEncryptionDatakeyOpts();
+	auto* opts = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionDatakeyOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -858,21 +840,19 @@ const luaL_Reg kDkLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 10. MongoClientEncryptionRewrapManyDatakeyResult
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// 10. MongoClientEncryptionRewrapManyDatakeyResult
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kRwrMeta = "mongoc.rewrap_result";
 
 int l_rewrap_result_gc(lua_State* L) {
 	auto* result = GetUserdata<mongo::MongoClientEncryptionRewrapManyDatakeyResult>(L, 1, kRwrMeta);
-	delete result;
+	MEM_DELETE(result);
 	*CheckUserdata<mongo::MongoClientEncryptionRewrapManyDatakeyResult>(L, 1, kRwrMeta) = nullptr;
 	return 0;
 }
 
 int l_rewrap_result_new(lua_State* L) {
-	auto* result = new (std::nothrow) mongo::MongoClientEncryptionRewrapManyDatakeyResult();
+	auto* result = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionRewrapManyDatakeyResult);
 	if (!result) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -900,8 +880,7 @@ int l_rewrap_result_get_bulk_write_result(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = new (std::nothrow)
-		mongo::BsonDocument(mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
+	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -935,10 +914,8 @@ const luaL_Reg kRwrLib[] = {
 	{nullptr, nullptr},
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 11. MongoClientEncryption
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// 11. MongoClientEncryption
+// ══════════════════════════════════════════════════════════════════════════�?
 const char* kCeMeta = "mongoc.client_encryption";
 
 int l_client_encryption_gc(lua_State* L) {
@@ -1014,8 +991,7 @@ int l_client_encryption_rewrap_many_datakey(lua_State* L) {
 		lua_pushnil(L);
 	} else {
 		lua_pushnil(L);
-		auto* copy = new (std::nothrow)
-			mongo::MongoClientEncryptionRewrapManyDatakeyResult(std::move(result));
+		auto* copy = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionRewrapManyDatakeyResult, std::move(result));
 		if (!copy) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -1038,7 +1014,7 @@ bool push_key_management_reply(lua_State* L,
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
+		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -1284,10 +1260,8 @@ const luaL_Reg kCeLib[] = {
 
 }  // namespace
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Meta registration functions
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// Meta registration functions
+// ══════════════════════════════════════════════════════════════════════════�?
 void RegisterMongoAutoEncryptionOptsMeta(lua_State* L) {
 	RegisterMetatable(L, kAeoMeta, nullptr, l_auto_encrypt_opts_gc);
 }
@@ -1332,10 +1306,8 @@ void RegisterMongoClientEncryptionMeta(lua_State* L) {
 	RegisterMetatable(L, kCeMeta, nullptr, l_client_encryption_gc);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Library accessors
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════════════�?// Library accessors
+// ══════════════════════════════════════════════════════════════════════════�?
 const luaL_Reg* GetMongoAutoEncryptionOptsLib() {
 	return kAeoLib;
 }

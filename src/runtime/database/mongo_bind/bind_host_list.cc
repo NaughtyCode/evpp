@@ -15,13 +15,13 @@ const char* kMetaName = "mongoc.host_list";
 
 int l_host_list_gc(lua_State* L) {
 	auto* hl = GetUserdata<mongo::MongoHostList>(L, 1, kMetaName);
-	delete hl;
+	MEM_DELETE(hl);
 	*CheckUserdata<mongo::MongoHostList>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
 
 int l_host_list_new(lua_State* L) {
-	auto* hl = new (std::nothrow) mongo::MongoHostList();
+	auto* hl = MEM_NEW_NOTHROW(mongo::MongoHostList);
 	if (!hl) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -81,7 +81,7 @@ int l_host_list_get_next(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	// next is owned by the parent list, do not GC â€” wrap as non-owning pointer
+	// next is owned by the parent list, do not GC â€?wrap as non-owning pointer
 	auto** ud = NewUserdata<mongo::MongoHostList>(L, kMetaName);
 	*ud = next;
 	return 1;

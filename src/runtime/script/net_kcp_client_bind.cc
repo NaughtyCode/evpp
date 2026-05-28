@@ -39,8 +39,8 @@ struct KcpClientCtx {
 
 const char* kKcpClientMetaName = "net.kcp_client.instance";
 
-// ── net.kcp_client.new([conv]) → instance_table ────────────────────
-// Creates an unconnected instance — useful when KCP tuning is needed
+// ── net.kcp_client.new([conv]) �?instance_table ────────────────────
+// Creates an unconnected instance �?useful when KCP tuning is needed
 // before calling instance:connect().
 int l_kcp_client_new(lua_State* L) {
 	uint32_t conv = 0x11223344;
@@ -52,7 +52,7 @@ int l_kcp_client_new(lua_State* L) {
 		conv = static_cast<uint32_t>(c);
 	}
 
-	auto* ctx = new KcpClientCtx();
+	auto* ctx = MEM_NEW(KcpClientCtx);
 	ctx->conv = conv;
 	ctx->client = std::make_unique<evpp::kcp::sync::Client>();
 	ctx->client->SetKcpConv(conv);
@@ -62,7 +62,7 @@ int l_kcp_client_new(lua_State* L) {
 	return 1;
 }
 
-// ── net.kcp_client.connect(host, port[, conv]) → instance_table ────
+// ── net.kcp_client.connect(host, port[, conv]) �?instance_table ────
 int l_kcp_client_connect_static(lua_State* L) {
 	const char* host = luaL_checkstring(L, 1);
 	if (!*host) {
@@ -83,7 +83,7 @@ int l_kcp_client_connect_static(lua_State* L) {
 		conv = static_cast<uint32_t>(c);
 	}
 
-	auto* ctx = new KcpClientCtx();
+	auto* ctx = MEM_NEW(KcpClientCtx);
 	ctx->conv = conv;
 
 	PushInstanceTable(L, ctx, kKcpClientMetaName);
@@ -96,7 +96,7 @@ int l_kcp_client_connect_static(lua_State* L) {
 		ctx->disposed = true;
 		lua_pushnil(L);
 		lua_setfield(L, -2, "_ctx");
-		delete ctx;
+		MEM_DELETE(ctx);
 		lua_pop(L, 1);
 		lua_pushnil(L);
 		lua_pushfstring(L, "kcp connect failed: %s:%d", host, port);
@@ -111,7 +111,7 @@ int l_kcp_client_connect_static(lua_State* L) {
 	return 1;
 }
 
-// ── instance:connect(host, port) → bool ────────────────────────────
+// ── instance:connect(host, port) �?bool ────────────────────────────
 // Connects an instance created via new() (applying any tuning set
 // before this call).
 int l_kcp_client_connect(lua_State* L) {
@@ -153,7 +153,7 @@ int l_kcp_client_connect(lua_State* L) {
 	return 1;
 }
 
-// ── instance:send(data) → bool ─────────────────────────────────────
+// ── instance:send(data) �?bool ─────────────────────────────────────
 int l_kcp_client_send(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_client: invalid context");
@@ -172,7 +172,7 @@ int l_kcp_client_send(lua_State* L) {
 	return 1;
 }
 
-// ── instance:do_request(data, timeout_ms) → string ─────────────────
+// ── instance:do_request(data, timeout_ms) �?string ─────────────────
 int l_kcp_client_do_request(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_client: invalid context");
@@ -208,13 +208,13 @@ int l_kcp_client_close(lua_State* L) {
 	lua_setfield(L, 1, "_ctx");
 
 	ctx->client->Close();
-	delete ctx;
+	MEM_DELETE(ctx);
 
 	lua_pushboolean(L, 1);
 	return 1;
 }
 
-// ── instance:is_connected() → bool ─────────────────────────────────
+// ── instance:is_connected() �?bool ─────────────────────────────────
 int l_kcp_client_is_connected(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
@@ -285,12 +285,12 @@ int l_kcp_client_gc(lua_State* L) {
 	lua_setfield(L, 1, "_ctx");
 
 	ctx->client->Close();
-	delete ctx;
+	MEM_DELETE(ctx);
 
 	return 0;
 }
 
-// ── Static: net.kcp_client.do_request(host, port, data, timeout_ms[, conv]) → string
+// ── Static: net.kcp_client.do_request(host, port, data, timeout_ms[, conv]) �?string
 int l_kcp_client_do_request_static(lua_State* L) {
 	const char* host = luaL_checkstring(L, 1);
 	if (!*host) {

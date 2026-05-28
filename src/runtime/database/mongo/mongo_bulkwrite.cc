@@ -1,22 +1,23 @@
 #if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo/mongo_bulkwrite.h"
+#include "runtime/core/mem/mem.h"
 
 #include <new>
 
 #include "runtime/database/mongo/mongo_bson.h"
+#include "runtime/core/mem/mem.h"
 #include "runtime/database/mongo/mongo_error.h"
+#include "runtime/core/mem/mem.h"
 #include "runtime/database/mongo/mongo_settings.h"
+#include "runtime/core/mem/mem.h"
 
 #include <mongoc/mongoc.h>
 
 namespace engine {
 namespace mongo {
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWriteInsertOneOpts
-// ═══════════════════════════════════════════════════════════════════════
-
 struct MongoBulkWriteInsertOneOpts::Impl {
 	mongoc_bulkwrite_insertoneopts_t* opts = nullptr;
 };
@@ -47,10 +48,7 @@ const void* MongoBulkWriteInsertOneOpts::Raw() const {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWriteUpdateOneOpts
-// ═══════════════════════════════════════════════════════════════════════
-
 struct MongoBulkWriteUpdateOneOpts::Impl {
 	mongoc_bulkwrite_updateoneopts_t* opts = nullptr;
 };
@@ -109,10 +107,7 @@ const void* MongoBulkWriteUpdateOneOpts::Raw() const {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWriteUpdateManyOpts
-// ═══════════════════════════════════════════════════════════════════════
-
 struct MongoBulkWriteUpdateManyOpts::Impl {
 	mongoc_bulkwrite_updatemanyopts_t* opts = nullptr;
 };
@@ -165,10 +160,7 @@ const void* MongoBulkWriteUpdateManyOpts::Raw() const {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWriteReplaceOneOpts
-// ═══════════════════════════════════════════════════════════════════════
-
 struct MongoBulkWriteReplaceOneOpts::Impl {
 	mongoc_bulkwrite_replaceoneopts_t* opts = nullptr;
 };
@@ -221,10 +213,7 @@ const void* MongoBulkWriteReplaceOneOpts::Raw() const {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWriteDeleteOneOpts
-// ═══════════════════════════════════════════════════════════════════════
-
 struct MongoBulkWriteDeleteOneOpts::Impl {
 	mongoc_bulkwrite_deleteoneopts_t* opts = nullptr;
 };
@@ -267,10 +256,7 @@ const void* MongoBulkWriteDeleteOneOpts::Raw() const {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWriteDeleteManyOpts
-// ═══════════════════════════════════════════════════════════════════════
-
 struct MongoBulkWriteDeleteManyOpts::Impl {
 	mongoc_bulkwrite_deletemanyopts_t* opts = nullptr;
 };
@@ -313,10 +299,7 @@ const void* MongoBulkWriteDeleteManyOpts::Raw() const {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWriteOpts
-// ═══════════════════════════════════════════════════════════════════════
-
 struct MongoBulkWriteOpts::Impl {
 	mongoc_bulkwriteopts_t* opts = nullptr;
 };
@@ -384,10 +367,7 @@ const void* MongoBulkWriteOpts::Raw() const {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWriteResult
-// ═══════════════════════════════════════════════════════════════════════
-
 struct MongoBulkWriteResult::Impl {
 	mongoc_bulkwriteresult_t* result = nullptr;
 };
@@ -454,10 +434,7 @@ void MongoBulkWriteResult::SetRaw(void* raw) {
 	}
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWriteException
-// ═══════════════════════════════════════════════════════════════════════
-
 struct MongoBulkWriteException::Impl {
 	mongoc_bulkwriteexception_t* exc = nullptr;
 };
@@ -507,29 +484,26 @@ void MongoBulkWriteException::SetRaw(void* raw) {
 	}
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoBulkWrite
-// ═══════════════════════════════════════════════════════════════════════
-
 struct MongoBulkWrite::Impl {
 	mongoc_bulkwrite_t* bw = nullptr;
 };
 
 MongoBulkWrite* MongoBulkWrite::New(void* raw_client) {
-	auto* b = new MongoBulkWrite();
+	auto* b = MEM_NEW(MongoBulkWrite);
 	b->impl_->bw = mongoc_client_bulkwrite_new(static_cast<mongoc_client_t*>(raw_client));
 	if (!b->impl_->bw) {
-		delete b;
+		MEM_DELETE(b);
 		return nullptr;
 	}
 	return b;
 }
 
 MongoBulkWrite* MongoBulkWrite::New() {
-	auto* b = new MongoBulkWrite();
+	auto* b = MEM_NEW(MongoBulkWrite);
 	b->impl_->bw = mongoc_bulkwrite_new();
 	if (!b->impl_->bw) {
-		delete b;
+		MEM_DELETE(b);
 		return nullptr;
 	}
 	return b;
@@ -547,7 +521,7 @@ void MongoBulkWrite::Destroy() {
 		mongoc_bulkwrite_destroy(impl_->bw);
 		impl_->bw = nullptr;
 	}
-	delete this;
+	MEM_DELETE(this);
 }
 
 bool MongoBulkWrite::AppendInsertOne(const char* ns,
@@ -642,7 +616,7 @@ MongoBulkWriteReturn MongoBulkWrite::Execute(const MongoBulkWriteOpts* opts) {
 		impl_->bw, opts ? static_cast<const mongoc_bulkwriteopts_t*>(opts->Raw()) : nullptr);
 
 	if (raw_ret.res) {
-		auto* result = new (std::nothrow) MongoBulkWriteResult();
+		auto* result = MEM_NEW_NOTHROW(MongoBulkWriteResult);
 		if (result) {
 			result->SetRaw(raw_ret.res);
 			ret.result = result;
@@ -651,7 +625,7 @@ MongoBulkWriteReturn MongoBulkWrite::Execute(const MongoBulkWriteOpts* opts) {
 		}
 	}
 	if (raw_ret.exc) {
-		auto* exc = new (std::nothrow) MongoBulkWriteException();
+		auto* exc = MEM_NEW_NOTHROW(MongoBulkWriteException);
 		if (exc) {
 			exc->SetRaw(raw_ret.exc);
 			ret.exception = exc;

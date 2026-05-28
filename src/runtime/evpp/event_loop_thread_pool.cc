@@ -34,8 +34,8 @@ bool EventLoopThreadPool::Start(bool wait_thread_started) {
 		return true;
 	}
 
-	std::shared_ptr<std::atomic<uint32_t>> started_count(new std::atomic<uint32_t>(0));
-	std::shared_ptr<std::atomic<uint32_t>> exited_count(new std::atomic<uint32_t>(0));
+	std::shared_ptr<std::atomic<uint32_t>> started_count(MEM_NEW(std::atomic<uint32_t>, 0));
+	std::shared_ptr<std::atomic<uint32_t>> exited_count(MEM_NEW(std::atomic<uint32_t>, 0));
 	for (uint32_t i = 0; i < thread_num_; ++i) {
 		auto prefn = [this, started_count]() {
 			ENGINE_LOG_TRACE(engine::GetLogger(),
@@ -53,7 +53,7 @@ bool EventLoopThreadPool::Start(bool wait_thread_started) {
 			return EventLoopThread::kOK;
 		};
 
-		EventLoopThreadPtr t(new EventLoopThread());
+		EventLoopThreadPtr t(MEM_NEW(EventLoopThread));
 		if (!t->Start(wait_thread_started, prefn, postfn)) {
 			ENGINE_LOG_ERROR(engine::GetLogger(),
 							 "EventLoopThreadPool: start thread {}/{} failed!",
