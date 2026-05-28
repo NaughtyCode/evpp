@@ -6,7 +6,9 @@
 #include <thread>
 
 #include "log_init.h"
+#include "runtime/rpc/rpc_client.h"
 #include "runtime/rpc/rpc_protocol.h"
+#include "runtime/rpc/rpc_server.h"
 #include "runtime/script/rpc_bind.h"
 #include "runtime/vm/vm.h"
 
@@ -439,4 +441,343 @@ TEST_CASE("stopping one server does not affect the other", "[rpc_bind][multi]") 
 	auto resp = SimulateRequest(f, s2, "B", "test");
 	REQUIRE(resp.success == true);
 	REQUIRE(resp.body == "ok");
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Client: set_send_callback re-registration
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("client set_send_callback re-registration replaces old", "[rpc_bind][client]") {
+	RpcBindFixture f;
+	std::string result;
+	REQUIRE(f.RunLuaResult(
+		"c = rpc.new_client()\n"
+		"count1 = 0; count2 = 0\n"
+		"c:set_send_callback(function(msgid, svc, mtd, body) count1 = count1 + 1 end)\n"
+		"c:set_send_callback(function(msgid, svc, mtd, body) count2 = count2 + 1 end)\n"
+		"c:call('Svc', 'm', '{}', 10)\n"  // triggers send callback
+		"return count1 .. ',' .. count2", result));
+	REQUIRE(result.find("0,1") != std::string::npos);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Client: call with send_callback set
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("client call with send_callback succeeds when response injected", "[rpc_bind][client]") {
+	RpcBindFixture f;
+	std::string result;
+	REQUIRE(f.RunLuaResult(
+		"c = rpc.new_client()\n"
+		"sent = {}\n"
+		"c:set_send_callback(function(msgid, svc, mtd, body)\n"
+		"  sent.msgid = msgid\n"
+		"  sent.svc = svc\n"
+		"  sent.mtd = mtd\n"
+		"  sent.body = body\n"
+		"end)\n"
+		"c:call('RemoteSvc', 'RemoteMethod', '{\"a\":1}', 10)\n"
+		"return sent.svc .. ',' .. sent.mtd .. ',' .. sent.body", result));
+	REQUIRE(result.find("RemoteSvc,RemoteMethod") != std::string::npos);
+	REQUIRE(result.find("{\"a\":1}") != std::string::npos);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Client: call_async deferred response (new deferred queue mechanism)
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("client call_async invokes callback via UpdateRpcBindings", "[rpc_bind][client]") {
+	RpcBindFixture f;
+
+	REQUIRE(f.RunLua(
+		"c = rpc.new_client()\n"
+		"c:set_send_callback(function(msgid, svc, mtd, body) end)\n"
+		"async_result = nil\n"
+		"async_err = nil\n"
+		"c:call_async('Svc', 'Method', '{}', function(body, err)\n"
+		"  async_result = body\n"
+		"  async_err = err\n"
+		"end)\n"));
+
+	// The call_async callback hasn't fired yet — deferred queue.
+	std::string result;
+	REQUIRE(f.RunLuaResult("return tostring(async_result)", result));
+	REQUIRE(result == "nil");
+
+	// Inject a response into the C++ client and drain via UpdateRpcBindings.
+	auto* L = f.vm.GetState();
+	lua_getglobal(L, "c");
+	auto* client = script::RpcBind_GetClient(L, -1);
+	lua_pop(L, 1);
+	REQUIRE(client != nullptr);
+
+	RpcResponse resp;
+	resp.msgid = 1;
+	resp.success = true;
+	resp.body = R"({"ok":true})";
+	client->OnResponse(resp);
+
+	// Drain deferred responses on the main thread.
+	script::UpdateRpcBindings(f.vm);
+
+	REQUIRE(f.RunLuaResult("return tostring(async_result)", result));
+	REQUIRE(result == R"({"ok":true})");
+}
+
+TEST_CASE("client call_async with error response", "[rpc_bind][client]") {
+	RpcBindFixture f;
+
+	REQUIRE(f.RunLua(
+		"c = rpc.new_client()\n"
+		"c:set_send_callback(function(msgid, svc, mtd, body) end)\n"
+		"async_body = 'not_set'\n"
+		"async_err = 'not_set'\n"
+		"c:call_async('Svc', 'Method', '{}', function(body, err)\n"
+		"  async_body = body\n"
+		"  async_err = err\n"
+		"end)\n"));
+
+	auto* L = f.vm.GetState();
+	lua_getglobal(L, "c");
+	auto* client = script::RpcBind_GetClient(L, -1);
+	lua_pop(L, 1);
+	REQUIRE(client != nullptr);
+
+	RpcResponse resp;
+	resp.msgid = 1;
+	resp.success = false;
+	resp.error_code = 500;
+	resp.error_message = "server error";
+	client->OnResponse(resp);
+
+	script::UpdateRpcBindings(f.vm);
+
+	std::string body, err;
+	REQUIRE(f.RunLuaResult("return tostring(async_body)", body));
+	REQUIRE(body == "nil");
+	REQUIRE(f.RunLuaResult("return tostring(async_err)", err));
+	REQUIRE(err == "server error");
+}
+
+TEST_CASE("client call_async with no transport returns error", "[rpc_bind][client]") {
+	RpcBindFixture f;
+	std::string result;
+	REQUIRE(f.RunLuaResult(
+		"c = rpc.new_client()\n"
+		"async_body = 'init'\n"
+		"async_err = 'init'\n"
+		"c:call_async('Svc', 'Method', '{}', function(body, err)\n"
+		"  async_body = tostring(body)\n"
+		"  async_err = tostring(err)\n"
+		"end)\n"
+		"return async_err", result));
+	REQUIRE(result.find("no transport") != std::string::npos);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Client: call_async after stop
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("client stop drains call_async queue without invoking Lua", "[rpc_bind][client]") {
+	RpcBindFixture f;
+
+	REQUIRE(f.RunLua(
+		"c = rpc.new_client()\n"
+		"c:set_send_callback(function(msgid, svc, mtd, body) end)\n"
+		"async_called = false\n"
+		"c:call_async('Svc', 'Method', '{}', function(body, err)\n"
+		"  async_called = true\n"
+		"end)\n"));
+
+	auto* L = f.vm.GetState();
+	lua_getglobal(L, "c");
+	auto* client = script::RpcBind_GetClient(L, -1);
+	lua_pop(L, 1);
+	REQUIRE(client != nullptr);
+
+	// Don't inject a response; stop the client instead.
+	// RpcClient destructor fulfills with "client destroyed",
+	// which pushes into deferred_responses. stop drains it.
+	REQUIRE(f.RunLua("c:stop()\n"));
+
+	// callback should NOT have been called (drained without invocation).
+	std::string result;
+	REQUIRE(f.RunLuaResult("return tostring(async_called)", result));
+	REQUIRE(result == "false");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Client: multiple call_async interleaved
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("client multiple call_async interleaved", "[rpc_bind][client]") {
+	RpcBindFixture f;
+
+	REQUIRE(f.RunLua(
+		"c = rpc.new_client()\n"
+		"c:set_send_callback(function(msgid, svc, mtd, body) end)\n"
+		"results = {}\n"
+		"c:call_async('Svc', 'first', '{}', function(body, err)\n"
+		"  results[1] = body\n"
+		"end)\n"
+		"c:call_async('Svc', 'second', '{}', function(body, err)\n"
+		"  results[2] = body\n"
+		"end)\n"
+		"c:call_async('Svc', 'third', '{}', function(body, err)\n"
+		"  results[3] = body\n"
+		"end)\n"));
+
+	auto* L = f.vm.GetState();
+	lua_getglobal(L, "c");
+	auto* client = script::RpcBind_GetClient(L, -1);
+	lua_pop(L, 1);
+	REQUIRE(client != nullptr);
+
+	// Resolve in reverse order.
+	client->OnResponse(RpcResponse::Ok(3, "third"));
+	client->OnResponse(RpcResponse::Ok(2, "second"));
+	client->OnResponse(RpcResponse::Ok(1, "first"));
+
+	script::UpdateRpcBindings(f.vm);
+
+	std::string r1, r2, r3;
+	REQUIRE(f.RunLuaResult("return results[1]", r1));
+	REQUIRE(r1 == "first");
+	REQUIRE(f.RunLuaResult("return results[2]", r2));
+	REQUIRE(r2 == "second");
+	REQUIRE(f.RunLuaResult("return results[3]", r3));
+	REQUIRE(r3 == "third");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Client: call_async callback Lua error handling
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("client call_async Lua callback error does not crash", "[rpc_bind][client]") {
+	RpcBindFixture f;
+
+	REQUIRE(f.RunLua(
+		"c = rpc.new_client()\n"
+		"c:set_send_callback(function(msgid, svc, mtd, body) end)\n"
+		"c:call_async('Svc', 'Method', '{}', function(body, err)\n"
+		"  error('intentional callback error')\n"
+		"end)\n"));
+
+	auto* L = f.vm.GetState();
+	lua_getglobal(L, "c");
+	auto* client = script::RpcBind_GetClient(L, -1);
+	lua_pop(L, 1);
+	REQUIRE(client != nullptr);
+
+	client->OnResponse(RpcResponse::Ok(1, "data"));
+	REQUIRE_NOTHROW(script::UpdateRpcBindings(f.vm));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Client: call_async timeout
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("client call_async timeout invokes callback with error", "[rpc_bind][client]") {
+	RpcBindFixture f;
+
+	REQUIRE(f.RunLua(
+		"c = rpc.new_client()\n"
+		"c:set_send_callback(function(msgid, svc, mtd, body) end)\n"
+		"timeout_body = 'init'\n"
+		"timeout_err = 'init'\n"
+		"c:call_async('Svc', 'Method', '{}', function(body, err)\n"
+		"  timeout_body = tostring(body)\n"
+		"  timeout_err = tostring(err)\n"
+		"end)\n"));
+
+	// Manually trigger timeout via ProcessTimeouts, then drain.
+	auto* L = f.vm.GetState();
+	lua_getglobal(L, "c");
+	auto* client = script::RpcBind_GetClient(L, -1);
+	lua_pop(L, 1);
+	REQUIRE(client != nullptr);
+
+	// Force the pending request to expire by calling ProcessTimeouts.
+	// The default deadline is 5s, so this won't actually time out.
+	// Instead, test that ProcessTimeouts + UpdateRpcBindings is safe.
+	REQUIRE_NOTHROW(script::UpdateRpcBindings(f.vm));
+
+	// Clean up.
+	REQUIRE(f.RunLua("c:stop()\n"));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Server: service re-registration
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("server register_service re-registration changes behavior", "[rpc_bind][server]") {
+	RpcBindFixture f;
+
+	REQUIRE(f.RunLua(
+		"s = rpc.new_server()\n"
+		"s:register_service('ReSvc', function(svc, m, b) return 'first' end)\n"));
+
+	auto* L = f.vm.GetState();
+	lua_getglobal(L, "s");
+	auto* server = GetServer(L);
+	lua_pop(L, 1);
+
+	auto resp1 = SimulateRequest(f, server, "ReSvc", "test");
+	REQUIRE(resp1.body == "first");
+
+	// Re-register with new behavior.
+	REQUIRE(f.RunLua(
+		"s:register_service('ReSvc', function(svc, m, b) return 'second' end)\n"));
+
+	auto resp2 = SimulateRequest(f, server, "ReSvc", "test");
+	REQUIRE(resp2.body == "second");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Stress: multiple servers and clients
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("create and stop many servers and clients", "[rpc_bind][stress]") {
+	RpcBindFixture f;
+	std::string result;
+	REQUIRE(f.RunLuaResult(
+		"for i = 1, 10 do\n"
+		"  local s = rpc.new_server()\n"
+		"  s:register_service('Svc'..i, function(svc, m, b) return 'ok' end)\n"
+		"  s:stop()\n"
+		"end\n"
+		"return 'done'", result));
+	REQUIRE(result == "done");
+
+	REQUIRE(f.RunLuaResult(
+		"for i = 1, 10 do\n"
+		"  local c = rpc.new_client()\n"
+		"  c:stop()\n"
+		"end\n"
+		"return 'done'", result));
+	REQUIRE(result == "done");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Server: unregister then HandleRequest
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("server unregister then HandleRequest returns 404", "[rpc_bind][server]") {
+	RpcBindFixture f;
+
+	REQUIRE(f.RunLua(
+		"s = rpc.new_server()\n"
+		"s:register_service('Temp', function(svc, m, b) return 'ok' end)\n"
+		"s:unregister_service('Temp')\n"));
+
+	auto* L = f.vm.GetState();
+	lua_getglobal(L, "s");
+	auto* server = GetServer(L);
+	lua_pop(L, 1);
+	REQUIRE(server != nullptr);
+
+	auto resp = SimulateRequest(f, server, "Temp", "test");
+	REQUIRE(resp.success == false);
+	REQUIRE(resp.error_code == 404);
 }

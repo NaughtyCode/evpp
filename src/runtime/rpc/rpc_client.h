@@ -8,6 +8,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 #include "runtime/core/engine_api.h"
 #include "runtime/rpc/rpc_protocol.h"
@@ -96,6 +97,15 @@ public:
 
 private:
 	uint32_t NextMsgId();
+
+	// Common logic for Call/CallSync: enqueues a request and returns
+	// a (msgid, future) pair.  If no transport is set the future is
+	// already fulfilled with an error and no entry is added to pending_.
+	std::pair<uint32_t, std::future<RpcResponse>> EnqueueRequest(
+		const std::string& service,
+		const std::string& method,
+		const std::string& args_json,
+		int timeout_ms);
 
 	struct PendingRequest {
 		std::promise<RpcResponse> promise;

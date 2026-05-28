@@ -83,8 +83,7 @@ RpcResponse RpcServer::HandleRequest(const RpcRequest& request) {
 		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger, "RpcServer: handler exception in [{}].[{}]: {}",
 						 request.header.service, request.header.method, e.what());
-		return RpcResponse::Error(request.header.msgid, 500,
-			std::string("handler error: ") + e.what());
+		return RpcResponse::Error(request.header.msgid, 500, e.what());
 	} catch (...) {
 		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger, "RpcServer: unknown exception in [{}].[{}]",

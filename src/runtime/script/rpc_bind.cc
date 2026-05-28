@@ -67,6 +67,11 @@ struct RpcClientCtx {
 	int instance_ref = LUA_NOREF;
 	int send_cb_ref = LUA_NOREF;  // Lua registry ref for the send callback
 	bool disposed = false;
+
+	// Deferred response queue — call_async callbacks push here from any
+	// thread; UpdateRpcBindings drains on the Lua main thread.
+	std::mutex response_mutex;
+	std::vector<std::pair<int, rpc::RpcResponse>> deferred_responses;
 };
 
 // ── Per-VM state ────────────────────────────────────────────────────────
@@ -123,6 +128,20 @@ static void DrainPendingQueue(RpcServerCtx* ctx, const char* error_msg) {
 		// Yield between passes so in-flight handlers blocked on
 		// queue_mutex have a chance to push their requests.
 		if (pass < 2) std::this_thread::yield();
+	}
+}
+
+// Drain the client deferred response queue, releasing all callback refs.
+// Called during stop/gc/shutdown — no Lua callbacks are invoked since the
+// client is being torn down.
+static void DrainResponseQueue(RpcClientCtx* ctx, lua_State* L) {
+	std::vector<std::pair<int, rpc::RpcResponse>> batch;
+	{
+		std::lock_guard<std::mutex> lock(ctx->response_mutex);
+		batch.swap(ctx->deferred_responses);
+	}
+	for (auto& [cb_ref, resp] : batch) {
+		if (cb_ref != LUA_NOREF) luaL_unref(L, LUA_REGISTRYINDEX, cb_ref);
 	}
 }
 
@@ -220,9 +239,6 @@ int l_server_stop(lua_State* L) {
 	auto* state = GetRpcState(L);
 	if (state) {
 		state->servers.erase(ctx);
-		// Release shared ownership — weak_ptrs in handler lambdas will
-		// fail to lock, causing new invocations to bail out early.
-		state->server_shared.erase(ctx);
 	}
 
 	// Release all Lua callback references.
@@ -242,6 +258,12 @@ int l_server_stop(lua_State* L) {
 		ctx->instance_ref = LUA_NOREF;
 	}
 
+	// Release shared ownership LAST — after all ctx accesses.
+	// Weak_ptrs in handler lambdas will then fail to lock.
+	if (state) {
+		state->server_shared.erase(ctx);
+	}
+
 	lua_pushboolean(L, 1);
 	return 1;
 }
@@ -256,7 +278,6 @@ int l_server_gc(lua_State* L) {
 	auto* state = GetRpcState(L);
 	if (state) {
 		state->servers.erase(ctx);
-		state->server_shared.erase(ctx);
 	}
 
 	for (auto& [name, ref] : ctx->service_callbacks) {
@@ -273,6 +294,11 @@ int l_server_gc(lua_State* L) {
 	if (ctx->instance_ref != LUA_NOREF) {
 		luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
 		ctx->instance_ref = LUA_NOREF;
+	}
+
+	// Release shared ownership LAST — after all ctx accesses.
+	if (state) {
+		state->server_shared.erase(ctx);
 	}
 
 	return 0;
@@ -308,8 +334,8 @@ int l_client_call(lua_State* L) {
 }
 
 // client:call_async(service, method, args, callback)
-// Non-blocking — callback(body, err) is invoked when the response
-// arrives (or on timeout/error).  Does NOT block the Lua thread.
+// Thread-safe: the callback lambda pushes the response into a deferred
+// queue; UpdateRpcBindings drains it on the Lua main thread.
 int l_client_call_async(lua_State* L) {
 	auto* ctx = GetCtxFromTable<RpcClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) return PushRpcError(L, "client: closed");
@@ -323,31 +349,30 @@ int l_client_call_async(lua_State* L) {
 	const char* args = luaL_optstring(L, 4, "{}");
 	luaL_checktype(L, 5, LUA_TFUNCTION);
 
-	// Store callback in registry for async invocation
+	// Store callback in registry for main-thread invocation.
 	lua_pushvalue(L, 5);
 	int cb_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-	lua_State* captured_L = L;
+
+	// Build a weak_ptr so the transport-thread lambda can safely
+	// detect client destruction without touching the Lua VM.
+	auto* rpc_state = GetRpcState(L);
+	std::weak_ptr<RpcClientCtx> weak_ctx;
+	if (rpc_state) {
+		auto it = rpc_state->client_shared.find(ctx);
+		if (it != rpc_state->client_shared.end()) {
+			weak_ctx = it->second;
+		}
+	}
 
 	ctx->client->CallAsync(service, method, args,
-		[captured_L, cb_ref](const rpc::RpcResponse& resp) {
-			lua_rawgeti(captured_L, LUA_REGISTRYINDEX, cb_ref);  // cb
-			if (resp.success) {
-				lua_pushlstring(captured_L, resp.body.data(), resp.body.size());  // cb, body
-				lua_pushnil(captured_L);                                          // cb, body, nil
-			} else {
-				lua_pushnil(captured_L);                                                  // cb, nil
-				lua_pushlstring(captured_L, resp.error_message.data(),
-								resp.error_message.size());                                 // cb, nil, err
+		[weak_ctx = std::move(weak_ctx), cb_ref](const rpc::RpcResponse& resp) {
+			auto captured = weak_ctx.lock();
+			if (captured) {
+				std::lock_guard<std::mutex> lock(captured->response_mutex);
+				captured->deferred_responses.emplace_back(cb_ref, resp);
 			}
-
-			if (lua_pcall(captured_L, 2, 0, 0) != LUA_OK) {
-				auto* logger = GetLogger();
-				ENGINE_LOG_ERROR(logger, "RpcClient: call_async callback error: {}",
-								 lua_tostring(captured_L, -1));
-				lua_pop(captured_L, 1);
-			}
-
-			luaL_unref(captured_L, LUA_REGISTRYINDEX, cb_ref);
+			// If captured is null the client was destroyed; cb_ref is
+			// released by the destruction path (stop/gc/shutdown).
 		});
 
 	lua_pushboolean(L, 1);
@@ -407,7 +432,6 @@ int l_client_stop(lua_State* L) {
 	auto* state = GetRpcState(L);
 	if (state) {
 		state->clients.erase(ctx);
-		state->client_shared.erase(ctx);
 	}
 
 	if (ctx->send_cb_ref != LUA_NOREF) {
@@ -415,7 +439,13 @@ int l_client_stop(lua_State* L) {
 		ctx->send_cb_ref = LUA_NOREF;
 	}
 
+	// Destroy the client first — RpcClient::~RpcClient fulfills
+	// pending callbacks, which push into deferred_responses.
 	ctx->client.reset();
+
+	// Drain deferred responses (release cb_refs without invoking
+	// Lua callbacks since the client is being torn down).
+	DrainResponseQueue(ctx, L);
 
 	lua_pushnil(L);
 	lua_setfield(L, 1, "_ctx");
@@ -423,6 +453,12 @@ int l_client_stop(lua_State* L) {
 	if (ctx->instance_ref != LUA_NOREF) {
 		luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
 		ctx->instance_ref = LUA_NOREF;
+	}
+
+	// Release shared ownership LAST — after all ctx accesses.
+	// This may destroy ctx (if no transport callback holds a ref).
+	if (state) {
+		state->client_shared.erase(ctx);
 	}
 
 	lua_pushboolean(L, 1);
@@ -438,7 +474,6 @@ int l_client_gc(lua_State* L) {
 	auto* state = GetRpcState(L);
 	if (state) {
 		state->clients.erase(ctx);
-		state->client_shared.erase(ctx);
 	}
 
 	if (ctx->send_cb_ref != LUA_NOREF) {
@@ -447,6 +482,7 @@ int l_client_gc(lua_State* L) {
 	}
 
 	ctx->client.reset();
+	DrainResponseQueue(ctx, L);
 
 	lua_pushnil(L);
 	lua_setfield(L, 1, "_ctx");
@@ -454,6 +490,11 @@ int l_client_gc(lua_State* L) {
 	if (ctx->instance_ref != LUA_NOREF) {
 		luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
 		ctx->instance_ref = LUA_NOREF;
+	}
+
+	// Release shared ownership LAST — after all ctx accesses.
+	if (state) {
+		state->client_shared.erase(ctx);
 	}
 
 	return 0;
@@ -573,6 +614,41 @@ void UpdateRpcBindings(ScriptVM& vm) {
 		ctx->client->ProcessTimeouts();
 	}
 
+	// ── Drain client deferred response queues (call_async responses) ──
+
+	for (auto* ctx : state->clients) {
+		if (ctx->disposed) continue;
+
+		std::vector<std::pair<int, rpc::RpcResponse>> batch;
+		{
+			std::lock_guard<std::mutex> lock(ctx->response_mutex);
+			batch.swap(ctx->deferred_responses);
+		}
+
+		for (auto& [cb_ref, resp] : batch) {
+			if (cb_ref == LUA_NOREF) continue;
+
+			lua_rawgeti(L, LUA_REGISTRYINDEX, cb_ref);  // cb
+			if (resp.success) {
+				lua_pushlstring(L, resp.body.data(), resp.body.size());  // cb, body
+				lua_pushnil(L);                                          // cb, body, nil
+			} else {
+				lua_pushnil(L);                                                  // cb, nil
+				lua_pushlstring(L, resp.error_message.data(),
+								resp.error_message.size());                       // cb, nil, err
+			}
+
+			if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+				auto* logger = GetLogger();
+				ENGINE_LOG_ERROR(logger, "RpcClient: call_async callback error: {}",
+								 lua_tostring(L, -1));
+				lua_pop(L, 1);
+			}
+
+			luaL_unref(L, LUA_REGISTRYINDEX, cb_ref);
+		}
+	}
+
 	// ── Process server pending queues (with 5ms time budget) ──────────
 
 	auto budget_start = std::chrono::steady_clock::now();
@@ -653,9 +729,6 @@ void ShutdownRpcBindings(ScriptVM& vm) {
 		ctx->disposed = true;
 		ctx->alive.store(false, std::memory_order_release);
 
-		// Release shared ownership so handler weak_ptrs fail to lock.
-		state->server_shared.erase(ctx);
-
 		for (auto& [name, ref] : ctx->service_callbacks) {
 			if (ref != LUA_NOREF) luaL_unref(L, LUA_REGISTRYINDEX, ref);
 		}
@@ -668,11 +741,14 @@ void ShutdownRpcBindings(ScriptVM& vm) {
 			luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
 			ctx->instance_ref = LUA_NOREF;
 		}
+
+		// Release shared ownership LAST — after all ctx accesses.
+		state->server_shared.erase(ctx);
 	}
 
 	// Client cleanup: RpcClient::~RpcClient fulfills pending promises
-	// and destroys the send callback lambda (which captures cb_ref but
-	// does NOT call luaL_unref — that's our responsibility here).
+	// and invokes call_async callbacks → pushes to deferred_responses.
+	// Drain those to release cb_refs.
 	for (auto* ctx : clients) {
 		if (ctx->disposed) continue;
 		ctx->disposed = true;
@@ -683,6 +759,7 @@ void ShutdownRpcBindings(ScriptVM& vm) {
 		}
 
 		ctx->client.reset();
+		DrainResponseQueue(ctx, L);
 
 		if (ctx->instance_ref != LUA_NOREF) {
 			luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);

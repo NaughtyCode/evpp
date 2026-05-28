@@ -29,7 +29,7 @@ void RpcClient::SetSendCallback(SendCallback cb) {
 	send_callback_ = std::move(cb);
 }
 
-// ── Request methods ─────────────────────────────────────────────────────
+// ── Request helpers ─────────────────────────────────────────────────────
 
 uint32_t RpcClient::NextMsgId() {
 	uint32_t id = next_msgid_.fetch_add(1, std::memory_order_relaxed);
@@ -40,30 +40,30 @@ uint32_t RpcClient::NextMsgId() {
 	return id;
 }
 
-std::future<RpcResponse> RpcClient::Call(const std::string& service,
-										  const std::string& method,
-										  const std::string& args_json) {
+std::pair<uint32_t, std::future<RpcResponse>> RpcClient::EnqueueRequest(
+		const std::string& service,
+		const std::string& method,
+		const std::string& args_json,
+		int timeout_ms) {
 	uint32_t msgid = NextMsgId();
 
 	auto pending = std::make_unique<PendingRequest>();
 	auto future = pending->promise.get_future();
 	pending->deadline = std::chrono::steady_clock::now() +
-						std::chrono::milliseconds(5000);
+						std::chrono::milliseconds(timeout_ms);
 
 	SendCallback sender;
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 		if (!send_callback_) {
-			// No transport — fulfil immediately with error.
 			pending->promise.set_value(
 				RpcResponse::Error(msgid, -2, "no transport (call SetSendCallback first)"));
-			return future;
+			return {msgid, std::move(future)};
 		}
 		sender = send_callback_;
 		pending_[msgid] = std::move(pending);
 	}
 
-	// Build and send the request.
 	RpcRequest req;
 	req.header.msgid = msgid;
 	req.header.service = service;
@@ -72,7 +72,16 @@ std::future<RpcResponse> RpcClient::Call(const std::string& service,
 	req.body = args_json;
 
 	sender(std::move(req));
-	return future;
+	return {msgid, std::move(future)};
+}
+
+// ── Request methods ─────────────────────────────────────────────────────
+
+std::future<RpcResponse> RpcClient::Call(const std::string& service,
+										  const std::string& method,
+										  const std::string& args_json) {
+	auto result = EnqueueRequest(service, method, args_json, 5000);
+	return std::move(result.second);
 }
 
 void RpcClient::CallAsync(const std::string& service,
@@ -114,11 +123,19 @@ RpcResponse RpcClient::CallSync(const std::string& service,
 								 const std::string& method,
 								 const std::string& args_json,
 								 int timeout_ms) {
-	auto future = Call(service, method, args_json);
+	auto result = EnqueueRequest(service, method, args_json, timeout_ms);
+	auto msgid = result.first;
+	auto future = std::move(result.second);
+
 	auto status = future.wait_for(std::chrono::milliseconds(timeout_ms));
 
 	if (status == std::future_status::timeout) {
-		return RpcResponse::Error(0, -1, "timeout");
+		// Clean up the pending entry so it doesn't outlive the wait.
+		{
+			std::lock_guard<std::mutex> lock(mutex_);
+			pending_.erase(msgid);
+		}
+		return RpcResponse::Error(msgid, -1, "timeout");
 	}
 
 	return future.get();

@@ -308,6 +308,7 @@ TEST_CASE("RpcClient default construction", "[rpc][client]") {
 
 TEST_CASE("RpcClient Call returns a valid future", "[rpc][client]") {
 	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});  // transport must be set
 	auto future = client.Call("TestService", "TestMethod", R"({"x":1})");
 	REQUIRE(future.valid());
 	// No response sent; future should time out.
@@ -317,6 +318,7 @@ TEST_CASE("RpcClient Call returns a valid future", "[rpc][client]") {
 
 TEST_CASE("RpcClient OnResponse resolves a pending future", "[rpc][client]") {
 	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});  // transport must be set
 
 	auto future = client.Call("TestService", "TestMethod", R"({"x":1})");
 	REQUIRE(future.valid());
@@ -343,13 +345,17 @@ TEST_CASE("RpcClient OnResponse resolves a pending future", "[rpc][client]") {
 
 TEST_CASE("RpcClient CallSync returns timeout when no response", "[rpc][client]") {
 	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});  // transport must be set for real timeout
 	auto resp = client.CallSync("TestService", "TestMethod", R"({"x":1})", 10);
 	REQUIRE(resp.success == false);
 	REQUIRE(resp.error_message == "timeout");
+	REQUIRE(resp.msgid != 0);
+	REQUIRE(client.PendingCount() == 0);
 }
 
 TEST_CASE("RpcClient CallSync returns result on response", "[rpc][client]") {
 	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});  // transport must be set
 
 	// Start a sync call in another thread so we can inject a response.
 	std::atomic<bool> call_started{false};
@@ -379,6 +385,7 @@ TEST_CASE("RpcClient CallSync returns result on response", "[rpc][client]") {
 
 TEST_CASE("RpcClient CallAsync invokes callback on response", "[rpc][client]") {
 	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
 
 	bool callback_called = false;
 	RpcResponse captured;
@@ -412,6 +419,7 @@ TEST_CASE("RpcClient OnResponse with unknown msgid is safe", "[rpc][client]") {
 
 TEST_CASE("RpcClient ProcessTimeouts is safe to call", "[rpc][client]") {
 	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
 	auto future = client.Call("TestService", "TestMethod", R"({"x":1})");
 	REQUIRE(future.valid());
 	REQUIRE_NOTHROW(client.ProcessTimeouts());
@@ -419,6 +427,7 @@ TEST_CASE("RpcClient ProcessTimeouts is safe to call", "[rpc][client]") {
 
 TEST_CASE("RpcClient message IDs are sequential", "[rpc][client]") {
 	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
 
 	auto f1 = client.Call("Svc", "m1", "{}");
 	auto f2 = client.Call("Svc", "m2", "{}");
@@ -464,6 +473,7 @@ TEST_CASE("RpcClient message IDs are sequential", "[rpc][client]") {
 
 TEST_CASE("RpcClient handles error response", "[rpc][client]") {
 	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
 
 	auto future = client.Call("TestService", "TestMethod", R"({"x":1})");
 
@@ -497,6 +507,7 @@ TEST_CASE("RPC client-server round-trip", "[rpc][integration]") {
 		});
 
 	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
 
 	// Client makes a call; we manually route the request through the server
 	// and feed the response back to the client.
@@ -524,4 +535,530 @@ TEST_CASE("RPC client-server round-trip", "[rpc][integration]") {
 	RpcResponse result = future.get();
 	REQUIRE(result.success == true);
 	REQUIRE(result.body == R"({"result":30})");
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RPC Response: factory functions
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("RpcResponse::Ok factory creates success response", "[rpc][protocol]") {
+	auto resp = RpcResponse::Ok(42, R"({"val":1})");
+	REQUIRE(resp.msgid == 42);
+	REQUIRE(resp.success == true);
+	REQUIRE(resp.body == R"({"val":1})");
+	REQUIRE(resp.error_code == 0);
+	REQUIRE(resp.error_message.empty());
+}
+
+TEST_CASE("RpcResponse::Error factory creates error response", "[rpc][protocol]") {
+	auto resp = RpcResponse::Error(99, 500, "Internal Error");
+	REQUIRE(resp.msgid == 99);
+	REQUIRE(resp.success == false);
+	REQUIRE(resp.error_code == 500);
+	REQUIRE(resp.error_message == "Internal Error");
+	REQUIRE(resp.body.empty());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RPC Server: Clear() and handler re-registration
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("RpcServer Clear removes all services", "[rpc][server]") {
+	RpcServer server;
+	server.RegisterService("SvcA",
+		[](const std::string&, const std::string&) -> std::string { return "a"; });
+	server.RegisterService("SvcB",
+		[](const std::string&, const std::string&) -> std::string { return "b"; });
+	REQUIRE(server.HasService("SvcA"));
+	REQUIRE(server.HasService("SvcB"));
+
+	server.Clear();
+	REQUIRE_FALSE(server.HasService("SvcA"));
+	REQUIRE_FALSE(server.HasService("SvcB"));
+}
+
+TEST_CASE("RpcServer RegisterMethod overwrites previous handler", "[rpc][server]") {
+	RpcServer server;
+
+	server.RegisterMethod("Svc", "m", [](const std::string&) -> std::string {
+		return "first";
+	});
+	server.RegisterMethod("Svc", "m", [](const std::string&) -> std::string {
+		return "second";
+	});
+
+	RpcRequest req;
+	req.header.msgid = 1;
+	req.header.service = "Svc";
+	req.header.method = "m";
+	req.body = "{}";
+
+	RpcResponse resp = server.HandleRequest(req);
+	REQUIRE(resp.success == true);
+	REQUIRE(resp.body == "second");
+}
+
+TEST_CASE("RpcServer HandleRequest catches non-std-exception", "[rpc][server]") {
+	RpcServer server;
+	server.RegisterService("BadSvc",
+		[](const std::string&, const std::string&) -> std::string {
+			throw 42;  // non-std::exception
+		});
+
+	RpcRequest req;
+	req.header.msgid = 1;
+	req.header.service = "BadSvc";
+	req.header.method = "crash";
+	req.body = "{}";
+
+	RpcResponse resp = server.HandleRequest(req);
+	REQUIRE(resp.success == false);
+	REQUIRE(resp.error_code == 500);
+	REQUIRE(resp.error_message == "unknown handler error");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RPC Server: concurrent HandleRequest
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("RpcServer HandleRequest is safe under concurrent calls", "[rpc][server][concurrent]") {
+	RpcServer server;
+	std::atomic<int> call_count{0};
+
+	server.RegisterService("ConcurrentSvc",
+		[&call_count](const std::string& method, const std::string& body) -> std::string {
+			call_count.fetch_add(1, std::memory_order_relaxed);
+			std::this_thread::sleep_for(std::chrono::milliseconds(5));
+			return "ok";
+		});
+
+	constexpr int kThreads = 8;
+	std::vector<std::thread> threads;
+	std::vector<RpcResponse> results(kThreads);
+
+	for (int i = 0; i < kThreads; ++i) {
+		threads.emplace_back([&server, &results, i]() {
+			RpcRequest req;
+			req.header.msgid = static_cast<uint32_t>(i + 1);
+			req.header.service = "ConcurrentSvc";
+			req.header.method = "run";
+			req.body = "{}";
+			results[i] = server.HandleRequest(req);
+		});
+	}
+
+	for (auto& t : threads) t.join();
+
+	REQUIRE(call_count.load() == kThreads);
+	for (int i = 0; i < kThreads; ++i) {
+		REQUIRE(results[i].success == true);
+		REQUIRE(results[i].body == "ok");
+		REQUIRE(results[i].msgid == static_cast<uint32_t>(i + 1));
+	}
+}
+
+TEST_CASE("RpcServer concurrent register and HandleRequest is safe", "[rpc][server][concurrent]") {
+	RpcServer server;
+	std::atomic<bool> done{false};
+	std::atomic<int> ok_count{0};
+
+	server.RegisterService("StableSvc",
+		[&ok_count](const std::string&, const std::string&) -> std::string {
+			ok_count.fetch_add(1, std::memory_order_relaxed);
+			return "ok";
+		});
+
+	std::thread worker([&]() {
+		while (!done.load(std::memory_order_relaxed)) {
+			RpcRequest req;
+			req.header.msgid = 1;
+			req.header.service = "StableSvc";
+			req.header.method = "f";
+			req.body = "{}";
+			auto resp = server.HandleRequest(req);
+			if (resp.success) ok_count.fetch_add(1, std::memory_order_relaxed);
+			std::this_thread::yield();
+		}
+	});
+
+	for (int i = 0; i < 20; ++i) {
+		server.RegisterService("TempSvc" + std::to_string(i),
+			[](const std::string&, const std::string&) -> std::string { return ""; });
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+
+	done.store(true);
+	worker.join();
+	REQUIRE(ok_count.load() > 0);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RPC Client: ProcessTimeouts
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("RpcClient ProcessTimeouts with non-expired entries is safe", "[rpc][client]") {
+	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
+
+	auto future = client.Call("Svc", "m", "{}");
+	REQUIRE(future.valid());
+	REQUIRE(client.PendingCount() == 1);
+
+	// ProcessTimeouts on a fresh entry (5s deadline) should not clean it.
+	REQUIRE_NOTHROW(client.ProcessTimeouts());
+	REQUIRE(client.PendingCount() == 1);
+
+	// Resolve normally.
+	client.OnResponse(RpcResponse::Ok(1, "ok"));
+	REQUIRE(client.PendingCount() == 0);
+	auto status = future.wait_for(std::chrono::milliseconds(10));
+	REQUIRE(status == std::future_status::ready);
+	REQUIRE(future.get().body == "ok");
+}
+
+TEST_CASE("RpcClient ProcessTimeouts removes only expired entries", "[rpc][client]") {
+	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
+
+	auto f1 = client.Call("Svc", "short", "{}");
+	auto f2 = client.Call("Svc", "long", "{}");
+	REQUIRE(client.PendingCount() == 2);
+
+	// Resolve f1, f2 stays pending.
+	client.OnResponse(RpcResponse::Ok(1, "first"));
+	REQUIRE(client.PendingCount() == 1);
+
+	REQUIRE(f1.wait_for(std::chrono::milliseconds(10)) == std::future_status::ready);
+	REQUIRE(f1.get().body == "first");
+
+	REQUIRE(f2.wait_for(std::chrono::milliseconds(5)) == std::future_status::timeout);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RPC Client: destruction during in-flight requests
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("RpcClient destructor fulfills pending Call with error", "[rpc][client]") {
+	std::future<RpcResponse> future;
+	{
+		RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
+		future = client.Call("Svc", "m", "{}");
+		REQUIRE(client.PendingCount() == 1);
+	}  // client destroyed
+
+	REQUIRE(future.valid());
+	auto status = future.wait_for(std::chrono::milliseconds(10));
+	REQUIRE(status == std::future_status::ready);
+
+	RpcResponse resp = future.get();
+	REQUIRE(resp.success == false);
+	REQUIRE(resp.error_code == -1);
+	REQUIRE(resp.error_message == "client destroyed");
+}
+
+TEST_CASE("RpcClient destructor fulfills pending CallAsync with error", "[rpc][client]") {
+	bool called = false;
+	RpcResponse captured;
+	{
+		RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
+		client.CallAsync("Svc", "m", "{}", [&](const RpcResponse& r) {
+			called = true;
+			captured = r;
+		});
+		REQUIRE(client.PendingCount() == 1);
+	}  // client destroyed
+
+	REQUIRE(called);
+	REQUIRE(captured.success == false);
+	REQUIRE(captured.error_message == "client destroyed");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RPC Client: SetSendCallback
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("RpcClient SendCallback is invoked on Call", "[rpc][client]") {
+	RpcClient client;
+	bool send_called = false;
+	RpcRequest captured_req;
+
+	client.SetSendCallback([&](RpcRequest req) {
+		send_called = true;
+		captured_req = std::move(req);
+	});
+
+	auto future = client.Call("TestSvc", "TestMethod", R"({"x":1})");
+	REQUIRE(send_called);
+	REQUIRE(captured_req.header.msgid != 0);
+	REQUIRE(captured_req.header.service == "TestSvc");
+	REQUIRE(captured_req.header.method == "TestMethod");
+	REQUIRE(captured_req.header.type == RpcMessageType::kRequest);
+	REQUIRE(captured_req.body == R"({"x":1})");
+
+	client.OnResponse(RpcResponse::Ok(captured_req.header.msgid, "done"));
+	auto status = future.wait_for(std::chrono::milliseconds(10));
+	REQUIRE(status == std::future_status::ready);
+}
+
+TEST_CASE("RpcClient SetSendCallback re-registration overwrites", "[rpc][client]") {
+	RpcClient client;
+	int first_count = 0;
+	int second_count = 0;
+
+	client.SetSendCallback([&](RpcRequest) { first_count++; });
+	client.SetSendCallback([&](RpcRequest) { second_count++; });
+
+	auto f = client.Call("Svc", "m", "{}");
+	REQUIRE(first_count == 0);
+	REQUIRE(second_count == 1);
+	client.OnResponse(RpcResponse::Ok(1, "ok"));
+}
+
+TEST_CASE("RpcClient Call returns error when no transport", "[rpc][client]") {
+	RpcClient client;
+	auto future = client.Call("Svc", "m", "{}");
+	REQUIRE(future.valid());
+	auto status = future.wait_for(std::chrono::milliseconds(50));
+	REQUIRE(status == std::future_status::ready);
+
+	RpcResponse resp = future.get();
+	REQUIRE(resp.success == false);
+	REQUIRE(resp.error_code == -2);
+	REQUIRE(resp.error_message.find("no transport") != std::string::npos);
+}
+
+TEST_CASE("RpcClient CallAsync returns immediately when no transport", "[rpc][client]") {
+	RpcClient client;
+	bool called = false;
+	client.CallAsync("Svc", "m", "{}", [&](const RpcResponse& r) {
+		called = true;
+		REQUIRE(r.success == false);
+		REQUIRE(r.error_code == -2);
+	});
+	REQUIRE(called);
+	REQUIRE(client.PendingCount() == 0);
+}
+
+TEST_CASE("RpcClient PendingCount tracks in-flight requests", "[rpc][client]") {
+	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
+	REQUIRE(client.PendingCount() == 0);
+
+	auto f1 = client.Call("Svc", "m1", "{}");
+	REQUIRE(client.PendingCount() == 1);
+
+	auto f2 = client.Call("Svc", "m2", "{}");
+	REQUIRE(client.PendingCount() == 2);
+
+	client.OnResponse(RpcResponse::Ok(1, "a"));
+	REQUIRE(client.PendingCount() == 1);
+
+	client.OnResponse(RpcResponse::Ok(2, "b"));
+	REQUIRE(client.PendingCount() == 0);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RPC Client: HasTransport
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("RpcClient HasTransport returns false initially", "[rpc][client]") {
+	RpcClient client;
+	REQUIRE_FALSE(client.HasTransport());
+}
+
+TEST_CASE("RpcClient HasTransport returns true after SetSendCallback", "[rpc][client]") {
+	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
+	REQUIRE(client.HasTransport());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RPC Client: multiple CallAsync and mixed Call/CallAsync
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("RpcClient multiple CallAsync interleaved responses", "[rpc][client]") {
+	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
+	int called_a = 0, called_b = 0;
+	std::string body_a, body_b;
+
+	client.CallAsync("Svc", "ma", "{}", [&](const RpcResponse& r) {
+		called_a++;
+		if (r.success) body_a = r.body;
+	});
+	client.CallAsync("Svc", "mb", "{}", [&](const RpcResponse& r) {
+		called_b++;
+		if (r.success) body_b = r.body;
+	});
+
+	REQUIRE(client.PendingCount() == 2);
+
+	// Resolve in reverse order.
+	client.OnResponse(RpcResponse::Ok(2, "second"));
+	REQUIRE(called_a == 0);
+	REQUIRE(called_b == 1);
+	REQUIRE(body_b == "second");
+
+	client.OnResponse(RpcResponse::Ok(1, "first"));
+	REQUIRE(called_a == 1);
+	REQUIRE(called_b == 1);
+	REQUIRE(body_a == "first");
+
+	REQUIRE(client.PendingCount() == 0);
+}
+
+TEST_CASE("RpcClient mixed Call and CallAsync work together", "[rpc][client]") {
+	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
+	bool async_called = false;
+
+	auto future = client.Call("Svc", "sync", "{}");
+	client.CallAsync("Svc", "async", "{}", [&](const RpcResponse& r) {
+		async_called = true;
+		REQUIRE(r.success);
+	});
+
+	REQUIRE(client.PendingCount() == 2);
+
+	client.OnResponse(RpcResponse::Ok(1, "sync_result"));
+	client.OnResponse(RpcResponse::Ok(2, "async_result"));
+
+	REQUIRE(async_called);
+	REQUIRE(future.wait_for(std::chrono::milliseconds(10)) == std::future_status::ready);
+	REQUIRE(future.get().body == "sync_result");
+	REQUIRE(client.PendingCount() == 0);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RPC Server: edge cases
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("RpcServer method handler with no service handler returns 405 for unknown", "[rpc][server]") {
+	RpcServer server;
+	server.RegisterMethod("Svc", "only_this",
+		[](const std::string&) -> std::string { return "ok"; });
+
+	RpcRequest req1;
+	req1.header.msgid = 1; req1.header.service = "Svc"; req1.header.method = "only_this"; req1.body = "{}";
+	auto r1 = server.HandleRequest(req1);
+	REQUIRE(r1.success == true);
+	REQUIRE(r1.body == "ok");
+
+	RpcRequest req2;
+	req2.header.msgid = 2; req2.header.service = "Svc"; req2.header.method = "other"; req2.body = "{}";
+	auto r2 = server.HandleRequest(req2);
+	REQUIRE(r2.success == false);
+	REQUIRE(r2.error_code == 405);
+}
+
+TEST_CASE("RpcServer handler receives empty body", "[rpc][server]") {
+	RpcServer server;
+	bool body_was_empty = false;
+	server.RegisterService("Echo",
+		[&body_was_empty](const std::string& method, const std::string& body) -> std::string {
+			body_was_empty = body.empty();
+			return "ok";
+		});
+
+	RpcRequest req;
+	req.header.msgid = 1; req.header.service = "Echo"; req.header.method = "m"; req.body = "";
+	auto resp = server.HandleRequest(req);
+	REQUIRE(resp.success == true);
+	REQUIRE(body_was_empty);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RPC Integration: full round-trip with error / service not found
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("RPC client-server round-trip with error", "[rpc][integration]") {
+	RpcServer server;
+	server.RegisterService("CalcService",
+		[](const std::string& method, const std::string&) -> std::string {
+			if (method == "div") throw std::runtime_error("division by zero");
+			return "{}";
+		});
+
+	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
+	auto future = client.Call("CalcService", "div", R"({"a":1,"b":0})");
+
+	RpcRequest req;
+	req.header.msgid = 1;
+	req.header.service = "CalcService";
+	req.header.method = "div";
+	req.header.type = RpcMessageType::kRequest;
+	req.body = R"({"a":1,"b":0})";
+
+	RpcResponse svcResp = server.HandleRequest(req);
+	REQUIRE(svcResp.success == false);
+	REQUIRE(svcResp.error_code == 500);
+	REQUIRE(svcResp.error_message == "division by zero");
+
+	client.OnResponse(svcResp);
+	auto status = future.wait_for(std::chrono::milliseconds(50));
+	REQUIRE(status == std::future_status::ready);
+
+	RpcResponse result = future.get();
+	REQUIRE(result.success == false);
+	REQUIRE(result.error_code == 500);
+	REQUIRE(result.error_message == "division by zero");
+}
+
+TEST_CASE("RPC client-server round-trip service not found", "[rpc][integration]") {
+	RpcServer server;
+	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
+
+	auto future = client.Call("NonExistent", "method", "{}");
+
+	RpcRequest req;
+	req.header.msgid = 1;
+	req.header.service = "NonExistent";
+	req.header.method = "method";
+	req.header.type = RpcMessageType::kRequest;
+	req.body = "{}";
+
+	RpcResponse svcResp = server.HandleRequest(req);
+	REQUIRE(svcResp.success == false);
+	REQUIRE(svcResp.error_code == 404);
+
+	client.OnResponse(svcResp);
+	auto status = future.wait_for(std::chrono::milliseconds(50));
+	REQUIRE(status == std::future_status::ready);
+
+	RpcResponse result = future.get();
+	REQUIRE(result.success == false);
+	REQUIRE(result.error_code == 404);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RPC Stress: many concurrent pending requests
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("RpcClient handles 100 concurrent pending requests", "[rpc][stress]") {
+	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
+	std::vector<std::future<RpcResponse>> futures;
+
+	for (int i = 0; i < 100; ++i) {
+		futures.push_back(client.Call("Svc", "m" + std::to_string(i), "{}"));
+	}
+	REQUIRE(client.PendingCount() == 100);
+
+	// Resolve all in reverse order.
+	for (int i = 99; i >= 0; --i) {
+		client.OnResponse(RpcResponse::Ok(static_cast<uint32_t>(i + 1),
+			"result_" + std::to_string(i)));
+	}
+
+	REQUIRE(client.PendingCount() == 0);
+	for (int i = 0; i < 100; ++i) {
+		auto status = futures[i].wait_for(std::chrono::milliseconds(10));
+		REQUIRE(status == std::future_status::ready);
+		REQUIRE(futures[i].get().body == "result_" + std::to_string(i));
+	}
 }
