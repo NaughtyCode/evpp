@@ -331,9 +331,13 @@ void ConfigManager::UnregisterReloadCallback(int id) {
 void ConfigManager::NotifyReloadCallbacks() {
 	if (reloading_.exchange(true)) return;  // prevent re-entrant reload
 
-	std::shared_lock<std::shared_mutex> lock(callbacks_mutex_);
+	std::vector<std::pair<int, ReloadCallback>> callbacks_copy;
+	{
+		std::shared_lock<std::shared_mutex> lock(callbacks_mutex_);
+		callbacks_copy = callbacks_;
+	}
 	auto* logger = GetLogger();
-	for (auto& [id, callback] : callbacks_) {
+	for (auto& [id, callback] : callbacks_copy) {
 		try {
 			callback();
 		} catch (const std::exception& e) {

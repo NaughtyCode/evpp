@@ -17,8 +17,12 @@ FileWatcher::~FileWatcher() {
 
 void FileWatcher::WatchDirectory(const std::string& path,
                                   const std::string& extension) {
-	watch_dirs_.push_back(path);
-	extension_ = extension;
+	watch_entries_.push_back({path, extension});
+
+	auto* logger = GetLogger();
+	ENGINE_LOG_INFO(logger,
+	                "FileWatcher: watching [{}] for [{}] files",
+	                path, extension);
 }
 
 void FileWatcher::SetChangeCallback(ChangeCallback callback) {
@@ -30,9 +34,10 @@ void FileWatcher::Start(int poll_interval_ms) {
 
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger,
-					"FileWatcher: starting, watching [{}] dir(s), interval=[{}ms]",
-					watch_dirs_.size(),
-					poll_interval_ms);
+	                "FileWatcher: starting, watching [{}] dir(s), "
+	                "interval=[{}ms]",
+	                watch_entries_.size(),
+	                poll_interval_ms);
 
 	running_.store(true, std::memory_order_release);
 	thread_ = std::make_unique<std::thread>(
@@ -72,36 +77,65 @@ void FileWatcher::WatchLoop(int poll_interval_ms) {
 	ENGINE_LOG_INFO(logger, "FileWatcher: watch loop exited");
 }
 
+// Convert filesystem file_time_type to system_clock time_point.
+// Uses the approach: (file_time - file_clock::now) + system_clock::now
+// This computes the age of the file and applies it to system_clock,
+// which works correctly even when the clocks have different epochs.
+static std::chrono::system_clock::time_point ToSystemClock(
+    std::filesystem::file_time_type ftime) {
+	auto file_now = std::filesystem::file_time_type::clock::now();
+	auto sys_now = std::chrono::system_clock::now();
+	auto age = file_now - ftime;
+	return sys_now - std::chrono::duration_cast<
+	                    std::chrono::system_clock::duration>(age);
+}
+
 std::vector<std::string> FileWatcher::ScanChanges() {
 	std::vector<std::string> changed;
 	std::error_code ec;
 
-	for (const auto& dir : watch_dirs_) {
-		if (!std::filesystem::exists(dir, ec)) continue;
+	// Track which known files were seen this scan to detect deletions.
+	std::unordered_map<std::string, bool> seen;
 
-		for (auto it = std::filesystem::recursive_directory_iterator(dir, ec);
-			 it != std::filesystem::recursive_directory_iterator(); ++it) {
+	for (const auto& entry : watch_entries_) {
+		if (!std::filesystem::exists(entry.path, ec)) {
+			if (ec) ec.clear();
+			continue;
+		}
+
+		for (auto it = std::filesystem::recursive_directory_iterator(
+		         entry.path, ec);
+		     it != std::filesystem::recursive_directory_iterator();
+		     ++it) {
 			if (ec) {
 				ec.clear();
 				continue;
 			}
 
-			const auto& entry = *it;
-			if (!entry.is_regular_file(ec)) continue;
+			const auto& dir_entry = *it;
+			if (!dir_entry.is_regular_file(ec)) continue;
 			if (ec) { ec.clear(); continue; }
 
-			auto path_str = entry.path().string();
-			if (!extension_.empty() && entry.path().extension().string() != extension_) {
+			auto ext = dir_entry.path().extension().string();
+			if (!entry.extension.empty() && ext != entry.extension) {
 				continue;
 			}
 
-			auto ftime = std::filesystem::last_write_time(entry, ec);
+			auto path_str = dir_entry.path().string();
+			seen[path_str] = true;
+
+			auto ftime = std::filesystem::last_write_time(dir_entry, ec);
 			if (ec) { ec.clear(); continue; }
 
-			// Convert filesystem time_point to system_clock time_point
-			auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-				ftime - std::filesystem::file_time_type::clock::now() +
-				std::chrono::system_clock::now());
+			auto sctp = ToSystemClock(ftime);
+
+			// New file detection: report files not previously known.
+			if (known_files_.find(path_str) == known_files_.end()) {
+				known_files_[path_str] = true;
+				file_times_[path_str] = sctp;
+				changed.push_back(path_str);
+				continue;
+			}
 
 			auto it_mtime = file_times_.find(path_str);
 			if (it_mtime == file_times_.end()) {
@@ -110,6 +144,16 @@ std::vector<std::string> FileWatcher::ScanChanges() {
 				it_mtime->second = sctp;
 				changed.push_back(path_str);
 			}
+		}
+	}
+
+	// Clean up stale entries for files that no longer exist.
+	for (auto it = known_files_.begin(); it != known_files_.end(); ) {
+		if (seen.find(it->first) == seen.end()) {
+			file_times_.erase(it->first);
+			it = known_files_.erase(it);
+		} else {
+			++it;
 		}
 	}
 

@@ -1,9 +1,11 @@
 #include "runtime/vm/script_reloader.h"
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 
 #include "runtime/core/log/log.h"
+#include "runtime/evpp/event_loop.h"
 #include "runtime/vm/file_watcher.h"
 #include "runtime/vm/sandbox.h"
 #include "runtime/vm/script_importer.h"
@@ -28,15 +30,19 @@ void ScriptReloader::SetTarget(ScriptVM* vm,
 	script_dirs_ = script_dirs;
 }
 
+void ScriptReloader::SetEventLoop(evpp::EventLoop* loop) {
+	loop_ = loop;
+}
+
 void ScriptReloader::Start(int poll_interval_ms, int debounce_ms) {
 	if (!vm_) {
 		auto* logger = GetLogger();
-		ENGINE_LOG_ERROR(logger, "ScriptReloader: SetTarget() must be called before Start()");
+		ENGINE_LOG_ERROR(logger,
+			"ScriptReloader: SetTarget() must be called before Start()");
 		return;
 	}
 
 	debounce_ms_ = debounce_ms;
-	last_reload_time_ = std::chrono::steady_clock::now();
 
 	watcher_ = std::make_unique<FileWatcher>();
 	for (const auto& dir : script_dirs_) {
@@ -50,9 +56,11 @@ void ScriptReloader::Start(int poll_interval_ms, int debounce_ms) {
 
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger,
-					"ScriptReloader: started, watching [{}] dir(s), debounce=[{}ms]",
-					script_dirs_.size(),
-					debounce_ms);
+	                "ScriptReloader: started, watching [{}] dir(s), "
+	                "debounce=[{}ms], dispatch=[{}]",
+	                script_dirs_.size(),
+	                debounce_ms,
+	                loop_ ? "event_loop" : "direct");
 }
 
 void ScriptReloader::Stop() {
@@ -62,55 +70,110 @@ void ScriptReloader::Stop() {
 	}
 }
 
+//=============================================================================
+// OnFilesChanged — called on watcher thread
+//=============================================================================
+
 void ScriptReloader::OnFilesChanged(const std::vector<std::string>& files) {
-	// Debounce: skip if within the debounce window
-	auto now = std::chrono::steady_clock::now();
-	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-					   now - last_reload_time_)
-					   .count();
-	if (elapsed < debounce_ms_) return;
-
-	last_reload_time_ = now;
-
 	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger,
-					"ScriptReloader: [{}] file(s) changed, triggering reload",
-					files.size());
 
-	// Validate and reload each changed file
-	bool all_ok = true;
+	// Per-file debounce: filter out files changed within the debounce window.
+	auto now = std::chrono::steady_clock::now();
+	std::vector<std::string> ready_files;
 	for (const auto& file : files) {
-		if (!ValidateScript(file)) {
-			ENGINE_LOG_ERROR(logger,
-							 "ScriptReloader: validation failed for [{}], "
-							 "skipping",
-							 file);
-			all_ok = false;
-			if (reload_callback_) reload_callback_(file, false);
-			continue;
+		auto it = file_reload_times_.find(file);
+		if (it != file_reload_times_.end()) {
+			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+				now - it->second).count();
+			if (elapsed < debounce_ms_) {
+				ENGINE_LOG_DEBUG(logger,
+					"ScriptReloader: debounce skip [{}] ({}ms < {}ms)",
+					file, elapsed, debounce_ms_);
+				continue;
+			}
 		}
-
-		if (!ReloadFile(file)) {
-			ENGINE_LOG_ERROR(logger, "ScriptReloader: reload failed for [{}]", file);
-			all_ok = false;
-			if (reload_callback_) reload_callback_(file, false);
-			continue;
-		}
-
-		ENGINE_LOG_INFO(logger, "ScriptReloader: reloaded [{}] successfully", file);
-		if (reload_callback_) reload_callback_(file, true);
+		file_reload_times_[file] = now;
+		ready_files.push_back(file);
 	}
 
-	if (all_ok) {
-		ENGINE_LOG_INFO(logger, "ScriptReloader: all [{}] file(s) reloaded OK", files.size());
+	if (ready_files.empty()) return;
+
+	ENGINE_LOG_INFO(logger,
+	                "ScriptReloader: [{}] file(s) changed after debounce",
+	                ready_files.size());
+
+	// Validate each changed file in a sandbox VM (thread-safe).
+	std::vector<std::string> valid_files;
+	for (const auto& file : ready_files) {
+		if (ValidateScript(file)) {
+			valid_files.push_back(file);
+		} else {
+			ENGINE_LOG_ERROR(logger,
+				"ScriptReloader: validation failed for [{}], skipping",
+				file);
+			if (reload_callback_) reload_callback_(file, false);
+		}
+	}
+
+	if (valid_files.empty()) return;
+
+	// Dispatch reload to the main thread if an EventLoop is available.
+	if (loop_) {
+		loop_->RunInLoop([this, files = std::move(valid_files)]() {
+			ProcessReloadList(files);
+		});
+	} else {
+		// No event loop — enqueue for manual processing.
+		// This path is safe only in single-threaded test environments.
+		std::lock_guard<std::mutex> lock(pending_mutex_);
+		pending_reloads_.insert(pending_reloads_.end(),
+		                        valid_files.begin(), valid_files.end());
 	}
 }
 
-bool ScriptReloader::ValidateScript(const std::string& filepath) {
-	// Create a temporary Lua VM for isolated validation.
-	// This VM shares no state with the real ScriptVM, so syntax errors
-	// and load-time errors here do not affect the running system.
+//=============================================================================
+// ProcessReloadList — called on main thread (via EventLoop or manual)
+//=============================================================================
 
+void ScriptReloader::ProcessReloadList(const std::vector<std::string>& files) {
+	auto* logger = GetLogger();
+	bool all_ok = true;
+
+	for (const auto& file : files) {
+		if (!ReloadFile(file)) {
+			ENGINE_LOG_ERROR(logger,
+				"ScriptReloader: reload failed for [{}]", file);
+			all_ok = false;
+			if (reload_callback_) reload_callback_(file, false);
+		} else {
+			ENGINE_LOG_INFO(logger,
+				"ScriptReloader: reloaded [{}] successfully", file);
+			if (reload_callback_) reload_callback_(file, true);
+		}
+	}
+
+	if (all_ok && !files.empty()) {
+		ENGINE_LOG_INFO(logger,
+			"ScriptReloader: all [{}] file(s) reloaded OK", files.size());
+	}
+}
+
+void ScriptReloader::ProcessPendingReloads() {
+	std::vector<std::string> files;
+	{
+		std::lock_guard<std::mutex> lock(pending_mutex_);
+		files.swap(pending_reloads_);
+	}
+	if (!files.empty()) {
+		ProcessReloadList(files);
+	}
+}
+
+//=============================================================================
+// ValidateScript — runs on watcher thread (creates its own lua_State)
+//=============================================================================
+
+bool ScriptReloader::ValidateScript(const std::string& filepath) {
 	auto* logger = GetLogger();
 
 	if (!std::filesystem::exists(filepath)) {
@@ -120,33 +183,31 @@ bool ScriptReloader::ValidateScript(const std::string& filepath) {
 
 	lua_State* L = luaL_newstate();
 	if (!L) {
-		ENGINE_LOG_ERROR(logger, "ScriptReloader: failed to create validation Lua state");
+		ENGINE_LOG_ERROR(logger,
+			"ScriptReloader: failed to create validation Lua state");
 		return false;
 	}
 	luaL_openlibs_sandboxed(L, LuaSandboxLevel::Strict);
 
-	// Load the file as a Lua chunk. Do NOT execute — just compile.
+	// Load the file as a Lua chunk and execute in the sandbox.
+	// Using pcall to catch both compile-time and top-level runtime errors.
 	int ret = luaL_loadfile(L, filepath.c_str());
 	if (ret != LUA_OK) {
 		ENGINE_LOG_WARN(logger,
-						"ScriptReloader: validation failed for [{}]: {}",
-						filepath,
-						lua_tostring(L, -1));
+		                "ScriptReloader: validation compile failed [{}]: {}",
+		                filepath,
+		                lua_tostring(L, -1));
 		lua_pop(L, 1);
 		lua_close(L);
 		return false;
 	}
 
-	// Optionally run the chunk to catch runtime errors in top-level code.
-	// This is a trade-off: running in sandbox may have side effects
-	// (e.g., globals), but catches more errors than compile-only.
-	// We run in the sandbox so side effects are isolated.
 	ret = lua_pcall(L, 0, 0, 0);
 	if (ret != LUA_OK) {
 		ENGINE_LOG_WARN(logger,
-						"ScriptReloader: runtime validation failed for [{}]: {}",
-						filepath,
-						lua_tostring(L, -1));
+		                "ScriptReloader: validation runtime failed [{}]: {}",
+		                filepath,
+		                lua_tostring(L, -1));
 		lua_pop(L, 1);
 		lua_close(L);
 		return false;
@@ -156,23 +217,59 @@ bool ScriptReloader::ValidateScript(const std::string& filepath) {
 	return true;
 }
 
+//=============================================================================
+// ReloadFile — main-thread only, accesses the real ScriptVM
+//=============================================================================
+
 bool ScriptReloader::ReloadFile(const std::string& filepath) {
 	if (!vm_) return false;
 
 	auto* L = vm_->GetState();
 	if (!L) return false;
 
-	// Snapshot globals before reload (best-effort rollback)
+	// Extract module name as dotted path relative to the watched directories.
+	std::string module_name;
+	std::filesystem::path fp(filepath);
+	for (const auto& dir : script_dirs_) {
+		std::filesystem::path dp(dir);
+		// Normalize both paths for comparison.
+		std::string fp_str = std::filesystem::absolute(fp).string();
+		std::string dp_str = std::filesystem::absolute(dp).string();
+		if (fp_str.size() > dp_str.size() &&
+		    fp_str.compare(0, dp_str.size(), dp_str) == 0) {
+			// Remove the directory prefix and ".lua" extension.
+			std::string relative = fp_str.substr(
+				dp_str.size() + (dp_str.back() == '/' ||
+				                 dp_str.back() == '\\' ? 0 : 1));
+			// Replace path separators with dots.
+			for (auto& c : relative) {
+				if (c == '/' || c == '\\') c = '.';
+			}
+			// Remove .lua extension.
+			if (relative.size() > 4 &&
+			    relative.compare(relative.size() - 4, 4, ".lua") == 0) {
+				relative.resize(relative.size() - 4);
+			}
+			module_name = relative;
+			break;
+		}
+	}
+
+	if (module_name.empty()) {
+		// Fallback: use stem as module name.
+		module_name = fp.stem().string();
+	}
+
+	auto* logger = GetLogger();
+	ENGINE_LOG_INFO(logger,
+		"ScriptReloader: reloading module [{}] from [{}]",
+		module_name, filepath);
+
+	// Snapshot globals and package.loaded entry before reload.
 	SnapshotGlobals(L);
+	SnapshotPackageLoaded(L, module_name);
 
-	// Clear the import cache so the file is re-loaded fresh
-	vm_->GetImporter().ClearCache(L);
-
-	// Extract module name from file path
-	std::string module_name =
-		std::filesystem::path(filepath).stem().string();
-
-	// Remove the module from package.loaded so it gets re-imported
+	// Remove only this module from package.loaded (not the entire cache).
 	lua_getglobal(L, "package");
 	if (lua_istable(L, -1)) {
 		lua_getfield(L, -1, "loaded");
@@ -184,33 +281,47 @@ bool ScriptReloader::ReloadFile(const std::string& filepath) {
 	}
 	lua_pop(L, 1);
 
-	// Load and execute the file
+	// Also clear the import cache tracking so re-imports resolve fresh.
+	vm_->GetImporter().ClearCache(L);
+	// Re-set the cleared module to nil to match the state we want.
+	lua_getglobal(L, "package");
+	if (lua_istable(L, -1)) {
+		lua_getfield(L, -1, "loaded");
+		if (lua_istable(L, -1)) {
+			lua_pushnil(L);
+			lua_setfield(L, -2, module_name.c_str());
+		}
+		lua_pop(L, 1);
+	}
+	lua_pop(L, 1);
+
+	// Load and execute the file.
 	int ret = luaL_loadfile(L, filepath.c_str());
 	if (ret != LUA_OK) {
-		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger,
-						 "ScriptReloader: load failed for [{}]: {}",
-						 filepath,
-						 lua_tostring(L, -1));
+		                 "ScriptReloader: load failed for [{}]: {}",
+		                 filepath,
+		                 lua_tostring(L, -1));
 		lua_pop(L, 1);
 		RestoreGlobals(L);
+		RestorePackageLoaded(L, module_name);
 		return false;
 	}
 
-	// Run the chunk
+	// Run the chunk.
 	ret = lua_pcall(L, 0, 1, 0);
 	if (ret != LUA_OK) {
-		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger,
-						 "ScriptReloader: execute failed for [{}]: {}",
-						 filepath,
-						 lua_tostring(L, -1));
+		                 "ScriptReloader: execute failed for [{}]: {}",
+		                 filepath,
+		                 lua_tostring(L, -1));
 		lua_pop(L, 1);
 		RestoreGlobals(L);
+		RestorePackageLoaded(L, module_name);
 		return false;
 	}
 
-	// If the module returned a table, register it in package.loaded
+	// If the module returned a table, register it in package.loaded.
 	if (lua_istable(L, -1)) {
 		lua_getglobal(L, "package");
 		if (lua_istable(L, -1)) {
@@ -225,8 +336,18 @@ bool ScriptReloader::ReloadFile(const std::string& filepath) {
 	}
 	lua_pop(L, 1);  // pop return value
 
+	// Release the package.loaded snapshot — reload succeeded.
+	if (package_loaded_snapshot_ref_ != LUA_NOREF) {
+		luaL_unref(L, LUA_REGISTRYINDEX, package_loaded_snapshot_ref_);
+		package_loaded_snapshot_ref_ = LUA_NOREF;
+	}
+
 	return true;
 }
+
+//=============================================================================
+// ReloadAll — main-thread only
+//=============================================================================
 
 bool ScriptReloader::ReloadAll() {
 	auto* logger = GetLogger();
@@ -236,21 +357,30 @@ bool ScriptReloader::ReloadAll() {
 	for (const auto& dir : script_dirs_) {
 		std::error_code ec;
 		for (auto it = std::filesystem::recursive_directory_iterator(dir, ec);
-			 it != std::filesystem::recursive_directory_iterator(); ++it) {
-			if (ec) break;
+		     it != std::filesystem::recursive_directory_iterator(); ++it) {
+			if (ec) {
+				ENGINE_LOG_WARN(logger,
+					"ScriptReloader: iteration error in [{}]: {}",
+					dir, ec.message());
+				ec.clear();
+				continue;
+			}
 			const auto& entry = *it;
-			if (entry.is_regular_file() && entry.path().extension() == ".lua") {
+			if (entry.is_regular_file(ec) &&
+			    entry.path().extension() == ".lua") {
 				if (!ReloadFile(entry.path().string())) {
 					all_ok = false;
 				}
 			}
+			if (ec) ec.clear();
 		}
 	}
 
 	if (all_ok) {
 		ENGINE_LOG_INFO(logger, "ScriptReloader: all scripts reloaded OK");
 	} else {
-		ENGINE_LOG_ERROR(logger, "ScriptReloader: some scripts failed to reload");
+		ENGINE_LOG_ERROR(logger,
+			"ScriptReloader: some scripts failed to reload");
 	}
 
 	return all_ok;
@@ -258,6 +388,47 @@ bool ScriptReloader::ReloadAll() {
 
 void ScriptReloader::SetReloadCallback(ReloadCallback callback) {
 	reload_callback_ = std::move(callback);
+}
+
+//=============================================================================
+// Snapshot / Restore — typed, with package.loaded support
+//=============================================================================
+
+void ScriptReloader::SnapshotGlobal(lua_State* L, const char* key) {
+	int t = lua_type(L, -1);
+	SnapshotValue sv;
+
+	switch (t) {
+	case LUA_TBOOLEAN:
+		sv.type = SnapshotValue::Type::Boolean;
+		sv.bool_val = lua_toboolean(L, -1);
+		break;
+	case LUA_TNUMBER:
+		if (lua_isinteger(L, -1)) {
+			sv.type = SnapshotValue::Type::Integer;
+			sv.int_val = lua_tointeger(L, -1);
+		} else {
+			sv.type = SnapshotValue::Type::Number;
+			sv.num_val = lua_tonumber(L, -1);
+		}
+		break;
+	case LUA_TSTRING:
+		sv.type = SnapshotValue::Type::String;
+		{
+			size_t len;
+			const char* s = lua_tolstring(L, -1, &len);
+			if (s) sv.str_val.assign(s, len);
+		}
+		break;
+	case LUA_TNIL:
+		sv.type = SnapshotValue::Type::Nil;
+		break;
+	default:
+		// Tables, functions, userdata — not snapshottable.
+		return;
+	}
+
+	global_snapshot_[key] = std::move(sv);
 }
 
 void ScriptReloader::SnapshotGlobals(lua_State* L) {
@@ -269,16 +440,7 @@ void ScriptReloader::SnapshotGlobals(lua_State* L) {
 		if (lua_type(L, -2) == LUA_TSTRING) {
 			const char* key = lua_tostring(L, -2);
 			if (key) {
-				// Best-effort: snapshot string/number/boolean values
-				if (lua_isstring(L, -1)) {
-					global_snapshot_[key] = lua_tostring(L, -1);
-				} else if (lua_isinteger(L, -1)) {
-					global_snapshot_[key] = std::to_string(lua_tointeger(L, -1));
-				} else if (lua_isnumber(L, -1)) {
-					global_snapshot_[key] = std::to_string(lua_tonumber(L, -1));
-				} else if (lua_isboolean(L, -1)) {
-					global_snapshot_[key] = lua_toboolean(L, -1) ? "true" : "false";
-				}
+				SnapshotGlobal(L, key);
 			}
 		}
 		lua_pop(L, 1);
@@ -287,10 +449,76 @@ void ScriptReloader::SnapshotGlobals(lua_State* L) {
 }
 
 void ScriptReloader::RestoreGlobals(lua_State* L) {
-	for (const auto& [key, value] : global_snapshot_) {
-		lua_pushstring(L, value.c_str());
+	for (const auto& [key, sv] : global_snapshot_) {
+		switch (sv.type) {
+		case SnapshotValue::Type::Nil:
+			lua_pushnil(L);
+			break;
+		case SnapshotValue::Type::Boolean:
+			lua_pushboolean(L, sv.bool_val ? 1 : 0);
+			break;
+		case SnapshotValue::Type::Integer:
+			lua_pushinteger(L, sv.int_val);
+			break;
+		case SnapshotValue::Type::Number:
+			lua_pushnumber(L, sv.num_val);
+			break;
+		case SnapshotValue::Type::String:
+			lua_pushlstring(L, sv.str_val.data(), sv.str_val.size());
+			break;
+		}
 		lua_setglobal(L, key.c_str());
 	}
+}
+
+void ScriptReloader::SnapshotPackageLoaded(lua_State* L,
+                                            const std::string& module_name) {
+	// Release any previous snapshot.
+	if (package_loaded_snapshot_ref_ != LUA_NOREF) {
+		luaL_unref(L, LUA_REGISTRYINDEX, package_loaded_snapshot_ref_);
+		package_loaded_snapshot_ref_ = LUA_NOREF;
+	}
+	package_loaded_snapshot_key_ = module_name;
+
+	// Snapshot the current package.loaded[module_name] value.
+	lua_getglobal(L, "package");       // ..., pkg
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 1);
+		return;
+	}
+	lua_getfield(L, -1, "loaded");     // ..., pkg, loaded
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 2);
+		return;
+	}
+	lua_getfield(L, -1, module_name.c_str());  // ..., pkg, loaded, value
+	package_loaded_snapshot_ref_ = luaL_ref(L, LUA_REGISTRYINDEX);
+	lua_pop(L, 2);  // pop loaded, pkg
+}
+
+void ScriptReloader::RestorePackageLoaded(lua_State* L,
+                                           const std::string& module_name) {
+	if (package_loaded_snapshot_ref_ == LUA_NOREF) return;
+	if (module_name != package_loaded_snapshot_key_) return;
+
+	lua_getglobal(L, "package");
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 1);
+		return;
+	}
+	lua_getfield(L, -1, "loaded");
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 2);
+		return;
+	}
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, package_loaded_snapshot_ref_);
+	lua_setfield(L, -2, module_name.c_str());
+
+	lua_pop(L, 2);  // pop loaded, pkg
+
+	luaL_unref(L, LUA_REGISTRYINDEX, package_loaded_snapshot_ref_);
+	package_loaded_snapshot_ref_ = LUA_NOREF;
 }
 
 }  // namespace engine

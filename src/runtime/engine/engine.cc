@@ -250,6 +250,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		if (reload_root.empty()) reload_root = ".";
 		script_reloader_ = std::make_unique<ScriptReloader>();
 		script_reloader_->SetTarget(script_vm_.get(), {reload_root});
+		script_reloader_->SetEventLoop(loop_);
 		script_reloader_->SetReloadCallback(
 			[](const std::string& file, bool success) {
 				auto* logger = GetLogger();
@@ -259,6 +260,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 					ENGINE_LOG_ERROR(logger, "hot-reload FAILED: {}", file);
 				}
 			});
+		script_reloader_->Start();
 	}
 
 	last_frame_time_ = std::chrono::steady_clock::now();
@@ -350,10 +352,6 @@ void Engine::Start() {
 	last_frame_time_ = std::chrono::steady_clock::now();
 	last_work_time_ = last_frame_time_;
 
-	// Start hot-reload file watcher on the reloader's own thread.
-	if (script_reloader_) {
-		script_reloader_->Start();
-	}
 
 
 	ENGINE_LOG_INFO(logger, "Start() complete, running_=true");
@@ -421,6 +419,10 @@ void Engine::Cleanup() {
 
 	cleanup_phase_ = CleanupPhase::PhysicsShutdown;
 	PhysicsEngineBridge::Instance().Shutdown();
+	// Stop hot-reload before any VM teardown to prevent watcher thread from accessing Lua state.
+	if (script_reloader_) {
+		script_reloader_->Stop();
+	}
 
 	cleanup_phase_ = CleanupPhase::DatabaseShutdown;
 #if defined(ENGINE_MONGODB_ENABLED)
@@ -433,9 +435,6 @@ void Engine::Cleanup() {
 		frame_timer_.reset();
 	}
 
-	if (script_reloader_) {
-		script_reloader_->Stop();
-	}
 
 	admin_server_.Stop();
 
