@@ -112,7 +112,15 @@ void FileWatcher::WatchLoop(int poll_interval_ms) {
 
 		auto changed = ScanChanges();
 		if (!changed.empty() && callback_) {
-			callback_(changed);
+			try {
+				callback_(changed);
+			} catch (const std::exception& e) {
+				ENGINE_LOG_ERROR(logger,
+					"FileWatcher: callback exception: {}", e.what());
+			} catch (...) {
+				ENGINE_LOG_ERROR(logger,
+					"FileWatcher: callback exception: unknown");
+			}
 		}
 	}
 

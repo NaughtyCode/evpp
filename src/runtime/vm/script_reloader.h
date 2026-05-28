@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "runtime/core/engine_api.h"
+#include "runtime/vm/sandbox.h"
 
 struct lua_State;
 
@@ -62,6 +63,12 @@ class ENGINE_API ScriptReloader {
 	// Set the EventLoop for main-thread dispatch.
 	// Required for thread-safe reload. Call before Start().
 	void SetEventLoop(evpp::EventLoop* loop);
+
+	// Set the sandbox level used when validating scripts.
+	// Must match the target ScriptVM's sandbox level so that scripts
+	// using io/os (allowed in Server/Full levels) can pass validation.
+	// Default: Strict. Call before Start().
+	void SetSandboxLevel(LuaSandboxLevel level);
 
 	// Start file watching and hot-reload.
 	// poll_interval_ms: how often to scan for file changes.
@@ -121,6 +128,7 @@ class ENGINE_API ScriptReloader {
 	evpp::EventLoop* loop_ = nullptr;
 	std::vector<std::string> script_dirs_;
 	std::unique_ptr<FileWatcher> watcher_;
+	LuaSandboxLevel sandbox_level_ = LuaSandboxLevel::Strict;
 
 	ReloadCallback reload_callback_;
 

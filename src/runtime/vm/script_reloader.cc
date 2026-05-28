@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <unordered_set>
 
 #include "runtime/core/log/log.h"
 #include "runtime/evpp/event_loop.h"
@@ -32,6 +33,10 @@ void ScriptReloader::SetTarget(ScriptVM* vm,
 
 void ScriptReloader::SetEventLoop(evpp::EventLoop* loop) {
 	loop_ = loop;
+}
+
+void ScriptReloader::SetSandboxLevel(LuaSandboxLevel level) {
+	sandbox_level_ = level;
 }
 
 void ScriptReloader::Start(int poll_interval_ms, int debounce_ms) {
@@ -105,7 +110,6 @@ void ScriptReloader::OnFilesChanged(const std::vector<std::string>& files) {
 				continue;
 			}
 		}
-		file_reload_times_[file] = now;
 		ready_files.push_back(file);
 	}
 
@@ -116,11 +120,15 @@ void ScriptReloader::OnFilesChanged(const std::vector<std::string>& files) {
 	                ready_files.size());
 
 	// Validate each changed file in a sandbox VM (thread-safe).
+	// Debounce timestamps are set only after successful validation so that
+	// a validation failure does not block a subsequent change within the
+	// debounce window.
 	std::vector<std::string> valid_files;
 	std::vector<std::string> failed_files;
 	for (const auto& file : ready_files) {
 		if (ValidateScript(file)) {
 			valid_files.push_back(file);
+			file_reload_times_[file] = now;
 		} else {
 			ENGINE_LOG_ERROR(logger,
 				"ScriptReloader: validation failed for [{}], skipping",
@@ -202,6 +210,18 @@ void ScriptReloader::ProcessPendingReloads() {
 // ValidateScript — runs on watcher thread (creates its own lua_State)
 //=============================================================================
 
+// Minimal import() for validation sandbox — delegates to require().
+// Does not support import.setpath/addpath/loaded/clearcache or wildcard
+// imports; the goal is to let scripts that call import("mod.name") at the
+// top level pass validation, not to fully replicate the engine's import.
+static int l_validate_import(lua_State* L) {
+	const char* name = luaL_checkstring(L, 1);
+	lua_getglobal(L, "require");
+	lua_pushstring(L, name);
+	lua_call(L, 1, 1);
+	return 1;
+}
+
 bool ScriptReloader::ValidateScript(const std::string& filepath) {
 	auto* logger = GetLogger();
 
@@ -216,7 +236,31 @@ bool ScriptReloader::ValidateScript(const std::string& filepath) {
 			"ScriptReloader: failed to create validation Lua state");
 		return false;
 	}
-	luaL_openlibs_sandboxed(L, LuaSandboxLevel::Strict);
+	luaL_openlibs_sandboxed(L, sandbox_level_);
+
+	// Set package.path so require() can find modules relative to the
+	// watched script directories. Normalize backslashes for Lua runtime.
+	{
+		std::string pkg_path;
+		for (const auto& dir : script_dirs_) {
+			std::string norm = dir;
+			std::replace(norm.begin(), norm.end(), '\\', '/');
+			if (!norm.empty() && norm.back() != '/') norm += '/';
+			if (!pkg_path.empty()) pkg_path += ";";
+			pkg_path += norm + "?.lua;" + norm + "?/init.lua";
+		}
+		if (!pkg_path.empty()) {
+			lua_getglobal(L, "package");
+			lua_pushstring(L, pkg_path.c_str());
+			lua_setfield(L, -2, "path");
+			lua_pop(L, 1);
+		}
+	}
+
+	// Register a minimal import() so scripts that call import() at the
+	// top level can pass validation. This import delegates to require().
+	lua_pushcfunction(L, l_validate_import);
+	lua_setglobal(L, "import");
 
 	// Load the file as a Lua chunk and execute in the sandbox.
 	// Using pcall to catch both compile-time and top-level runtime errors.
@@ -423,8 +467,24 @@ bool ScriptReloader::ReloadAll() {
 
 	// Snapshot initial state for atomic rollback.
 	SnapshotGlobals(L);
-	// Save the snapshot away so per-file ReloadFile calls don't overwrite it.
 	auto initial_snapshot = std::move(global_snapshot_);
+
+	// Record all pre-existing global keys (including non-snapshottable
+	// types like functions and tables) so that after rollback we can
+	// nil out any globals that were created by partially-reloaded files.
+	std::unordered_set<std::string> initial_keys;
+	{
+		lua_pushglobaltable(L);
+		lua_pushnil(L);
+		while (lua_next(L, -2) != 0) {
+			if (lua_type(L, -2) == LUA_TSTRING) {
+				const char* key = lua_tostring(L, -2);
+				if (key) initial_keys.insert(key);
+			}
+			lua_pop(L, 1);
+		}
+		lua_pop(L, 1);
+	}
 
 	bool all_ok = true;
 	auto now = std::chrono::steady_clock::now();
@@ -452,6 +512,36 @@ bool ScriptReloader::ReloadAll() {
 		// Restore initial global state, undoing all successful reloads.
 		global_snapshot_ = std::move(initial_snapshot);
 		RestoreGlobals(L);
+
+		// Nil out globals that were created during the reload (keys that
+		// exist now but were not present before the reload). The initial
+		// snapshot only covers scalars, so table/function keys are handled
+		// by the key-set check rather than snapshot lookup.
+		{
+			std::vector<std::string> leaked_keys;
+			lua_pushglobaltable(L);
+			lua_pushnil(L);
+			while (lua_next(L, -2) != 0) {
+				if (lua_type(L, -2) == LUA_TSTRING) {
+					const char* key = lua_tostring(L, -2);
+					if (key && initial_keys.find(key) == initial_keys.end()) {
+						leaked_keys.push_back(key);
+					}
+				}
+				lua_pop(L, 1);
+			}
+			lua_pop(L, 1);
+			for (const auto& key : leaked_keys) {
+				lua_pushnil(L);
+				lua_setglobal(L, key.c_str());
+			}
+			if (!leaked_keys.empty()) {
+				ENGINE_LOG_WARN(logger,
+					"ScriptReloader: rollback cleaned up [{}] leaked global(s)",
+					leaked_keys.size());
+			}
+		}
+
 		ENGINE_LOG_ERROR(logger,
 			"ScriptReloader: reload-all rolled back to initial state");
 		return false;

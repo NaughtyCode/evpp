@@ -250,6 +250,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		if (reload_root.empty()) reload_root = ".";
 		script_reloader_ = std::make_unique<ScriptReloader>();
 		script_reloader_->SetTarget(script_vm_.get(), {reload_root});
+		script_reloader_->SetSandboxLevel(sandbox_level);
 		script_reloader_->SetEventLoop(loop_);
 		script_reloader_->SetReloadCallback(
 			[](const std::string& file, bool success) {
