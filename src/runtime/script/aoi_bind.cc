@@ -3,6 +3,7 @@
 #include "runtime/aoi/aoi_manager.h"
 #include "runtime/aoi/spatial_index.h"
 #include "runtime/core/log/log.h"
+#include "runtime/vm/lua_error_handler.h"
 #include "runtime/vm/vm.h"
 
 extern "C" {
@@ -60,7 +61,8 @@ int l_aoi_set_event_callback(lua_State* L) {
 		lua_pushinteger(L, static_cast<lua_Integer>(observer));
 		lua_pushinteger(L, static_cast<lua_Integer>(target));
 		lua_pushboolean(L, entered ? 1 : 0);
-		if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
+		int msgh = PushLuaErrorHandlerForCall(L, 3);
+		if (lua_pcall(L, 3, 0, msgh) != LUA_OK) {
 			auto* logger = GetLogger();
 			ENGINE_LOG_ERROR(logger, "AOI callback error: {}", lua_tostring(L, -1));
 			lua_pop(L, 1);

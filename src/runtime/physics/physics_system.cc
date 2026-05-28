@@ -15,6 +15,7 @@
 #include "runtime/profiler/profiler_events.h"
 #include "runtime/script/import_bind.h"
 #include "runtime/vm/custom_ptr_store.h"
+#include "runtime/vm/lua_error_handler.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {
@@ -430,7 +431,8 @@ void PhysicsSystem::UpdateScript(const std::vector<CollisionEvent>& collision_ev
 		lua_setfield(L, -2, "points");
 
 		// Call on_physics_collision(event)
-		if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+		int msgh = PushLuaErrorHandlerForCall(L, 1);
+		if (lua_pcall(L, 1, 0, msgh) != LUA_OK) {
 			PHYSICS_LOG_ERROR(physics_thread_.GetLogger(),
 							  "PhysicsSystem: on_physics_collision error: {}",
 							  lua_tostring(L, -1));

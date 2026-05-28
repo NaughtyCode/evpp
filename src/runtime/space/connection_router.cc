@@ -3,6 +3,7 @@
 #include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
 #include "runtime/space/space_manager.h"
+#include "runtime/vm/lua_error_handler.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {
@@ -80,7 +81,8 @@ void ConnectionRouter::RouteMessage(evpp::TCPConnPtr conn, const std::string& da
 	lua_pushlightuserdata(L, conn.get());
 	lua_pushlstring(L, data.data(), data.size());
 
-	if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+	int msgh = PushLuaErrorHandlerForCall(L, 2);
+	if (lua_pcall(L, 2, 0, msgh) != LUA_OK) {
 		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger,
 						 "ConnectionRouter: message delivery error: {}",

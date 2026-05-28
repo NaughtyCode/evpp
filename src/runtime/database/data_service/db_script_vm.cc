@@ -9,6 +9,7 @@
 #include "runtime/database/mongo/mongo_client_pool.h"
 #include "runtime/database/mongo_bind/mongo_bind.h"
 #include "runtime/vm/custom_ptr_store.h"
+#include "runtime/vm/lua_error_handler.h"
 
 namespace engine {
 
@@ -344,7 +345,8 @@ void DBScriptVM::CallFrameCallback(int64_t frame_count, double delta_seconds) {
 	lua_pushnumber(L, delta_seconds);
 	lua_setfield(L, -2, "delta_seconds");
 
-	if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+	int msgh = PushLuaErrorHandlerForCall(L, 1);
+	if (lua_pcall(L, 1, 0, msgh) != LUA_OK) {
 		const char* err = lua_tostring(L, -1);
 		auto* thread = GetDBThread();
 		auto* logger = thread ? thread->GetLogger() : nullptr;

@@ -10,6 +10,7 @@
 #include "runtime/vm/file_watcher.h"
 #include "runtime/vm/sandbox.h"
 #include "runtime/vm/script_importer.h"
+#include "runtime/vm/lua_error_handler.h"
 #include "runtime/vm/vm.h"
 
 extern "C" {
@@ -96,9 +97,7 @@ void ScriptReloader::Stop() {
 	}
 }
 
-//=============================================================================
 // OnFilesChanged — called on watcher thread
-//=============================================================================
 
 void ScriptReloader::OnFilesChanged(const std::vector<std::string>& files) {
 	auto* logger = GetLogger();
@@ -175,9 +174,7 @@ void ScriptReloader::OnFilesChanged(const std::vector<std::string>& files) {
 	}
 }
 
-//=============================================================================
 // ProcessReloadList — called on main thread (via EventLoop or manual)
-//=============================================================================
 
 void ScriptReloader::ProcessReloadList(const std::vector<std::string>& files) {
 	auto* logger = GetLogger();
@@ -218,9 +215,7 @@ void ScriptReloader::ProcessPendingReloads() {
 	}
 }
 
-//=============================================================================
 // ValidateScript — runs on watcher thread (creates its own lua_State)
-//=============================================================================
 
 // Minimal import() for validation sandbox — delegates to require().
 // Does not support import.setpath/addpath/loaded/clearcache or wildcard
@@ -287,7 +282,10 @@ bool ScriptReloader::ValidateScript(const std::string& filepath) {
 		return false;
 	}
 
-	ret = lua_pcall(L, 0, 0, 0);
+	{
+		int msgh = PushLuaErrorHandlerForCall(L, 0);
+		ret = lua_pcall(L, 0, 0, msgh);
+	}
 	if (ret != LUA_OK) {
 		ENGINE_LOG_WARN(logger,
 		                "ScriptReloader: validation runtime failed [{}]: {}",
@@ -302,9 +300,7 @@ bool ScriptReloader::ValidateScript(const std::string& filepath) {
 	return true;
 }
 
-//=============================================================================
 // Module name extraction helper
-//=============================================================================
 
 static std::string ExtractModuleName(const std::string& filepath,
                                       const std::vector<std::string>& script_dirs) {
@@ -332,9 +328,7 @@ static std::string ExtractModuleName(const std::string& filepath,
 	return fp.stem().string();
 }
 
-//=============================================================================
 // ReloadFileCore — core reload logic without snapshot/restore
-//=============================================================================
 
 bool ScriptReloader::ReloadFileCore(lua_State* L, const std::string& filepath,
                                      const std::string& module_name) {
@@ -363,7 +357,10 @@ bool ScriptReloader::ReloadFileCore(lua_State* L, const std::string& filepath,
 		return false;
 	}
 
-	ret = lua_pcall(L, 0, 1, 0);
+	{
+		int msgh = PushLuaErrorHandlerForCall(L, 0);
+		ret = lua_pcall(L, 0, 1, msgh);
+	}
 	if (ret != LUA_OK) {
 		ENGINE_LOG_ERROR(logger,
 		                 "ScriptReloader: execute failed for [{}]: {}",
@@ -391,9 +388,7 @@ bool ScriptReloader::ReloadFileCore(lua_State* L, const std::string& filepath,
 	return true;
 }
 
-//=============================================================================
 // ReloadFile — main-thread only, with per-file snapshot/restore
-//=============================================================================
 
 bool ScriptReloader::ReloadFile(const std::string& filepath) {
 	if (!vm_) return false;
@@ -434,9 +429,7 @@ bool ScriptReloader::ReloadFile(const std::string& filepath) {
 	return true;
 }
 
-//=============================================================================
 // ReloadAll — main-thread only, atomic rollback on failure
-//=============================================================================
 
 bool ScriptReloader::ReloadAll() {
 	if (!vm_) return true;
@@ -615,9 +608,7 @@ void ScriptReloader::SetReloadCallback(ReloadCallback callback) {
 	reload_callback_ = std::move(callback);
 }
 
-//=============================================================================
 // Snapshot / Restore — typed, with package.loaded support
-//=============================================================================
 
 void ScriptReloader::ClearSnapshot(lua_State* L) {
 	for (auto& [key, sv] : global_snapshot_) {

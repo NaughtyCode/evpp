@@ -6,6 +6,7 @@
 
 #include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
+#include "runtime/vm/lua_error_handler.h"
 
 namespace engine {
 
@@ -58,9 +59,7 @@ ScriptVM& ScriptVM::operator=(ScriptVM&& other) noexcept {
 	return *this;
 }
 
-//=================================================================
 // Script lifecycle helpers
-//=================================================================
 
 void ScriptVM::CallGlobalFunction(std::string_view name) {
 	if (!L_) return;
@@ -71,7 +70,10 @@ void ScriptVM::CallGlobalFunction(std::string_view name) {
 		return;
 	}
 
-	int rc = lua_pcall(L_, 0, 0, 0);
+	int f_idx = lua_gettop(L_);
+	int err_idx = PushLuaErrorHandler(L_);
+	lua_insert(L_, f_idx);
+	int rc = lua_pcall(L_, 0, 0, f_idx);
 	if (rc != LUA_OK) {
 		auto* logger = GetLogger();
 		if (name == "UpdateScript") {
@@ -107,9 +109,7 @@ void ScriptVM::DestroyScript() {
 	CallGlobalFunction("DestroyScript");
 }
 
-//=================================================================
 // Script execution
-//=================================================================
 
 // Maximum script size for DoString to prevent memory exhaustion (1 MB).
 static constexpr size_t kMaxDoStringSize = 1024 * 1024;
@@ -155,7 +155,11 @@ bool ScriptVM::DoString(std::string_view script,
 	}
 
 	int nresults = result_out ? 1 : 0;
-	rc = lua_pcall(L_, 0, nresults, 0);
+	int msgh = PushLuaErrorHandlerForCall(L_, 0);
+	rc = lua_pcall(L_, 0, nresults, msgh);
+	if (rc == LUA_OK && nresults > 0) {
+		lua_remove(L_, msgh);  // remove error handler below result
+	}
 	if (rc != LUA_OK) {
 		const char* msg = lua_tostring(L_, -1);
 		auto* logger = GetLogger();
@@ -202,7 +206,8 @@ bool ScriptVM::DoFile(const std::string& filename, std::string* error_out) {
 		return false;
 	}
 
-	rc = lua_pcall(L_, 0, 0, 0);
+	int msgh = PushLuaErrorHandlerForCall(L_, 0);
+	rc = lua_pcall(L_, 0, 0, msgh);
 	if (rc != LUA_OK) {
 		const char* msg = lua_tostring(L_, -1);
 		ENGINE_LOG_ERROR(logger, "ScriptVM::DoFile run error [{}]: [{}]", filename, msg);
@@ -266,9 +271,7 @@ size_t ScriptVM::DoDirectory(const std::string& dir_path) {
 	return failures;
 }
 
-//=================================================================
 // C function / module registration
-//=================================================================
 
 void ScriptVM::RegisterFunction(std::string_view name, lua_CFunction func) {
 	if (!L_ || !func) return;
@@ -316,9 +319,7 @@ void ScriptVM::RegisterModuleOpen(std::string_view name, lua_CFunction openf, bo
 		logger, "ScriptVM: registered module [{}] (openf, global=[{}])", name, make_global);
 }
 
-//=================================================================
 // Custom pointer store — per-VM void* array (backed by global_State)
-//=================================================================
 
 bool ScriptVM::ReserveCustomPtrSlots(int total_slots) {
 	VMCustomPtrStore store(const_cast<lua_State*>(GetState()));
@@ -384,9 +385,7 @@ void ScriptVM::CopyCustomPtrsFrom(void* const* src, int count) {
 	store.CopyFrom(src, count);
 }
 
-//=================================================================
 // Convenience getters
-//=================================================================
 
 std::string ScriptVM::ToString(int index) {
 	if (!L_) return {};
@@ -403,9 +402,7 @@ const char* ScriptVM::LuaVersion() {
 	return LUA_VERSION;
 }
 
-//=================================================================
 // Module import system
-//=================================================================
 
 ScriptImporter& ScriptVM::GetImporter() {
 	if (!importer_) {
@@ -418,9 +415,7 @@ void ScriptVM::SetImportPath(const std::string& scripts_dir) {
 	GetImporter().Init(scripts_dir);
 }
 
-//=================================================================
 // RegisterCallback
-//=================================================================
 
 void ScriptVM::RegisterCallback(std::string_view name, LuaCallback callback) {
 	if (!L_) return;

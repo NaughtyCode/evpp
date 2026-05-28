@@ -41,6 +41,22 @@ inline int PushLuaErrorHandler(lua_State* L) {
 	return lua_gettop(L);
 }
 
+// Push an error handler and position it below the function about to be called.
+// Returns the stack index of the error handler (usable as msgh for lua_pcall).
+//
+// Before:  ... [function] [arg1] ... [argN]
+// After:   ... [err_handler] [function] [arg1] ... [argN]
+//
+// The caller then calls lua_pcall(L, nargs, nresults, msgh) with the
+// returned value as msgh. After pcall the caller must NOT try to remove
+// the error handler — lua_pcall with msgh handles that automatically.
+inline int PushLuaErrorHandlerForCall(lua_State* L, int nargs) {
+	int f_idx = lua_gettop(L) - nargs;
+	int err_idx = PushLuaErrorHandler(L);
+	lua_insert(L, f_idx);
+	return f_idx;  // error handler is now at f_idx
+}
+
 // Throttle repeated error logging. Returns true if the error should be logged.
 inline bool ShouldLogError(const std::string& key) {
 	static thread_local std::unordered_map<std::string, int64_t> last_error_time;

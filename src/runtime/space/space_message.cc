@@ -3,6 +3,7 @@
 #include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
 #include "runtime/space/space_manager.h"
+#include "runtime/vm/lua_error_handler.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {
@@ -63,7 +64,8 @@ void SpaceMessageRouter::ProcessPending() {
 		lua_pushinteger(L, static_cast<lua_Integer>(msg.target_entity));
 		lua_pushlstring(L, msg.payload.data(), msg.payload.size());
 
-		if (lua_pcall(L, 4, 0, 0) != LUA_OK) {
+		int msgh = PushLuaErrorHandlerForCall(L, 4);
+		if (lua_pcall(L, 4, 0, msgh) != LUA_OK) {
 			auto* logger = GetLogger();
 			ENGINE_LOG_ERROR(logger,
 							 "SpaceMessageRouter: delivery error: {}",

@@ -2,6 +2,7 @@
 
 #include "runtime/core/engine_api.h"
 #include "runtime/core/mem/mem.h"
+#include "runtime/vm/lua_error_handler.h"
 
 #include <memory>
 #include <string>
@@ -116,9 +117,15 @@ inline void CallInstMethod(lua_State* L, int inst_ref, const char* method) {
 		return;
 	}
 	lua_insert(L, -2);
-	if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
-		lua_pop(L, 1);
+	// Stack: function, instance (nargs=1)
+	int f_idx = lua_gettop(L) - 1;
+	int err_idx = PushLuaErrorHandler(L);
+	lua_insert(L, f_idx);
+	// Stack: err_handler, function, instance
+	if (lua_pcall(L, 1, 0, f_idx) != LUA_OK) {
+		lua_pop(L, 1);  // pop error message
 	}
+	// On success: err_handler at f_idx removed by lua_pcall (msgh consumed)
 }
 
 //------------------------------------------------------------------------------
@@ -140,8 +147,13 @@ inline void CallInstMethodStr(lua_State* L, int inst_ref, const char* method,
 	}
 	lua_insert(L, -2);
 	lua_pushlstring(L, arg.data(), arg.size());
-	if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
-		lua_pop(L, 1);
+	// Stack: function, instance, arg (nargs=2)
+	int f_idx = lua_gettop(L) - 2;
+	int err_idx = PushLuaErrorHandler(L);
+	lua_insert(L, f_idx);
+	// Stack: err_handler, function, instance, arg
+	if (lua_pcall(L, 2, 0, f_idx) != LUA_OK) {
+		lua_pop(L, 1);  // pop error message
 	}
 }
 
@@ -167,8 +179,13 @@ inline void CallInstMethodTableStr(lua_State* L, int inst_ref, const char* metho
 	lua_insert(L, -2);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, table_ref);
 	lua_pushlstring(L, arg.data(), arg.size());
-	if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
-		lua_pop(L, 1);
+	// Stack: function, instance, table, arg (nargs=3)
+	int f_idx = lua_gettop(L) - 3;
+	int err_idx = PushLuaErrorHandler(L);
+	lua_insert(L, f_idx);
+	// Stack: err_handler, function, instance, table, arg
+	if (lua_pcall(L, 3, 0, f_idx) != LUA_OK) {
+		lua_pop(L, 1);  // pop error message
 	}
 }
 

@@ -60,7 +60,7 @@ void BindKcpMessageHandler(KcpServerCtx* ctx) {
 		if (msg_ref == LUA_NOREF) return;
 		if (!main_loop) return;
 
-		// Snapshot message data �?the Message buffer may be reused by the
+		// Snapshot message data �?the Message buffer may be reused by the
 		// recv thread on the next iteration.
 		std::string data(msg->data(), msg->size());
 		std::string remote_ip = msg->remote_ip();
@@ -82,7 +82,8 @@ void BindKcpMessageHandler(KcpServerCtx* ctx) {
 			lua_pushlstring(L_ptr, data.data(), data.size());
 			lua_pushlstring(L_ptr, remote_ip.data(), remote_ip.size());
 			lua_pushinteger(L_ptr, conv);
-			if (lua_pcall(L_ptr, 3, 0, 0) != LUA_OK) {
+			int msgh = PushLuaErrorHandlerForCall(L_ptr, 3);
+			if (lua_pcall(L_ptr, 3, 0, msgh) != LUA_OK) {
 				auto* logger = GetLogger();
 				ENGINE_LOG_ERROR(
 					logger, "[net.kcp_server] on_message error: {}", lua_tostring(L_ptr, -1));
@@ -134,7 +135,7 @@ void ReleaseKcpServer(lua_State* L, KcpServerCtx* ctx) {
 	}
 }
 
-// ── net.kcp_server.listen(port_or_ports, on_message) �?server_instance ─
+// ── net.kcp_server.listen(port_or_ports, on_message) �?server_instance ─
 int l_kcp_server_listen(lua_State* L) {
 	int arg1_type = lua_type(L, 1);
 	if (arg1_type != LUA_TNUMBER && arg1_type != LUA_TSTRING) {
@@ -210,7 +211,7 @@ int l_kcp_server_listen(lua_State* L) {
 	return 1;
 }
 
-// ── server:stop() �?bool ───────────────────────────────────────────
+// ── server:stop() �?bool ───────────────────────────────────────────
 int l_kcp_server_stop(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
@@ -245,7 +246,7 @@ int l_kcp_server_continue(lua_State* L) {
 	return 0;
 }
 
-// ── server:is_running() �?bool ─────────────────────────────────────
+// ── server:is_running() �?bool ─────────────────────────────────────
 int l_kcp_server_is_running(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
@@ -403,7 +404,7 @@ void ShutdownKcpServerBindings() {
 		ctx->disposed = true;
 		ctx->server->Stop(true);
 
-		/* Step 4: Direct cleanup �?no RunInLoop deferral needed because
+		/* Step 4: Direct cleanup �?no RunInLoop deferral needed because
 		 * WaitDrain guarantees no callback is touching Lua state, and
 		 * TryAcquire=false guarantees no future callback will try. */
 		int old_msg_ref = ctx->on_message_ref.exchange(LUA_NOREF);

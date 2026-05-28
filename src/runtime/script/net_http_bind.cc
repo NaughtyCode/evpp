@@ -21,6 +21,8 @@
 #include "runtime/engine/engine.h"
 #include "runtime/vm/vm.h"
 
+#include "runtime/vm/lua_error_handler.h"
+
 extern "C" {
 #include "lauxlib.h"
 }
@@ -39,10 +41,14 @@ namespace {
 void call_lua_http_handler(lua_State* L, int ref, int code, const std::string& body) {
 	if (!L) return;
 	if (ref == LUA_NOREF) return;
-	lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
-	lua_pushinteger(L, static_cast<lua_Integer>(code));
-	lua_pushlstring(L, body.data(), body.size());
-	if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+	lua_rawgeti(L, LUA_REGISTRYINDEX, ref);  // function
+	lua_pushinteger(L, static_cast<lua_Integer>(code));  // function, code
+	lua_pushlstring(L, body.data(), body.size());  // function, code, body
+	// nargs=2, function at top-2
+	int f_idx = lua_gettop(L) - 2;
+	int err_idx = PushLuaErrorHandler(L);
+	lua_insert(L, f_idx);
+	if (lua_pcall(L, 2, 0, f_idx) != LUA_OK) {
 		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger, "[net.http] callback error: {}", lua_tostring(L, -1));
 		lua_pop(L, 1);

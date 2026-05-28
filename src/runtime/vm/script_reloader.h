@@ -22,7 +22,6 @@ namespace engine {
 class FileWatcher;
 class ScriptVM;
 
-//=============================================================================
 // ScriptReloader — hot-reload lifecycle manager
 //
 // Coordinates the hot-reload workflow:
@@ -36,7 +35,6 @@ class ScriptVM;
 //   - ValidateScript runs on the watcher thread (uses sandbox VM)
 //   - ReloadFile runs on the main thread (dispatched via EventLoop)
 //   - SetEventLoop must be called before Start
-//=============================================================================
 
 // Typed snapshot value — preserves Lua type across snapshot/restore.
 struct SnapshotValue {

@@ -19,19 +19,15 @@ extern "C" {
 
 namespace engine {
 
-//=============================================================================
 // ScriptVM — RAII wrapper around a Lua lua_State.
 //
 // Exposes the raw lua_State* via GetState() so callers have full access to
 // the Lua C API for stack operations, table manipulation, coroutine control,
 // debug hooks, etc.
-//=============================================================================
 
 class ENGINE_API ScriptVM {
 	public:
-	//=================================================================
 	// Construction / destruction
-	//=================================================================
 
 	ScriptVM(LuaSandboxLevel level = LuaSandboxLevel::Full);
 	virtual ~ScriptVM();
@@ -41,10 +37,8 @@ class ENGINE_API ScriptVM {
 	ScriptVM(ScriptVM&& other) noexcept;
 	ScriptVM& operator=(ScriptVM&& other) noexcept;
 
-	//=================================================================
 	// Raw state access — use this for any Lua C API call not directly
 	// wrapped by this class.
-	//=================================================================
 
 	lua_State* GetState() {
 		return L_;
@@ -53,18 +47,14 @@ class ENGINE_API ScriptVM {
 		return L_;
 	}
 
-	//=================================================================
 	// Script lifecycle — calls the corresponding global Lua function
 	// if it exists. Silently no-ops when the function is not defined.
-	//=================================================================
 
 	void InitScript();
 	void UpdateScript();
 	void DestroyScript();
 
-	//=================================================================
 	// Script execution
-	//=================================================================
 
 	// Execute a Lua string. Returns true on success.
 	// On error the message is logged and returned via `error_out`.
@@ -82,9 +72,7 @@ class ENGINE_API ScriptVM {
 	// Returns the number of files that failed.
 	size_t DoDirectory(const std::string& dir_path);
 
-	//=================================================================
 	// C function / module registration
-	//=================================================================
 
 	// Register a single C function as a global.
 	void RegisterFunction(std::string_view name, lua_CFunction func);
@@ -103,9 +91,7 @@ class ENGINE_API ScriptVM {
 	// loading via require().
 	void RegisterModuleOpen(std::string_view name, lua_CFunction openf, bool make_global = true);
 
-	//=================================================================
 	// Custom pointer store — per-VM void* array (backed by global_State)
-	//=================================================================
 
 	// Pre-allocate capacity for at least 'total_slots' pointers.
 	// Returns true on success, false on allocation failure.
@@ -160,16 +146,12 @@ class ENGINE_API ScriptVM {
 	// Replace the entire array with count pointers from src.
 	void CopyCustomPtrsFrom(void* const* src, int count);
 
-	//=================================================================
 	// Convenience getters / setters for globals
-	//=================================================================
 
 	template <typename T>
 	void SetGlobal(std::string_view name, T value);
 
-	//=================================================================
 	// Convenience: register a lambda / std::function as a global
-	//=================================================================
 
 	// The callback receives (lua_State*) and returns number of return values
 	// pushed on the Lua stack, following Lua C calling convention.
@@ -177,9 +159,7 @@ class ENGINE_API ScriptVM {
 
 	void RegisterCallback(std::string_view name, LuaCallback callback);
 
-	//=================================================================
 	// Utilities
-	//=================================================================
 
 	// Pop the value at the top of the stack and return it as a string.
 	std::string ToString(int index = -1);
@@ -187,9 +167,7 @@ class ENGINE_API ScriptVM {
 	// Return the Lua version string.
 	static const char* LuaVersion();
 
-	//=================================================================
 	// Module import system
-	//=================================================================
 
 	ScriptImporter& GetImporter();
 	void SetImportPath(const std::string& scripts_dir);
@@ -211,9 +189,7 @@ class ENGINE_API ScriptVM {
 	std::unique_ptr<ScriptImporter> importer_;
 };
 
-//=============================================================================
 // Template implementations
-//=============================================================================
 
 template <>
 inline void ScriptVM::SetGlobal(std::string_view name, int value) {

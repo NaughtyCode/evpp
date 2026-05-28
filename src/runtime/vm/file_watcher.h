@@ -14,7 +14,6 @@
 
 namespace engine {
 
-//=============================================================================
 // FileWatcher — cross-platform file change monitor
 //
 // Monitors directories for changes to files matching configured extensions.
@@ -27,7 +26,6 @@ namespace engine {
 // Callbacks are invoked on the watcher's own thread. The callback
 // implementation is responsible for thread-safe dispatch (e.g., RunInLoop
 // for Lua state access).
-//=============================================================================
 
 class ENGINE_API FileWatcher {
 	public:

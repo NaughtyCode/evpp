@@ -11,13 +11,11 @@ struct lua_State;
 
 namespace engine {
 
-//=============================================================================
 // ScriptImporter — per-VM Lua module import system
 //
 // Module names are dot-separated paths relative to search directories:
 //   import("utils.helpers")  →  <search_dir>/utils/helpers.lua
 //   import("utils.*")        →  loads all .lua files in <search_dir>/utils/
-//=============================================================================
 
 class ENGINE_API ScriptImporter {
 	public:

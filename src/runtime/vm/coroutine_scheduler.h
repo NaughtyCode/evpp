@@ -12,7 +12,6 @@ struct lua_State;
 
 namespace engine {
 
-//=============================================================================
 // CoroutineScheduler — cooperative Lua coroutine manager
 //
 // Manages lifecycle of Lua coroutines (create, suspend, resume, cancel).
@@ -24,7 +23,6 @@ namespace engine {
 //   - An optional wake time for timer-based suspension
 //
 // Thread safety: All methods are called from the main thread only.
-//=============================================================================
 
 class ENGINE_API CoroutineScheduler {
 	public:

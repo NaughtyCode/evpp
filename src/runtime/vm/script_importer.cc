@@ -12,9 +12,7 @@ extern "C" {
 
 namespace engine {
 
-//=============================================================================
 // ScriptImporter implementation
-//=============================================================================
 
 void ScriptImporter::Init(std::string scripts_dir) {
 	search_paths_.clear();

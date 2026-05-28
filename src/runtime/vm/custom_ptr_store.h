@@ -10,7 +10,6 @@ extern "C" {
 
 namespace engine {
 
-//=============================================================================
 // VMCustomPtrStore — C++ wrapper around the Lua custom-pointer array API.
 //
 // Each lua_State owns a dynamic void* array stored in global_State. This
@@ -40,7 +39,6 @@ namespace engine {
 //   auto* obj = store.GetAs<MyClass>(1);     // typed read
 //   store.SetNull(2);                        // zero a slot
 //   store.Clear();                           // drop all
-//=============================================================================
 
 class ENGINE_API VMCustomPtrStore {
 	public:
@@ -54,9 +52,7 @@ class ENGINE_API VMCustomPtrStore {
 	explicit VMCustomPtrStore(lua_State* L) : L_(L) {
 	}
 
-	//=========================================================================
 	// Element access
-	//=========================================================================
 
 	//-------------------------------------------------------------------------
 	// Set(index, ptr)
@@ -123,9 +119,7 @@ class ENGINE_API VMCustomPtrStore {
 	/// Side effects: none (read-only).  Undefined behaviour if out of range.
 	void* operator[](int index) const;
 
-	//=========================================================================
 	// Mutation
-	//=========================================================================
 
 	//-------------------------------------------------------------------------
 	// Push(ptr)
@@ -193,9 +187,7 @@ class ENGINE_API VMCustomPtrStore {
 	///   - If n == 0, both Count() and Capacity() become 0.
 	bool Reserve(int n);
 
-	//=========================================================================
 	// Query
-	//=========================================================================
 
 	/// Current number of stored pointers.  Side effects: none.
 	int Count() const;
@@ -227,9 +219,7 @@ class ENGINE_API VMCustomPtrStore {
 	/// Side effects: none.  O(n) in Count().
 	bool Contains(void* ptr) const;
 
-	//=========================================================================
 	// Bulk operations
-	//=========================================================================
 
 	//-------------------------------------------------------------------------
 	// CopyTo(dst, max_count)

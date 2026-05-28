@@ -8,6 +8,7 @@
 #include "runtime/core/log/log.h"
 #include "runtime/core/timer/timer_core.h"
 #include "runtime/core/timer/timer_manager.h"
+#include "runtime/vm/lua_error_handler.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {
@@ -64,7 +65,11 @@ void call_lua_callback(lua_State* L, int ref) {
 		lua_pop(L, 1);
 		return;
 	}
-	if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+	// nargs=0, function at top
+	int f_idx = lua_gettop(L);
+	int err_idx = PushLuaErrorHandler(L);
+	lua_insert(L, f_idx);
+	if (lua_pcall(L, 0, 0, f_idx) != LUA_OK) {
 		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger, "[lua timer] callback error: {}", lua_tostring(L, -1));
 		lua_pop(L, 1);
@@ -75,7 +80,7 @@ void call_lua_callback(lua_State* L, int ref) {
 // Lua C functions for the "timer" module
 //-----------------------------------------------------------------
 
-// timer.timeout(ms, callback) â†?timer_id
+// timer.timeout(ms, callback) - timer_id
 int l_timer_timeout(lua_State* L) {
 	int64_t ms = luaL_checkinteger(L, 1);
 	luaL_checktype(L, 2, LUA_TFUNCTION);
@@ -104,7 +109,7 @@ int l_timer_timeout(lua_State* L) {
 			// timer:cancel() which destroys the HrTimerNode (and this
 			// lambda's capture storage).  The local keep prevents the
 			// shared_ptr<Ctx> refcount from hitting zero until we return.
-			// Read keep->ref *after* the callback â€?the callback may call
+			// Read keep->ref *after* the callback - the callback may call
 			// timer:cancel() which sets ref to LUA_NOREF and calls
 			// luaL_unref.  A stale snapshot would double-unref.
 			auto keep = ctx;
@@ -136,7 +141,7 @@ int l_timer_timeout(lua_State* L) {
 	return 1;
 }
 
-// timer.interval(ms, callback) â†?timer_id
+// timer.interval(ms, callback) - timer_id
 int l_timer_interval(lua_State* L) {
 	int64_t ms = luaL_checkinteger(L, 1);
 	luaL_checktype(L, 2, LUA_TFUNCTION);
@@ -194,7 +199,7 @@ int l_timer_interval(lua_State* L) {
 	return 1;
 }
 
-// timer.cancel(timer_id) â†?true / nil+errmsg
+// timer.cancel(timer_id) - true / nil+errmsg
 int l_timer_cancel(lua_State* L) {
 	TimerId id = static_cast<TimerId>(luaL_checkinteger(L, 1));
 
@@ -275,7 +280,7 @@ void ShutdownTimerBindings(ScriptVM& vm) {
 		return;
 	}
 
-	// Collect IDs first â€?destroy_timer may fire callbacks synchronously,
+	// Collect IDs first - destroy_timer may fire callbacks synchronously,
 	// which would invalidate iterators if we traversed the map directly.
 	// Loop until no more timers remain: a Lua callback invoked during
 	// shutdown could create new timers, which would otherwise leak.
