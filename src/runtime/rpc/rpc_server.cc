@@ -7,6 +7,7 @@ namespace rpc {
 
 void RpcServer::RegisterService(const std::string& name,
 								 RpcServiceHandler handler) {
+	std::lock_guard<std::shared_mutex> lock(mutex_);
 	services_[name].service_handler = std::move(handler);
 
 	auto* logger = GetLogger();
@@ -16,59 +17,78 @@ void RpcServer::RegisterService(const std::string& name,
 void RpcServer::RegisterMethod(const std::string& service,
 								const std::string& method,
 								RpcMethodHandler handler) {
+	std::lock_guard<std::shared_mutex> lock(mutex_);
 	services_[service].method_handlers[method] = std::move(handler);
 }
 
 void RpcServer::UnregisterService(const std::string& name) {
+	std::lock_guard<std::shared_mutex> lock(mutex_);
 	services_.erase(name);
 }
 
+void RpcServer::Clear() {
+	std::lock_guard<std::shared_mutex> lock(mutex_);
+	services_.clear();
+}
+
 RpcResponse RpcServer::HandleRequest(const RpcRequest& request) {
-	RpcResponse response;
-	response.msgid = request.header.msgid;
+	// Take a snapshot of handlers under shared lock so the actual
+	// invocation happens outside the lock (handlers may block).
+	RpcServiceHandler service_handler;
+	RpcMethodHandler method_handler;
+	bool has_service = false;
+	bool has_method = false;
 
-	auto it = services_.find(request.header.service);
-	if (it == services_.end()) {
-		response.success = false;
-		response.error_code = 404;
-		response.error_message = "service not found: " + request.header.service;
+	{
+		std::shared_lock<std::shared_mutex> lock(mutex_);
 
-		auto* logger = GetLogger();
-		ENGINE_LOG_WARN(logger, "RpcServer: service not found [{}]",
-						request.header.service);
-		return response;
-	}
+		auto it = services_.find(request.header.service);
+		if (it == services_.end()) {
+			auto* logger = GetLogger();
+			ENGINE_LOG_WARN(logger, "RpcServer: service not found [{}]",
+							request.header.service);
+			return RpcResponse::Error(request.header.msgid, 404,
+				std::string("service not found: ") + request.header.service);
+		}
 
-	auto& entry = it->second;
+		has_service = true;
+		auto& entry = it->second;
 
-	try {
-		// Try method-specific handler first
 		auto mit = entry.method_handlers.find(request.header.method);
 		if (mit != entry.method_handlers.end()) {
-			response.body = mit->second(request.body);
-			response.success = true;
+			method_handler = mit->second;
+			has_method = true;
 		} else if (entry.service_handler) {
-			response.body = entry.service_handler(request.header.method, request.body);
-			response.success = true;
-		} else {
-			response.success = false;
-			response.error_code = 405;
-			response.error_message = "method not found: " + request.header.method;
+			service_handler = entry.service_handler;
+			has_method = true;
 		}
-	} catch (const std::exception& e) {
-		response.success = false;
-		response.error_code = 500;
-		response.error_message = e.what();
+	}
 
+	// Invoke handler outside the lock — handler may block (e.g., the Lua
+	// bind defer-to-main-thread pattern).  Captured std::function copies
+	// keep the handler alive even if the service is unregistered mid-call.
+	if (!has_service || !has_method) {
+		return RpcResponse::Error(request.header.msgid, 405,
+			std::string("method not found: ") + request.header.method);
+	}
+
+	try {
+		if (method_handler) {
+			return RpcResponse::Ok(request.header.msgid, method_handler(request.body));
+		}
+		return RpcResponse::Ok(request.header.msgid,
+			service_handler(request.header.method, request.body));
+	} catch (const std::exception& e) {
 		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger, "RpcServer: handler exception in [{}].[{}]: {}",
 						 request.header.service, request.header.method, e.what());
+		return RpcResponse::Error(request.header.msgid, 500,
+			std::string("handler error: ") + e.what());
 	}
-
-	return response;
 }
 
 bool RpcServer::HasService(const std::string& name) const {
+	std::shared_lock<std::shared_mutex> lock(mutex_);
 	return services_.find(name) != services_.end();
 }
 

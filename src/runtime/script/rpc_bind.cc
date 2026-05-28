@@ -1,6 +1,7 @@
 #include "runtime/script/rpc_bind.h"
 
 #include <atomic>
+#include <chrono>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -31,12 +32,6 @@ const char* kServerMetaName = "rpc.server.instance";
 const char* kClientMetaName = "rpc.client.instance";
 
 // ── Pending request (deferred execution queue) ──────────────────────────
-//
-// RpcServer::RegisterService stores a handler that may be called from an
-// arbitrary (network / transport) thread via HandleRequest().  Lua must
-// only be touched from the VM thread, so the handler enqueues a
-// PendingRpcCall and blocks on its std::future.  UpdateRpcBindings()
-// drains the queue on the main thread and fulfills the promise.
 
 struct PendingRpcCall {
 	std::string service;
@@ -55,7 +50,8 @@ struct RpcServerCtx {
 	// service_name → Lua callback registry ref
 	std::unordered_map<std::string, int> service_callbacks;
 
-	// Deferred execution queue
+	// Deferred execution queue — requests from transport thread wait here
+	// until drained by UpdateRpcBindings() on the main thread.
 	std::mutex queue_mutex;
 	std::vector<std::unique_ptr<PendingRpcCall>> pending;
 	std::atomic<bool> alive{true};
@@ -105,6 +101,26 @@ int PushRpcError(lua_State* L, const char* msg) {
 	return 2;
 }
 
+// Drain the pending queue for a server, fulfilling all promises with the
+// given error message.  Used by Stop/GC/Shutdown to unblock in-flight
+// handlers before the server is destroyed.
+// Retries up to 3 passes to catch handlers that were blocked on queue_mutex
+// during a prior pass.  Once the queue is empty, all in-flight handlers
+// have returned — safe to destroy the server.
+static void DrainPendingQueue(RpcServerCtx* ctx, const char* error_msg) {
+	for (int pass = 0; pass < 3; ++pass) {
+		std::vector<std::unique_ptr<PendingRpcCall>> batch;
+		{
+			std::lock_guard<std::mutex> lock(ctx->queue_mutex);
+			batch.swap(ctx->pending);
+		}
+		if (batch.empty()) break;
+		for (auto& req : batch) {
+			try { req->promise.set_value(error_msg); } catch (...) {}
+		}
+	}
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // Server methods (called as server:method())
 // ═══════════════════════════════════════════════════════════════════════
@@ -116,7 +132,7 @@ int l_server_register_service(lua_State* L) {
 	const char* service_name = luaL_checkstring(L, 2);
 	luaL_checktype(L, 3, LUA_TFUNCTION);
 
-	// Release previous callback if re-registering.
+	// Release previous callback if re-registering (before acquiring new ref).
 	auto it = ctx->service_callbacks.find(service_name);
 	if (it != ctx->service_callbacks.end() && it->second != LUA_NOREF) {
 		luaL_unref(L, LUA_REGISTRYINDEX, it->second);
@@ -126,14 +142,21 @@ int l_server_register_service(lua_State* L) {
 	int cb_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 	ctx->service_callbacks[service_name] = cb_ref;
 
+	// Build weak_ptr before validating — GetRpcState should never be null
+	// since new_server requires it, but guard anyway.
 	auto* rpc_state = GetRpcState(L);
-	std::string svc(service_name);
-	std::weak_ptr<RpcServerCtx> weak_ctx =
-		rpc_state ? rpc_state->server_shared[ctx] : std::weak_ptr<RpcServerCtx>();
+	std::weak_ptr<RpcServerCtx> weak_ctx;
+	if (rpc_state) {
+		auto sit = rpc_state->server_shared.find(ctx);
+		if (sit != rpc_state->server_shared.end()) {
+			weak_ctx = sit->second;
+		}
+	}
 
+	std::string svc(service_name);
 	ctx->server->RegisterService(svc,
-		[weak_ctx, svc](const std::string& method,
-						const std::string& body) -> std::string {
+		[weak_ctx = std::move(weak_ctx), svc](const std::string& method,
+											   const std::string& body) -> std::string {
 			auto captured = weak_ctx.lock();
 			if (!captured || !captured->alive.load(std::memory_order_acquire))
 				return R"({"error":"server stopped"})";
@@ -203,23 +226,7 @@ int l_server_stop(lua_State* L) {
 	}
 	ctx->service_callbacks.clear();
 
-	// Loop-drain the pending queue so every handler that passed the
-	// alive check before we set it to false is unblocked.  We retry up
-	// to 3 times because a handler may be waiting on queue_mutex
-	// during the previous drain pass.  Once the queue is empty all
-	// in-flight handlers have returned — safe to destroy the server.
-	for (int pass = 0; pass < 3; ++pass) {
-		std::vector<std::unique_ptr<PendingRpcCall>> batch;
-		{
-			std::lock_guard<std::mutex> lock(ctx->queue_mutex);
-			batch.swap(ctx->pending);
-		}
-		if (batch.empty()) break;
-		for (auto& req : batch) {
-			try { req->promise.set_value(R"({"error":"server stopped"})"); } catch (...) {}
-		}
-	}
-
+	DrainPendingQueue(ctx, R"({"error":"server stopped"})");
 	ctx->server.reset();
 
 	lua_pushnil(L);
@@ -252,18 +259,7 @@ int l_server_gc(lua_State* L) {
 	}
 	ctx->service_callbacks.clear();
 
-	for (int pass = 0; pass < 3; ++pass) {
-		std::vector<std::unique_ptr<PendingRpcCall>> batch;
-		{
-			std::lock_guard<std::mutex> lock(ctx->queue_mutex);
-			batch.swap(ctx->pending);
-		}
-		if (batch.empty()) break;
-		for (auto& req : batch) {
-			try { req->promise.set_value(R"({"error":"gc"})"); } catch (...) {}
-		}
-	}
-
+	DrainPendingQueue(ctx, R"({"error":"gc"})");
 	ctx->server.reset();
 
 	lua_pushnil(L);
@@ -285,6 +281,10 @@ int l_client_call(lua_State* L) {
 	auto* ctx = GetCtxFromTable<RpcClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) return PushRpcError(L, "client: closed");
 
+	if (!ctx->client->HasTransport()) {
+		return PushRpcError(L, "client has no transport — call client:set_send_callback first");
+	}
+
 	const char* service = luaL_checkstring(L, 2);
 	const char* method = luaL_checkstring(L, 3);
 	const char* args = luaL_optstring(L, 4, "{}");
@@ -302,6 +302,37 @@ int l_client_call(lua_State* L) {
 	return 2;
 }
 
+int l_client_set_send_callback(lua_State* L) {
+	auto* ctx = GetCtxFromTable<RpcClientCtx>(L, 1);
+	if (!ctx || ctx->disposed) return PushRpcError(L, "client: closed");
+
+	luaL_checktype(L, 2, LUA_TFUNCTION);
+	lua_pushvalue(L, 2);
+	int cb_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+	// The send callback is invoked from RpcClient::Call/CallAsync on the
+	// calling thread.  It receives the RpcRequest and must serialise +
+	// transmit it.  Since CallSync blocks the calling thread, the send
+	// callback runs synchronously — no need for deferred dispatch.
+	ctx->client->SetSendCallback([L, cb_ref](rpc::RpcRequest req) {
+		lua_rawgeti(L, LUA_REGISTRYINDEX, cb_ref);          // cb
+		lua_pushinteger(L, static_cast<lua_Integer>(req.header.msgid));  // cb, msgid
+		lua_pushlstring(L, req.header.service.data(), req.header.service.size());  // cb, msgid, svc
+		lua_pushlstring(L, req.header.method.data(), req.header.method.size());    // cb, msgid, svc, mtd
+		lua_pushlstring(L, req.body.data(), req.body.size());                      // cb, msgid, svc, mtd, body
+
+		if (lua_pcall(L, 4, 0, 0) != LUA_OK) {
+			auto* logger = GetLogger();
+			ENGINE_LOG_ERROR(logger, "RpcClient: send callback error: {}",
+							 lua_tostring(L, -1));
+			lua_pop(L, 1);
+		}
+	});
+
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
 int l_client_stop(lua_State* L) {
 	auto* ctx = GetCtxFromTable<RpcClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
@@ -312,7 +343,10 @@ int l_client_stop(lua_State* L) {
 	ctx->disposed = true;
 
 	auto* state = GetRpcState(L);
-	if (state) state->clients.erase(ctx);
+	if (state) {
+		state->clients.erase(ctx);
+		state->client_shared.erase(ctx);
+	}
 
 	ctx->client.reset();
 
@@ -323,8 +357,6 @@ int l_client_stop(lua_State* L) {
 		luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
 		ctx->instance_ref = LUA_NOREF;
 	}
-
-	if (state) state->client_shared.erase(ctx);
 
 	lua_pushboolean(L, 1);
 	return 1;
@@ -337,7 +369,10 @@ int l_client_gc(lua_State* L) {
 	ctx->disposed = true;
 
 	auto* state = GetRpcState(L);
-	if (state) state->clients.erase(ctx);
+	if (state) {
+		state->clients.erase(ctx);
+		state->client_shared.erase(ctx);
+	}
 
 	ctx->client.reset();
 
@@ -349,7 +384,6 @@ int l_client_gc(lua_State* L) {
 		ctx->instance_ref = LUA_NOREF;
 	}
 
-	if (state) state->client_shared.erase(ctx);
 	return 0;
 }
 
@@ -413,8 +447,9 @@ const luaL_Reg kServerMethods[] = {
 };
 
 const luaL_Reg kClientMethods[] = {
-	{"call", l_client_call},
-	{"stop", l_client_stop},
+	{"call",                l_client_call},
+	{"set_send_callback",   l_client_set_send_callback},
+	{"stop",                l_client_stop},
 	{nullptr, nullptr},
 };
 
@@ -457,6 +492,11 @@ void UpdateRpcBindings(ScriptVM& vm) {
 	auto* state = GetRpcState(L);
 	if (!state) return;
 
+	auto budget_start = std::chrono::steady_clock::now();
+	constexpr auto kMaxBudget = std::chrono::milliseconds(5);
+
+	// ── Process server pending queues ──────────────────────────────────
+
 	for (auto* ctx : state->servers) {
 		if (ctx->disposed) continue;
 
@@ -467,14 +507,18 @@ void UpdateRpcBindings(ScriptVM& vm) {
 		}
 
 		for (auto& req : batch) {
+			// Check time budget — stop processing if we've used >5ms.
+			if (std::chrono::steady_clock::now() - budget_start >= kMaxBudget)
+				goto budget_exhausted;
+
 			std::string result = R"({"error":"service not found"})";
 
 			auto it = ctx->service_callbacks.find(req->service);
 			if (it != ctx->service_callbacks.end() && it->second != LUA_NOREF) {
-				lua_rawgeti(L, LUA_REGISTRYINDEX, it->second);             // cb
-				lua_pushlstring(L, req->service.data(), req->service.size());  // cb, svc
-				lua_pushlstring(L, req->method.data(), req->method.size());    // cb, svc, method
-				lua_pushlstring(L, req->body.data(), req->body.size());        // cb, svc, method, body
+				lua_rawgeti(L, LUA_REGISTRYINDEX, it->second);                  // cb
+				lua_pushlstring(L, req->service.data(), req->service.size());   // cb, svc
+				lua_pushlstring(L, req->method.data(), req->method.size());     // cb, svc, method
+				lua_pushlstring(L, req->body.data(), req->body.size());         // cb, svc, method, body
 
 				if (lua_pcall(L, 3, 1, 0) == LUA_OK) {
 					if (lua_isstring(L, -1))
@@ -494,6 +538,15 @@ void UpdateRpcBindings(ScriptVM& vm) {
 
 			try { req->promise.set_value(result); } catch (...) {}
 		}
+	}
+
+budget_exhausted:
+
+	// ── Process client timeouts ────────────────────────────────────────
+
+	for (auto* ctx : state->clients) {
+		if (ctx->disposed) continue;
+		ctx->client->ProcessTimeouts();
 	}
 }
 
@@ -523,21 +576,7 @@ void ShutdownRpcBindings(ScriptVM& vm) {
 		}
 		ctx->service_callbacks.clear();
 
-		// Loop-drain before destroying the server — same pattern as
-		// l_server_stop: unblocks any in-flight handlers so they return
-		// before the std::function objects inside RpcServer are freed.
-		for (int pass = 0; pass < 3; ++pass) {
-			std::vector<std::unique_ptr<PendingRpcCall>> batch;
-			{
-				std::lock_guard<std::mutex> lock(ctx->queue_mutex);
-				batch.swap(ctx->pending);
-			}
-			if (batch.empty()) break;
-			for (auto& req : batch) {
-				try { req->promise.set_value(R"({"error":"shutdown"})"); } catch (...) {}
-			}
-		}
-
+		DrainPendingQueue(ctx, R"({"error":"shutdown"})");
 		ctx->server.reset();
 
 		if (ctx->instance_ref != LUA_NOREF) {
@@ -546,6 +585,7 @@ void ShutdownRpcBindings(ScriptVM& vm) {
 		}
 	}
 
+	// Client cleanup: RpcClient::~RpcClient fulfills pending promises.
 	for (auto* ctx : clients) {
 		if (ctx->disposed) continue;
 		ctx->disposed = true;
