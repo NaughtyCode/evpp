@@ -1,4 +1,4 @@
-#if defined(ENGINE_MONGODB_ENABLED)
+ï»¿#if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo_bind/bind_client.h"
 
@@ -668,7 +668,7 @@ int l_client_get_gridfs(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	// Return as lightuserdata â€?caller wraps with gridfs binding if available
+	// Return as lightuserdata  - caller wraps with gridfs binding if available
 	lua_pushlightuserdata(L, raw_gridfs);
 	return 1;
 }
@@ -790,7 +790,7 @@ int l_client_get_crypt_shared_version(lua_State* L) {
 }
 
 int l_client_set_usleep_impl(lua_State* L) {
-	// Not directly usable from Lua â€?requires C function pointer
+	// Not directly usable from Lua  - requires C function pointer
 	return 0;
 }
 

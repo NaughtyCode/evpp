@@ -1,4 +1,4 @@
-#include "runtime/auth/auth_backend.h"
+﻿#include "runtime/auth/auth_backend.h"
 
 #include <array>
 #include <cstring>
@@ -12,9 +12,7 @@
 namespace engine {
 namespace auth {
 
-// =============================================================================
 // Minimal SHA-256 implementation (FIPS 180-4)
-// =============================================================================
 
 namespace {
 
@@ -128,9 +126,7 @@ std::string HmacSha256(const std::string& key, const std::string& message) {
 
 }  // namespace
 
-// =============================================================================
 // AuthBackend — permission checking
-// =============================================================================
 
 bool AuthBackend::HasPermission(const std::string& entity_id,
                                  const std::string& permission) {
@@ -152,9 +148,7 @@ void AuthBackend::RevokePermission(const std::string& entity_id,
 	}
 }
 
-// =============================================================================
 // TokenAuthBackend
-// =============================================================================
 
 void TokenAuthBackend::AddToken(const std::string& token, const std::string& entity_id) {
 	tokens_[token] = entity_id;
@@ -219,9 +213,7 @@ void TokenAuthBackend::RevokeSession(const std::string& session_id) {
 	sessions_.erase(session_id);
 }
 
-// =============================================================================
 // JwtAuthBackend
-// =============================================================================
 
 void JwtAuthBackend::SetSecret(const std::string& secret) {
 	secret_ = secret;

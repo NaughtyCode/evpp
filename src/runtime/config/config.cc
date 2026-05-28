@@ -1,4 +1,4 @@
-#include "runtime/config/config.h"
+﻿#include "runtime/config/config.h"
 
 #include <cstdio>
 #include <filesystem>
@@ -16,9 +16,7 @@ ConfigManager& ConfigManager::Instance() {
 	return instance;
 }
 
-//============================================================================
 // From JSON strings (text)
-//============================================================================
 
 bool ConfigManager::LoadRuntimeFromString(const std::string& json) {
 	auto ec = glz::read_json(runtime_config_, json);
@@ -48,9 +46,7 @@ bool ConfigManager::LoadServerFromString(const std::string& json) {
 	return true;
 }
 
-//============================================================================
 // From files
-//============================================================================
 
 bool ConfigManager::LoadRuntimeFromFile(const std::string& path) {
 	std::string buf;
@@ -107,9 +103,7 @@ bool ConfigManager::Load(const std::string& config_dir) {
 	return true;
 }
 
-//============================================================================
 // Reload (runtime — logger is available)
-//============================================================================
 
 bool ConfigManager::Reload(const std::string& config_dir) {
 	using namespace config;
@@ -182,9 +176,7 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 	return true;
 }
 
-//============================================================================
 // MongoDB config file paths (thread-safe)
-//============================================================================
 
 std::string ConfigManager::GetMongoDbDevPath() const {
 	std::shared_lock<std::shared_mutex> lock(config_mutex_);
@@ -216,9 +208,7 @@ bool ConfigManager::HasMongoDbPublic() const {
 	return !server_config_.mongodb_public.empty();
 }
 
-//============================================================================
 // MongoDB cluster config loading
-//============================================================================
 
 bool ConfigManager::LoadMongoDbConfigFromFile(const std::string& path, MongoDbConfig& out) {
 	std::string buf;
@@ -252,9 +242,7 @@ bool ConfigManager::LoadMongoDbPublicConfig(MongoDbConfig& out) const {
 	return LoadMongoDbConfigFromFile(path, out);
 }
 
-//============================================================================
 // Cached MongoDB config access
-//============================================================================
 
 MongoDbConfig ConfigManager::GetMongoDbDevConfig() const {
 	std::shared_lock<std::shared_mutex> lock(config_mutex_);

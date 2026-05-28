@@ -1,4 +1,4 @@
-#include "runtime/script/msgpack_bind.h"
+﻿#include "runtime/script/msgpack_bind.h"
 
 #include <cmath>
 #include <cstdint>
@@ -24,9 +24,7 @@ size_t GetMaxPayloadSize() {
 	return ConfigManager::Instance().GetServerConfig().msgpack.max_payload_size;
 }
 
-// ============================================================================
 // Endian helper
-// ============================================================================
 
 inline bool IsLittleEndian() noexcept {
 	constexpr int test = 1;
@@ -47,9 +45,7 @@ inline void MemRevIfLE(void* ptr, size_t len) noexcept {
 	}
 }
 
-// ============================================================================
 // Encoding buffer
-// ============================================================================
 
 struct EncodeBuf {
 	std::vector<uint8_t> data;
@@ -78,9 +74,7 @@ struct EncodeBuf {
 	}
 };
 
-// ============================================================================
 // Decoding cursor
-// ============================================================================
 
 enum class CurError {
 	None,
@@ -110,11 +104,9 @@ struct DecodeCursor {
 	}
 };
 
-// ============================================================================
 // Push an unsigned 64-bit value to Lua.
 // Values <= INT64_MAX are pushed as lua_Integer; larger values go via
 // lua_Number (double) to avoid signed-overflow / negative integers.
-// ============================================================================
 
 void PushUnsigned(lua_State* L, uint64_t n) {
 	if (n <= static_cast<uint64_t>(std::numeric_limits<lua_Integer>::max())) {
@@ -124,12 +116,10 @@ void PushUnsigned(lua_State* L, uint64_t n) {
 	}
 }
 
-// ============================================================================
 // Test whether a lua_Number is exactly representable as int64.
 // Guarded to avoid UB from casting inf / NaN / out-of-range values.
 // -2^63 and 2^63 are exactly representable as double (powers of 2), so the
 // bounds check is exact. Values in [-2^63, 2^63) are always safe to cast.
-// ============================================================================
 
 inline bool IsInt64Equivalent(lua_Number x) noexcept {
 	if (!std::isfinite(x)) return false;
@@ -137,9 +127,7 @@ inline bool IsInt64Equivalent(lua_Number x) noexcept {
 	return static_cast<int64_t>(x) == x;
 }
 
-// ============================================================================
 // Low-level MessagePack encoding
-// ============================================================================
 
 void EncodeBytes(EncodeBuf& buf, const unsigned char* s, size_t len) {
 	if (len < 32) {
@@ -282,9 +270,7 @@ void EncodeMap(EncodeBuf& buf, int64_t n) {
 	}
 }
 
-// ============================================================================
 // Lua → MessagePack encoding
-// ============================================================================
 
 void EncodeLuaType(lua_State* L, EncodeBuf& buf, int level);
 
@@ -407,9 +393,7 @@ void EncodeLuaType(lua_State* L, EncodeBuf& buf, int level) {
 	lua_pop(L, 1);
 }
 
-// ============================================================================
 // MessagePack → Lua decoding
-// ============================================================================
 
 void DecodeToLuaType(lua_State* L, DecodeCursor* c, int depth);
 
@@ -659,9 +643,7 @@ void DecodeToLuaType(lua_State* L, DecodeCursor* c, int depth) {
 	}
 }
 
-// ============================================================================
 // Common unpack implementation
-// ============================================================================
 
 int UnpackFull(lua_State* L, int limit, int offset) {
 	size_t len = 0;
@@ -704,9 +686,7 @@ int UnpackFull(lua_State* L, int limit, int offset) {
 	return cnt;
 }
 
-// ============================================================================
 // Lua C functions — cmsgpack module
-// ============================================================================
 
 int l_msgpack_pack(lua_State* L) {
 	ENGINE_PROFILE_SCOPE("engine.script", "MsgPackPack");
@@ -761,10 +741,8 @@ const luaL_Reg kMsgPackFunctions[] = {
 	{nullptr, nullptr},
 };
 
-// ============================================================================
 // Safe wrapper — wraps a function so that errors return (nil, errmsg)
 // instead of raising a Lua error.
-// ============================================================================
 
 int l_msgpack_safe(lua_State* L) {
 	int argc = lua_gettop(L);
@@ -781,9 +759,7 @@ int l_msgpack_safe(lua_State* L) {
 	return 2;
 }
 
-// ============================================================================
 // Module metadata
-// ============================================================================
 
 void SetModuleMeta(lua_State* L) {
 	lua_pushliteral(L, "cmsgpack");
@@ -798,9 +774,7 @@ void SetModuleMeta(lua_State* L) {
 
 }  // namespace
 
-// ============================================================================
 // Public API
-// ============================================================================
 
 void ExportMsgPack(ScriptVM& vm) {
 	ENGINE_PROFILE_SCOPE("engine.script", "ExportMsgPack");

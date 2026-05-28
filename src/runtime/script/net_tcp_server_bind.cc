@@ -1,4 +1,4 @@
-#include "runtime/script/net_tcp_server_bind.h"
+﻿#include "runtime/script/net_tcp_server_bind.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -31,9 +31,7 @@ namespace script {
 
 namespace {
 
-// ======================================================================
 // TCP Server bindings (light userdata + Lua class instances)
-// ======================================================================
 
 struct ConnCtx {
 	evpp::TCPConnPtr conn;
@@ -135,7 +133,7 @@ int l_conn_close(lua_State* L) {
 
 	ctx->conn->Close();
 	// Close() may fire the disconnect callback synchronously, but it
-	// checks ctx->disposed and returns early �?on_close is NOT called
+	// checks ctx->disposed and returns early  - on_close is NOT called
 	// for a manual close.
 
 	g_conn_shared.erase(ctx);
@@ -211,7 +209,7 @@ int l_server_stop(lua_State* L) {
 
 	ctx->disposed = true;
 
-	// Remove from shutdown tracking BEFORE Stop() �?Stop() fires Lua
+	// Remove from shutdown tracking BEFORE Stop()  - Stop() fires Lua
 	// callbacks that may call server:stop() re-entrantly; the inner
 	// stop would otherwise try to erase from g_server_ctxs a second time.
 	g_server_ctxs.erase(ctx);
@@ -308,7 +306,7 @@ int l_server_gc(lua_State* L) {
 	return 0;
 }
 
-// ── net.server.listen(addr) �?server_instance ────────────────────────
+// ── net.server.listen(addr)  - server_instance ────────────────────────
 
 int l_net_server_listen(lua_State* L) {
 	const char* addr = luaL_checkstring(L, 1);
@@ -389,7 +387,7 @@ int l_net_server_listen(lua_State* L) {
 				auto* logger = GetLogger();
 				ENGINE_LOG_INFO(logger, "[net.server] conn closed: conn=[{}]", raw_id);
 
-				// Guard against re-entrant disconnect through on_close �?
+				// Guard against re-entrant disconnect through on_close  - 
 				// conn:close() or server:stop(). Setting disposed before
 				// dispatch blocks the re-entrant path and makes conn:close()
 				// return false so the outer cleanup below always runs.
@@ -412,7 +410,7 @@ int l_net_server_listen(lua_State* L) {
 
 				// l_conn_close sets instance_ref = LUA_NOREF after unref;
 				// if that happened re-entrantly the inner call already
-				// cleaned up �?skip outer cleanup to avoid double-unref.
+				// cleaned up  - skip outer cleanup to avoid double-unref.
 				if (conn_ctx->instance_ref == LUA_NOREF) return;
 
 				// Clean up ConnCtx
@@ -505,9 +503,7 @@ const luaL_Reg kServerFunctions[] = {
 
 }  // namespace
 
-// ======================================================================
 // Metatable registration
-// ======================================================================
 
 void RegisterConnMetaTable(lua_State* L) {
 	if (!L) return;
@@ -519,9 +515,7 @@ void RegisterServerMetaTable(lua_State* L) {
 	RegisterInstanceMeta(L, kServerMetaName, kServerMethods, l_server_gc);
 }
 
-// ======================================================================
 // Public API
-// ======================================================================
 
 void PushServerLibrary(lua_State* L) {
 	if (!L) return;
@@ -531,7 +525,7 @@ void PushServerLibrary(lua_State* L) {
 void ShutdownServerBindings() {
 	auto* logger = GetLogger();
 
-	// Move to local before iterating �?Stop() fires Lua callbacks that
+	// Move to local before iterating  - Stop() fires Lua callbacks that
 	// may call server:stop() re-entrantly, which erases from g_server_ctxs.
 	auto ctxs = std::move(g_server_ctxs);
 	for (auto* ctx : ctxs) {

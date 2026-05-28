@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <cstdint>
 #include <functional>
@@ -34,9 +34,7 @@ struct SpaceConfig {
 	size_t max_players = 1000;
 };
 
-//=============================================================================
 // Space — isolated game world with its own Lua VM and entity set
-//=============================================================================
 
 class ENGINE_API Space {
 public:

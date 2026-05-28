@@ -1,11 +1,9 @@
-#pragma once
+﻿#pragma once
 
-//==============================================================================
 // PHYSICS_INTERNAL_ACCESS — internal header guard macro
 //
 // See physics_system.h for full documentation.
 // Including this header without the macro will cause a compile-time #error.
-//==============================================================================
 #ifndef PHYSICS_INTERNAL_ACCESS
 #error \
 	"physics_log.h is internal to the physics subsystem. \
@@ -18,13 +16,11 @@ before including this header."
 
 #include "runtime/core/log/log.h"
 
-//=============================================================================
 // Physics-specific log macros.
 //
 // Each macro takes an explicit quill::Logger* obtained from PhysicsThread
 // (via GetLogger()), PhysicsWorld, or PhysicsScriptVM.  No global logger
 // lookup is performed — the logger must be passed in.
-//=============================================================================
 
 #define PHYSICS_LOG_TRACE(logger, fmt, ...) LOG_TRACE_L1(logger, fmt, ##__VA_ARGS__)
 #define PHYSICS_LOG_DEBUG(logger, fmt, ...) LOG_DEBUG(logger, fmt, ##__VA_ARGS__)

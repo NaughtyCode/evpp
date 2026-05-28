@@ -1,4 +1,4 @@
-#ifdef ENGINE_PHYSICS_ENABLED
+﻿#ifdef ENGINE_PHYSICS_ENABLED
 
 #define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/physics_diff.h"
@@ -9,9 +9,7 @@
 
 namespace engine {
 
-//============================================================================
 // GenerateDiff
-//============================================================================
 
 std::optional<DiffPacket> GenerateDiff(uint32_t body_id,
 									   const BodyStateSnapshot& current,
@@ -91,9 +89,7 @@ std::optional<DiffPacket> GenerateDiff(uint32_t body_id,
 	return packet;
 }
 
-//============================================================================
 // ObjectRegistry
-//============================================================================
 
 void ObjectRegistry::Register(uint32_t body_id, const std::string& asset_name) {
 	ENGINE_PROFILE_SCOPE("engine.physics", "ObjRegistryRegister");

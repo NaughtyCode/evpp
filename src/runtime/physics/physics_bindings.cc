@@ -1,4 +1,4 @@
-#ifdef ENGINE_PHYSICS_ENABLED
+﻿#ifdef ENGINE_PHYSICS_ENABLED
 
 #define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/physics_bindings.h"
@@ -16,9 +16,7 @@
 namespace engine {
 namespace physics_bindings {
 
-//============================================================================
 // Lua stack helpers
-//============================================================================
 
 namespace {
 
@@ -38,9 +36,7 @@ bool CheckInit(lua_State* L) {
 	return true;
 }
 
-//============================================================================
 // physics.spawn(proto_id, x, y, z, qx, qy, qz, qw[, user_data]) → body_id | nil, err
-//============================================================================
 
 int LuaSpawn(lua_State* L) {
 	if (!CheckInit(L)) return 2;
@@ -72,9 +68,7 @@ int LuaSpawn(lua_State* L) {
 	return 1;
 }
 
-//============================================================================
 // physics.destroy(body_id) → bool
-//============================================================================
 
 int LuaDestroy(lua_State* L) {
 	if (!CheckInit(L)) return 2;
@@ -86,9 +80,7 @@ int LuaDestroy(lua_State* L) {
 	return 1;
 }
 
-//============================================================================
 // physics.apply_force(body_id, fx, fy, fz, px, py, pz) → bool
-//============================================================================
 
 int LuaApplyForce(lua_State* L) {
 	if (!CheckInit(L)) return 2;
@@ -106,9 +98,7 @@ int LuaApplyForce(lua_State* L) {
 	return 1;
 }
 
-//============================================================================
 // physics.set_velocity(body_id, vx, vy, vz) → bool
-//============================================================================
 
 int LuaSetVelocity(lua_State* L) {
 	if (!CheckInit(L)) return 2;
@@ -123,9 +113,7 @@ int LuaSetVelocity(lua_State* L) {
 	return 1;
 }
 
-//============================================================================
 // physics.get_transform(body_id) → (x, y, z, qx, qy, qz, qw) | nil, err
-//============================================================================
 
 int LuaGetTransform(lua_State* L) {
 	if (!CheckInit(L)) return 2;
@@ -146,9 +134,7 @@ int LuaGetTransform(lua_State* L) {
 	return 7;
 }
 
-//============================================================================
 // physics.get_velocity(body_id) → (vx, vy, vz) | nil, err
-//============================================================================
 
 int LuaGetVelocity(lua_State* L) {
 	if (!CheckInit(L)) return 2;
@@ -165,9 +151,7 @@ int LuaGetVelocity(lua_State* L) {
 	return 3;
 }
 
-//============================================================================
 // physics.is_active(body_id) → bool | nil, err
-//============================================================================
 
 int LuaIsActive(lua_State* L) {
 	if (!CheckInit(L)) return 2;
@@ -177,9 +161,7 @@ int LuaIsActive(lua_State* L) {
 	return 1;
 }
 
-//============================================================================
 // physics.ray_cast(ox, oy, oz, dx, dy, dz, max_dist) → {body_id, x, y, z} | nil, err
-//============================================================================
 
 int LuaRayCast(lua_State* L) {
 	if (!CheckInit(L)) return 2;
@@ -210,9 +192,7 @@ int LuaRayCast(lua_State* L) {
 	return 1;
 }
 
-//============================================================================
 // physics.save_state() → string (binary blob)
-//============================================================================
 
 int LuaSaveState(lua_State* L) {
 	if (!CheckInit(L)) return 2;
@@ -222,9 +202,7 @@ int LuaSaveState(lua_State* L) {
 	return 1;
 }
 
-//============================================================================
 // physics.restore_state(data) → bool | nil, err
-//============================================================================
 
 int LuaRestoreState(lua_State* L) {
 	if (!CheckInit(L)) return 2;
@@ -240,9 +218,7 @@ int LuaRestoreState(lua_State* L) {
 	return 1;
 }
 
-//============================================================================
 // physics.recover([saved_state]) → bool | nil, err
-//============================================================================
 
 int LuaRecover(lua_State* L) {
 	if (!CheckInit(L)) return 2;
@@ -263,9 +239,7 @@ int LuaRecover(lua_State* L) {
 	return 1;
 }
 
-//============================================================================
 // physics.get_stats() → {bodies=N, active=N, collisions=N}
-//============================================================================
 
 int LuaGetStats(lua_State* L) {
 	if (!CheckInit(L)) return 2;
@@ -281,10 +255,8 @@ int LuaGetStats(lua_State* L) {
 	return 1;
 }
 
-//============================================================================
 // Physics-specific log API — logger obtained via custom-ptr store from
 // PhysicsThread each call, so it stays valid after PhysicsSystem::Start().
-//============================================================================
 
 #define PHYSICS_LUA_LOG_CALL(name, macro)                      \
 	int LuaLog##name(lua_State* L) {                           \
@@ -308,9 +280,7 @@ PHYSICS_LUA_LOG_CALL(Fatal, PHYSICS_LOG_CRITICAL)
 
 #undef PHYSICS_LUA_LOG_CALL
 
-//============================================================================
 // Log functions — registered as globals (log_info, log_debug, …)
-//============================================================================
 
 const luaL_Reg kPhysicsLogFunctions[] = {{"log_trace", LuaLogTrace},
 										 {"log_debug", LuaLogDebug},
@@ -320,9 +290,7 @@ const luaL_Reg kPhysicsLogFunctions[] = {{"log_trace", LuaLogTrace},
 										 {"log_fatal", LuaLogFatal},
 										 {nullptr, nullptr}};
 
-//============================================================================
 // Physics module — registered as the "physics" table
-//============================================================================
 
 const luaL_Reg kPhysicsModule[] = {{"spawn", LuaSpawn},
 								   {"destroy", LuaDestroy},
@@ -340,9 +308,7 @@ const luaL_Reg kPhysicsModule[] = {{"spawn", LuaSpawn},
 
 }  // namespace
 
-//============================================================================
 // Register — export "physics" module to ScriptVM
-//============================================================================
 
 void Register(ScriptVM& vm) {
 	vm.RegisterFunctions(kPhysicsLogFunctions);	 // globals: log_info, log_debug, …

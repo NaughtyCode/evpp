@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // Copyright (c) 2024 GameTimerLib
 //
 // TimerManager — the main public API for the GameTimer library.
@@ -42,22 +42,16 @@
 
 namespace engine {
 
-//=============================================================================
 // TimerHandle — unique identifier for a timer
-//=============================================================================
 
 using TimerId = uint64_t;
 inline constexpr TimerId kInvalidTimerId = 0;
 
-//=============================================================================
 // TimerManager — central timer management system
-//=============================================================================
 
 class TimerManager {
 	public:
-	//=================================================================
 	// Construction
-	//=================================================================
 
 	TimerManager();
 	~TimerManager();
@@ -67,9 +61,7 @@ class TimerManager {
 	TimerManager(TimerManager&&) = delete;
 	TimerManager& operator=(TimerManager&&) = delete;
 
-	//=================================================================
 	// Initialization / shutdown
-	//=================================================================
 
 	void initialize();
 	void shutdown();
@@ -78,10 +70,8 @@ class TimerManager {
 		return initialized_.load();
 	}
 
-	//=================================================================
 	// Main loop update — call every frame / tick
 	// Processes all expired timers across all subsystems.
-	//=================================================================
 
 	struct UpdateResult {
 		size_t hrtimers_fired = 0;
@@ -96,9 +86,7 @@ class TimerManager {
 	UpdateResult update();
 	UpdateResult update(TimePoint now);	 // override current time (testing)
 
-	//=================================================================
 	// Time query API (mirrors ktime_get* family)
-	//=================================================================
 
 	TimePoint now() const;	// monotonic time (ktime_get)
 	TimePoint now_real() const;	 // real/wall time (ktime_get_real)
@@ -119,9 +107,7 @@ class TimerManager {
 
 	int64_t resolution_ns() const;	// clock resolution
 
-	//=================================================================
 	// High-Resolution Timer API
-	//=================================================================
 
 	// Create a timer with a callback.
 	// Returns a TimerId for future reference.
@@ -161,9 +147,7 @@ class TimerManager {
 	// Update a timer's callback
 	void set_timer_callback(TimerId id, HrTimerNode::Callback callback);
 
-	//=================================================================
 	// Timer Wheel API (low-resolution, bulk timers)
-	//=================================================================
 
 	// Create a wheel timer with millisecond-precision
 	TimerId create_wheel_timer(TimerWheelNode::Callback callback, uint32_t flags = 0);
@@ -174,9 +158,7 @@ class TimerManager {
 	bool cancel_wheel_timer(TimerId id);
 	bool wheel_timer_pending(TimerId id) const;
 
-	//=================================================================
 	// Alarm Timer API
-	//=================================================================
 
 	TimerId create_alarm(AlarmType type, Alarm::Callback callback);
 	void start_alarm(TimerId id, TimePoint start_time);
@@ -186,9 +168,7 @@ class TimerManager {
 	int64_t forward_alarm(TimerId id, Duration interval);
 	void restart_alarm(TimerId id);
 
-	//=================================================================
 	// Convenience: std::chrono integration
-	//=================================================================
 
 	// Create a timer that fires after a chrono duration
 	template <typename Rep, typename Period>
@@ -209,9 +189,7 @@ class TimerManager {
 										  std::function<void()> callback,
 										  ClockId clock_id = ClockId::kMonotonic);
 
-	//=================================================================
 	// Suspend / Resume (game pause handling)
-	//=================================================================
 
 	void on_suspend();
 	void on_resume();
@@ -219,27 +197,21 @@ class TimerManager {
 
 	Duration total_suspend_duration() const;
 
-	//=================================================================
 	// Time adjustment (testing, cheats, corrections)
-	//=================================================================
 
 	void inject_sleep_time(Duration delta);
 	void set_time_scale(double scale);	// 1.0 = normal, 0.5 = half speed, 2.0 = double speed
 
 	double time_scale() const;
 
-	//=================================================================
 	// Clock source management
-	//=================================================================
 
 	ClockManager& clock_manager();
 	const ClockManager& clock_manager() const;
 
 	void set_clock_source(std::unique_ptr<ClockSource> cs);
 
-	//=================================================================
 	// Statistics and introspection
-	//=================================================================
 
 	struct ManagerStats {
 		TimerStats hrtimer_stats;

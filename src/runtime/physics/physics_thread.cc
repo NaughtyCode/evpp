@@ -1,4 +1,4 @@
-#ifdef ENGINE_PHYSICS_ENABLED
+﻿#ifdef ENGINE_PHYSICS_ENABLED
 
 #define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/physics_thread.h"
@@ -19,17 +19,13 @@
 
 namespace engine {
 
-//============================================================================
 // Destructor
-//============================================================================
 
 PhysicsThread::~PhysicsThread() {
 	Stop();
 }
 
-//============================================================================
 // CreatePhysicsLogger - map PhysicsLogConfig to engine::LogConfig [D7][D8]
-//============================================================================
 
 quill::Logger* PhysicsThread::CreatePhysicsLogger(const PhysicsLogConfig& log_config) {
 	engine::LogConfig mapped;
@@ -49,9 +45,7 @@ quill::Logger* PhysicsThread::CreatePhysicsLogger(const PhysicsLogConfig& log_co
 	return engine::CreateLogger(mapped);
 }
 
-//============================================================================
 // Start
-//============================================================================
 
 bool PhysicsThread::Start(const PhysicsConfig& config,
 						  const ThreadingConfig& threading,
@@ -113,9 +107,7 @@ bool PhysicsThread::Start(const PhysicsConfig& config,
 	return true;
 }
 
-//============================================================================
 // Stop
-//============================================================================
 
 void PhysicsThread::Stop() {
 	if (!running_.load(std::memory_order_acquire)) {
@@ -137,9 +129,7 @@ void PhysicsThread::Stop() {
 	PHYSICS_LOG_INFO(logger_, "PhysicsThread: stopped");
 }
 
-//============================================================================
 // Recover - restart physics thread after a crash [D21]
-//============================================================================
 
 bool PhysicsThread::Recover(const std::string& saved_state) {
 	PHYSICS_LOG_WARN(logger_, "PhysicsThread: attempting recovery...");
@@ -190,9 +180,7 @@ bool PhysicsThread::Recover(const std::string& saved_state) {
 	return true;
 }
 
-//============================================================================
 // EnqueueCommand
-//============================================================================
 
 bool PhysicsThread::EnqueueCommand(PhysicsCommand cmd) {
 	if (!running_.load(std::memory_order_acquire)) {
@@ -215,9 +203,7 @@ bool PhysicsThread::EnqueueCommand(PhysicsCommand cmd) {
 	return enqueued;
 }
 
-//============================================================================
 // TryDequeueResult
-//============================================================================
 
 std::unique_ptr<PhysicsFrameResult> PhysicsThread::TryDequeueResult() {
 	PhysicsFrameResult result;
@@ -236,9 +222,7 @@ void PhysicsThread::WaitForResult(std::chrono::milliseconds timeout) {
 	result_cv_.wait_for(lock, timeout);
 }
 
-//============================================================================
 // VerifyIsPhysicsThread - runtime guard for PT-only code
-//============================================================================
 
 void PhysicsThread::VerifyIsPhysicsThread() const {
 	// Skip check if physics_thread_id_ hasn't been captured yet
@@ -250,9 +234,7 @@ void PhysicsThread::VerifyIsPhysicsThread() const {
 	}
 }
 
-//============================================================================
 // EventLoop - runs on the dedicated physics thread
-//============================================================================
 
 void PhysicsThread::EventLoop() {
 	// Capture the physics thread ID once, at the start of the event loop.

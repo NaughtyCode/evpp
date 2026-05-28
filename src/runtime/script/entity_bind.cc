@@ -1,4 +1,4 @@
-#include "runtime/script/entity_bind.h"
+﻿#include "runtime/script/entity_bind.h"
 
 #include <cstdint>
 #include <string>
@@ -30,7 +30,7 @@ struct EntityCtx {
 	EntityId id;
 	bool disposed = false;
 	int conn_ref = LUA_NOREF;  // Lua conn instance table (for send)
-	// TimerId �?Lua callback registry ref (for cleanup on destroy)
+	// TimerId  - Lua callback registry ref (for cleanup on destroy)
 	std::unordered_map<uint64_t, int> timer_refs;
 };
 
@@ -41,7 +41,7 @@ EntityCtx* GetEntityCtx(lua_State* L, int idx) {
 	return ctx;
 }
 
-// ── entity.create([id]) �?entity_instance ─────────────────────────────
+// ── entity.create([id])  - entity_instance ─────────────────────────────
 
 int l_entity_create(lua_State* L) {
 	EntityId id = 0;
@@ -72,7 +72,7 @@ int l_entity_create(lua_State* L) {
 	return 1;
 }
 
-// ── entity:destroy() �?bool ──────────────────────────────────────────
+// ── entity:destroy()  - bool ──────────────────────────────────────────
 
 int l_entity_destroy(lua_State* L) {
 	auto* ctx = GetEntityCtx(L, 1);
@@ -108,7 +108,7 @@ int l_entity_destroy(lua_State* L) {
 	return 1;
 }
 
-// ── entity:get_id() �?integer ────────────────────────────────────────
+// ── entity:get_id()  - integer ────────────────────────────────────────
 
 int l_entity_get_id(lua_State* L) {
 	auto* ctx = GetEntityCtx(L, 1);
@@ -117,7 +117,7 @@ int l_entity_get_id(lua_State* L) {
 	return 1;
 }
 
-// ── entity:get_state() �?string ─────────────────────────────────────
+// ── entity:get_state()  - string ─────────────────────────────────────
 
 int l_entity_get_state(lua_State* L) {
 	auto* ctx = GetEntityCtx(L, 1);
@@ -155,7 +155,7 @@ int l_entity_suspend(lua_State* L) {
 	return 0;
 }
 
-// ── entity:get_attr(key) �?value ─────────────────────────────────────
+// ── entity:get_attr(key)  - value ─────────────────────────────────────
 
 int l_entity_get_attr(lua_State* L) {
 	auto* ctx = GetEntityCtx(L, 1);
@@ -220,7 +220,7 @@ int l_entity_set_attr(lua_State* L) {
 	return 0;
 }
 
-// ── entity:has_attr(key) �?bool ─────────────────────────────────────
+// ── entity:has_attr(key)  - bool ─────────────────────────────────────
 
 int l_entity_has_attr(lua_State* L) {
 	auto* ctx = GetEntityCtx(L, 1);
@@ -264,7 +264,7 @@ int l_entity_bind_connection(lua_State* L) {
 	return 0;
 }
 
-// ── entity:get_connection() �?conn or nil ────────────────────────────
+// ── entity:get_connection()  - conn or nil ────────────────────────────
 
 int l_entity_get_connection(lua_State* L) {
 	auto* ctx = GetEntityCtx(L, 1);
@@ -307,7 +307,7 @@ int l_entity_send(lua_State* L) {
 	return 0;
 }
 
-// ── entity:add_timer(interval_ms, repeat, callback) �?timer_id ───────
+// ── entity:add_timer(interval_ms, repeat, callback)  - timer_id ───────
 
 int l_entity_add_timer(lua_State* L) {
 	auto* ctx = GetEntityCtx(L, 1);
@@ -403,7 +403,7 @@ int l_entity_add_component(lua_State* L) {
 	return 0;
 }
 
-// ── entity:get_component(name) �?table or nil ────────────────────────
+// ── entity:get_component(name)  - table or nil ────────────────────────
 
 int l_entity_get_component(lua_State* L) {
 	auto* ctx = GetEntityCtx(L, 1);

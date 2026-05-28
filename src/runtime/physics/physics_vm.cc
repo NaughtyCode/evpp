@@ -1,4 +1,4 @@
-#ifdef ENGINE_PHYSICS_ENABLED
+﻿#ifdef ENGINE_PHYSICS_ENABLED
 
 #define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/physics_vm.h"
@@ -10,9 +10,7 @@
 
 namespace engine {
 
-//=============================================================================
 // Construction / destruction
-//=============================================================================
 
 PhysicsScriptVM::PhysicsScriptVM() {
 	ENGINE_LOG_INFO(GetLogger(), "[PhysicsVM] created, Lua state ready");
@@ -22,9 +20,7 @@ PhysicsScriptVM::~PhysicsScriptVM() {
 	ENGINE_LOG_INFO(GetLogger(), "[PhysicsVM] destroyed");
 }
 
-//=============================================================================
 // Custom pointer store — physics subsystem object registry
-//============================================================================
 
 void PhysicsScriptVM::RegisterSubsystemObjects(PhysicsSystem* sys,
 											   PhysicsThread* thread,

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // Copyright (c) 2024 GameTimerLib
 //
 // Cascading timer wheel — efficient bulk timer management for timeouts.
@@ -33,9 +33,7 @@
 
 namespace engine {
 
-//=============================================================================
 // TimerWheelNode — a node in the timer wheel
-//=============================================================================
 
 class TimerWheelNode {
 	public:
@@ -170,9 +168,7 @@ class TimerWheelNode {
 	int bucket_index_ = -1;	 // for O(1) removal; -1 = not in any bucket
 };
 
-//=============================================================================
 // TimerWheel — cascading multi-level hash wheel
-//=============================================================================
 
 class TimerWheel {
 	public:

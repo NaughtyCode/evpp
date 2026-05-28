@@ -1,4 +1,4 @@
-#if defined(ENGINE_MONGODB_ENABLED)
+ï»¿#if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo_bind/bind_host_list.h"
 
@@ -81,7 +81,7 @@ int l_host_list_get_next(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	// next is owned by the parent list, do not GC â€?wrap as non-owning pointer
+	// next is owned by the parent list, do not GC  - wrap as non-owning pointer
 	auto** ud = NewUserdata<mongo::MongoHostList>(L, kMetaName);
 	*ud = next;
 	return 1;

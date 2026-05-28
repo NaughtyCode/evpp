@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <cstdint>
 #include <string>
@@ -24,9 +24,7 @@ enum class AuthMethod : uint8_t {
 	kJwt = 2,
 };
 
-// =============================================================================
 // Permission model — simple string-based permissions with levels
-// =============================================================================
 
 // Predefined permission levels. Higher levels inherit lower ones.
 enum class PermissionLevel : uint8_t {
@@ -50,9 +48,7 @@ inline const char* kPermChatModerate = "chat:moderate";
 inline const char* kPermAdmin = "admin";
 inline const char* kPermServerShutdown = "server:shutdown";
 
-// =============================================================================
 // Auth result structures
-// =============================================================================
 
 struct AuthResult {
 	bool success = false;

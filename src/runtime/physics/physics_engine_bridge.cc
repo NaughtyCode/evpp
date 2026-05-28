@@ -1,4 +1,4 @@
-#ifdef ENGINE_PHYSICS_ENABLED
+﻿#ifdef ENGINE_PHYSICS_ENABLED
 
 #include "runtime/physics/physics_engine_bridge.h"
 
@@ -7,7 +7,6 @@
 #define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/physics_system.h"
 
-// ============================================================================
 // PhysicsEngineBridge implementation
 //
 // Every method in this file delegates directly to the corresponding method
@@ -31,7 +30,6 @@
 //                                FetchResult, GetScriptVM, GetFixedDeltaTime
 //   Methods without:            IsRunning, IsHealthy (read atomics, safe
 //                                from any thread)
-// ============================================================================
 
 namespace engine {
 

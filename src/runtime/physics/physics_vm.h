@@ -1,11 +1,9 @@
-#pragma once
+﻿#pragma once
 
-//==============================================================================
 // PHYSICS_INTERNAL_ACCESS — internal header guard macro
 //
 // See physics_system.h for full documentation.
 // Including this header without the macro will cause a compile-time #error.
-//==============================================================================
 #ifndef PHYSICS_INTERNAL_ACCESS
 #error \
 	"physics_vm.h is internal to the physics subsystem. \
@@ -27,13 +25,11 @@ class PhysicsSystem;
 class PhysicsThread;
 class PhysicsWorld;
 
-//=============================================================================
 // PhysicsCustomPtr — enum indices for VMCustomPtrStore in the physics VM
 //
 // Each physics subsystem object is registered in the VM's custom-pointer
 // array under a fixed slot. Use VMCustomPtrStore::GetAs<T>(index) to
 // retrieve a typed pointer, or the convenience accessors on PhysicsScriptVM.
-//=============================================================================
 
 enum PhysicsCustomPtr : int {
 	kPhysPtrSystem = 1,	 // PhysicsSystem*
@@ -42,7 +38,6 @@ enum PhysicsCustomPtr : int {
 	kPhysPtrScriptVM = 4,  // PhysicsScriptVM*
 };
 
-//=============================================================================
 // PhysicsScriptVM — physics-dedicated VM inheriting from ScriptVM
 //
 // [Thread Model]
@@ -74,7 +69,6 @@ enum PhysicsCustomPtr : int {
 //   Owns a VMCustomPtrStore interface to the underlying lua_State for
 //   registering and retrieving subsystem object pointers (PhysicsSystem,
 //   PhysicsThread, PhysicsWorld, itself).
-//=============================================================================
 
 class PhysicsScriptVM : public ScriptVM {
 	public:

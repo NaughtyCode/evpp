@@ -1,4 +1,4 @@
-#if defined(ENGINE_MONGODB_ENABLED)
+﻿#if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo_bind/bind_bson_ext.h"
 
@@ -28,9 +28,7 @@ const char* kMetaWriter = "bson.writer";
 const char* kMetaJsonOpts = "bson.json_opts";
 const char* kMetaValue = "bson.value";
 
-// ==========================================================================
 //  BsonContext
-// ==========================================================================
 
 int l_context_gc(lua_State* L) {
 	auto* ctx = GetUserdata<mongo::BsonContext>(L, 1, kMetaContext);
@@ -76,9 +74,7 @@ const luaL_Reg kContextLib[] = {
 	{nullptr, nullptr},
 };
 
-// ==========================================================================
 //  BsonString
-// ==========================================================================
 
 int l_string_gc(lua_State* L) {
 	auto* s = GetUserdata<mongo::BsonString>(L, 1, kMetaString);
@@ -186,9 +182,7 @@ const luaL_Reg kStringLib[] = {
 	{nullptr, nullptr},
 };
 
-// ==========================================================================
 //  BsonJsonReader
-// ==========================================================================
 
 int l_json_reader_gc(lua_State* L) {
 	auto* p = GetUserdata<mongo::BsonJsonReader>(L, 1, kMetaJsonReader);
@@ -310,9 +304,7 @@ const luaL_Reg kJsonReaderLib[] = {
 	{nullptr, nullptr},
 };
 
-// ==========================================================================
 //  BsonJsonDataReader
-// ==========================================================================
 
 int l_json_data_reader_gc(lua_State* L) {
 	auto* p = GetUserdata<mongo::BsonJsonDataReader>(L, 1, kMetaJsonDataReader);
@@ -364,9 +356,7 @@ const luaL_Reg kJsonDataReaderLib[] = {
 	{nullptr, nullptr},
 };
 
-// ==========================================================================
 //  BsonReader
-// ==========================================================================
 
 int l_reader_gc(lua_State* L) {
 	auto* p = GetUserdata<mongo::BsonReader>(L, 1, kMetaReader);
@@ -513,9 +503,7 @@ const luaL_Reg kReaderLib[] = {
 	{nullptr, nullptr},
 };
 
-// ==========================================================================
 //  BsonWriter
-// ==========================================================================
 
 int l_writer_gc(lua_State* L) {
 	auto* p = GetUserdata<mongo::BsonWriter>(L, 1, kMetaWriter);
@@ -628,9 +616,7 @@ const luaL_Reg kWriterLib[] = {
 	{nullptr, nullptr},
 };
 
-// ==========================================================================
 //  BsonJsonOpts
-// ==========================================================================
 
 int l_json_opts_gc(lua_State* L) {
 	auto* p = GetUserdata<mongo::BsonJsonOpts>(L, 1, kMetaJsonOpts);
@@ -681,9 +667,7 @@ const luaL_Reg kJsonOptsLib[] = {
 	{nullptr, nullptr},
 };
 
-// ==========================================================================
 //  BsonValue
-// ==========================================================================
 
 int l_value_gc(lua_State* L) {
 	auto* p = GetUserdata<mongo::BsonValue>(L, 1, kMetaValue);
@@ -753,9 +737,7 @@ const luaL_Reg kValueLib[] = {
 	{nullptr, nullptr},
 };
 
-// ==========================================================================
 //  Static extension utilities (free functions)
-// ==========================================================================
 
 int l_utf8_validate(lua_State* L) {
 	size_t len;

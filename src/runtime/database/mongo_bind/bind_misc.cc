@@ -1,4 +1,4 @@
-#if defined(ENGINE_MONGODB_ENABLED)
+ï»¿#if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo_bind/bind_misc.h"
 
@@ -21,9 +21,7 @@ namespace engine {
 namespace script {
 namespace {
 
-// ============================================================================
-// Part 1: MongoOptional â€?proper class with metatable
-// ============================================================================
+// Part 1: MongoOptional  - proper class with metatable
 
 const char* kOptionalMeta = "mongoc.optional";
 
@@ -109,9 +107,7 @@ const luaL_Reg kOptionalLib[] = {
 	{nullptr, nullptr},
 };
 
-// ============================================================================
-// Part 2: Static utility module â€?mongo_flags.h
-// ============================================================================
+// Part 2: Static utility module  - mongo_flags.h
 
 int l_insert_flags_none(lua_State* L) {
 	lua_pushinteger(L, static_cast<lua_Integer>(mongo::MongoInsertFlags::kNone));
@@ -243,9 +239,7 @@ int l_opcode_msg(lua_State* L) {
 	return 1;
 }
 
-// ============================================================================
 // Part 2 continued: mongo_init.h
-// ============================================================================
 
 int l_mongo_init(lua_State* L) {
 	mongo::MongoInit::Init();
@@ -257,9 +251,7 @@ int l_mongo_cleanup(lua_State* L) {
 	return 0;
 }
 
-// ============================================================================
 // Part 2 continued: mongo_version.h
-// ============================================================================
 
 int l_mongo_get_major_version(lua_State* L) {
 	lua_pushinteger(L, mongo::MongoVersion::GetMajorVersion());
@@ -317,9 +309,7 @@ int l_bson_check_version(lua_State* L) {
 	return 1;
 }
 
-// ============================================================================
 // Part 2 continued: mongo_handshake.h
-// ============================================================================
 
 int l_mongo_handshake_data_append(lua_State* L) {
 	const char* driver_name = luaL_checkstring(L, 1);
@@ -329,9 +319,7 @@ int l_mongo_handshake_data_append(lua_State* L) {
 	return 1;
 }
 
-// ============================================================================
 // Part 2 continued: mongo_rand.h
-// ============================================================================
 
 int l_mongo_rand_seed(lua_State* L) {
 	size_t len;
@@ -353,9 +341,7 @@ int l_mongo_rand_status(lua_State* L) {
 	return 1;
 }
 
-// ============================================================================
 // Part 2 continued: mongo_system.h
-// ============================================================================
 
 int l_mongo_system_initialize(lua_State* L) {
 	lua_pushboolean(L, mongo::MongoSystem::Instance().Initialize());
@@ -372,27 +358,25 @@ int l_mongo_system_is_initialized(lua_State* L) {
 	return 1;
 }
 
-// ============================================================================
-// kMiscLib â€?all static utility functions (no metatable, added to module)
-// ============================================================================
+// kMiscLib  - all static utility functions (no metatable, added to module)
 
 const luaL_Reg kMiscLib[] = {
-	// mongo_flags.h â€?insert flags
+	// mongo_flags.h  - insert flags
 	{"insert_flags_none", l_insert_flags_none},
 	{"insert_flags_continue_on_error", l_insert_flags_continue_on_error},
 	{"insert_flags_no_validate", l_insert_flags_no_validate},
 
-	// mongo_flags.h â€?update flags
+	// mongo_flags.h  - update flags
 	{"update_flags_none", l_update_flags_none},
 	{"update_flags_upsert", l_update_flags_upsert},
 	{"update_flags_multi_update", l_update_flags_multi_update},
 	{"update_flags_no_validate", l_update_flags_no_validate},
 
-	// mongo_flags.h â€?remove flags
+	// mongo_flags.h  - remove flags
 	{"remove_flags_none", l_remove_flags_none},
 	{"remove_flags_single_remove", l_remove_flags_single_remove},
 
-	// mongo_flags.h â€?query flags
+	// mongo_flags.h  - query flags
 	{"query_flags_none", l_query_flags_none},
 	{"query_flags_tailable_cursor", l_query_flags_tailable_cursor},
 	{"query_flags_secondary_ok", l_query_flags_secondary_ok},
@@ -402,7 +386,7 @@ const luaL_Reg kMiscLib[] = {
 	{"query_flags_exhaust", l_query_flags_exhaust},
 	{"query_flags_partial", l_query_flags_partial},
 
-	// mongo_flags.h â€?opcodes
+	// mongo_flags.h  - opcodes
 	{"opcode_reply", l_opcode_reply},
 	{"opcode_update", l_opcode_update},
 	{"opcode_insert", l_opcode_insert},

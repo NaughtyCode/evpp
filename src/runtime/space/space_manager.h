@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <cstdint>
 #include <functional>
@@ -12,9 +12,7 @@
 namespace engine {
 namespace space {
 
-//=============================================================================
 // SpaceManager — manages all active Spaces
-//=============================================================================
 
 class ENGINE_API SpaceManager {
 public:

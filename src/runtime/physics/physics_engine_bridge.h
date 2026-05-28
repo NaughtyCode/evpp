@@ -1,11 +1,10 @@
-#pragma once
+﻿#pragma once
 
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <thread>
 
-//==============================================================================
 // PhysicsEngineBridge — sole public API entry point into the physics subsystem
 //
 // [Thread-Safety Boundary]
@@ -63,7 +62,6 @@
 //   This header is always includable regardless of ENGINE_PHYSICS_ENABLED.
 //   When the macro is off, all methods compile to zero-cost inline no-ops
 //   and no physics code is linked. No #ifdef required in Engine.
-//==============================================================================
 
 #ifdef ENGINE_PHYSICS_ENABLED
 #include "runtime/physics/physics_commands.h"
@@ -92,13 +90,11 @@ class PhysicsEngineBridge {
 
 #ifdef ENGINE_PHYSICS_ENABLED
 
-	// ==================================================================
 	// Full implementation (delegates to internal PhysicsSystem singleton)
 	//
 	// All methods below are called from the main thread. See the
 	// thread-safety boundary comment at the top of this file for the
 	// safety guarantees of each method.
-	// ==================================================================
 
 	static PhysicsEngineBridge& Instance();
 
@@ -159,9 +155,7 @@ class PhysicsEngineBridge {
 
 #else
 
-	// ==================================================================
 	// Empty stubs (ENGINE_PHYSICS_ENABLED off — zero-cost inline no-ops)
-	// ==================================================================
 
 	static PhysicsEngineBridge& Instance() {
 		static PhysicsEngineBridge instance;

@@ -1,11 +1,9 @@
-#pragma once
+﻿#pragma once
 
-//==============================================================================
 // PHYSICS_INTERNAL_ACCESS — internal header guard macro
 //
 // See physics_system.h for full documentation.
 // Including this header without the macro will cause a compile-time #error.
-//==============================================================================
 #ifndef PHYSICS_INTERNAL_ACCESS
 #error \
 	"physics_diff.h is internal to the physics subsystem. \
@@ -30,9 +28,7 @@ before including this header."
 
 namespace engine {
 
-//============================================================================
 // BodyStateSnapshot — per-body state captured each frame for diff generation
-//============================================================================
 
 struct BodyStateSnapshot {
 	JPH::RVec3 position = JPH::RVec3::sZero();
@@ -41,25 +37,21 @@ struct BodyStateSnapshot {
 	JPH::Vec3 angular_velocity = JPH::Vec3::sZero();
 };
 
-//============================================================================
 // GenerateDiff — compare current vs previous state, produce DiffPacket
 //
 // Returns std::nullopt if no change exceeds the configured thresholds.
 // Otherwise returns a DiffPacket with the changed fields packed.
 // Uses per-field epsilon from ThresholdsConfig [D24].
-//============================================================================
 
 std::optional<DiffPacket> GenerateDiff(uint32_t body_id,
 									   const BodyStateSnapshot& current,
 									   const BodyStateSnapshot& previous,
 									   const ThresholdsConfig& thresholds);
 
-//============================================================================
 // ObjectRegistry — body_id ↔ asset_name bidirectional mapping
 //
 // Static bodies: registered during asset loading.
 // Dynamic bodies: registered at Spawn time.
-//============================================================================
 
 class ObjectRegistry {
 	public:

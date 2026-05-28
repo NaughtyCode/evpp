@@ -1,4 +1,4 @@
-#include "runtime/script/net_udp_server_bind.h"
+﻿#include "runtime/script/net_udp_server_bind.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -29,9 +29,7 @@ namespace script {
 
 namespace {
 
-// ======================================================================
 // UDP Server bindings (light userdata + Lua class)
-// ======================================================================
 
 struct UdpServerCtx {
 	std::unique_ptr<evpp::udp::Server> server;
@@ -67,7 +65,7 @@ void BindMessageHandler(UdpServerCtx* ctx) {
 		if (msg_ref == LUA_NOREF) return;
 		if (!main_loop) return;
 
-		// Snapshot message data �?the Message buffer may be reused by the
+		// Snapshot message data  - the Message buffer may be reused by the
 		// recv thread on the next iteration.
 		std::string data(msg->data(), msg->size());
 		std::string remote_ip = msg->remote_ip();
@@ -104,7 +102,7 @@ void BindMessageHandler(UdpServerCtx* ctx) {
 void ReleaseUdpServer(lua_State* L, UdpServerCtx* ctx) {
 	ctx->disposed = true;
 
-	// Remove from shutdown tracking BEFORE Stop() �?Stop(true) waits for
+	// Remove from shutdown tracking BEFORE Stop()  - Stop(true) waits for
 	// recv threads.  A Lua callback queued during the wait could
 	// theoretically call server:stop() re-entrantly and hit the set.
 	g_udp_server_ctxs.erase(ctx);
@@ -147,9 +145,9 @@ void ReleaseUdpServer(lua_State* L, UdpServerCtx* ctx) {
 	}
 }
 
-// ── net.udp_server.listen(port_or_ports, on_message) �?server_instance ─
+// ── net.udp_server.listen(port_or_ports, on_message)  - server_instance ─
 int l_udp_server_listen(lua_State* L) {
-	// Validate arg type before allocation �?luaL_checkstring errors via
+	// Validate arg type before allocation  - luaL_checkstring errors via
 	// longjmp, which would leak ctx if we had already allocated it.
 	int arg1_type = lua_type(L, 1);
 	if (arg1_type != LUA_TNUMBER && arg1_type != LUA_TSTRING) {
@@ -167,7 +165,7 @@ int l_udp_server_listen(lua_State* L) {
 	ctx->server = std::make_unique<evpp::udp::Server>();
 
 	bool ok = false;
-	// Number �?single port; string �?pass through (handles "5353" and "53,5353")
+	// Number  - single port; string  - pass through (handles "5353" and "53,5353")
 	if (arg1_type == LUA_TNUMBER) {
 		lua_Integer port64 = luaL_checkinteger(L, 1);
 		if (port64 <= 0 || port64 > 65535) {
@@ -224,7 +222,7 @@ int l_udp_server_listen(lua_State* L) {
 	return 1;  // return the server instance table
 }
 
-// ── server:stop() �?bool ───────────────────────────────────────────
+// ── server:stop()  - bool ───────────────────────────────────────────
 int l_udp_server_stop(lua_State* L) {
 	auto* ctx = GetCtxFromTable<UdpServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
@@ -259,7 +257,7 @@ int l_udp_server_continue(lua_State* L) {
 	return 0;
 }
 
-// ── server:is_running() �?bool ─────────────────────────────────────
+// ── server:is_running()  - bool ─────────────────────────────────────
 int l_udp_server_is_running(lua_State* L) {
 	auto* ctx = GetCtxFromTable<UdpServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
@@ -335,9 +333,7 @@ const luaL_Reg kUdpServerFunctions[] = {
 
 }  // namespace
 
-// ======================================================================
 // Public API
-// ======================================================================
 
 void RegisterUdpServerMetaTable(lua_State* L) {
 	if (!L) return;
@@ -372,7 +368,7 @@ void ShutdownUdpServerBindings() {
 		ctx->disposed = true;
 		ctx->server->Stop(true);
 
-		/* Step 4: Direct cleanup �?no RunInLoop deferral needed because
+		/* Step 4: Direct cleanup  - no RunInLoop deferral needed because
 		 * WaitDrain guarantees no callback is touching Lua state, and
 		 * TryAcquire=false guarantees no future callback will try. */
 		int old_msg_ref = ctx->on_message_ref.exchange(LUA_NOREF);

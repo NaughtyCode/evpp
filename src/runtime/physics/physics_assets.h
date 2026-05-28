@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #ifdef ENGINE_PHYSICS_ENABLED
 
@@ -37,9 +37,7 @@ struct ENGINE_API JsonShapeDef {
 	std::optional<std::string> material;
 };
 
-//============================================================================
 // PrototypeEntry — a dynamic body template stored in the prototype pool
-//============================================================================
 
 struct ENGINE_API PrototypeEntry {
 	std::string proto_id;
@@ -60,9 +58,7 @@ struct ENGINE_API PrototypeEntry {
 	float max_angular_velocity = 47.1f;
 };
 
-//============================================================================
 // AssetLoadResult — outcome of loading a physics asset file
-//============================================================================
 
 struct ENGINE_API AssetLoadResult {
 	bool success = false;
@@ -72,12 +68,10 @@ struct ENGINE_API AssetLoadResult {
 	int constraints_loaded = 0;
 };
 
-//============================================================================
 // AssetLoader — loads scene assets from JSON files into the physics world
 //
 // References JPH::BodyInterface for body creation (received as parameter,
 // avoiding circular dependency with PhysicsWorld).
-//============================================================================
 
 class ENGINE_API AssetLoader {
 	public:

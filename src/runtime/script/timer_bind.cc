@@ -1,4 +1,4 @@
-#include "runtime/script/timer_bind.h"
+﻿#include "runtime/script/timer_bind.h"
 
 #include <cstdint>
 #include <memory>
@@ -243,9 +243,7 @@ const luaL_Reg kTimerFunctions[] = {
 
 }  // namespace
 
-//=================================================================
 // Public API
-//=================================================================
 
 void ExportTimer(ScriptVM& vm, TimerManager& tm) {
 	lua_State* L = vm.GetState();

@@ -1,4 +1,4 @@
-#include "runtime/script/import_bind.h"
+﻿#include "runtime/script/import_bind.h"
 
 #include "runtime/core/log/log.h"
 #include "runtime/vm/script_importer.h"
@@ -99,9 +99,7 @@ int l_import_call(lua_State* L) {
 
 }  // namespace
 
-//=============================================================================
 // Public API
-//=============================================================================
 
 void ExportImport(ScriptVM& vm) {
 	lua_State* L = vm.GetState();

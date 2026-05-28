@@ -1,6 +1,5 @@
-#pragma once
+﻿#pragma once
 
-//==============================================================================
 // PHYSICS_INTERNAL_ACCESS — internal header guard macro
 //
 // physics_system.h is an internal implementation detail of the physics
@@ -12,7 +11,6 @@
 //   #include "runtime/physics/physics_system.h"
 //
 // Including this header without the macro will cause a compile-time #error.
-//==============================================================================
 #ifndef PHYSICS_INTERNAL_ACCESS
 #error \
 	"physics_system.h is internal to the physics subsystem. \
@@ -36,7 +34,6 @@ before including this header."
 
 namespace engine {
 
-//==============================================================================
 // PhysicsSystem — physics subsystem facade (singleton, internal implementation)
 //
 // [Thread Model]
@@ -83,16 +80,13 @@ namespace engine {
 //   All external functionality is exposed through PhysicsEngineBridge
 //   (friend class). Compile-time protection is provided by the
 //   PHYSICS_INTERNAL_ACCESS macro at the top of this file.
-//==============================================================================
 
 class PhysicsSystem {
 	public:
 	PhysicsSystem(const PhysicsSystem&) = delete;
 	PhysicsSystem& operator=(const PhysicsSystem&) = delete;
 
-	// ==================================================================
 	// Public interface (internal use only: PhysicsEngineBridge + bindings)
-	// ==================================================================
 
 	static PhysicsSystem& Instance();
 
@@ -237,13 +231,10 @@ class PhysicsSystem {
 	}
 
 	private:
-	// ==================================================================
 	// Constructor private — accessible only via Instance() singleton
-	// ==================================================================
 	PhysicsSystem() = default;
 	~PhysicsSystem() = default;
 
-	// ==================================================================
 	// Friends — granted access to private members
 	//
 	// PhysicsEngineBridge: sole external API entry point.
@@ -251,7 +242,6 @@ class PhysicsSystem {
 	//   PhysicsEngineBridge. Therefore PhysicsEngineBridge needs access
 	//   to all PhysicsSystem methods.
 	//
-	// ==================================================================
 	friend class PhysicsEngineBridge;
 
 	// ── Members ──────────────────────────────────────────────────────

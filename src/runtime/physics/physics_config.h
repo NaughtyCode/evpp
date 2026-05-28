@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #ifdef ENGINE_PHYSICS_ENABLED
 
@@ -11,9 +11,7 @@
 
 namespace engine {
 
-//============================================================================
 // LayerConfig — collision layer definitions (nested in physics.json)
-//============================================================================
 
 struct LayerConfig {
 	std::unordered_map<std::string, uint16_t> object_layers;
@@ -28,9 +26,7 @@ struct LayerConfig {
 	std::vector<CollisionRule> collision_matrix;
 };
 
-//============================================================================
 // PhysicsConfig — core physics parameters (physics.json)
-//============================================================================
 
 struct PhysicsConfig {
 	// Design doc §5.1 required fields
@@ -68,9 +64,7 @@ struct PhysicsConfig {
 	LayerConfig layer_config;
 };
 
-//============================================================================
 // ThreadingConfig — thread model configuration (threading.json)
-//============================================================================
 
 struct ThreadingConfig {
 	// Design doc §5.2 fields
@@ -86,9 +80,7 @@ struct ThreadingConfig {
 	int job_system_thread_count = -1;
 };
 
-//============================================================================
 // PhysicsLogConfig — physics log configuration (logging.json)
-//============================================================================
 
 struct PhysicsLogConfig {
 	// Design doc §5.3 fields
@@ -108,9 +100,7 @@ struct PhysicsLogConfig {
 		"[%(caller_function)] [%(logger)] %(message)";
 };
 
-//============================================================================
 // ThresholdsConfig — change detection thresholds (thresholds.json)
-//============================================================================
 
 struct ThresholdsConfig {
 	float position_epsilon = 0.001f;  // 1mm
@@ -121,9 +111,7 @@ struct ThresholdsConfig {
 
 }  // namespace engine
 
-//============================================================================
 // glaze reflection metadata — JSON key names use camelCase per design doc
-//============================================================================
 
 template <>
 struct glz::meta<engine::LayerConfig::CollisionRule> {
@@ -267,11 +255,9 @@ struct glz::meta<engine::ThresholdsConfig> {
 
 namespace engine {
 
-//============================================================================
 // PhysicsConfigManager — independent config manager (not dependent on
 // engine::ConfigManager). Owns all 4 config structs and handles loading,
 // validation, and hot-reload of supported fields.
-//============================================================================
 
 class PhysicsConfigManager {
 	public:

@@ -1,4 +1,4 @@
-#include "runtime/script/net_bind.h"
+﻿#include "runtime/script/net_bind.h"
 
 #include "runtime/core/log/log.h"
 #include "runtime/script/net_http_bind.h"
@@ -13,9 +13,7 @@
 namespace engine {
 namespace script {
 
-// ======================================================================
 // Public API
-// ======================================================================
 
 void ExportNet(ScriptVM& vm) {
 	lua_State* L = vm.GetState();

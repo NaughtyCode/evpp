@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "runtime/core/engine_api.h"
 #include "runtime/core/mem/mem.h"
@@ -40,7 +40,6 @@ namespace script {
  */
 ENGINE_API int LuaError(lua_State* L, const char* fmt, ...);
 
-//==============================================================================
 // Template helpers — eliminate duplicated boilerplate across network bindings
 //
 // These replace the manual lightuserdata + _ctx + disposed + luaL_ref + __gc
@@ -52,7 +51,6 @@ ENGINE_API int LuaError(lua_State* L, const char* fmt, ...);
 //   3. RegisterInstanceMeta(L, name, methods, gc) — for metatable registration
 //   4. CallInstMethod / CallInstMethodStr — for Lua callback dispatch
 //   5. PushLibrary(L, funcs) — instead of raw luaL_newlib
-//==============================================================================
 
 //------------------------------------------------------------------------------
 // GetCtxFromTable<T> — extract typed context from _ctx lightuserdata field

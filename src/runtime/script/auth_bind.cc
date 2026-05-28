@@ -1,4 +1,4 @@
-#include "runtime/script/auth_bind.h"
+﻿#include "runtime/script/auth_bind.h"
 
 #include <memory>
 
@@ -17,9 +17,7 @@ namespace script {
 
 namespace {
 
-// =============================================================================
 // Token auth helpers
-// =============================================================================
 
 // auth.set_token_backend()
 int l_auth_set_token_backend(lua_State* L) {
@@ -46,9 +44,7 @@ int l_auth_add_token(lua_State* L) {
 	return 1;
 }
 
-// =============================================================================
 // JWT auth
-// =============================================================================
 
 static auth::JwtAuthBackend* g_jwt_backend = nullptr;
 
@@ -65,9 +61,7 @@ int l_auth_set_jwt_backend(lua_State* L) {
 	return 1;
 }
 
-// =============================================================================
 // Permission management
-// =============================================================================
 
 // Helper to get the current backend as AuthBackend*
 static auth::AuthBackend* GetBackend() {
@@ -122,9 +116,7 @@ int l_auth_has_permission(lua_State* L) {
 	return 1;
 }
 
-// =============================================================================
 // Session management
-// =============================================================================
 
 // auth.authenticate(method, params_table) → ok, entity_id, session_id | nil, err
 int l_auth_authenticate(lua_State* L) {
@@ -193,9 +185,7 @@ int l_auth_cleanup_expired(lua_State* L) {
 	return 0;
 }
 
-// =============================================================================
 // Module registration
-// =============================================================================
 
 static const luaL_Reg kAuthFuncs[] = {
 	{"set_token_backend",  l_auth_set_token_backend},

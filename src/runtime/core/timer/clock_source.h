@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // Copyright (c) 2024 GameTimerLib
 //
 // Clock source abstraction layer. Mirrors the Linux kernel clocksource
@@ -22,9 +22,7 @@
 
 namespace engine {
 
-//=============================================================================
 // ClockSource — abstraction for a free-running time counter
-//=============================================================================
 
 class ClockSource {
 	public:
@@ -144,9 +142,7 @@ class ClockSource {
 	unsigned long flags_ = 0;
 };
 
-//=============================================================================
 // Concrete clock sources
-//=============================================================================
 
 // Monotonic clock source (default, recommended for games)
 class MonotonicClockSource : public ClockSource {
@@ -167,10 +163,8 @@ class RealtimeClockSource : public ClockSource {
 	}
 };
 
-//=============================================================================
 // ClockEventDevice — abstraction for a programmable timer event device
 // (mirrors clock_event_device in Linux)
-//=============================================================================
 
 class ClockEventDevice {
 	public:
@@ -291,9 +285,7 @@ class ClockEventDevice {
 	uint32_t shift_ = 0;
 };
 
-//=============================================================================
 // SimulatedClockEventDevice — for testing and simulation
-//=============================================================================
 
 class SimulatedClockEventDevice : public ClockEventDevice {
 	public:
@@ -320,9 +312,7 @@ class SimulatedClockEventDevice : public ClockEventDevice {
 	uint64_t fire_count_ = 0;
 };
 
-//=============================================================================
 // ClockManager — manages clock sources and event devices
-//=============================================================================
 
 class ClockManager {
 	public:

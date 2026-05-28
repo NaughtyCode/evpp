@@ -1,4 +1,4 @@
-#include "runtime/script/net_tcp_client_bind.h"
+﻿#include "runtime/script/net_tcp_client_bind.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -31,9 +31,7 @@ namespace script {
 
 namespace {
 
-// ======================================================================
 // TCP Client bindings (light userdata + Lua class)
-// ======================================================================
 
 struct ClientCtx {
 	std::unique_ptr<evpp::TCPClient> client;
@@ -65,7 +63,7 @@ void UnregisterClientCtx(ClientCtx* ctx) {
 }
 
 
-// ── l_net_client_connect(addr) �?instance_table ──
+// ── l_net_client_connect(addr)  - instance_table ──
 int l_net_client_connect(lua_State* L) {
 	const char* addr = luaL_checkstring(L, 1);
 	if (!*addr) {
@@ -179,7 +177,7 @@ int l_client_send(lua_State* L) {
 	return 0;
 }
 
-// ── client:disconnect() �?bool ───────────────────────────────────────────
+// ── client:disconnect()  - bool ───────────────────────────────────────────
 int l_client_disconnect(lua_State* L) {
 	auto* ctx = GetCtxFromTable<ClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
@@ -203,7 +201,7 @@ int l_client_disconnect(lua_State* L) {
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "[net.client] disconnecting");
 
-	// Clear callbacks before Disconnect() �?TCPConn::Close() uses
+	// Clear callbacks before Disconnect()  - TCPConn::Close() uses
 	// QueueInLoop (always defers), so HandleClose may execute after
 	// delete ctx below, and the stored callbacks capture raw ClientCtx*.
 	ctx->client->SetConnectionCallback(evpp::ConnectionCallback());
@@ -216,7 +214,7 @@ int l_client_disconnect(lua_State* L) {
 	return 1;
 }
 
-// ── client:is_connected() �?bool ─────────────────────────────────────────
+// ── client:is_connected()  - bool ─────────────────────────────────────────
 int l_client_is_connected(lua_State* L) {
 	auto* ctx = GetCtxFromTable<ClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
@@ -318,9 +316,7 @@ const luaL_Reg kClientFunctions[] = {
 
 }  // namespace
 
-// ======================================================================
 // Public API
-// ======================================================================
 
 void RegisterClientMetaTable(lua_State* L) {
 	if (!L) return;

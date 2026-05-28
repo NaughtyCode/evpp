@@ -1,4 +1,4 @@
-#if defined(ENGINE_MONGODB_ENABLED)
+ï»¿#if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo_bind/bind_bson_document.h"
 
@@ -680,7 +680,7 @@ int l_bson_doc_array_as_legacy_extended_json(lua_State* L) {
 int l_bson_doc_new_from_buffer(lua_State* L) {
 	// Takes existing data + realloc func as lightuserdata; advanced use.
 	lua_pushnil(L);
-	lua_pushstring(L, "new_from_buffer requires buffer and realloc â€?use from_data");
+	lua_pushstring(L, "new_from_buffer requires buffer and realloc  - use from_data");
 	lua_pushnil(L);
 	return 3;
 }

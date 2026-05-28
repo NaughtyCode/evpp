@@ -1,4 +1,4 @@
-#include "runtime/script/net_http_bind.h"
+﻿#include "runtime/script/net_http_bind.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -32,9 +32,7 @@ namespace script {
 
 namespace {
 
-// ======================================================================
 // HTTP Client bindings
-// ======================================================================
 
 // Call a Lua function with (int, string) for HTTP response.
 // Logs and pops errors; does NOT unref.
@@ -184,9 +182,7 @@ const luaL_Reg kHttpFunctions[] = {
 
 }  // namespace
 
-// ======================================================================
 // Public API
-// ======================================================================
 
 void PushHttpLibrary(lua_State* L) {
 	if (!L) return;

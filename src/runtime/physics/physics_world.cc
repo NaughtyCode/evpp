@@ -1,4 +1,4 @@
-#ifdef ENGINE_PHYSICS_ENABLED
+﻿#ifdef ENGINE_PHYSICS_ENABLED
 
 #define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/physics_world.h"
@@ -31,15 +31,11 @@
 
 namespace engine {
 
-//============================================================================
 // Static guard for one-time Jolt registration (steps 1-3)
-//============================================================================
 
 std::atomic<bool> PhysicsWorld::s_jolt_registered_{false};
 
-//============================================================================
 // ContactListenerImpl
-//============================================================================
 
 void ContactListenerImpl::PushRecord(uint32_t body_a,
 									 uint32_t body_b,
@@ -116,9 +112,7 @@ std::vector<ContactListenerImpl::ContactRecord> ContactListenerImpl::Drain() {
 	return drained;
 }
 
-//============================================================================
 // BodyActivationListenerImpl
-//============================================================================
 
 void BodyActivationListenerImpl::OnBodyActivated(const JPH::BodyID& inBodyID,
 												 JPH::uint64 inBodyUserData) {
@@ -154,9 +148,7 @@ void BodyActivationListenerImpl::Clear() {
 	active_bodies_.clear();
 }
 
-//============================================================================
 // PhysicsWorld destructor
-//============================================================================
 
 PhysicsWorld::~PhysicsWorld() {
 	// Destroy in reverse order of creation
@@ -172,9 +164,7 @@ PhysicsWorld::~PhysicsWorld() {
 	// A full cleanup would need: JPH::UnregisterTypes() and delete Factory::sInstance.
 }
 
-//============================================================================
 // Initialize — strict 10-step order per [J2]
-//============================================================================
 
 bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 							  const ThreadingConfig& threading,
@@ -317,9 +307,7 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 	return true;
 }
 
-//============================================================================
 // CreateBody — spawn dynamic body from prototype [D3]
-//============================================================================
 
 uint32_t PhysicsWorld::CreateBody(const std::string& proto_id,
 								  const JPH::RVec3& position,
@@ -373,9 +361,7 @@ uint32_t PhysicsWorld::CreateBody(const std::string& proto_id,
 	return body_id;
 }
 
-//============================================================================
 // DestroyBody [D3]
-//============================================================================
 
 bool PhysicsWorld::DestroyBody(uint32_t body_id) {
 	JPH::BodyID jid(body_id);
@@ -394,9 +380,7 @@ bool PhysicsWorld::DestroyBody(uint32_t body_id) {
 	return true;
 }
 
-//============================================================================
 // ApplyForce [D3]
-//============================================================================
 
 bool PhysicsWorld::ApplyForce(uint32_t body_id, const JPH::Vec3& force, const JPH::RVec3& point) {
 	JPH::BodyID jid(body_id);
@@ -411,9 +395,7 @@ bool PhysicsWorld::ApplyForce(uint32_t body_id, const JPH::Vec3& force, const JP
 	return true;
 }
 
-//============================================================================
 // SetVelocity [D3]
-//============================================================================
 
 bool PhysicsWorld::SetVelocity(uint32_t body_id, const JPH::Vec3& velocity) {
 	JPH::BodyID jid(body_id);
@@ -428,9 +410,7 @@ bool PhysicsWorld::SetVelocity(uint32_t body_id, const JPH::Vec3& velocity) {
 	return true;
 }
 
-//============================================================================
 // Step — execute one physics simulation step [D5][D6]
-//============================================================================
 
 PhysicsFrameResult PhysicsWorld::Step(float delta_time, uint64_t frame_id) {
 	PhysicsFrameResult result;
@@ -498,9 +478,7 @@ PhysicsFrameResult PhysicsWorld::Step(float delta_time, uint64_t frame_id) {
 	return result;
 }
 
-//============================================================================
 // CollectTransforms — snapshot all active dynamic bodies
-//============================================================================
 
 void PhysicsWorld::CollectTransforms(PhysicsFrameResult& result) {
 	JPH::BodyInterface& bi = system_.GetBodyInterfaceNoLock();
@@ -527,9 +505,7 @@ void PhysicsWorld::CollectTransforms(PhysicsFrameResult& result) {
 	}
 }
 
-//============================================================================
 // CollectCollisionEvents — drain ContactListener buffer
-//============================================================================
 
 void PhysicsWorld::CollectCollisionEvents(PhysicsFrameResult& result) {
 	auto records = contact_listener_.Drain();
@@ -565,9 +541,7 @@ void PhysicsWorld::CollectCollisionEvents(PhysicsFrameResult& result) {
 	}
 }
 
-//============================================================================
 // GenerateDiffs — produce DiffPackets for changed bodies
-//============================================================================
 
 void PhysicsWorld::GenerateDiffs(PhysicsFrameResult& result) {
 	JPH::BodyInterface& bi = system_.GetBodyInterfaceNoLock();
@@ -600,9 +574,7 @@ void PhysicsWorld::GenerateDiffs(PhysicsFrameResult& result) {
 	}
 }
 
-//============================================================================
 // Query helpers
-//============================================================================
 
 std::optional<std::pair<JPH::RVec3, JPH::Quat>> PhysicsWorld::GetTransform(uint32_t body_id) const {
 	JPH::BodyID jid(body_id);

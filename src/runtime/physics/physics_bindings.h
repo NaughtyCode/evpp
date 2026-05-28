@@ -1,11 +1,9 @@
-#pragma once
+﻿#pragma once
 
-//==============================================================================
 // PHYSICS_INTERNAL_ACCESS — internal header guard macro
 //
 // See physics_system.h for full documentation.
 // Including this header without the macro will cause a compile-time #error.
-//==============================================================================
 #ifndef PHYSICS_INTERNAL_ACCESS
 #error \
 	"physics_bindings.h is internal to the physics subsystem. \

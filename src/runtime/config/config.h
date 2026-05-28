@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <functional>
 #include <mutex>
@@ -14,10 +14,8 @@ namespace engine {
 // Forward declaration for database service config
 struct DbServiceConfig;
 
-//============================================================================
 // Config structs — aggregates for glaze auto-reflection (C++23).
 // JSON key names match struct member names (snake_case).
-//============================================================================
 
 struct LogConfig {
 	std::string dir = config::kDefaultLogDir;
@@ -70,7 +68,6 @@ struct MsgpackConfig {
 	size_t max_payload_size = config::kDefaultMsgpackMaxPayloadSize;
 };
 
-//============================================================================
 // MongoDB cluster config — loaded from the path referenced by
 // server.json's "mongodb_dev" / "mongodb_public" fields.
 //
@@ -78,7 +75,6 @@ struct MsgpackConfig {
 // (glaze auto-reflection matches member names to JSON keys). This differs
 // from the rest of the config structs because the mongodb config files
 // were authored in camelCase.
-//============================================================================
 
 struct MongoDbConnectionOptions {
 	std::string readPreference = "primaryPreferred";
@@ -183,9 +179,7 @@ struct ServerConfig {
 	std::string db_service = "resources/config/server/db_service.json";
 };
 
-//============================================================================
 // ConfigManager — loads configs from JSON files at startup
-//============================================================================
 
 class ENGINE_API ConfigManager {
 	public:

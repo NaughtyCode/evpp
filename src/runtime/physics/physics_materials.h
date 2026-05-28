@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #ifdef ENGINE_PHYSICS_ENABLED
 
@@ -20,14 +20,12 @@
 
 namespace engine {
 
-//============================================================================
 // PhysicsMaterialSimple — minimal physics material with friction & restitution
 //
 // This is the project-level material that stores surface properties.
 // For simple bodies, friction/restitution are set directly on
 // BodyCreationSettings. This class serves MeshShape/HeightFieldShape
 // per-face material lists.
-//============================================================================
 
 class PhysicsMaterialSimple final : public JPH::PhysicsMaterial {
 	public:
@@ -65,9 +63,7 @@ class PhysicsMaterialSimple final : public JPH::PhysicsMaterial {
 	float restitution_ = 0.0f;
 };
 
-//============================================================================
 // MaterialTable — named material registry loaded from JSON
-//============================================================================
 
 struct MaterialEntry {
 	std::string name;

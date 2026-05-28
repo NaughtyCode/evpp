@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <cstdint>
 #include <memory>
@@ -15,9 +15,7 @@
 namespace engine {
 namespace space {
 
-//=============================================================================
 // ConnectionRouter — routes incoming TCP connections to Spaces
-//=============================================================================
 
 class ENGINE_API ConnectionRouter {
 public:

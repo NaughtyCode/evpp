@@ -1,4 +1,4 @@
-#include "runtime/evpp/kcp/sync_kcp_client.h"
+﻿#include "runtime/evpp/kcp/sync_kcp_client.h"
 
 #include "runtime/evpp/gettimeofday.h"
 #include "runtime/evpp/inner_pre.h"
@@ -34,9 +34,7 @@ static int kcp_output_callback(const char* buf, int len, ikcpcb* /*kcp*/, void* 
 	return (sent >= 0) ? 0 : -1;
 }
 
-// ===========================================================================
 // Client
-// ===========================================================================
 Client::Client() {
 	memset(&remote_addr_, 0, sizeof(remote_addr_));
 }

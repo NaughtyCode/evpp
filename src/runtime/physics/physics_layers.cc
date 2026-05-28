@@ -1,4 +1,4 @@
-#ifdef ENGINE_PHYSICS_ENABLED
+﻿#ifdef ENGINE_PHYSICS_ENABLED
 
 #include "runtime/physics/physics_layers.h"
 
@@ -6,9 +6,7 @@
 
 namespace engine {
 
-//============================================================================
 // BPLayerInterfaceImpl
-//============================================================================
 
 BPLayerInterfaceImpl::BPLayerInterfaceImpl(const LayerConfig& config) {
 	// Build ObjectLayer → BroadPhaseLayer mapping from layer_mapping
@@ -57,9 +55,7 @@ const char* BPLayerInterfaceImpl::GetBroadPhaseLayerName(JPH::BroadPhaseLayer in
 }
 #endif
 
-//============================================================================
 // ObjectLayerPairFilterImpl
-//============================================================================
 
 ObjectLayerPairFilterImpl::ObjectLayerPairFilterImpl(const LayerConfig& config) {
 	for (const auto& rule : config.collision_matrix) {
@@ -86,9 +82,7 @@ bool ObjectLayerPairFilterImpl::ShouldCollide(JPH::ObjectLayer inLayer1,
 	return default_collide_;
 }
 
-//============================================================================
 // ObjectVSBLayerFilterImpl
-//============================================================================
 
 ObjectVSBLayerFilterImpl::ObjectVSBLayerFilterImpl(const LayerConfig& config,
 												   const BPLayerInterfaceImpl& bp_iface) {

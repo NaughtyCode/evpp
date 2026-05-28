@@ -1,4 +1,4 @@
-#include "runtime/script/net_kcp_server_bind.h"
+﻿#include "runtime/script/net_kcp_server_bind.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -29,9 +29,7 @@ namespace script {
 
 namespace {
 
-// ======================================================================
 // KCP Server bindings (light userdata + Lua class)
-// ======================================================================
 
 struct KcpServerCtx {
 	std::unique_ptr<evpp::kcp::Server> server;
@@ -60,7 +58,7 @@ void BindKcpMessageHandler(KcpServerCtx* ctx) {
 		if (msg_ref == LUA_NOREF) return;
 		if (!main_loop) return;
 
-		// Snapshot message data �?the Message buffer may be reused by the
+		// Snapshot message data  - the Message buffer may be reused by the
 		// recv thread on the next iteration.
 		std::string data(msg->data(), msg->size());
 		std::string remote_ip = msg->remote_ip();
@@ -135,7 +133,7 @@ void ReleaseKcpServer(lua_State* L, KcpServerCtx* ctx) {
 	}
 }
 
-// ── net.kcp_server.listen(port_or_ports, on_message) �?server_instance ─
+// ── net.kcp_server.listen(port_or_ports, on_message)  - server_instance ─
 int l_kcp_server_listen(lua_State* L) {
 	int arg1_type = lua_type(L, 1);
 	if (arg1_type != LUA_TNUMBER && arg1_type != LUA_TSTRING) {
@@ -211,7 +209,7 @@ int l_kcp_server_listen(lua_State* L) {
 	return 1;
 }
 
-// ── server:stop() �?bool ───────────────────────────────────────────
+// ── server:stop()  - bool ───────────────────────────────────────────
 int l_kcp_server_stop(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
@@ -246,7 +244,7 @@ int l_kcp_server_continue(lua_State* L) {
 	return 0;
 }
 
-// ── server:is_running() �?bool ─────────────────────────────────────
+// ── server:is_running()  - bool ─────────────────────────────────────
 int l_kcp_server_is_running(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx || ctx->disposed) {
@@ -368,9 +366,7 @@ const luaL_Reg kKcpServerFunctions[] = {
 
 }  // namespace
 
-// ======================================================================
 // Public API
-// ======================================================================
 
 void RegisterKcpServerMetaTable(lua_State* L) {
 	if (!L) return;
@@ -404,7 +400,7 @@ void ShutdownKcpServerBindings() {
 		ctx->disposed = true;
 		ctx->server->Stop(true);
 
-		/* Step 4: Direct cleanup �?no RunInLoop deferral needed because
+		/* Step 4: Direct cleanup  - no RunInLoop deferral needed because
 		 * WaitDrain guarantees no callback is touching Lua state, and
 		 * TryAcquire=false guarantees no future callback will try. */
 		int old_msg_ref = ctx->on_message_ref.exchange(LUA_NOREF);

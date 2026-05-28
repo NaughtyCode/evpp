@@ -1,4 +1,4 @@
-#ifdef ENGINE_PHYSICS_ENABLED
+﻿#ifdef ENGINE_PHYSICS_ENABLED
 
 #include "runtime/physics/physics_assets.h"
 
@@ -32,9 +32,7 @@
 
 namespace engine {
 
-//============================================================================
 // Internal JSON parsing structures (used with glaze for asset deserialization)
-//============================================================================
 
 // ── Material JSON shape ──
 struct JsonMaterial {
@@ -102,9 +100,7 @@ struct JsonAssetFile {
 	std::optional<std::vector<MaterialEntry>> materials;  // inline material defs
 };
 
-//============================================================================
 // glaze reflection for JSON asset structures
-//============================================================================
 
 }  // namespace engine
 
@@ -207,9 +203,7 @@ struct glz::meta<engine::JsonAssetFile> {
 
 namespace engine {
 
-//============================================================================
 // Helpers
-//============================================================================
 
 JPH::RVec3 AssetLoader::ParseVec3(const std::vector<double>& v) {
 	return JPH::RVec3(
@@ -223,9 +217,7 @@ JPH::Quat AssetLoader::ParseQuat(const std::vector<float>& q) {
 	return JPH::Quat::sIdentity();
 }
 
-//============================================================================
 // Shape creation from JSON definition
-//============================================================================
 
 AssetLoader::ShapeCreateResult AssetLoader::CreateShape(const JsonShapeDef& def,
 														const MaterialTable& material_table,
@@ -516,9 +508,7 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(const JsonShapeDef& def,
 	return result;
 }
 
-//============================================================================
 // Parse motion type and quality from strings
-//============================================================================
 
 static JPH::EMotionType ParseMotionType(const std::string& s) {
 	if (s == "static") return JPH::EMotionType::Static;
@@ -531,9 +521,7 @@ static JPH::EMotionQuality ParseMotionQuality(const std::string& s) {
 	return JPH::EMotionQuality::Discrete;
 }
 
-//============================================================================
 // LoadScene — main entry point
-//============================================================================
 
 AssetLoadResult AssetLoader::LoadScene(const std::string& json_path,
 									   JPH::BodyInterface& body_interface,

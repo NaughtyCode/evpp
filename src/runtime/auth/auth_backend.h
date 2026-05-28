@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <map>
 #include <memory>
@@ -42,9 +42,7 @@ protected:
 	std::unordered_map<std::string, PermissionSet> entity_permissions_;
 };
 
-// =============================================================================
 // Static token-based auth (dev/testing).
-// =============================================================================
 
 class ENGINE_API TokenAuthBackend : public AuthBackend {
 public:
@@ -60,13 +58,11 @@ private:
 	std::unordered_map<std::string, std::string> sessions_;    // session_id → entity_id
 };
 
-// =============================================================================
 // JWT (JSON Web Token) auth backend.
 //
 // Supports HS256 (HMAC-SHA256) tokens. The backend is configured with a
 // pre-shared secret. On authentication, it verifies the JWT signature,
 // checks expiry, and extracts the entity_id from the "sub" claim.
-// =============================================================================
 
 class ENGINE_API JwtAuthBackend : public AuthBackend {
 public:

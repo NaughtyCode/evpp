@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // Copyright (c) 2024 GameTimerLib
 //
 // Fundamental time types and utilities for the GameTimer library.
@@ -15,9 +15,7 @@
 
 namespace engine {
 
-//=============================================================================
 // Duration type: nanosecond-resolution, mirrors Linux ktime_t concept
-//=============================================================================
 
 using Duration = std::chrono::nanoseconds;
 using DurationDouble = std::chrono::duration<double>;
@@ -51,9 +49,7 @@ inline const char* clock_id_name(ClockId id) {
 	}
 }
 
-//=============================================================================
 // Time point types
-//=============================================================================
 
 // A generic time point using a specific clock type
 // In practice, we use Duration as our "ktime_t" — a plain nanosecond count
@@ -62,9 +58,7 @@ inline const char* clock_id_name(ClockId id) {
 
 using TimePoint = Duration;	 // nanoseconds from clock's epoch
 
-//=============================================================================
 // Time constants (matching Linux kernel NSEC_PER_SEC etc.)
-//=============================================================================
 
 inline constexpr int64_t kNsPerSec = 1'000'000'000;
 inline constexpr int64_t kNsPerMs = 1'000'000;
@@ -79,9 +73,7 @@ inline constexpr TimePoint kTimeMax = TimePoint(INT64_MAX);
 inline constexpr TimePoint kTimeMin = TimePoint(INT64_MIN);
 inline constexpr TimePoint kTimeZero = TimePoint(0);
 
-//=============================================================================
 // Time construction helpers (mirror ktime_set, ns_to_ktime, etc.)
-//=============================================================================
 
 inline constexpr TimePoint make_time(int64_t secs, int64_t nsecs = 0) {
 	// Check for overflow
@@ -115,9 +107,7 @@ inline constexpr int64_t time_to_sec(TimePoint t) {
 	return t.count() / kNsPerSec;
 }
 
-//=============================================================================
 // Time arithmetic (mirror ktime_add, ktime_sub, etc.)
-//=============================================================================
 
 inline constexpr TimePoint time_add(TimePoint a, TimePoint b) {
 	return TimePoint(a.count() + b.count());
@@ -149,9 +139,7 @@ inline TimePoint time_add_safe(TimePoint a, TimePoint b) {
 	return TimePoint(av + bv);
 }
 
-//=============================================================================
 // Time comparison (mirror ktime_compare, ktime_before, ktime_after)
-//=============================================================================
 
 inline constexpr int time_compare(TimePoint a, TimePoint b) {
 	if (a < b) return -1;
@@ -176,9 +164,7 @@ inline constexpr TimePoint time_max(TimePoint a, TimePoint b) {
 	return a > b ? a : b;
 }
 
-//=============================================================================
 // Time delta helpers
-//=============================================================================
 
 inline constexpr int64_t time_delta_ns(TimePoint later, TimePoint earlier) {
 	return (later - earlier).count();
@@ -192,9 +178,7 @@ inline constexpr int64_t time_delta_ms(TimePoint later, TimePoint earlier) {
 	return time_delta_ns(later, earlier) / kNsPerMs;
 }
 
-//=============================================================================
 // Timer mode flags (mirror hrtimer_mode / TIMER_* flags)
-//=============================================================================
 
 enum class TimerMode : uint32_t {
 	kAbsolute = 0x00,  // Expiry time is absolute
@@ -246,18 +230,14 @@ inline constexpr bool mode_is_deferrable(TimerMode m) {
 	return (m & TimerMode::kDeferrable) == TimerMode::kDeferrable;
 }
 
-//=============================================================================
 // Timer callback return values (mirror hrtimer_restart enum)
-//=============================================================================
 
 enum class TimerResult {
 	kNoRestart,	 // Timer is not restarted (one-shot done)
 	kRestart,  // Timer must be restarted (for repeating timers)
 };
 
-//=============================================================================
 // Callback types
-//=============================================================================
 
 // High-resolution timer callback: returns whether to restart
 template <typename TimerType>
@@ -271,9 +251,7 @@ using TimerCallback = void (*)(TimerType* timer);
 using GenericTimerFn = std::function<void()>;
 using GenericTimerResultFn = std::function<TimerResult()>;
 
-//=============================================================================
 // Timer state
-//=============================================================================
 
 enum class TimerState : uint8_t {
 	kInactive = 0,	// Timer is not armed
@@ -297,9 +275,7 @@ inline const char* timer_state_name(TimerState s) {
 	}
 }
 
-//=============================================================================
 // Timer statistics
-//=============================================================================
 
 struct TimerStats {
 	uint64_t total_armed = 0;
@@ -336,9 +312,7 @@ struct TimerStats {
 	}
 };
 
-//=============================================================================
 // Utility: get current time from various clock sources
-//=============================================================================
 
 // Default clock (monotonic) — preferred for game timers
 inline TimePoint clock_now_monotonic() {
@@ -385,9 +359,7 @@ inline TimePoint clock_now_for(ClockId id) {
 	}
 }
 
-//=============================================================================
 // High-resolution sleep helpers
-//=============================================================================
 
 inline void sleep_until(TimePoint target, ClockId clock = ClockId::kMonotonic) {
 	auto now = clock_now_for(clock);

@@ -1,4 +1,4 @@
-#ifdef ENGINE_PHYSICS_ENABLED
+﻿#ifdef ENGINE_PHYSICS_ENABLED
 
 #include "runtime/physics/physics_config.h"
 
@@ -12,9 +12,7 @@
 
 namespace engine {
 
-//============================================================================
 // Internal helpers
-//============================================================================
 
 namespace {
 
@@ -38,9 +36,7 @@ bool FileExists(const std::string& path) {
 
 }  // namespace
 
-//============================================================================
 // Load all 4 JSON files
-//============================================================================
 
 bool PhysicsConfigManager::Load(const std::string& config_dir) {
 	if (!LoadPhysics(config_dir + "/physics.json")) {
@@ -69,9 +65,7 @@ bool PhysicsConfigManager::Load(const std::string& config_dir) {
 	return true;
 }
 
-//============================================================================
 // Per-file loaders
-//============================================================================
 
 bool PhysicsConfigManager::LoadPhysics(const std::string& path) {
 	if (!FileExists(path)) {
@@ -141,9 +135,7 @@ bool PhysicsConfigManager::LoadThresholds(const std::string& path) {
 	return true;
 }
 
-//============================================================================
 // Validation
-//============================================================================
 
 bool PhysicsConfigManager::ValidateConfigs(std::string& error_out) const {
 	// PhysicsConfig validations
@@ -234,9 +226,7 @@ bool PhysicsConfigManager::ValidateConfigs(std::string& error_out) const {
 	return true;
 }
 
-//============================================================================
 // Hot-reload
-//============================================================================
 
 bool PhysicsConfigManager::ReloadThresholds(const std::string& config_dir) {
 	// Single-threaded: only called from PhysicsSystem::ReloadThresholds()

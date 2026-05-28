@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // Copyright (c) 2024 GameTimerLib
 //
 // TimerManager implementation.
@@ -15,9 +15,7 @@
 
 namespace engine {
 
-//=============================================================================
 // Construction / Destruction
-//=============================================================================
 
 TimerManager::TimerManager()
 	: hrtimer_mgr_(std::make_unique<HrTimerManager>()),
@@ -29,9 +27,7 @@ TimerManager::~TimerManager() {
 	shutdown();
 }
 
-//=============================================================================
 // Initialization / shutdown
-//=============================================================================
 
 void TimerManager::initialize() {
 	if (initialized_.exchange(true)) return;
@@ -60,9 +56,7 @@ void TimerManager::shutdown() {
 	}
 }
 
-//=============================================================================
 // Main loop update
-//=============================================================================
 
 TimerManager::UpdateResult TimerManager::update() {
 	return update(now());
@@ -148,9 +142,7 @@ TimerManager::UpdateResult TimerManager::update_alarms(UpdateResult result, Time
 	return result;
 }
 
-//=============================================================================
 // Timer ID management
-//=============================================================================
 
 TimerId TimerManager::allocate_id() {
 	return next_id_.fetch_add(1, std::memory_order_relaxed);
@@ -173,9 +165,7 @@ const TimerManager::TimerEntry* TimerManager::get_entry(TimerId id) const {
 	return (it != entries_.end()) ? it->second.get() : nullptr;
 }
 
-//=============================================================================
 // Time query API
-//=============================================================================
 
 TimePoint TimerManager::now() const {
 	return clock_mgr_.now();
@@ -228,9 +218,7 @@ int64_t TimerManager::resolution_ns() const {
 	return clock_mgr_.resolution_ns();
 }
 
-//=============================================================================
 // High-Resolution Timer API
-//=============================================================================
 
 TimerId TimerManager::create_timer(HrTimerNode::Callback callback,
 								   ClockId clock_id,
@@ -393,9 +381,7 @@ void TimerManager::set_timer_callback(TimerId id, HrTimerNode::Callback callback
 	entry->hrtimer->set_callback(std::move(callback));
 }
 
-//=============================================================================
 // Timer Wheel API
-//=============================================================================
 
 TimerId TimerManager::create_wheel_timer(TimerWheelNode::Callback callback, uint32_t flags) {
 	auto entry = std::make_unique<TimerEntry>();
@@ -436,9 +422,7 @@ bool TimerManager::wheel_timer_pending(TimerId id) const {
 	return wheel_->timer_pending(entry->wheel_timer);
 }
 
-//=============================================================================
 // Alarm Timer API
-//=============================================================================
 
 TimerId TimerManager::create_alarm(AlarmType type, Alarm::Callback callback) {
 	auto entry = std::make_unique<TimerEntry>();
@@ -491,9 +475,7 @@ void TimerManager::restart_alarm(TimerId id) {
 	alarm_mgr_->restart(entry->alarm);
 }
 
-//=============================================================================
 // Repeating timer creation
-//=============================================================================
 
 TimerId TimerManager::create_repeating_timer(Duration interval,
 											 HrTimerNode::Callback callback,
@@ -527,9 +509,7 @@ TimerId TimerManager::create_repeating_simple_timer(Duration interval,
 	return create_timer(std::move(hr_cb), clock_id, TimerMode::kAbsolute | TimerMode::kRepeating);
 }
 
-//=============================================================================
 // Suspend / Resume
-//=============================================================================
 
 void TimerManager::on_suspend() {
 	suspended_.store(true);
@@ -555,9 +535,7 @@ Duration TimerManager::total_suspend_duration() const {
 	return suspend_offset_;
 }
 
-//=============================================================================
 // Time adjustment
-//=============================================================================
 
 void TimerManager::inject_sleep_time(Duration delta) {
 	clock_mgr_.inject_sleep_time(delta);
@@ -571,9 +549,7 @@ double TimerManager::time_scale() const {
 	return time_scale_.load();
 }
 
-//=============================================================================
 // Clock source
-//=============================================================================
 
 ClockManager& TimerManager::clock_manager() {
 	return clock_mgr_;
@@ -587,9 +563,7 @@ void TimerManager::set_clock_source(std::unique_ptr<ClockSource> cs) {
 	clock_mgr_.register_source(std::move(cs));
 }
 
-//=============================================================================
 // Statistics
-//=============================================================================
 
 TimerManager::ManagerStats TimerManager::stats() const {
 	ManagerStats s = stats_;

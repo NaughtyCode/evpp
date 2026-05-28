@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // Copyright (c) 2024 GameTimerLib
 //
 // Alarm timers — timers that survive system suspend / game pause states.
@@ -30,18 +30,14 @@ namespace engine {
 // Forward declarations
 class AlarmTimerManager;
 
-//=============================================================================
 // AlarmType — which clock the alarm is based on
-//=============================================================================
 
 enum class AlarmType {
 	kRealtime,	// CLOCK_REALTIME based
 	kBoottime,	// CLOCK_BOOTTIME based (monotonic + suspend)
 };
 
-//=============================================================================
 // Alarm — the alarm timer structure
-//=============================================================================
 
 class Alarm {
 	friend class AlarmTimerManager;
@@ -150,9 +146,7 @@ class Alarm {
 	MapIterator queue_it_;
 };
 
-//=============================================================================
 // AlarmTimerManager — manages alarm timers
-//=============================================================================
 
 class AlarmTimerManager {
 	public:

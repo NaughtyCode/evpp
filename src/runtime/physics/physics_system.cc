@@ -1,4 +1,4 @@
-#ifdef ENGINE_PHYSICS_ENABLED
+﻿#ifdef ENGINE_PHYSICS_ENABLED
 
 #define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/physics_system.h"
@@ -20,18 +20,14 @@
 
 namespace engine {
 
-//============================================================================
 // Singleton
-//============================================================================
 
 PhysicsSystem& PhysicsSystem::Instance() {
 	static PhysicsSystem instance;
 	return instance;
 }
 
-//============================================================================
 // Initialize — load configs + create ScriptVM + load scripts [D22]
-//============================================================================
 
 bool PhysicsSystem::Initialize(const std::string& config_dir,
 							   const std::string& assets_path,
@@ -90,9 +86,7 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
 	return true;
 }
 
-//============================================================================
 // InitCustomPtrStore — register subsystem objects in the VM [custom ptr array]
-//============================================================================
 
 void PhysicsSystem::InitCustomPtrStore() {
 	if (!script_vm_) return;
@@ -100,9 +94,7 @@ void PhysicsSystem::InitCustomPtrStore() {
 	// Note: RegisterSubsystemObjects handles Reserve(4) internally.
 }
 
-//============================================================================
 // Typed accessors — retrieve subsystem objects from any physics lua_State
-//============================================================================
 
 PhysicsSystem* PhysicsSystem::GetSystemFromState(lua_State* L) {
 	VMCustomPtrStore store(L);
@@ -124,9 +116,7 @@ PhysicsScriptVM* PhysicsSystem::GetScriptVMFromState(lua_State* L) {
 	return store.GetAs<PhysicsScriptVM>(kPhysPtrScriptVM);
 }
 
-//============================================================================
 // Start — explicitly start the physics thread
-//============================================================================
 
 bool PhysicsSystem::Start() {
 	ENGINE_PROFILE_SCOPE("engine.physics", "Start");
@@ -159,9 +149,7 @@ bool PhysicsSystem::Start() {
 	return true;
 }
 
-//============================================================================
 // Shutdown
-//============================================================================
 
 void PhysicsSystem::Shutdown() {
 	ENGINE_PROFILE_SCOPE("engine.physics", "Shutdown");
@@ -181,17 +169,13 @@ void PhysicsSystem::Shutdown() {
 	ENGINE_LOG_INFO(GetLogger(), "PhysicsSystem: shutdown complete");
 }
 
-//============================================================================
 // IsRunning
-//============================================================================
 
 bool PhysicsSystem::IsRunning() const {
 	return is_initialized_ && physics_thread_.IsRunning();
 }
 
-//============================================================================
 // Enqueue commands (5 types)
-//============================================================================
 
 void PhysicsSystem::EnqueueSpawn(const std::string& proto_id,
 								 double x,
@@ -242,9 +226,7 @@ void PhysicsSystem::Tick(uint64_t frame_id, float delta_time) {
 	physics_thread_.EnqueueCommand(PhysicsCommand::MakeTick(std::move(args)));
 }
 
-//============================================================================
 // FetchResult — blocking wait for a frame result
-//============================================================================
 
 std::optional<PhysicsFrameResult> PhysicsSystem::FetchResult(uint64_t frame_id, int timeout_ms) {
 	ENGINE_PROFILE_PHYSICS_FETCH(frame_id);
@@ -268,17 +250,13 @@ std::optional<PhysicsFrameResult> PhysicsSystem::FetchResult(uint64_t frame_id, 
 	}
 }
 
-//============================================================================
 // IsHealthy
-//============================================================================
 
 bool PhysicsSystem::IsHealthy() const {
 	return physics_thread_.IsHealthy();
 }
 
-//============================================================================
 // Config hot-reload
-//============================================================================
 
 bool PhysicsSystem::ReloadThresholds() {
 	if (!config_manager_) return false;
@@ -295,9 +273,7 @@ bool PhysicsSystem::ReloadLogLevel() {
 	return config_manager_->ReloadLogLevel(config_dir_);
 }
 
-//============================================================================
 // Synchronous query methods — thread-safe via Jolt BodyLockInterface
-//============================================================================
 
 std::optional<BodyTransform> PhysicsSystem::GetTransform(uint32_t body_id) const {
 	ENGINE_PROFILE_SCOPE("engine.physics", "GetTransform");
@@ -345,9 +321,7 @@ PhysicsSystem::PhysicsStats PhysicsSystem::GetPhysicsStats() const {
 	return {s.active_bodies, s.total_bodies, s.body_pairs, s.contact_constraints};
 }
 
-//============================================================================
 // SaveState / RestoreState
-//============================================================================
 
 std::string PhysicsSystem::SaveState() const {
 	if (!is_initialized_) return {};
@@ -367,11 +341,9 @@ bool PhysicsSystem::Recover(const std::string& saved_state) {
 	return physics_thread_.Recover(saved_state);
 }
 
-//============================================================================
 // UpdateScript — call Lua collision callbacks [D17.6]
 //
 // PT-only. Verified at entry by physics_thread_.VerifyIsPhysicsThread().
-//============================================================================
 
 void PhysicsSystem::UpdateScript(const std::vector<CollisionEvent>& collision_events) {
 	ENGINE_PROFILE_SCRIPT_CALLBACK();

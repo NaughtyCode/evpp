@@ -1,11 +1,9 @@
-#pragma once
+﻿#pragma once
 
-//==============================================================================
 // PHYSICS_INTERNAL_ACCESS — internal header guard macro
 //
 // See physics_system.h for full documentation.
 // Including this header without the macro will cause a compile-time #error.
-//==============================================================================
 #ifndef PHYSICS_INTERNAL_ACCESS
 #error \
 	"physics_thread.h is internal to the physics subsystem. \
@@ -34,7 +32,6 @@ before including this header."
 
 namespace engine {
 
-//==============================================================================
 // PhysicsThread — dedicated physics thread [D18][D19][D20]
 //
 // [Thread Model]
@@ -73,7 +70,6 @@ namespace engine {
 //   This class is a physics subsystem implementation detail. External modules
 //   MUST NOT use PhysicsThread directly. Compile-time protection is provided
 //   by the PHYSICS_INTERNAL_ACCESS macro.
-//==============================================================================
 
 class PhysicsThread {
 	public:

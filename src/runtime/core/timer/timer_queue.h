@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // Copyright (c) 2024 GameTimerLib
 //
 // Timer queue — a red-black tree based priority queue for timer nodes,
@@ -15,9 +15,7 @@
 
 namespace engine {
 
-//=============================================================================
 // TimerQueueNode — base class for objects stored in a TimerQueue
-//=============================================================================
 
 // CRTP base providing the node interface. T must expose:
 //   TimePoint expire_time() const   — the expiration time
@@ -29,12 +27,10 @@ class TimerQueueNode {
 	}
 };
 
-//=============================================================================
 // TimerQueue — rbtree-backed (std::multimap) priority queue of timer nodes
 //
 // Provides O(log n) insert, O(log n) delete, O(1) get-min.
 // Multiple timers can share the same expiration time.
-//=============================================================================
 
 template <typename NodeT>
 class TimerQueue {
@@ -167,10 +163,8 @@ class TimerQueue {
 	MapType tree_;
 };
 
-//=============================================================================
 // TimerQueueLinked — variant with linked-list traversal support
 // (mirrors timerqueue_linked in Linux)
-//=============================================================================
 
 template <typename NodeT>
 class TimerQueueLinked {

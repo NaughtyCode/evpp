@@ -1,4 +1,4 @@
-#ifdef ENGINE_PHYSICS_ENABLED
+﻿#ifdef ENGINE_PHYSICS_ENABLED
 
 #include "runtime/physics/physics_materials.h"
 
@@ -8,9 +8,7 @@
 
 #include <glaze/glaze.hpp>
 
-//============================================================================
 // glaze reflection for MaterialEntry
-//============================================================================
 
 template <>
 struct glz::meta<engine::MaterialEntry> {
@@ -21,9 +19,7 @@ struct glz::meta<engine::MaterialEntry> {
 
 namespace engine {
 
-//============================================================================
 // MaterialTable
-//============================================================================
 
 bool MaterialTable::LoadFromJson(const std::string& json) {
 	std::vector<MaterialEntry> entries;

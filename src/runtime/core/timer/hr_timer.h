@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // Copyright (c) 2024 GameTimerLib
 //
 // High-resolution timer (hrtimer). Mirrors the Linux kernel hrtimer subsystem
@@ -31,9 +31,7 @@ namespace engine {
 // Forward declarations
 class HrTimerManager;
 
-//=============================================================================
 // HrTimerNode — the basic high-resolution timer structure
-//=============================================================================
 
 class HrTimerNode {
 	public:
@@ -232,9 +230,7 @@ class HrTimerNode {
 	MapIterator queue_it_;
 };
 
-//=============================================================================
 // HrTimerSleeper — timer + task coordination (mirror hrtimer_sleeper)
-//=============================================================================
 
 class HrTimerSleeper {
 	public:
@@ -266,10 +262,8 @@ class HrTimerSleeper {
 	std::atomic<bool> sleeping_{false};
 };
 
-//=============================================================================
 // HrTimerManager — manages a collection of high-resolution timers
 // (mirrors hrtimer_cpu_base / hrtimer_clock_base in Linux)
-//=============================================================================
 
 class HrTimerManager {
 	public:

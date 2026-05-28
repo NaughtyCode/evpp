@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <cstdint>
 #include <memory>
@@ -13,9 +13,7 @@
 namespace engine {
 namespace space {
 
-//=============================================================================
 // SpaceMessage — cross-space async message
-//=============================================================================
 
 struct SpaceMessage {
 	SpaceId source_space = kInvalidSpaceId;
@@ -25,9 +23,7 @@ struct SpaceMessage {
 	std::string payload;
 };
 
-//=============================================================================
 // SpaceMessageRouter — delivers cross-space messages via SPSC queue
-//=============================================================================
 
 class ENGINE_API SpaceMessageRouter {
 public:

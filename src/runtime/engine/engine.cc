@@ -1,4 +1,4 @@
-// NOMINMAX must be defined before any windows.h inclusion,
+﻿// NOMINMAX must be defined before any windows.h inclusion,
 // which can come via engine.h -> invoke_timer.h -> ...
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -104,9 +104,7 @@ ScriptVM& Engine::GetScriptVM() {
 	return *script_vm_;
 }
 
-//============================================================================
 // Init
-//============================================================================
 
 void Engine::Init(const RuntimeConfig& runtime_cfg,
 				  const std::string& entry_scripts_dir,
@@ -306,9 +304,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	ENGINE_LOG_INFO(logger, "Init() complete");
 }
 
-//============================================================================
 // Start -- standalone mode: arm frame timer and signal watchers
-//============================================================================
 
 void Engine::Start() {
 	auto* logger = GetLogger();
@@ -360,9 +356,7 @@ void Engine::Start() {
 	ENGINE_LOG_INFO(logger, "Start() complete, running_=true");
 }
 
-//============================================================================
 // Run -- standalone convenience: Start + dispatch + Cleanup
-//============================================================================
 
 void Engine::Run() {
 	auto* logger = GetLogger();
@@ -378,9 +372,7 @@ void Engine::Run() {
 	Cleanup();
 }
 
-//============================================================================
 // Tick -- one frame of engine work
-//============================================================================
 
 void Engine::Tick() {
 	if (!running_) return;
@@ -395,9 +387,7 @@ void Engine::Tick() {
 	}  // Tick slice ends
 }
 
-//============================================================================
 // Shutdown -- request graceful stop
-//============================================================================
 
 void Engine::Shutdown() {
 	ENGINE_PROFILE_SCOPE("engine", "Shutdown");
@@ -411,9 +401,7 @@ void Engine::Shutdown() {
 	}
 }
 
-//============================================================================
 // Cleanup -- release all resources
-//============================================================================
 
 void Engine::Cleanup() {
 	ENGINE_PROFILE_SCOPE("engine", "Cleanup");
@@ -494,9 +482,7 @@ void Engine::Cleanup() {
 	loop_ = nullptr;
 }
 
-//============================================================================
 // FrameLoop -- per-frame work (timer update + Lua update)
-//============================================================================
 
 void Engine::FrameLoop() {
 	if (!running_) return;

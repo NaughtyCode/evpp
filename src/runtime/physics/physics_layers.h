@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #ifdef ENGINE_PHYSICS_ENABLED
 
@@ -15,9 +15,7 @@
 
 namespace engine {
 
-//============================================================================
 // BPLayerInterfaceImpl — maps ObjectLayer → BroadPhaseLayer [J7]
-//============================================================================
 
 class ENGINE_API BPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface {
 	public:
@@ -40,9 +38,7 @@ class ENGINE_API BPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterfa
 #endif
 };
 
-//============================================================================
 // ObjectLayerPairFilterImpl — checks if two ObjectLayers should collide [J7]
-//============================================================================
 
 class ENGINE_API ObjectLayerPairFilterImpl final : public JPH::ObjectLayerPairFilter {
 	public:
@@ -56,9 +52,7 @@ class ENGINE_API ObjectLayerPairFilterImpl final : public JPH::ObjectLayerPairFi
 	bool default_collide_ = false;
 };
 
-//============================================================================
 // ObjectVSBLayerFilterImpl — checks if ObjectLayer collides with BroadPhaseLayer
-//============================================================================
 
 class ENGINE_API ObjectVSBLayerFilterImpl final : public JPH::ObjectVsBroadPhaseLayerFilter {
 	public:

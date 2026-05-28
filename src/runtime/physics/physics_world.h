@@ -1,11 +1,9 @@
-#pragma once
+﻿#pragma once
 
-//==============================================================================
 // PHYSICS_INTERNAL_ACCESS — internal header guard macro
 //
 // See physics_system.h for full documentation.
 // Including this header without the macro will cause a compile-time #error.
-//==============================================================================
 #ifndef PHYSICS_INTERNAL_ACCESS
 #error \
 	"physics_world.h is internal to the physics subsystem. \
@@ -45,7 +43,6 @@ class TempAllocator;
 
 namespace engine {
 
-//============================================================================
 // ContactListenerImpl — contact event collector with JT-synchronization
 //
 // Jolt contact callbacks (OnContactAdded, OnContactPersisted,
@@ -65,7 +62,6 @@ namespace engine {
 // If the JobSystem is single-threaded (e.g. JobSystemSingleThreaded),
 // the mutex is never contended and the overhead is a single uncontended
 // lock/unlock per callback.
-//============================================================================
 
 class ContactListenerImpl final : public JPH::ContactListener {
 	public:
@@ -109,7 +105,6 @@ class ContactListenerImpl final : public JPH::ContactListener {
 	std::vector<ContactRecord> records_;
 };
 
-//============================================================================
 // BodyActivationListenerImpl — active body tracker with JT/MT synchronization
 //
 // Tracks which bodies are currently active (awake) in the physics simulation.
@@ -135,7 +130,6 @@ class ContactListenerImpl final : public JPH::ContactListener {
 //
 // Clear() is only called from the PhysicsWorld destructor, after the physics
 // thread has been joined — no concurrent access, no lock contention.
-//============================================================================
 
 class BodyActivationListenerImpl final : public JPH::BodyActivationListener {
 	public:
@@ -153,7 +147,6 @@ class BodyActivationListenerImpl final : public JPH::BodyActivationListener {
 	std::unordered_map<uint32_t, bool> active_bodies_;
 };
 
-//============================================================================
 // PhysicsWorld — wraps JPH::PhysicsSystem with full lifecycle management
 //
 // [Thread Model]
@@ -192,7 +185,6 @@ class BodyActivationListenerImpl final : public JPH::BodyActivationListener {
 //   This class is a physics subsystem implementation detail. External modules
 //   MUST NOT use PhysicsWorld directly. Compile-time protection is provided
 //   by the PHYSICS_INTERNAL_ACCESS macro.
-//============================================================================
 
 class PhysicsWorld {
 	public:

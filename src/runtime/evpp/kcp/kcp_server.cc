@@ -1,4 +1,4 @@
-#include "runtime/evpp/kcp/kcp_server.h"
+﻿#include "runtime/evpp/kcp/kcp_server.h"
 
 #include "runtime/evpp/event_loop.h"
 #include "runtime/evpp/event_loop_thread_pool.h"
@@ -38,9 +38,7 @@ static inline IUINT32 kcp_clock() {
 	return static_cast<IUINT32>(utcmicrosecond() / 1000);
 }
 
-// ===========================================================================
 // KcpSession — wraps a single ikcpcb instance pinned to one remote address.
-// ===========================================================================
 class Server::KcpSession {
 	public:
 	KcpSession(IUINT32 conv,
@@ -167,9 +165,7 @@ class Server::KcpSession {
 	bool alive_ = true;
 };
 
-// ===========================================================================
 // RecvThread — owns the UDP socket, the session map, and the I/O loop.
-// ===========================================================================
 class Server::RecvThread {
 	public:
 	explicit RecvThread(Server* srv)
@@ -254,9 +250,7 @@ class Server::RecvThread {
 	std::atomic<Status> status_;
 };
 
-// ===========================================================================
 // Server
-// ===========================================================================
 Server::Server() {
 }
 Server::~Server() {

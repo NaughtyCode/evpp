@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #ifdef ENGINE_PHYSICS_ENABLED
 
@@ -13,9 +13,7 @@
 
 namespace engine {
 
-//============================================================================
 // Command types — exactly 5, per design doc §3.2 [D3]
-//============================================================================
 
 enum class CommandType : uint8_t {
 	Spawn,	// Spawn(protoId, transform)
@@ -25,9 +23,7 @@ enum class CommandType : uint8_t {
 	Tick,  // Tick(frameId, fixedDeltaTime)
 };
 
-//============================================================================
 // Command argument structs
-//============================================================================
 
 struct SpawnArgs {
 	std::string proto_id;
@@ -56,9 +52,7 @@ struct TickArgs {
 	float delta_time = 0.0f;
 };
 
-//============================================================================
 // PhysicsCommand — tagged union over 5 command types
-//============================================================================
 
 struct PhysicsCommand {
 	CommandType type;
@@ -83,9 +77,7 @@ struct PhysicsCommand {
 	}
 };
 
-//============================================================================
 // Result structures — per design doc §3.3 [D6]
-//============================================================================
 
 struct DiffPacket {
 	uint32_t object_id = 0;
