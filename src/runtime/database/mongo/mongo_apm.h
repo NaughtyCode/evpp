@@ -13,9 +13,7 @@
 namespace engine {
 namespace mongo {
 
-// ═══════════════════════════════════════════════════════════════════════
 // APM Event Types — read-only accessors for command/SDAM events
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API MongoApmCommandStartedEvent {
 	public:
@@ -178,9 +176,7 @@ class ENGINE_API MongoApmServerHeartbeatFailedEvent {
 	const void* event_;
 };
 
-// ═══════════════════════════════════════════════════════════════════════
 // APM Callbacks — configure via C++ std::function or std::move
-// ═══════════════════════════════════════════════════════════════════════
 
 using MongoApmCommandStartedCb = std::function<void(const MongoApmCommandStartedEvent&)>;
 using MongoApmCommandSucceededCb = std::function<void(const MongoApmCommandSucceededEvent&)>;

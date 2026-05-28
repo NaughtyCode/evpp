@@ -12,8 +12,8 @@ namespace engine {
 namespace script {
 namespace {
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoStructuredLogOpts
-// ══════════════════════════════════════════════════════════════════════════�?
+
+// MongoStructuredLogOpts
 const char* kOptsMeta = "mongoc.structured_log_opts";
 
 int l_log_opts_gc(lua_State* L) {
@@ -163,8 +163,8 @@ const luaL_Reg kOptsLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoStructuredLogEntry
-// ══════════════════════════════════════════════════════════════════════════�?
+
+// MongoStructuredLogEntry
 const char* kEntryMeta = "mongoc.structured_log_entry";
 
 int l_log_entry_gc(lua_State* L) {
@@ -254,8 +254,8 @@ const luaL_Reg kEntryLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoLog static methods
-// ══════════════════════════════════════════════════════════════════════════�?
+
+// MongoLog static methods
 int l_log_level_to_string(lua_State* L) {
 	auto level = static_cast<mongo::MongoLogLevel>(luaL_checkinteger(L, 1));
 	const char* name = mongo::MongoLog::LevelToString(level);

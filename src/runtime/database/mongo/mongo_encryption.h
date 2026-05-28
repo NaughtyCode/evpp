@@ -13,16 +13,12 @@
 namespace engine {
 namespace mongo {
 
-// ═══════════════════════════════════════════════════════════════════════
 // KMS credentials provider callback type
-// ═══════════════════════════════════════════════════════════════════════
 
 using MongoKmsCredentialsProviderCb = std::function<bool(
 	void* userdata, const BsonDocument& params, BsonDocument* out, MongoError* error)>;
 
-// ═══════════════════════════════════════════════════════════════════════
 // Auto-Encryption Options
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API MongoAutoEncryptionOpts {
 	public:
@@ -54,9 +50,7 @@ class ENGINE_API MongoAutoEncryptionOpts {
 	std::unique_ptr<Impl> impl_;
 };
 
-// ═══════════════════════════════════════════════════════════════════════
 // Client Encryption Options (for explicit encryption)
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API MongoClientEncryptionOpts {
 	public:
@@ -82,9 +76,7 @@ class ENGINE_API MongoClientEncryptionOpts {
 	std::unique_ptr<Impl> impl_;
 };
 
-// ═══════════════════════════════════════════════════════════════════════
 // Encrypt Options
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API MongoClientEncryptionEncryptOpts {
 	public:
@@ -113,9 +105,7 @@ class ENGINE_API MongoClientEncryptionEncryptOpts {
 	std::unique_ptr<Impl> impl_;
 };
 
-// ═══════════════════════════════════════════════════════════════════════
 // FLE2 Range Encryption Options
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API MongoClientEncryptionEncryptRangeOpts {
 	public:
@@ -142,9 +132,7 @@ class ENGINE_API MongoClientEncryptionEncryptRangeOpts {
 	std::unique_ptr<Impl> impl_;
 };
 
-// ═══════════════════════════════════════════════════════════════════════
 // FLE2 Text Encryption Options — Prefix
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API MongoClientEncryptionEncryptTextPrefixOpts {
 	public:
@@ -170,9 +158,7 @@ class ENGINE_API MongoClientEncryptionEncryptTextPrefixOpts {
 	std::unique_ptr<Impl> impl_;
 };
 
-// ═══════════════════════════════════════════════════════════════════════
 // FLE2 Text Encryption Options — Suffix
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API MongoClientEncryptionEncryptTextSuffixOpts {
 	public:
@@ -198,9 +184,7 @@ class ENGINE_API MongoClientEncryptionEncryptTextSuffixOpts {
 	std::unique_ptr<Impl> impl_;
 };
 
-// ═══════════════════════════════════════════════════════════════════════
 // FLE2 Text Encryption Options — Substring
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API MongoClientEncryptionEncryptTextSubstringOpts {
 	public:
@@ -227,9 +211,7 @@ class ENGINE_API MongoClientEncryptionEncryptTextSubstringOpts {
 	std::unique_ptr<Impl> impl_;
 };
 
-// ═══════════════════════════════════════════════════════════════════════
 // FLE2 Text Encryption Options (aggregates prefix/suffix/substring)
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API MongoClientEncryptionEncryptTextOpts {
 	public:
@@ -256,9 +238,7 @@ class ENGINE_API MongoClientEncryptionEncryptTextOpts {
 	std::unique_ptr<Impl> impl_;
 };
 
-// ═══════════════════════════════════════════════════════════════════════
 // Data Key Options
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API MongoClientEncryptionDatakeyOpts {
 	public:
@@ -282,9 +262,7 @@ class ENGINE_API MongoClientEncryptionDatakeyOpts {
 	std::unique_ptr<Impl> impl_;
 };
 
-// ═══════════════════════════════════════════════════════════════════════
 // Rewrap Many Data Key Result
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API MongoClientEncryptionRewrapManyDatakeyResult {
 	public:
@@ -308,9 +286,7 @@ class ENGINE_API MongoClientEncryptionRewrapManyDatakeyResult {
 	std::unique_ptr<Impl> impl_;
 };
 
-// ═══════════════════════════════════════════════════════════════════════
 // Client Encryption (explicit encryption)
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API MongoClientEncryption {
 	public:

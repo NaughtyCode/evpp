@@ -37,9 +37,7 @@ static_assert(sizeof(BsonVectorPackedBitView) >= sizeof(bson_vector_packed_bit_v
 #define VPB(p) reinterpret_cast<bson_vector_packed_bit_view_t*>((p)->storage_)
 #define CVPB(p) reinterpret_cast<const bson_vector_packed_bit_view_t*>((p)->storage_)
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonVectorInt8ConstView
-// ═══════════════════════════════════════════════════════════════════════
 
 BsonVectorInt8ConstView::BsonVectorInt8ConstView() {
 	memset(storage_, 0, sizeof(storage_));
@@ -73,9 +71,7 @@ uint32_t BsonVectorInt8ConstView::BinaryDataLength(size_t element_count) {
 	return bson_vector_int8_binary_data_length(element_count);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonVectorInt8View
-// ═══════════════════════════════════════════════════════════════════════
 
 BsonVectorInt8View::BsonVectorInt8View() {
 	memset(storage_, 0, sizeof(storage_));
@@ -124,9 +120,7 @@ uint32_t BsonVectorInt8View::BinaryDataLength(size_t element_count) {
 	return bson_vector_int8_binary_data_length(element_count);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonVectorFloat32ConstView
-// ═══════════════════════════════════════════════════════════════════════
 
 BsonVectorFloat32ConstView::BsonVectorFloat32ConstView() {
 	memset(storage_, 0, sizeof(storage_));
@@ -156,9 +150,7 @@ uint32_t BsonVectorFloat32ConstView::BinaryDataLength(size_t element_count) {
 	return bson_vector_float32_binary_data_length(element_count);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonVectorFloat32View
-// ═══════════════════════════════════════════════════════════════════════
 
 BsonVectorFloat32View::BsonVectorFloat32View() {
 	memset(storage_, 0, sizeof(storage_));
@@ -201,9 +193,7 @@ uint32_t BsonVectorFloat32View::BinaryDataLength(size_t element_count) {
 	return bson_vector_float32_binary_data_length(element_count);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonVectorPackedBitConstView
-// ═══════════════════════════════════════════════════════════════════════
 
 BsonVectorPackedBitConstView::BsonVectorPackedBitConstView() {
 	memset(storage_, 0, sizeof(storage_));
@@ -248,9 +238,7 @@ uint32_t BsonVectorPackedBitConstView::BinaryDataLength(size_t element_count) {
 	return bson_vector_packed_bit_binary_data_length(element_count);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonVectorPackedBitView
-// ═══════════════════════════════════════════════════════════════════════
 
 BsonVectorPackedBitView::BsonVectorPackedBitView() {
 	memset(storage_, 0, sizeof(storage_));
@@ -315,9 +303,7 @@ uint32_t BsonVectorPackedBitView::BinaryDataLength(size_t element_count) {
 	return bson_vector_packed_bit_binary_data_length(element_count);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonDocument vector append helpers
-// ═══════════════════════════════════════════════════════════════════════
 
 bool BsonAppendVectorInt8Uninit(BsonDocument& doc,
 								const char* key,
@@ -403,9 +389,7 @@ bool BsonAppendArrayFromVectorPackedBit(BsonDocument& doc,
 		static_cast<bson_t*>(doc.RawBson()), key, -1, *CVPBC(&view));
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonArrayBuilder vector append helpers
-// ═══════════════════════════════════════════════════════════════════════
 
 bool BsonArrayBuilderAppendVectorInt8Elements(BsonArrayBuilder& builder,
 											  const BsonVectorInt8ConstView& view) {

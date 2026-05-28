@@ -20,9 +20,7 @@
 namespace engine {
 namespace mongo {
 
-// ══════════════════════════════════════════════════════════════════════�?
 // MongoTransactionOpts
-// ══════════════════════════════════════════════════════════════════════�?
 
 struct MongoTransactionOpts::Impl {
 	mongoc_transaction_opt_t* opts = nullptr;
@@ -105,9 +103,7 @@ const void* MongoTransactionOpts::RawTransactionOpts() const {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ══════════════════════════════════════════════════════════════════════�?
 // MongoSessionOpts
-// ══════════════════════════════════════════════════════════════════════�?
 
 struct MongoSessionOpts::Impl {
 	mongoc_session_opt_t* opts = nullptr;
@@ -179,9 +175,7 @@ const void* MongoSessionOpts::RawSessionOpts() const {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ══════════════════════════════════════════════════════════════════════�?
 // MongoSession
-// ══════════════════════════════════════════════════════════════════════�?
 
 struct MongoSession::Impl {
 	mongoc_client_session_t* session = nullptr;

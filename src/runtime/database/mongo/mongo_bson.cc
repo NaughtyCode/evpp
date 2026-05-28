@@ -14,18 +14,14 @@
 namespace engine {
 namespace mongo {
 
-// ═══════════════════════════════════════════════════════════════════════
 // Static assertions: verify our inline storage sizes match the C types.
-// ═══════════════════════════════════════════════════════════════════════
 static_assert(sizeof(BsonDocument) == sizeof(bson_t),
 			  "BsonDocument storage must match bson_t size");
 static_assert(alignof(BsonDocument) == alignof(bson_t), "BsonDocument alignment must match bson_t");
 static_assert(sizeof(BsonIter) >= sizeof(bson_iter_t),
 			  "BsonIter storage must be >= bson_iter_t size");
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonDocument
-// ═══════════════════════════════════════════════════════════════════════
 
 BsonDocument::BsonDocument() {
 	bson_init(static_cast<bson_t*>(RawBson()));
@@ -490,9 +486,7 @@ const void* BsonDocument::RawBson() const {
 	return static_cast<const void*>(storage_);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonIter
-// ═══════════════════════════════════════════════════════════════════════
 
 BsonIter::BsonIter() {
 	std::memset(storage_, 0, sizeof(storage_));
@@ -788,9 +782,7 @@ const void* BsonIter::RawIter() const {
 	return static_cast<const void*>(storage_);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoDecimal128
-// ═══════════════════════════════════════════════════════════════════════
 
 bool MongoDecimal128::FromString(const char* str) {
 	return bson_decimal128_from_string(str, reinterpret_cast<bson_decimal128_t*>(this));
@@ -805,9 +797,7 @@ std::string MongoDecimal128::ToString() const {
 	return std::string(buf);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonArrayBuilder
-// ═══════════════════════════════════════════════════════════════════════
 
 BsonArrayBuilder::BsonArrayBuilder() : ptr_(bson_array_builder_new()) {
 }

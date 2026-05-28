@@ -9,9 +9,7 @@
 namespace engine {
 namespace mongo {
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoReadPrefs
-// ═══════════════════════════════════════════════════════════════════════
 
 struct MongoReadPrefs::Impl {
 	mongoc_read_prefs_t* prefs = nullptr;
@@ -108,9 +106,7 @@ bool MongoReadPrefs::IsValid() const {
 	return impl_ && impl_->prefs && mongoc_read_prefs_is_valid(impl_->prefs);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoWriteConcern
-// ═══════════════════════════════════════════════════════════════════════
 
 struct MongoWriteConcern::Impl {
 	mongoc_write_concern_t* wc = nullptr;
@@ -229,9 +225,7 @@ const void* MongoWriteConcern::RawWriteConcern() const {
 	return impl_ ? impl_->wc : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoReadConcern
-// ═══════════════════════════════════════════════════════════════════════
 
 struct MongoReadConcern::Impl {
 	mongoc_read_concern_t* rc = nullptr;

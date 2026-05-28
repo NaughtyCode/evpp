@@ -4,9 +4,7 @@
 
 namespace engine {
 
-// ══════════════════════════════════════════════════════════════════════════════
 // DbLogConfig — per-DBThread log configuration (R9)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Each DBThread creates an independent Quill logger during Start() via
 // DBThread::CreateDbLogger(). The logger name is "db_vm_{N}" and log files
@@ -27,9 +25,7 @@ struct DbLogConfig {
 	int max_backup_files = 10;	// keep at most this many old log files
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
 // DbScriptConfig — Lua script loading configuration (R12)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // During EventLoop initialisation, the DBThread:
 //   1. Sets import path to "db_scripts_dir;runtime_scripts_dir"
@@ -46,9 +42,7 @@ struct DbScriptConfig {
 	bool auto_load = true;	// auto-load script directories on EventLoop start
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
 // DbThreadPoolConfig — thread pool sizing and SPSC queue capacities
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Each DBThread has two moodycamel::ConcurrentQueue instances:
 //   request_queue  (MT → DBT): gated by request_queue_size  (back-pressure)
@@ -67,9 +61,7 @@ struct DbThreadPoolConfig {
 	int max_requests_per_frame = 0;	 // max requests to process per frame (0 = unlimited)
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
 // DbConnectionPoolConfig — MongoClientPool sizing and Pop timeout
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // max_pool_size must be >= thread_count, otherwise threads will block on
 // pool_->Pop() and eventually time out. Recommended: thread_count * 2 for
@@ -85,9 +77,7 @@ struct DbConnectionPoolConfig {
 	int wait_queue_timeout_ms = 5000;  // pool Pop() timeout in ms (0 = infinite — avoid)
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
 // DbServiceConfig — top-level configuration aggregate
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Loaded from resources/config/server/db_service.json via
 // ConfigManager::LoadDbServiceConfigFromFile().

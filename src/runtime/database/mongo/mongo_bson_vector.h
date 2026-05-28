@@ -12,9 +12,7 @@
 namespace engine {
 namespace mongo {
 
-// ═══════════════════════════════════════════════════════════════════════
 // BSON Vector constants
-// ═══════════════════════════════════════════════════════════════════════
 
 constexpr size_t kBsonVectorHeaderLen = 2;
 
@@ -26,9 +24,7 @@ class BsonVectorFloat32View;
 class BsonVectorPackedBitConstView;
 class BsonVectorPackedBitView;
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonDocument vector append helpers (free functions)
-// ═══════════════════════════════════════════════════════════════════════
 
 ENGINE_API bool BsonAppendVectorInt8Uninit(BsonDocument& doc,
 										   const char* key,
@@ -66,9 +62,7 @@ ENGINE_API bool BsonAppendArrayFromVectorPackedBit(BsonDocument& doc,
 												   const char* key,
 												   const BsonVectorPackedBitConstView& view);
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonArrayBuilder vector append helpers (free functions)
-// ═══════════════════════════════════════════════════════════════════════
 
 ENGINE_API bool BsonArrayBuilderAppendVectorInt8Elements(BsonArrayBuilder& builder,
 														 const BsonVectorInt8ConstView& view);
@@ -79,9 +73,7 @@ ENGINE_API bool BsonArrayBuilderAppendVectorPackedBitElements(
 ENGINE_API bool BsonArrayBuilderAppendVectorElements(BsonArrayBuilder& builder,
 													 const BsonIter& iter);
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonVectorInt8ConstView
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API BsonVectorInt8ConstView {
 	public:
@@ -106,9 +98,7 @@ class ENGINE_API BsonVectorInt8ConstView {
 	alignas(8) char storage_[24];
 };
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonVectorInt8View
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API BsonVectorInt8View {
 	public:
@@ -132,9 +122,7 @@ class ENGINE_API BsonVectorInt8View {
 	alignas(8) char storage_[24];
 };
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonVectorFloat32ConstView
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API BsonVectorFloat32ConstView {
 	public:
@@ -158,9 +146,7 @@ class ENGINE_API BsonVectorFloat32ConstView {
 	alignas(8) char storage_[24];
 };
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonVectorFloat32View
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API BsonVectorFloat32View {
 	public:
@@ -185,9 +171,7 @@ class ENGINE_API BsonVectorFloat32View {
 	alignas(8) char storage_[24];
 };
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonVectorPackedBitConstView
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API BsonVectorPackedBitConstView {
 	public:
@@ -218,9 +202,7 @@ class ENGINE_API BsonVectorPackedBitConstView {
 	alignas(8) char storage_[24];
 };
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonVectorPackedBitView
-// ═══════════════════════════════════════════════════════════════════════
 
 class ENGINE_API BsonVectorPackedBitView {
 	public:

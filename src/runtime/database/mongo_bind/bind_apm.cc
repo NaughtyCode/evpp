@@ -17,8 +17,6 @@ namespace engine {
 namespace script {
 namespace {
 
-// ══════════════════════════════════════════════════════════════════════════�?// Metatable name constants
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kMetaCmdStarted = "mongoc.apm_cmd_started";
 const char* kMetaCmdSucceeded = "mongoc.apm_cmd_succeeded";
 const char* kMetaCmdFailed = "mongoc.apm_cmd_failed";
@@ -33,8 +31,6 @@ const char* kMetaHbSucceeded = "mongoc.apm_hb_succeeded";
 const char* kMetaHbFailed = "mongoc.apm_hb_failed";
 const char* kMetaCallbacks = "mongoc.apm_callbacks";
 
-// ══════════════════════════════════════════════════════════════════════════�?// Helper: create a BsonDocument from a raw bson_t* (returns userdata on Lua stack)
-// ══════════════════════════════════════════════════════════════════════════�?
 void PushBsonDocument(lua_State* L, const void* raw_bson) {
 	if (!raw_bson) {
 		lua_pushnil(L);
@@ -52,8 +48,7 @@ void PushBsonDocument(lua_State* L, const void* raw_bson) {
 	*ud = doc;
 }
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoApmCommandStartedEvent
-// ══════════════════════════════════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════════════════════════════════// MongoApmCommandStartedEvent
 int l_apm_cmd_started_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmCommandStartedEvent>(L, 1, kMetaCmdStarted);
 	MEM_DELETE(ev);
@@ -185,8 +180,6 @@ const luaL_Reg kCmdStartedLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoApmCommandSucceededEvent
-// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_cmd_succeeded_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmCommandSucceededEvent>(L, 1, kMetaCmdSucceeded);
 	MEM_DELETE(ev);
@@ -325,8 +318,6 @@ const luaL_Reg kCmdSucceededLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoApmCommandFailedEvent
-// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_cmd_failed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmCommandFailedEvent>(L, 1, kMetaCmdFailed);
 	MEM_DELETE(ev);
@@ -481,8 +472,6 @@ const luaL_Reg kCmdFailedLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoApmServerChangedEvent
-// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_server_changed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerChangedEvent>(L, 1, kMetaServerChanged);
 	MEM_DELETE(ev);
@@ -564,8 +553,6 @@ const luaL_Reg kServerChangedLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoApmServerOpeningEvent
-// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_server_opening_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerOpeningEvent>(L, 1, kMetaServerOpening);
 	MEM_DELETE(ev);
@@ -633,8 +620,6 @@ const luaL_Reg kServerOpeningLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoApmServerClosedEvent
-// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_server_closed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerClosedEvent>(L, 1, kMetaServerClosed);
 	MEM_DELETE(ev);
@@ -702,8 +687,6 @@ const luaL_Reg kServerClosedLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoApmTopologyChangedEvent
-// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_topology_changed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmTopologyChangedEvent>(L, 1, kMetaTopologyChanged);
 	MEM_DELETE(ev);
@@ -778,8 +761,6 @@ const luaL_Reg kTopologyChangedLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoApmTopologyOpeningEvent
-// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_topology_opening_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmTopologyOpeningEvent>(L, 1, kMetaTopologyOpening);
 	MEM_DELETE(ev);
@@ -840,8 +821,6 @@ const luaL_Reg kTopologyOpeningLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoApmTopologyClosedEvent
-// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_topology_closed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmTopologyClosedEvent>(L, 1, kMetaTopologyClosed);
 	MEM_DELETE(ev);
@@ -902,8 +881,6 @@ const luaL_Reg kTopologyClosedLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoApmServerHeartbeatStartedEvent
-// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_hb_started_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerHeartbeatStartedEvent>(L, 1, kMetaHbStarted);
 	MEM_DELETE(ev);
@@ -963,8 +940,6 @@ const luaL_Reg kHbStartedLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoApmServerHeartbeatSucceededEvent
-// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_hb_succeeded_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerHeartbeatSucceededEvent>(L, 1, kMetaHbSucceeded);
 	MEM_DELETE(ev);
@@ -1042,8 +1017,6 @@ const luaL_Reg kHbSucceededLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoApmServerHeartbeatFailedEvent
-// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_hb_failed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerHeartbeatFailedEvent>(L, 1, kMetaHbFailed);
 	MEM_DELETE(ev);
@@ -1126,8 +1099,6 @@ const luaL_Reg kHbFailedLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoApmCallbacks
-// ══════════════════════════════════════════════════════════════════════════�?
 int l_apm_callbacks_gc(lua_State* L) {
 	auto* cb = GetUserdata<mongo::MongoApmCallbacks>(L, 1, kMetaCallbacks);
 	MEM_DELETE(cb);
@@ -1175,8 +1146,6 @@ const luaL_Reg kCallbacksLib[] = {
 
 }  // namespace
 
-// ══════════════════════════════════════════════════════════════════════════�?// Metatable registration
-// ══════════════════════════════════════════════════════════════════════════�?
 void RegisterMongoApmCommandStartedEventMeta(lua_State* L) {
 	RegisterMetatable(L, kMetaCmdStarted, nullptr, l_apm_cmd_started_gc);
 }
@@ -1229,8 +1198,6 @@ void RegisterMongoApmCallbacksMeta(lua_State* L) {
 	RegisterMetatable(L, kMetaCallbacks, nullptr, l_apm_callbacks_gc);
 }
 
-// ══════════════════════════════════════════════════════════════════════════�?// Lib accessors
-// ══════════════════════════════════════════════════════════════════════════�?
 const luaL_Reg* GetMongoApmCommandStartedEventLib() {
 	return kCmdStartedLib;
 }

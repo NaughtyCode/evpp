@@ -13,9 +13,7 @@
 
 namespace engine {
 
-// ══════════════════════════════════════════════════════════════════════════════
 // Singleton
-// ══════════════════════════════════════════════════════════════════════════════
 
 DatabaseService::DatabaseService() = default;
 
@@ -26,9 +24,7 @@ DatabaseService& DatabaseService::Instance() {
 
 DatabaseService::~DatabaseService() = default;
 
-// ══════════════════════════════════════════════════════════════════════════════
 // Initialize (MT exclusive, design §4)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Copies the URI, injects waitQueueTimeoutMS from config, creates the
 // MongoClientPool, then starts N DBThreads.
@@ -105,9 +101,7 @@ bool DatabaseService::Initialize(const DbServiceConfig& config, const mongo::Mon
 	return true;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // Shutdown (MT exclusive, design §4)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Order matters (matching design §10):
 //   1. Set running_ = false (prevents new SendRequest).
@@ -148,9 +142,7 @@ void DatabaseService::Shutdown() {
 	ENGINE_LOG_INFO(GetLogger(), "DatabaseService: shutdown complete");
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // SendRequest — round-robin dispatch (design §11)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Each request is routed to exactly one DBThread via atomic round-robin.
 // The request is moved into the thread's SPSC queue. If the queue is full
@@ -180,9 +172,7 @@ bool DatabaseService::SendRequest(DbRequest&& request) {
 	return ok;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // PollResponse — round-robin scan of all response queues (design §4.1)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Scans threads in round-robin order starting from poll_cursor_, returns
 // the first non-empty response. After a successful dequeue, poll_cursor_
@@ -206,9 +196,7 @@ std::unique_ptr<DbResponse> DatabaseService::PollResponse() {
 	return nullptr;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // Status queries
-// ══════════════════════════════════════════════════════════════════════════════
 
 bool DatabaseService::IsHealthy() const {
 	for (const auto& t : threads_) {

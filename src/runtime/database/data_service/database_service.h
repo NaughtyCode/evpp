@@ -19,9 +19,7 @@ class MongoUri;
 
 class DBThread;
 
-// ══════════════════════════════════════════════════════════════════════════════
 // DatabaseService — singleton entry point for async DB operations (R1, R2)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // DatabaseService is the ONLY public interface of the data_service module.
 // All other classes (DBThread, DBScriptVM) are access-controlled via the

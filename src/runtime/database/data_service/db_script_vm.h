@@ -24,9 +24,7 @@ class MongoClient;
 class MongoClientPool;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // DbCustomPtr — indices into the per-VM CustomPtrStore
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // These slots are populated by DBScriptVM::RegisterSubsystemObjects() during
 // EventLoop initialisation (R5). Lua scripts access the stored C++ pointers
@@ -44,9 +42,7 @@ enum DbCustomPtr : int {
 	kDbPtrPool = 4,	 // MongoClientPool* — shared pool (for scripts that need pool ops)
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
 // DBScriptVM — per-DBThread Lua VM (subclass of ScriptVM)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Each DBThread owns one DBScriptVM. It reuses ScriptVM's infrastructure
 // (Lua state lifecycle, ScriptImporter, Create/DestroyScript, DoString,
@@ -99,9 +95,7 @@ class DBScriptVM : public ScriptVM {
 	void CallFrameCallback(int64_t frame_count, double delta_seconds);
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
 // ExportDbLog — register per-DBThread log functions (R9)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Registers log_trace / log_debug / log_info / log_warn / log_error / log_fatal
 // as Lua globals. Each function captures the DBThread's Quill logger pointer
@@ -116,9 +110,7 @@ class DBScriptVM : public ScriptVM {
 
 void ExportDbLog(ScriptVM& vm, quill::Logger* logger);
 
-// ══════════════════════════════════════════════════════════════════════════════
 // ExportDbRuntime — register db_* runtime globals
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Registers global functions that Lua scripts use to access DBThread resources
 // and metadata from the VM's CustomPtrStore (through the DBScriptVM* upvalue):

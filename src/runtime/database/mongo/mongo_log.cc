@@ -13,9 +13,7 @@
 namespace engine {
 namespace mongo {
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoLog
-// ═══════════════════════════════════════════════════════════════════════
 
 namespace {
 
@@ -71,9 +69,7 @@ void MongoLog::DefaultHandler(MongoLogLevel level, const char* domain, const cha
 	mongoc_log_default_handler(static_cast<mongoc_log_level_t>(level), domain, message, nullptr);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoStructuredLogEntry
-// ═══════════════════════════════════════════════════════════════════════
 
 MongoStructuredLogEntry::MongoStructuredLogEntry(const void* raw_entry) : entry_(raw_entry) {
 }
@@ -105,9 +101,7 @@ const char* MongoStructuredLogEntry::GetMessageString() const {
 		static_cast<const mongoc_structured_log_entry_t*>(entry_));
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoStructuredLogOpts
-// ═══════════════════════════════════════════════════════════════════════
 
 struct MongoStructuredLogOpts::Impl {
 	mongoc_structured_log_opts_t* opts = nullptr;

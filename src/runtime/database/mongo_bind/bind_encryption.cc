@@ -17,8 +17,7 @@ namespace engine {
 namespace script {
 namespace {
 
-// ══════════════════════════════════════════════════════════════════════════�?// 1. MongoAutoEncryptionOpts
-// ══════════════════════════════════════════════════════════════════════════�?
+// 1. MongoAutoEncryptionOpts
 const char* kAeoMeta = "mongoc.auto_encryption_opts";
 
 int l_auto_encrypt_opts_gc(lua_State* L) {
@@ -157,8 +156,6 @@ const luaL_Reg kAeoLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// 2. MongoClientEncryptionOpts
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kCeoMeta = "mongoc.client_encryption_opts";
 
 int l_client_encrypt_opts_gc(lua_State* L) {
@@ -248,8 +245,6 @@ const luaL_Reg kCeoLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// 3. MongoClientEncryptionEncryptOpts
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kEncMeta = "mongoc.encrypt_opts";
 
 int l_encrypt_opts_gc(lua_State* L) {
@@ -356,8 +351,6 @@ const luaL_Reg kEncLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// 4. MongoClientEncryptionEncryptRangeOpts
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kErMeta = "mongoc.encrypt_range_opts";
 
 int l_encrypt_range_opts_gc(lua_State* L) {
@@ -446,8 +439,6 @@ const luaL_Reg kErLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// 5. MongoClientEncryptionEncryptTextPrefixOpts
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kTpMeta = "mongoc.encrypt_text_prefix_opts";
 
 int l_encrypt_text_prefix_opts_gc(lua_State* L) {
@@ -514,8 +505,6 @@ const luaL_Reg kTpLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// 6. MongoClientEncryptionEncryptTextSuffixOpts
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kTsMeta = "mongoc.encrypt_text_suffix_opts";
 
 int l_encrypt_text_suffix_opts_gc(lua_State* L) {
@@ -582,8 +571,6 @@ const luaL_Reg kTsLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// 7. MongoClientEncryptionEncryptTextSubstringOpts
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kTssMeta = "mongoc.encrypt_text_substring_opts";
 
 int l_encrypt_text_substring_opts_gc(lua_State* L) {
@@ -658,8 +645,6 @@ const luaL_Reg kTssLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// 8. MongoClientEncryptionEncryptTextOpts
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kTxtMeta = "mongoc.encrypt_text_opts";
 
 int l_encrypt_text_opts_gc(lua_State* L) {
@@ -757,8 +742,6 @@ const luaL_Reg kTxtLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// 9. MongoClientEncryptionDatakeyOpts
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kDkMeta = "mongoc.datakey_opts";
 
 int l_datakey_opts_gc(lua_State* L) {
@@ -840,8 +823,6 @@ const luaL_Reg kDkLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// 10. MongoClientEncryptionRewrapManyDatakeyResult
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kRwrMeta = "mongoc.rewrap_result";
 
 int l_rewrap_result_gc(lua_State* L) {
@@ -914,8 +895,6 @@ const luaL_Reg kRwrLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// 11. MongoClientEncryption
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kCeMeta = "mongoc.client_encryption";
 
 int l_client_encryption_gc(lua_State* L) {
@@ -1260,8 +1239,6 @@ const luaL_Reg kCeLib[] = {
 
 }  // namespace
 
-// ══════════════════════════════════════════════════════════════════════════�?// Meta registration functions
-// ══════════════════════════════════════════════════════════════════════════�?
 void RegisterMongoAutoEncryptionOptsMeta(lua_State* L) {
 	RegisterMetatable(L, kAeoMeta, nullptr, l_auto_encrypt_opts_gc);
 }
@@ -1306,8 +1283,6 @@ void RegisterMongoClientEncryptionMeta(lua_State* L) {
 	RegisterMetatable(L, kCeMeta, nullptr, l_client_encryption_gc);
 }
 
-// ══════════════════════════════════════════════════════════════════════════�?// Library accessors
-// ══════════════════════════════════════════════════════════════════════════�?
 const luaL_Reg* GetMongoAutoEncryptionOptsLib() {
 	return kAeoLib;
 }

@@ -28,9 +28,7 @@ class MongoClient;
 class MongoClientPool;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // DBThread — per-thread MongoDB worker (module-internal, R4)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Each DBThread runs its own EventLoop on a dedicated std::thread. Inside the
 // loop it:
@@ -130,9 +128,7 @@ class DBThread {
 	void ProcessRequest(const DbRequest& req);
 	void EnqueueResponse(DbResponse&& resp);
 
-	// ════════════════════════════════════════════════════════════════════
 	// Members (thread-ownership annotated)
-	// ════════════════════════════════════════════════════════════════════
 
 	int index_;	 // [MT] thread index (0..N-1)
 	DbServiceConfig config_;  // [MT→] immutable after Start()

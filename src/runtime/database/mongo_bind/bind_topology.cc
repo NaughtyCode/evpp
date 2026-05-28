@@ -16,8 +16,7 @@ namespace engine {
 namespace script {
 namespace {
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoServerDescription
-// ══════════════════════════════════════════════════════════════════════════�?
+// MongoServerDescription
 const char* kSdMeta = "mongoc.server_description";
 
 int l_sd_gc(lua_State* L) {
@@ -169,8 +168,7 @@ const luaL_Reg kSdLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// MongoTopologyDescription
-// ══════════════════════════════════════════════════════════════════════════�?
+// MongoTopologyDescription
 const char* kTdMeta = "mongoc.topology_description";
 
 int l_td_gc(lua_State* L) {

@@ -7,9 +7,7 @@
 
 namespace engine {
 
-// ══════════════════════════════════════════════════════════════════════════════
 // DbRequestStatus — lifecycle status of a database request
-// ══════════════════════════════════════════════════════════════════════════════
 
 enum class DbRequestStatus : uint8_t {
 	kEnqueued,   // Successfully placed in queue
@@ -18,9 +16,7 @@ enum class DbRequestStatus : uint8_t {
 	kTimeout,    // Request exceeded timeout
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
 // DbOperation — CRUD + script execution operations
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // All operations except kExecuteScript are executed synchronously on the
 // DBThread via C++ direct calls to mongo-c-driver (R11).
@@ -44,9 +40,7 @@ enum class DbOperation : uint8_t {
 	kExecuteScript,	 // Lua script execution inside the thread's DBScriptVM (R11)
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
 // DbRequest — a single database operation sent from MT to a DBThread (SPSC)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Lifecycle: constructed on main thread → moved through ConcurrentQueue →
 // consumed on DBThread (ProcessRequest), then discarded.
@@ -87,9 +81,7 @@ struct DbRequest {
 	bool allow_empty_filter = false;
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
 // DbResponse — the result of processing one DbRequest
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // result_data serialisation (JSON) per operation:
 //   kFind:        "[{doc1},{doc2},...]"          — JSON array of documents

@@ -12,9 +12,7 @@
 
 namespace engine {
 
-// ══════════════════════════════════════════════════════════════════════════════
 // Internal log helpers (anonymous namespace)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Each l_db_log_* function is a Lua C closure with one upvalue: the DBThread's
 // Quill logger pointer (lightuserdata). Lua calls like log_info("msg") route
@@ -67,9 +65,7 @@ int l_db_log_fatal(lua_State* L) {
 	return 0;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // db_get_client / db_get_pool helpers
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Both closures capture the DBScriptVM* as an upvalue (lightuserdata) and
 // read the corresponding CustomPtr slot. The C++ pointer is returned to Lua
@@ -100,9 +96,7 @@ int l_db_get_pool(lua_State* L) {
 	return 1;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // db_get_thread_info — expose DBThread basic info to Lua
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Returns a table: { index = <int>, running = <bool>, healthy = <bool> }
 // Useful for Lua scripts that need to identify which thread they're running on
@@ -129,9 +123,7 @@ int l_db_get_thread_info(lua_State* L) {
 	return 1;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // l_push_kv — helper: push key + value and set into table at -3
-// ══════════════════════════════════════════════════════════════════════════════
 
 inline void l_push_kv(lua_State* L, const char* key, const char* val) {
 	lua_pushstring(L, key);
@@ -149,9 +141,7 @@ inline void l_push_kv(lua_State* L, const char* key, bool val) {
 	lua_settable(L, -3);
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // db_get_config — expose DbServiceConfig to Lua as a nested table
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Returns a nested table with the full DbServiceConfig tree:
 //   {
@@ -212,9 +202,7 @@ int l_db_get_config(lua_State* L) {
 
 }  // namespace
 
-// ══════════════════════════════════════════════════════════════════════════════
 // ExportDbLog — register per-thread log functions bound to a Quill logger
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Implementation note (upvalue reuse pattern):
 //   Push the logger pointer once, then use lua_pushvalue to copy it for each
@@ -252,9 +240,7 @@ void ExportDbLog(ScriptVM& vm, quill::Logger* logger) {
 	lua_setglobal(L, "log_fatal");
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // ExportDbRuntime — register db_* runtime globals
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Registers global functions that Lua scripts use to obtain:
 //   db_get_client()      — MongoClient* (lightuserdata, for mongoc.* APIs)
@@ -291,9 +277,7 @@ void ExportDbRuntime(ScriptVM& vm) {
 	lua_pop(L, 1);
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // DBScriptVM member functions
-// ══════════════════════════════════════════════════════════════════════════════
 
 DBScriptVM::DBScriptVM() = default;
 
@@ -334,9 +318,7 @@ bool DBScriptVM::AreCoreSlotsValid() const {
 		   GetMongoClientPool() != nullptr && GetCustomPtr(kDbPtrScriptVM) != nullptr;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // CallFrameCallback — invoke Lua global on_db_frame(info) once per frame
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Looks up the global function on_db_frame in the VM's Lua state.
 // If defined: constructs an info table {frame_count, delta_seconds} and

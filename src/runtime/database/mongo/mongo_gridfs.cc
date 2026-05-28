@@ -17,9 +17,7 @@
 namespace engine {
 namespace mongo {
 
-// ══════════════════════════════════════════════════════════════════════�?
 // MongoGridFsFileOpts
-// ══════════════════════════════════════════════════════════════════════�?
 
 struct MongoGridFsFileOpts::Impl {
 	mongoc_gridfs_file_opt_t opts;
@@ -95,9 +93,7 @@ void* MongoGridFsFileOpts::Raw() {
 	return &impl_->opts;
 }
 
-// ══════════════════════════════════════════════════════════════════════�?
 // MongoGridFsFile
-// ══════════════════════════════════════════════════════════════════════�?
 
 struct MongoGridFsFile::Impl {
 	mongoc_gridfs_file_t* file = nullptr;
@@ -240,9 +236,7 @@ void* MongoGridFsFile::Raw() {
 	return impl_ ? impl_->file : nullptr;
 }
 
-// ══════════════════════════════════════════════════════════════════════�?
 // MongoGridFsFileList
-// ══════════════════════════════════════════════════════════════════════�?
 
 struct MongoGridFsFileList::Impl {
 	mongoc_gridfs_file_list_t* list = nullptr;
@@ -287,7 +281,6 @@ bool MongoGridFsFileList::Error(MongoError* error) const {
 			   impl_->list, error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 }
 
-// ══════════════════════════════════════════════════════════════════════�?
 // MongoGridFs
 
 struct MongoGridFs::Impl {
@@ -393,9 +386,7 @@ void* MongoGridFs::Raw() {
 	return impl_ ? impl_->gridfs : nullptr;
 }
 
-// ══════════════════════════════════════════════════════════════════════�?
 // MongoGridFsBucket
-// ══════════════════════════════════════════════════════════════════════�?
 
 struct MongoGridFsBucket::Impl {
 	mongoc_gridfs_bucket_t* bucket = nullptr;

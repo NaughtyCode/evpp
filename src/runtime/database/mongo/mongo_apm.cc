@@ -9,9 +9,7 @@
 namespace engine {
 namespace mongo {
 
-// ═══════════════════════════════════════════════════════════════════════
 // Event type implementations
-// ═══════════════════════════════════════════════════════════════════════
 
 MongoApmCommandStartedEvent::MongoApmCommandStartedEvent(const void* raw_event)
 	: event_(raw_event) {
@@ -357,9 +355,7 @@ bool MongoApmServerHeartbeatFailedEvent::GetAwaited() const {
 		static_cast<const mongoc_apm_server_heartbeat_failed_t*>(event_));
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // MongoApmCallbacks
-// ═══════════════════════════════════════════════════════════════════════
 
 // Each callback is stored as a heap-allocated std::function managed by
 // shared_ptr. The C bridge trampoline invokes the function through the
@@ -385,11 +381,9 @@ bool MongoApmServerHeartbeatFailedEvent::GetAwaited() const {
 // holds ALL the std::function callbacks, and pass a pointer to that struct
 // as the context.
 
-// ═══════════════════════════════════════════════════════════════════════
 // APM callback context -- shared between Impl and the C trampolines.
 // Defined at file scope so trampolines (not members of MongoApmCallbacks)
 // can access it even though Impl is private.
-// ═══════════════════════════════════════════════════════════════════════
 
 struct ApmCallbackContext {
 	MongoApmCommandStartedCb command_started;

@@ -14,9 +14,7 @@
 namespace engine {
 namespace mongo {
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonContext
-// ═══════════════════════════════════════════════════════════════════════
 
 struct BsonContext::Impl {
 	bson_context_t* ctx = nullptr;
@@ -63,9 +61,7 @@ void* BsonContext::Raw() {
 	return impl_ ? impl_->ctx : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonString
-// ═══════════════════════════════════════════════════════════════════════
 
 struct BsonString::Impl {
 	std::string str;
@@ -125,9 +121,7 @@ void* BsonString::Raw() {
 	return impl_ ? &impl_->str : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonJsonReader
-// ═══════════════════════════════════════════════════════════════════════
 
 struct BsonJsonReader::Impl {
 	bson_json_reader_t* reader = nullptr;
@@ -208,9 +202,7 @@ void* BsonJsonReader::Raw() {
 	return impl_ ? impl_->reader : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonJsonDataReader
-// ═══════════════════════════════════════════════════════════════════════
 
 struct BsonJsonDataReader::Impl {
 	bson_json_reader_t* reader = nullptr;
@@ -251,9 +243,7 @@ void* BsonJsonDataReader::Raw() {
 	return impl_ ? impl_->reader : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonReader
-// ═══════════════════════════════════════════════════════════════════════
 
 struct BsonReader::Impl {
 	bson_reader_t* reader = nullptr;
@@ -355,9 +345,7 @@ void* BsonReader::Raw() {
 	return impl_ ? impl_->reader : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonWriter
-// ═══════════════════════════════════════════════════════════════════════
 
 struct BsonWriter::Impl {
 	bson_writer_t* writer = nullptr;
@@ -442,9 +430,7 @@ void* BsonWriter::Raw() {
 	return impl_ ? impl_->writer : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonClock
-// ═══════════════════════════════════════════════════════════════════════
 
 int64_t BsonClock::GetTimeNs() {
 	return bson_get_monotonic_time();
@@ -460,9 +446,7 @@ void BsonClock::GetTimeOfDay(void* tv) {
 	bson_gettimeofday(static_cast<struct timeval*>(tv));
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonUtf8
-// ═══════════════════════════════════════════════════════════════════════
 
 bool BsonUtf8::Validate(const char* str, size_t length, bool allow_null) {
 	return bson_utf8_validate(str, length, allow_null);
@@ -484,9 +468,7 @@ void BsonUtf8::FromUnichar(uint32_t unichar, char utf8[6], uint32_t* len) {
 	bson_utf8_from_unichar(unichar, utf8, len);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonJsonOpts
-// ═══════════════════════════════════════════════════════════════════════
 
 struct BsonJsonOpts::Impl {
 	bson_json_opts_t* opts = nullptr;
@@ -517,9 +499,7 @@ void* BsonJsonOpts::Raw() {
 	return impl_ ? impl_->opts : nullptr;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonValue
-// ═══════════════════════════════════════════════════════════════════════
 
 BsonValue::BsonValue() {
 	memset(storage_, 0, sizeof(storage_));
@@ -581,9 +561,7 @@ const void* BsonValue::Raw() const {
 	return storage_;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonStrUtil
-// ═══════════════════════════════════════════════════════════════════════
 
 char* BsonStrUtil::Strdup(const char* str) {
 	return bson_strdup(str);
@@ -640,9 +618,7 @@ bool BsonStrUtil::Isspace(int c) {
 	return bson_isspace(c);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
 // BsonKeys constants
-// ═══════════════════════════════════════════════════════════════════════
 
 namespace BsonKeys {
 

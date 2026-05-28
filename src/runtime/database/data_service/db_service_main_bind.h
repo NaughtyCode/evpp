@@ -10,9 +10,7 @@ class ScriptVM;
 
 namespace script {
 
-// ══════════════════════════════════════════════════════════════════════════════
 // ExportDbService — register data-service API into a ScriptVM (main thread)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Registers the following global functions into the given VM so that Lua
 // code running on the main thread can interact with the DatabaseService
@@ -115,7 +113,6 @@ namespace script {
 //   Guarded by ENGINE_MONGODB_ENABLED so it compiles out when MongoDB
 //   support is disabled.
 //
-// ══════════════════════════════════════════════════════════════════════════
 
 ENGINE_API void ExportDbService(ScriptVM& vm);
 

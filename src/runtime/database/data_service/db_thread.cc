@@ -21,9 +21,7 @@
 
 namespace engine {
 
-// ══════════════════════════════════════════════════════════════════════════════
 // Internal helpers
-// ══════════════════════════════════════════════════════════════════════════════
 
 namespace {
 
@@ -87,9 +85,7 @@ bool ParseJsonDoc(const std::string& json_str,
 
 }  // namespace
 
-// ══════════════════════════════════════════════════════════════════════════════
 // Construction / Destruction
-// ══════════════════════════════════════════════════════════════════════════════
 
 DBThread::DBThread(int index, const DbServiceConfig& config)
 	: index_(index), config_(config), last_frame_time_(std::chrono::steady_clock::time_point{}) {
@@ -99,9 +95,7 @@ DBThread::~DBThread() {
 	Stop();
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // Logger (R9)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Maps DbLogConfig fields to engine::LogConfig and delegates to CreateLogger().
 // The resulting logger writes to logs/db_service/db_vm_{N}_<timestamp>.log.
@@ -121,9 +115,7 @@ quill::Logger* DBThread::CreateDbLogger() {
 	return CreateLogger(mapped);
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // Lifecycle (MT-callable)
-// ══════════════════════════════════════════════════════════════════════════════
 
 bool DBThread::Start(mongo::MongoClientPool& pool) {
 	logger_ = CreateDbLogger();
@@ -174,9 +166,7 @@ void DBThread::Stop() {
 	thread_.reset();
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // SPSC queue operations (MT-callable, lock-free)
-// ══════════════════════════════════════════════════════════════════════════════
 
 bool DBThread::EnqueueRequest(DbRequest&& req) {
 	if (!running_.load(std::memory_order_acquire)) return false;
@@ -205,9 +195,7 @@ std::unique_ptr<DbResponse> DBThread::DequeueResponse() {
 	return nullptr;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // EnqueueResponse — DBT → MT, with capacity check (§6.3)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // If the response queue is full, the oldest response is silently dropped.
 // This is a deliberate trade-off: blocking the DBThread to wait for MT to
@@ -237,9 +225,7 @@ void DBThread::EnqueueResponse(DbResponse&& resp) {
 	response_queue_.enqueue(std::move(resp));
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // EventLoop — the DBThread's main function (§6.1)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Lifecycle phases (matching design §6.1):
 //
@@ -434,9 +420,7 @@ void DBThread::EventLoop() {
 	running_.store(false, std::memory_order_release);
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // ProcessRequest — dispatch DbOperation to the appropriate handler (§6.4)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // Two code paths:
 //

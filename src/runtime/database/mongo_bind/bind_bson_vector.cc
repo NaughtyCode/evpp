@@ -13,8 +13,6 @@ namespace engine {
 namespace script {
 namespace {
 
-// ══════════════════════════════════════════════════════════════════════════�?// BsonVectorInt8ConstView
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kVi8cMeta = "bson.vector_int8_const";
 
 int l_vi8c_gc(lua_State* L) {
@@ -97,8 +95,6 @@ const luaL_Reg kVi8cLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// BsonVectorInt8View
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kVi8Meta = "bson.vector_int8";
 
 int l_vi8_gc(lua_State* L) {
@@ -210,8 +206,6 @@ const luaL_Reg kVi8Lib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// BsonVectorFloat32ConstView
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kVf32cMeta = "bson.vector_float32_const";
 
 int l_vf32c_gc(lua_State* L) {
@@ -298,8 +292,6 @@ const luaL_Reg kVf32cLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// BsonVectorFloat32View
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kVf32Meta = "bson.vector_float32";
 
 int l_vf32_gc(lua_State* L) {
@@ -424,8 +416,6 @@ const luaL_Reg kVf32Lib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// BsonVectorPackedBitConstView
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kVpbMeta = "bson.vector_packedbit_const";
 
 int l_vpb_gc(lua_State* L) {
@@ -551,8 +541,6 @@ const luaL_Reg kVpbLib[] = {
 	{nullptr, nullptr},
 };
 
-// ══════════════════════════════════════════════════════════════════════════�?// BsonVectorPackedBitView
-// ══════════════════════════════════════════════════════════════════════════�?
 const char* kVpbwMeta = "bson.vector_packedbit";
 
 int l_vpbw_gc(lua_State* L) {

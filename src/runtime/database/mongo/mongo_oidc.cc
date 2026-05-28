@@ -13,18 +13,14 @@
 namespace engine {
 namespace mongo {
 
-// ══════════════════════════════════════════════════════════════════════�?
 // MongoOidcCredential::Impl (needed by MongoOidcCallbackParams)
-// ══════════════════════════════════════════════════════════════════════�?
 
 struct MongoOidcCredential::Impl {
 	mongoc_oidc_credential_t* cred = nullptr;
 	bool owned = true;
 };
 
-// ══════════════════════════════════════════════════════════════════════�?
 // MongoOidcCallbackParams
-// ══════════════════════════════════════════════════════════════════════�?
 
 MongoOidcCallbackParams::MongoOidcCallbackParams(void* raw_params) : params_(raw_params) {
 }
@@ -59,9 +55,7 @@ MongoOidcCredential* MongoOidcCallbackParams::CancelWithTimeout() {
 	return cred;
 }
 
-// ══════════════════════════════════════════════════════════════════════�?
 // MongoOidcCredential
-// ══════════════════════════════════════════════════════════════════════�?
 
 MongoOidcCredential* MongoOidcCredential::New(const char* access_token) {
 	auto* c = MEM_NEW(MongoOidcCredential);
@@ -117,9 +111,7 @@ void* MongoOidcCredential::ReleaseRaw() {
 	return nullptr;
 }
 
-// ══════════════════════════════════════════════════════════════════════�?
 // MongoOidcCallback
-// ══════════════════════════════════════════════════════════════════════�?
 
 namespace {
 

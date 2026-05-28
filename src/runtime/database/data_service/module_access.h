@@ -1,8 +1,6 @@
 #pragma once
 
-// ══════════════════════════════════════════════════════════════════════════════
 // Compile-time access guard for database service internals (design §8)
-// ══════════════════════════════════════════════════════════════════════════════
 //
 // External code must ONLY include database_service.h.
 // Internal code (db_thread.cc, db_script_vm.cc, database_service.cc) defines
