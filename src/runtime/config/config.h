@@ -288,10 +288,11 @@ class ENGINE_API ConfigManager {
 
 	// ── Cached MongoDB config access (auto-loaded with server config) ─
 
-	// Returns the cached dev/public mongodb config. Valid only if the
-	// corresponding Has*() returns true and the file was loaded successfully.
-	const MongoDbConfig& GetMongoDbDevConfig() const;
-	const MongoDbConfig& GetMongoDbPublicConfig() const;
+	// Returns the cached dev/public mongodb config (thread-safe copy).
+	// Valid only if the corresponding Has*() returns true and the file
+	// was loaded successfully.
+	MongoDbConfig GetMongoDbDevConfig() const;
+	MongoDbConfig GetMongoDbPublicConfig() const;
 
 	// True if the dev/public mongodb config was loaded (path was set and
 	// the file was parsed without error).

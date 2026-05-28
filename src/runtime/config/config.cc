@@ -256,11 +256,13 @@ bool ConfigManager::LoadMongoDbPublicConfig(MongoDbConfig& out) const {
 // Cached MongoDB config access
 //============================================================================
 
-const MongoDbConfig& ConfigManager::GetMongoDbDevConfig() const {
+MongoDbConfig ConfigManager::GetMongoDbDevConfig() const {
+	std::shared_lock<std::shared_mutex> lock(config_mutex_);
 	return mongo_dev_config_;
 }
 
-const MongoDbConfig& ConfigManager::GetMongoDbPublicConfig() const {
+MongoDbConfig ConfigManager::GetMongoDbPublicConfig() const {
+	std::shared_lock<std::shared_mutex> lock(config_mutex_);
 	return mongo_public_config_;
 }
 

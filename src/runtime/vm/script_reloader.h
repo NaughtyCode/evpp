@@ -96,6 +96,11 @@ class ENGINE_API ScriptReloader {
 	// Called by FileWatcher when changes are detected (watcher thread).
 	void OnFilesChanged(const std::vector<std::string>& files);
 
+	// Core reload without snapshot/restore (caller manages rollback).
+	// module_name must be the dotted package.loaded key.
+	bool ReloadFileCore(lua_State* L, const std::string& filepath,
+	                    const std::string& module_name);
+
 	// Process the validated reload list (main thread).
 	void ProcessReloadList(const std::vector<std::string>& files);
 
@@ -132,8 +137,9 @@ class ENGINE_API ScriptReloader {
 	std::string package_loaded_snapshot_key_;
 	int package_loaded_snapshot_ref_ = LUA_NOREF;
 
-	// Pending reload queue (written by watcher thread, read by main thread).
+	// Pending queues (written by watcher thread, read by main thread).
 	std::vector<std::string> pending_reloads_;
+	std::vector<std::string> pending_failures_;
 	std::mutex pending_mutex_;
 };
 

@@ -7,6 +7,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "runtime/core/engine_api.h"
@@ -42,6 +43,7 @@ class ENGINE_API FileWatcher {
 	// Watch a directory recursively for files with the given extension.
 	// extension should include the dot, e.g. ".lua".
 	// Multiple directories may be watched with different extensions.
+	// Must be called before Start(). Not thread-safe with ScanChanges.
 	void WatchDirectory(const std::string& path,
 	                    const std::string& extension = ".lua");
 
@@ -79,7 +81,7 @@ class ENGINE_API FileWatcher {
 	std::unordered_map<std::string,
 	                   std::chrono::system_clock::time_point> file_times_;
 	// Known file set for new-file detection.
-	std::unordered_map<std::string, bool> known_files_;
+	std::unordered_set<std::string> known_files_;
 
 	std::unique_ptr<std::thread> thread_;
 	std::atomic<bool> running_{false};

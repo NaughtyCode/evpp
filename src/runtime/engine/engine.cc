@@ -176,9 +176,9 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		}
 
 #ifndef NDEBUG
-		auto& mongo_cfg = ConfigManager::Instance().GetMongoDbDevConfig();
+		auto mongo_cfg = ConfigManager::Instance().GetMongoDbDevConfig();
 #else
-		auto& mongo_cfg = ConfigManager::Instance().GetMongoDbPublicConfig();
+		auto mongo_cfg = ConfigManager::Instance().GetMongoDbPublicConfig();
 #endif
 		auto uri = mongo::MongoUri::New(mongo_cfg.connection.uri.c_str());
 

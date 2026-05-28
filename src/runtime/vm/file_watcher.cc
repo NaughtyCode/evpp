@@ -5,6 +5,13 @@
 #include <filesystem>
 #include <thread>
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 #include "runtime/core/log/log.h"
 
 namespace engine {
@@ -60,6 +67,12 @@ void FileWatcher::Stop() {
 }
 
 void FileWatcher::WatchLoop(int poll_interval_ms) {
+#ifdef _WIN32
+	SetThreadDescription(GetCurrentThread(), L"evpp_file_watcher");
+#elif defined(__linux__)
+	pthread_setname_np(pthread_self(), "evpp_file_watcher");
+#endif
+
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "FileWatcher: watch loop started");
 
@@ -95,7 +108,7 @@ std::vector<std::string> FileWatcher::ScanChanges() {
 	std::error_code ec;
 
 	// Track which known files were seen this scan to detect deletions.
-	std::unordered_map<std::string, bool> seen;
+	std::unordered_set<std::string> seen;
 
 	for (const auto& entry : watch_entries_) {
 		if (!std::filesystem::exists(entry.path, ec)) {
@@ -122,7 +135,7 @@ std::vector<std::string> FileWatcher::ScanChanges() {
 			}
 
 			auto path_str = dir_entry.path().string();
-			seen[path_str] = true;
+			seen.insert(path_str);
 
 			auto ftime = std::filesystem::last_write_time(dir_entry, ec);
 			if (ec) { ec.clear(); continue; }
@@ -131,7 +144,7 @@ std::vector<std::string> FileWatcher::ScanChanges() {
 
 			// New file detection: report files not previously known.
 			if (known_files_.find(path_str) == known_files_.end()) {
-				known_files_[path_str] = true;
+				known_files_.insert(path_str);
 				file_times_[path_str] = sctp;
 				changed.push_back(path_str);
 				continue;
@@ -149,8 +162,8 @@ std::vector<std::string> FileWatcher::ScanChanges() {
 
 	// Clean up stale entries for files that no longer exist.
 	for (auto it = known_files_.begin(); it != known_files_.end(); ) {
-		if (seen.find(it->first) == seen.end()) {
-			file_times_.erase(it->first);
+		if (seen.find(*it) == seen.end()) {
+			file_times_.erase(*it);
 			it = known_files_.erase(it);
 		} else {
 			++it;

@@ -104,6 +104,7 @@ void ScriptReloader::OnFilesChanged(const std::vector<std::string>& files) {
 
 	// Validate each changed file in a sandbox VM (thread-safe).
 	std::vector<std::string> valid_files;
+	std::vector<std::string> failed_files;
 	for (const auto& file : ready_files) {
 		if (ValidateScript(file)) {
 			valid_files.push_back(file);
@@ -111,23 +112,33 @@ void ScriptReloader::OnFilesChanged(const std::vector<std::string>& files) {
 			ENGINE_LOG_ERROR(logger,
 				"ScriptReloader: validation failed for [{}], skipping",
 				file);
-			if (reload_callback_) reload_callback_(file, false);
+			failed_files.push_back(file);
 		}
 	}
 
-	if (valid_files.empty()) return;
-
-	// Dispatch reload to the main thread if an EventLoop is available.
+	// Dispatch reload results to the main thread if an EventLoop is available.
+	// All callback invocations must happen on the main thread for consistency.
 	if (loop_) {
-		loop_->RunInLoop([this, files = std::move(valid_files)]() {
-			ProcessReloadList(files);
-		});
+		if (!valid_files.empty()) {
+			loop_->RunInLoop([this, files = std::move(valid_files)]() {
+				ProcessReloadList(files);
+			});
+		}
+		if (!failed_files.empty()) {
+			loop_->RunInLoop([this, files = std::move(failed_files)]() {
+				for (const auto& f : files) {
+					if (reload_callback_) reload_callback_(f, false);
+				}
+			});
+		}
 	} else {
 		// No event loop — enqueue for manual processing.
 		// This path is safe only in single-threaded test environments.
 		std::lock_guard<std::mutex> lock(pending_mutex_);
 		pending_reloads_.insert(pending_reloads_.end(),
 		                        valid_files.begin(), valid_files.end());
+		pending_failures_.insert(pending_failures_.end(),
+		                         failed_files.begin(), failed_files.end());
 	}
 }
 
@@ -160,9 +171,14 @@ void ScriptReloader::ProcessReloadList(const std::vector<std::string>& files) {
 
 void ScriptReloader::ProcessPendingReloads() {
 	std::vector<std::string> files;
+	std::vector<std::string> failures;
 	{
 		std::lock_guard<std::mutex> lock(pending_mutex_);
 		files.swap(pending_reloads_);
+		failures.swap(pending_failures_);
+	}
+	for (const auto& f : failures) {
+		if (reload_callback_) reload_callback_(f, false);
 	}
 	if (!files.empty()) {
 		ProcessReloadList(files);
@@ -218,72 +234,44 @@ bool ScriptReloader::ValidateScript(const std::string& filepath) {
 }
 
 //=============================================================================
-// ReloadFile — main-thread only, accesses the real ScriptVM
+// Module name extraction helper
 //=============================================================================
 
-bool ScriptReloader::ReloadFile(const std::string& filepath) {
-	if (!vm_) return false;
-
-	auto* L = vm_->GetState();
-	if (!L) return false;
-
-	// Extract module name as dotted path relative to the watched directories.
-	std::string module_name;
+static std::string ExtractModuleName(const std::string& filepath,
+                                      const std::vector<std::string>& script_dirs) {
 	std::filesystem::path fp(filepath);
-	for (const auto& dir : script_dirs_) {
+	for (const auto& dir : script_dirs) {
 		std::filesystem::path dp(dir);
-		// Normalize both paths for comparison.
 		std::string fp_str = std::filesystem::absolute(fp).string();
 		std::string dp_str = std::filesystem::absolute(dp).string();
 		if (fp_str.size() > dp_str.size() &&
 		    fp_str.compare(0, dp_str.size(), dp_str) == 0) {
-			// Remove the directory prefix and ".lua" extension.
 			std::string relative = fp_str.substr(
 				dp_str.size() + (dp_str.back() == '/' ||
 				                 dp_str.back() == '\\' ? 0 : 1));
-			// Replace path separators with dots.
 			for (auto& c : relative) {
 				if (c == '/' || c == '\\') c = '.';
 			}
-			// Remove .lua extension.
 			if (relative.size() > 4 &&
 			    relative.compare(relative.size() - 4, 4, ".lua") == 0) {
 				relative.resize(relative.size() - 4);
 			}
-			module_name = relative;
-			break;
+			return relative;
 		}
 	}
+	// Fallback: use stem.
+	return fp.stem().string();
+}
 
-	if (module_name.empty()) {
-		// Fallback: use stem as module name.
-		module_name = fp.stem().string();
-	}
+//=============================================================================
+// ReloadFileCore — core reload logic without snapshot/restore
+//=============================================================================
 
+bool ScriptReloader::ReloadFileCore(lua_State* L, const std::string& filepath,
+                                     const std::string& module_name) {
 	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger,
-		"ScriptReloader: reloading module [{}] from [{}]",
-		module_name, filepath);
 
-	// Snapshot globals and package.loaded entry before reload.
-	SnapshotGlobals(L);
-	SnapshotPackageLoaded(L, module_name);
-
-	// Remove only this module from package.loaded (not the entire cache).
-	lua_getglobal(L, "package");
-	if (lua_istable(L, -1)) {
-		lua_getfield(L, -1, "loaded");
-		if (lua_istable(L, -1)) {
-			lua_pushnil(L);
-			lua_setfield(L, -2, module_name.c_str());
-		}
-		lua_pop(L, 1);
-	}
-	lua_pop(L, 1);
-
-	// Also clear the import cache tracking so re-imports resolve fresh.
-	vm_->GetImporter().ClearCache(L);
-	// Re-set the cleared module to nil to match the state we want.
+	// Remove only this module from package.loaded.
 	lua_getglobal(L, "package");
 	if (lua_istable(L, -1)) {
 		lua_getfield(L, -1, "loaded");
@@ -303,12 +291,9 @@ bool ScriptReloader::ReloadFile(const std::string& filepath) {
 		                 filepath,
 		                 lua_tostring(L, -1));
 		lua_pop(L, 1);
-		RestoreGlobals(L);
-		RestorePackageLoaded(L, module_name);
 		return false;
 	}
 
-	// Run the chunk.
 	ret = lua_pcall(L, 0, 1, 0);
 	if (ret != LUA_OK) {
 		ENGINE_LOG_ERROR(logger,
@@ -316,8 +301,6 @@ bool ScriptReloader::ReloadFile(const std::string& filepath) {
 		                 filepath,
 		                 lua_tostring(L, -1));
 		lua_pop(L, 1);
-		RestoreGlobals(L);
-		RestorePackageLoaded(L, module_name);
 		return false;
 	}
 
@@ -334,7 +317,37 @@ bool ScriptReloader::ReloadFile(const std::string& filepath) {
 		}
 		lua_pop(L, 1);
 	}
-	lua_pop(L, 1);  // pop return value
+	lua_pop(L, 1);
+
+	return true;
+}
+
+//=============================================================================
+// ReloadFile — main-thread only, with per-file snapshot/restore
+//=============================================================================
+
+bool ScriptReloader::ReloadFile(const std::string& filepath) {
+	if (!vm_) return false;
+
+	auto* L = vm_->GetState();
+	if (!L) return false;
+
+	std::string module_name = ExtractModuleName(filepath, script_dirs_);
+
+	auto* logger = GetLogger();
+	ENGINE_LOG_INFO(logger,
+		"ScriptReloader: reloading module [{}] from [{}]",
+		module_name, filepath);
+
+	// Per-file snapshot for rollback.
+	SnapshotGlobals(L);
+	SnapshotPackageLoaded(L, module_name);
+
+	if (!ReloadFileCore(L, filepath, module_name)) {
+		RestoreGlobals(L);
+		RestorePackageLoaded(L, module_name);
+		return false;
+	}
 
 	// Release the package.loaded snapshot — reload succeeded.
 	if (package_loaded_snapshot_ref_ != LUA_NOREF) {
@@ -342,18 +355,32 @@ bool ScriptReloader::ReloadFile(const std::string& filepath) {
 		package_loaded_snapshot_ref_ = LUA_NOREF;
 	}
 
+	// Update debounce timestamp so the watcher doesn't re-trigger on this
+	// file within the debounce window.
+	file_reload_times_[filepath] = std::chrono::steady_clock::now();
+
 	return true;
 }
 
 //=============================================================================
-// ReloadAll — main-thread only
+// ReloadAll — main-thread only, atomic rollback on failure
 //=============================================================================
 
 bool ScriptReloader::ReloadAll() {
+	if (!vm_) return true;
+
+	auto* L = vm_->GetState();
+	if (!L) return true;
+
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "ScriptReloader: reloading all scripts...");
 
-	bool all_ok = true;
+	// Collect all .lua files first.
+	struct FileEntry {
+		std::string filepath;
+		std::string module_name;
+	};
+	std::vector<FileEntry> files;
 	for (const auto& dir : script_dirs_) {
 		std::error_code ec;
 		for (auto it = std::filesystem::recursive_directory_iterator(dir, ec);
@@ -366,24 +393,56 @@ bool ScriptReloader::ReloadAll() {
 				continue;
 			}
 			const auto& entry = *it;
-			if (entry.is_regular_file(ec) &&
+			std::error_code fec;
+			if (entry.is_regular_file(fec) &&
 			    entry.path().extension() == ".lua") {
-				if (!ReloadFile(entry.path().string())) {
-					all_ok = false;
-				}
+				std::string fp = entry.path().string();
+				files.push_back({fp, ExtractModuleName(fp, script_dirs_)});
 			}
-			if (ec) ec.clear();
+			if (fec) fec.clear();
 		}
 	}
 
-	if (all_ok) {
-		ENGINE_LOG_INFO(logger, "ScriptReloader: all scripts reloaded OK");
-	} else {
-		ENGINE_LOG_ERROR(logger,
-			"ScriptReloader: some scripts failed to reload");
+	if (files.empty()) {
+		ENGINE_LOG_INFO(logger, "ScriptReloader: no scripts found to reload");
+		return true;
 	}
 
-	return all_ok;
+	// Snapshot initial state for atomic rollback.
+	SnapshotGlobals(L);
+	// Save the snapshot away so per-file ReloadFile calls don't overwrite it.
+	auto initial_snapshot = std::move(global_snapshot_);
+
+	bool all_ok = true;
+	for (const auto& fe : files) {
+		// Snapshot this file's package.loaded entry individually.
+		SnapshotPackageLoaded(L, fe.module_name);
+		if (!ReloadFileCore(L, fe.filepath, fe.module_name)) {
+			ENGINE_LOG_ERROR(logger,
+				"ScriptReloader: reload failed for [{}], rolling back all",
+				fe.filepath);
+			RestorePackageLoaded(L, fe.module_name);
+			all_ok = false;
+			break;
+		}
+		// Release this file's package.loaded snapshot on success.
+		if (package_loaded_snapshot_ref_ != LUA_NOREF) {
+			luaL_unref(L, LUA_REGISTRYINDEX, package_loaded_snapshot_ref_);
+			package_loaded_snapshot_ref_ = LUA_NOREF;
+		}
+	}
+
+	if (!all_ok) {
+		// Restore initial global state, undoing all successful reloads.
+		global_snapshot_ = std::move(initial_snapshot);
+		RestoreGlobals(L);
+		ENGINE_LOG_ERROR(logger,
+			"ScriptReloader: reload-all rolled back to initial state");
+		return false;
+	}
+
+	ENGINE_LOG_INFO(logger, "ScriptReloader: all [{}] scripts reloaded OK", files.size());
+	return true;
 }
 
 void ScriptReloader::SetReloadCallback(ReloadCallback callback) {

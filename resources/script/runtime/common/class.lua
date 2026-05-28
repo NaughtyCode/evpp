@@ -30,9 +30,15 @@
 --   assert(d:isinstanceof(Dog))     -- true
 --   assert(d:isinstanceof(Animal))  -- true
 
--- Module-level registry for hot-reload table reuse.
--- Weak values so classes that become unreferenced can be GC'd.
-local _registry = setmetatable({}, { __mode = "v" })
+-- Persistent registry for hot-reload table reuse. Stored as a well-known
+-- global so it survives reloads of class.lua itself. Weak values ensure
+-- classes that become unreferenced can be GC'd.
+local registry_key = "__class_registry__"
+local _registry = rawget(_G, registry_key)
+if type(_registry) ~= "table" then
+    _registry = setmetatable({}, { __mode = "v" })
+    rawset(_G, registry_key, _registry)
+end
 
 local function Class(classname, super)
     assert(type(classname) == "string" and classname ~= "",
