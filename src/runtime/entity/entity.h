@@ -82,6 +82,10 @@ public:
 	uint32_t GetPhysicsBodyId() const { return physics_body_id_; }
 	bool HasPhysicsBody() const { return physics_body_id_ != kInvalidBodyId; }
 
+	// TimerManager injection — set by EntityManager at creation time.
+	void SetTimerManager(TimerManager* tm) { timer_mgr_ = tm; }
+	TimerManager* GetTimerManager() const { return timer_mgr_; }
+
 	// Timer ownership — timers are auto-cancelled on Destroy.
 	// The callback should capture EntityId and check EntityManager for safety.
 	void AddOwnedTimer(TimerId id);
@@ -100,6 +104,7 @@ private:
 	AttributeTable attrs_;
 	evpp::TCPConnPtr connection_;
 	std::vector<TimerId> owned_timers_;
+	TimerManager* timer_mgr_ = nullptr;
 
 	// type_index → type-erased component
 	std::unordered_map<std::type_index, std::shared_ptr<void>> components_;

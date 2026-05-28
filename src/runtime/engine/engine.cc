@@ -147,7 +147,9 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 					(external_loop != nullptr));
 
 	ENGINE_LOG_INFO(logger, "creating TimerManager...");
-	TimerManager::create_instance();
+	timer_mgr_ = std::make_unique<TimerManager>();
+	timer_mgr_->initialize();
+	entity::EntityManager::Instance().SetTimerManager(timer_mgr_.get());
 	ENGINE_LOG_INFO(logger, "timer manager initialized");
 
 	if (external_loop) {
@@ -238,7 +240,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		}
 		script_vm_->SetImportPath(scripts_root);
 	}
-	script::ExportAll(*script_vm_);
+	script::ExportAll(*script_vm_, *timer_mgr_);
 
 	// Initialize coroutine scheduler (async.lua support)
 	CoroutineScheduler::Instance().Init(script_vm_->GetState());
@@ -463,7 +465,11 @@ void Engine::Cleanup() {
 		ENGINE_LOG_INFO(logger, "ScriptVM: final memory [{} KB], exiting", mem_kb);
 	}
 	script_vm_.reset();
-	TimerManager::destroy_instance();
+	
+	if (timer_mgr_) {
+		timer_mgr_->shutdown();
+		timer_mgr_.reset();
+	}
 
 	cleanup_phase_ = CleanupPhase::FinalLogs;
 	auto* logger = GetLogger();
@@ -506,7 +512,7 @@ void Engine::FrameLoop() {
 
 	{
 		ENGINE_PROFILE_TIMER_UPDATE();
-		TimerManager::instance().update();
+		timer_mgr_->update();
 	}  // TimerUpdate slice ends
 
 	// [D17.1][D17.2] Trigger physics simulation (Tick enqueues command; physics thread steps)

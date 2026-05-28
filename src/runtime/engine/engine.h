@@ -12,6 +12,7 @@
 
 #include "runtime/config/config.h"
 #include "runtime/core/engine_api.h"
+#include "runtime/core/timer/timer_manager.h"
 #include "runtime/monitoring/admin_http.h"
 
 namespace evpp {
@@ -130,6 +131,7 @@ class ENGINE_API Engine {
 	}
 
 	ScriptVM& GetScriptVM();
+	TimerManager& GetTimerManager() { return *timer_mgr_; }
 	evpp::EventLoop* GetEventLoop() const {
 		return loop_;
 	}
@@ -157,6 +159,7 @@ class ENGINE_API Engine {
 
 	PhysicsResultHandler physics_result_handler_;
 
+	std::unique_ptr<TimerManager> timer_mgr_;
 	std::unique_ptr<ScriptVM> script_vm_;
 	std::unique_ptr<ScriptReloader> script_reloader_;
 	CleanupPhase cleanup_phase_{CleanupPhase::NotStarted};

@@ -14,12 +14,6 @@ TEST_CASE("TimerManager initialize and shutdown", "[timer][lifecycle]") {
     REQUIRE_FALSE(f.tm.is_initialized());
 }
 
-TEST_CASE("TimerManager singleton", "[timer][lifecycle]") {
-    auto& tm1 = engine::TimerManager::instance();
-    auto& tm2 = engine::TimerManager::instance();
-    REQUIRE(&tm1 == &tm2);
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // TimerManager: one-shot timers
 // ═══════════════════════════════════════════════════════════════════════════

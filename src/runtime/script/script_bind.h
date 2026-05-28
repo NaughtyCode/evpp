@@ -11,11 +11,11 @@ namespace script {
 // Main entry point — call once after VM is created to export all C++ APIs
 // to the Lua environment. Each sub-module registers its own set of
 // functions / modules.
-ENGINE_API void ExportAll(ScriptVM& vm);
+ENGINE_API void ExportAll(ScriptVM& vm, TimerManager& tm);
 
 // Per-module entry points (also callable individually)
 ENGINE_API void ExportLog(ScriptVM& vm);
-ENGINE_API void ExportTimer(ScriptVM& vm);
+ENGINE_API void ExportTimer(ScriptVM& vm, TimerManager& tm);
 ENGINE_API void ExportNet(ScriptVM& vm);
 ENGINE_API void ExportMsgPack(ScriptVM& vm);
 ENGINE_API void ExportMongo(ScriptVM& vm);

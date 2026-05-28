@@ -17,6 +17,8 @@ class EntityManager {
 public:
 	static EntityManager& Instance();
 
+	void SetTimerManager(TimerManager* tm) { timer_mgr_ = tm; }
+
 	EntityManager(const EntityManager&) = delete;
 	EntityManager& operator=(const EntityManager&) = delete;
 
@@ -52,6 +54,7 @@ private:
 	std::unordered_map<const evpp::TCPConn*, EntityId> conn_to_entity_;
 	std::unordered_map<uint32_t, EntityId> body_to_entity_;
 	SequentialIdAllocator id_allocator_;
+	TimerManager* timer_mgr_ = nullptr;
 };
 
 }  // namespace entity

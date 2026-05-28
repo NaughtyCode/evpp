@@ -266,14 +266,6 @@ class TimerManager {
 	// Dump all timer state to console (debug)
 	void dump_state() const;
 
-	//=================================================================
-	// Global singleton access (optional convenience)
-	//=================================================================
-
-	static TimerManager& instance();
-	static TimerManager& create_instance();
-	static void destroy_instance();
-
 	private:
 	// Internal timer entry
 	struct TimerEntry {
@@ -359,29 +351,9 @@ class TimerManager {
 	// Clock management
 	ClockManager clock_mgr_;
 
-	// Global singleton
-	static std::unique_ptr<TimerManager> instance_;
-	static std::mutex instance_mutex_;
-
 	// Statistics
 	mutable ManagerStats stats_;
 	uint64_t total_update_time_ns_ = 0;
 };
-
-//=============================================================================
-// Inline convenience functions
-//=============================================================================
-
-inline TimerId create_timeout(Duration timeout, std::function<void()> callback) {
-	return TimerManager::instance().create_timer_for(timeout, std::move(callback));
-}
-
-inline TimerId create_interval(Duration interval, std::function<void()> callback) {
-	return TimerManager::instance().create_repeating_simple_timer(interval, std::move(callback));
-}
-
-inline void cancel(TimerId id) {
-	TimerManager::instance().cancel_timer(id);
-}
 
 }  // namespace engine

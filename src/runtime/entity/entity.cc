@@ -40,7 +40,7 @@ void Entity::Destroy() {
 	state_ = EntityState::Destroyed;
 
 	for (auto tid : owned_timers_) {
-		TimerManager::instance().cancel_timer(tid);
+		if (timer_mgr_) timer_mgr_->cancel_timer(tid);
 	}
 	owned_timers_.clear();
 
@@ -101,11 +101,11 @@ TimerId Entity::AddTimer(int64_t interval_ms, bool repeat, std::function<void()>
 
 	TimerId tid;
 	if (repeat) {
-		tid = TimerManager::instance().create_repeating_simple_timer(
+		tid = timer_mgr_->create_repeating_simple_timer(
 			milliseconds(interval_ms), std::move(safe_cb));
-		TimerManager::instance().start_timer_relative(tid, milliseconds(interval_ms));
+		timer_mgr_->start_timer_relative(tid, milliseconds(interval_ms));
 	} else {
-		tid = TimerManager::instance().create_timer_for(
+		tid = timer_mgr_->create_timer_for(
 			milliseconds(interval_ms), std::move(safe_cb));
 	}
 	owned_timers_.push_back(tid);
@@ -115,7 +115,7 @@ TimerId Entity::AddTimer(int64_t interval_ms, bool repeat, std::function<void()>
 void Entity::CancelTimer(TimerId id) {
 	auto it = std::find(owned_timers_.begin(), owned_timers_.end(), id);
 	if (it != owned_timers_.end()) {
-		TimerManager::instance().cancel_timer(id);
+		timer_mgr_->cancel_timer(id);
 		owned_timers_.erase(it);
 	}
 }

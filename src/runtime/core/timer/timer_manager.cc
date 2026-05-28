@@ -30,34 +30,6 @@ TimerManager::~TimerManager() {
 }
 
 //=============================================================================
-// Singleton
-//=============================================================================
-
-std::unique_ptr<TimerManager> TimerManager::instance_;
-std::mutex TimerManager::instance_mutex_;
-
-TimerManager& TimerManager::instance() {
-	std::lock_guard<std::mutex> lock(instance_mutex_);
-	if (!instance_) {
-		instance_ = std::unique_ptr<TimerManager>(MEM_NEW(TimerManager));
-		instance_->initialize();
-	}
-	return *instance_;
-}
-
-TimerManager& TimerManager::create_instance() {
-	return instance();
-}
-
-void TimerManager::destroy_instance() {
-	std::lock_guard<std::mutex> lock(instance_mutex_);
-	if (instance_) {
-		instance_->shutdown();
-		instance_.reset();
-	}
-}
-
-//=============================================================================
 // Initialization / shutdown
 //=============================================================================
 

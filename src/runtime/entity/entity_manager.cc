@@ -19,6 +19,7 @@ Entity* EntityManager::CreateEntity(EntityId id) {
 		return nullptr;  // ID collision
 	}
 	auto entity = std::make_unique<Entity>(id);
+	entity->SetTimerManager(timer_mgr_);
 	Entity* raw = entity.get();
 	entities_[id] = std::move(entity);
 	return raw;

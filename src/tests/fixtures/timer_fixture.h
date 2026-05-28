@@ -10,11 +10,15 @@
 // Wraps TimerManager with helpers for deterministic testing.
 // Uses the update(TimePoint) overload to inject time.
 struct TimerFixture {
-    engine::TimerManager& tm;
+    engine::TimerManager tm;
     engine::TimePoint virtual_now_;
 
-    TimerFixture() : tm(engine::TimerManager::instance()) {
-        // Ensure clean state — create fresh instance if needed
+    TimerFixture() {
+        tm.initialize();
+    }
+
+    ~TimerFixture() {
+        tm.shutdown();
     }
 
     void Reset() {

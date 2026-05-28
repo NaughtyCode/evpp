@@ -37,6 +37,7 @@ struct TimerCtx {
 
 struct TimerBindState {
 	std::unordered_map<TimerId, std::shared_ptr<TimerCtx>> ctxs;
+	TimerManager* timer_mgr = nullptr;
 };
 
 // Each ScriptVM gets its own TimerBindState. The pointer is stored in the
@@ -104,7 +105,7 @@ int l_timer_timeout(lua_State* L) {
 	ctx->owner = state;
 
 	TimerId id =
-		TimerManager::instance().create_timer([ctx](HrTimerNode* /*timer*/) -> TimerResult {
+		state->timer_mgr->create_timer([ctx](HrTimerNode* /*timer*/) -> TimerResult {
 			// Keep ctx alive on the stack: call_lua_callback may trigger
 			// timer:cancel() which destroys the HrTimerNode (and this
 			// lambda's capture storage).  The local keep prevents the
@@ -135,7 +136,7 @@ int l_timer_timeout(lua_State* L) {
 
 	ctx->id = id;
 	state->ctxs[id] = ctx;
-	TimerManager::instance().start_timer_relative(id, ms_to_time(ms));
+	state->timer_mgr->start_timer_relative(id, ms_to_time(ms));
 
 	lua_pushinteger(L, static_cast<lua_Integer>(id));
 	return 1;
@@ -165,7 +166,7 @@ int l_timer_interval(lua_State* L) {
 	ctx->interval = ms_to_time(ms);
 	ctx->owner = state;
 
-	TimerId id = TimerManager::instance().create_timer(
+	TimerId id = state->timer_mgr->create_timer(
 		[ctx](HrTimerNode* timer) -> TimerResult {
 			// Stack-local keep prevents Ctx from being freed if the Lua
 			// callback self-cancels (which destroys this lambda's capture
@@ -193,7 +194,7 @@ int l_timer_interval(lua_State* L) {
 
 	ctx->id = id;
 	state->ctxs[id] = ctx;
-	TimerManager::instance().start_timer_relative(id, ms_to_time(ms));
+	state->timer_mgr->start_timer_relative(id, ms_to_time(ms));
 
 	lua_pushinteger(L, static_cast<lua_Integer>(id));
 	return 1;
@@ -221,7 +222,7 @@ int l_timer_cancel(lua_State* L) {
 	it->second->ref = LUA_NOREF;
 	// Set ref to LUA_NOREF before destroy_timer so the callback lambda
 	// (which checks ref == LUA_NOREF) won't try to erase from state->ctxs.
-	TimerManager::instance().destroy_timer(id);
+	state->timer_mgr->destroy_timer(id);
 	// Use key-based erase to handle the case where destroy_timer fired the
 	// callback synchronously and the callback already erased this entry.
 	state->ctxs.erase(id);
@@ -246,12 +247,13 @@ const luaL_Reg kTimerFunctions[] = {
 // Public API
 //=================================================================
 
-void ExportTimer(ScriptVM& vm) {
+void ExportTimer(ScriptVM& vm, TimerManager& tm) {
 	lua_State* L = vm.GetState();
 	if (!L) return;
 
 	// Create per-VM timer state and store in the Lua registry.
 	auto* state = MEM_NEW(TimerBindState);
+	state->timer_mgr = &tm;
 	lua_pushlightuserdata(L, state);
 	lua_setfield(L, LUA_REGISTRYINDEX, "__TimerBindState");
 
@@ -304,7 +306,7 @@ void ShutdownTimerBindings(ScriptVM& vm) {
 				ctx->ref = LUA_NOREF;
 			}
 			ctx->owner = nullptr;
-			TimerManager::instance().destroy_timer(id);
+			state->timer_mgr->destroy_timer(id);
 			state->ctxs.erase(id);
 		}
 	}

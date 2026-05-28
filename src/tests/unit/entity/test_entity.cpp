@@ -16,9 +16,7 @@
 using namespace engine::entity;
 using namespace std::chrono;
 
-// ═══════════════════════════════════════════════════════════════════════════
 // EntityId & Allocator tests
-// ═══════════════════════════════════════════════════════════════════════════
 
 TEST_CASE("SequentialIdAllocator generates unique IDs", "[entity][id]") {
 	SequentialIdAllocator alloc;
@@ -35,9 +33,7 @@ TEST_CASE("SequentialIdAllocator starts at 1", "[entity][id]") {
 	REQUIRE(alloc.Allocate() == 1);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
 // AttributeTable tests
-// ═══════════════════════════════════════════════════════════════════════════
 
 TEST_CASE("AttributeTable set and get", "[entity][attribute]") {
 	AttributeTable attrs;
@@ -107,9 +103,7 @@ TEST_CASE("AttributeTable change callback", "[entity][attribute]") {
 	REQUIRE(last_new == 80);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
 // Entity lifecycle tests
-// ═══════════════════════════════════════════════════════════════════════════
 
 TEST_CASE("Entity lifecycle: Created → Active → Suspended → Destroyed", "[entity][lifecycle]") {
 	Entity e(1);
@@ -145,10 +139,7 @@ TEST_CASE("Entity attribute access", "[entity][lifecycle]") {
 	REQUIRE(std::get<std::string>(e.Attrs().Get("name")) == "test_entity");
 	REQUIRE(std::get<int64_t>(e.Attrs().Get("level")) == 5);
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Entity Component tests
-// ═══════════════════════════════════════════════════════════════════════════
 
 struct TestComponent {
 	int value = 0;
@@ -181,14 +172,15 @@ TEST_CASE("Entity Lua component add and get", "[entity][component]") {
 	REQUIRE(e.GetLuaComponent("inventory") == -1);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
 // Entity timer ownership tests
 // Note: actual timer firing is tested by the TimerManager unit tests;
 // here we verify that Entity correctly tracks owned timer IDs.
-// ═══════════════════════════════════════════════════════════════════════════
 
 TEST_CASE("Entity AddTimer returns non-zero timer ID", "[entity][timer]") {
+	engine::TimerManager tm;
+	tm.initialize();
 	Entity e(1);
+	e.SetTimerManager(&tm);
 	e.Activate();
 
 	engine::TimerId tid = e.AddTimer(100, false, []() {});
@@ -200,7 +192,9 @@ TEST_CASE("Entity Destroy is safe with owned timers", "[entity][timer]") {
 	e.Activate();
 
 	// Create several timers — TimerManager must be live
-	engine::TimerManager::instance().initialize();
+	engine::TimerManager tm2;
+	tm2.initialize();
+	e.SetTimerManager(&tm2);
 
 	e.AddTimer(100, false, []() {});
 	e.AddTimer(200, true, []() {});
@@ -211,9 +205,7 @@ TEST_CASE("Entity Destroy is safe with owned timers", "[entity][timer]") {
 	REQUIRE(e.GetState() == EntityState::Destroyed);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
 // EntityManager tests
-// ═══════════════════════════════════════════════════════════════════════════
 
 TEST_CASE("EntityManager creates and retrieves entities", "[entity][manager]") {
 	auto& mgr = EntityManager::Instance();
@@ -312,9 +304,7 @@ TEST_CASE("EntityManager connection binding and lookup", "[entity][manager]") {
 	mgr.DestroyAll();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
 // Static assertions
-// ═══════════════════════════════════════════════════════════════════════════
 
 TEST_CASE("EntityId is 64-bit", "[entity][id]") {
 	STATIC_REQUIRE(sizeof(EntityId) == 8);

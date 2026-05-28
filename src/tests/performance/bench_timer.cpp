@@ -3,7 +3,7 @@
 
 // Timer creation throughput
 static void BM_Timer_Create(benchmark::State& state) {
-    auto& tm = engine::TimerManager::instance();
+    engine::TimerManager tm;
     tm.initialize();
 
     for (auto _ : state) {
@@ -19,7 +19,7 @@ BENCHMARK(BM_Timer_Create);
 // Timer update with N active timers
 static void BM_Timer_Update(benchmark::State& state) {
     int count = static_cast<int>(state.range(0));
-    auto& tm = engine::TimerManager::instance();
+    engine::TimerManager tm;
     tm.initialize();
 
     for (int i = 0; i < count; ++i) {

@@ -27,7 +27,7 @@
 namespace engine {
 namespace script {
 
-void ExportAll(ScriptVM& vm) {
+void ExportAll(ScriptVM& vm, TimerManager& tm) {
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "ScriptBind: exporting all APIs to Lua...");
 
@@ -37,7 +37,7 @@ void ExportAll(ScriptVM& vm) {
 	}
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("timer");
-		ExportTimer(vm);
+		ExportTimer(vm, tm);
 	}
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("net");
