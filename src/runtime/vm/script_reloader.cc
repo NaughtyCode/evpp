@@ -49,8 +49,16 @@ void ScriptReloader::Start(int poll_interval_ms, int debounce_ms) {
 
 	// Stop any existing watcher and reset state for a clean restart.
 	Stop();
-	file_reload_times_.clear();
-	global_snapshot_.clear();
+
+	// Clean up Reference-type snapshot entries before clearing.
+	{
+		auto* L = vm_->GetState();
+		if (L) ClearSnapshot(L);
+		{
+			std::lock_guard<std::mutex> lock(file_reload_mutex_);
+			file_reload_times_.clear();
+		}
+	}
 	{
 		std::lock_guard<std::mutex> lock(pending_mutex_);
 		pending_reloads_.clear();
@@ -98,19 +106,22 @@ void ScriptReloader::OnFilesChanged(const std::vector<std::string>& files) {
 	// Per-file debounce: filter out files changed within the debounce window.
 	auto now = std::chrono::steady_clock::now();
 	std::vector<std::string> ready_files;
-	for (const auto& file : files) {
-		auto it = file_reload_times_.find(file);
-		if (it != file_reload_times_.end()) {
-			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-				now - it->second).count();
-			if (elapsed < debounce_ms_) {
-				ENGINE_LOG_DEBUG(logger,
-					"ScriptReloader: debounce skip [{}] ({}ms < {}ms)",
-					file, elapsed, debounce_ms_);
-				continue;
+	{
+		std::lock_guard<std::mutex> lock(file_reload_mutex_);
+		for (const auto& file : files) {
+			auto it = file_reload_times_.find(file);
+			if (it != file_reload_times_.end()) {
+				auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+					now - it->second).count();
+				if (elapsed < debounce_ms_) {
+					ENGINE_LOG_DEBUG(logger,
+						"ScriptReloader: debounce skip [{}] ({}ms < {}ms)",
+						file, elapsed, debounce_ms_);
+					continue;
+				}
 			}
+			ready_files.push_back(file);
 		}
-		ready_files.push_back(file);
 	}
 
 	if (ready_files.empty()) return;
@@ -128,6 +139,7 @@ void ScriptReloader::OnFilesChanged(const std::vector<std::string>& files) {
 	for (const auto& file : ready_files) {
 		if (ValidateScript(file)) {
 			valid_files.push_back(file);
+			std::lock_guard<std::mutex> lock(file_reload_mutex_);
 			file_reload_times_[file] = now;
 		} else {
 			ENGINE_LOG_ERROR(logger,
@@ -414,7 +426,10 @@ bool ScriptReloader::ReloadFile(const std::string& filepath) {
 
 	// Update debounce timestamp so the watcher doesn't re-trigger on this
 	// file within the debounce window.
-	file_reload_times_[filepath] = std::chrono::steady_clock::now();
+	{
+		std::lock_guard<std::mutex> lock(file_reload_mutex_);
+		file_reload_times_[filepath] = std::chrono::steady_clock::now();
+	}
 
 	return true;
 }
@@ -486,6 +501,23 @@ bool ScriptReloader::ReloadAll() {
 		lua_pop(L, 1);
 	}
 
+	// Snapshot the entire package.loaded table for full restoration on
+	// rollback. This covers all previously-succeeded files, unlike the
+	// per-file SnapshotPackageLoaded which only handles one module.
+	int pkg_loaded_snapshot = LUA_NOREF;
+	{
+		lua_getglobal(L, "package");
+		if (lua_istable(L, -1)) {
+			lua_getfield(L, -1, "loaded");
+			if (lua_istable(L, -1)) {
+				pkg_loaded_snapshot = luaL_ref(L, LUA_REGISTRYINDEX);
+			} else {
+				lua_pop(L, 1);
+			}
+		}
+		lua_pop(L, 1);  // pop package or nil
+	}
+
 	bool all_ok = true;
 	auto now = std::chrono::steady_clock::now();
 	for (const auto& fe : files) {
@@ -496,7 +528,10 @@ bool ScriptReloader::ReloadAll() {
 				"ScriptReloader: reload failed for [{}], rolling back all",
 				fe.filepath);
 			RestorePackageLoaded(L, fe.module_name);
-			file_reload_times_[fe.filepath] = now;
+			{
+				std::lock_guard<std::mutex> lock(file_reload_mutex_);
+				file_reload_times_[fe.filepath] = now;
+			}
 			all_ok = false;
 			break;
 		}
@@ -505,18 +540,31 @@ bool ScriptReloader::ReloadAll() {
 			luaL_unref(L, LUA_REGISTRYINDEX, package_loaded_snapshot_ref_);
 			package_loaded_snapshot_ref_ = LUA_NOREF;
 		}
-		file_reload_times_[fe.filepath] = now;
+		{
+			std::lock_guard<std::mutex> lock(file_reload_mutex_);
+			file_reload_times_[fe.filepath] = now;
+		}
 	}
 
 	if (!all_ok) {
+		// Restore the entire package.loaded table to its pre-reload state,
+		// undoing changes from previously-succeeded files.
+		if (pkg_loaded_snapshot != LUA_NOREF) {
+			lua_getglobal(L, "package");
+			if (lua_istable(L, -1)) {
+				lua_rawgeti(L, LUA_REGISTRYINDEX, pkg_loaded_snapshot);
+				lua_setfield(L, -2, "loaded");
+			}
+			lua_pop(L, 1);
+			luaL_unref(L, LUA_REGISTRYINDEX, pkg_loaded_snapshot);
+		}
+
 		// Restore initial global state, undoing all successful reloads.
 		global_snapshot_ = std::move(initial_snapshot);
 		RestoreGlobals(L);
 
 		// Nil out globals that were created during the reload (keys that
-		// exist now but were not present before the reload). The initial
-		// snapshot only covers scalars, so table/function keys are handled
-		// by the key-set check rather than snapshot lookup.
+		// exist now but were not present before the reload).
 		{
 			std::vector<std::string> leaked_keys;
 			lua_pushglobaltable(L);
@@ -547,6 +595,18 @@ bool ScriptReloader::ReloadAll() {
 		return false;
 	}
 
+	// Clean up initial snapshot references on the success path.
+	// The rollback path keeps them (RestoreGlobals uses them), but on
+	// success they are no longer needed and must be freed.
+	if (pkg_loaded_snapshot != LUA_NOREF) {
+		luaL_unref(L, LUA_REGISTRYINDEX, pkg_loaded_snapshot);
+	}
+	for (auto& [key, sv] : initial_snapshot) {
+		if (sv.type == SnapshotValue::Type::Reference && sv.ref_val != LUA_NOREF) {
+			luaL_unref(L, LUA_REGISTRYINDEX, sv.ref_val);
+		}
+	}
+
 	ENGINE_LOG_INFO(logger, "ScriptReloader: all [{}] scripts reloaded OK", files.size());
 	return true;
 }
@@ -558,6 +618,16 @@ void ScriptReloader::SetReloadCallback(ReloadCallback callback) {
 //=============================================================================
 // Snapshot / Restore — typed, with package.loaded support
 //=============================================================================
+
+void ScriptReloader::ClearSnapshot(lua_State* L) {
+	for (auto& [key, sv] : global_snapshot_) {
+		if (sv.type == SnapshotValue::Type::Reference && sv.ref_val != LUA_NOREF) {
+			luaL_unref(L, LUA_REGISTRYINDEX, sv.ref_val);
+			sv.ref_val = LUA_NOREF;
+		}
+	}
+	global_snapshot_.clear();
+}
 
 void ScriptReloader::SnapshotGlobal(lua_State* L, const char* key) {
 	int t = lua_type(L, -1);
@@ -589,15 +659,19 @@ void ScriptReloader::SnapshotGlobal(lua_State* L, const char* key) {
 		sv.type = SnapshotValue::Type::Nil;
 		break;
 	default:
-		// Tables, functions, userdata — not snapshottable.
-		return;
+		// Tables, functions, userdata — store a registry reference.
+		// luaL_ref pops the value, so push a copy first.
+		lua_pushvalue(L, -1);
+		sv.type = SnapshotValue::Type::Reference;
+		sv.ref_val = luaL_ref(L, LUA_REGISTRYINDEX);
+		break;
 	}
 
 	global_snapshot_[key] = std::move(sv);
 }
 
 void ScriptReloader::SnapshotGlobals(lua_State* L) {
-	global_snapshot_.clear();
+	ClearSnapshot(L);
 
 	lua_pushglobaltable(L);
 	lua_pushnil(L);
@@ -630,6 +704,13 @@ void ScriptReloader::RestoreGlobals(lua_State* L) {
 			break;
 		case SnapshotValue::Type::String:
 			lua_pushlstring(L, sv.str_val.data(), sv.str_val.size());
+			break;
+		case SnapshotValue::Type::Reference:
+			if (sv.ref_val != LUA_NOREF) {
+				lua_rawgeti(L, LUA_REGISTRYINDEX, sv.ref_val);
+			} else {
+				lua_pushnil(L);
+			}
 			break;
 		}
 		lua_setglobal(L, key.c_str());

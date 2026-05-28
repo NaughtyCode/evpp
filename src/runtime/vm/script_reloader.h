@@ -40,13 +40,14 @@ class ScriptVM;
 
 // Typed snapshot value — preserves Lua type across snapshot/restore.
 struct SnapshotValue {
-	enum class Type { Nil, Boolean, Integer, Number, String };
+	enum class Type { Nil, Boolean, Integer, Number, String, Reference };
 
 	Type type = Type::Nil;
 	bool bool_val = false;
 	lua_Integer int_val = 0;
 	lua_Number num_val = 0.0;
 	std::string str_val;
+	int ref_val = LUA_NOREF;  // registry reference for functions/tables/userdata
 };
 
 class ENGINE_API ScriptReloader {
@@ -124,6 +125,9 @@ class ENGINE_API ScriptReloader {
 	void SnapshotPackageLoaded(lua_State* L, const std::string& module_name);
 	void RestorePackageLoaded(lua_State* L, const std::string& module_name);
 
+	// Unref all Reference-type entries in global_snapshot_, then clear it.
+	void ClearSnapshot(lua_State* L);
+
 	ScriptVM* vm_ = nullptr;
 	evpp::EventLoop* loop_ = nullptr;
 	std::vector<std::string> script_dirs_;
@@ -135,8 +139,11 @@ class ENGINE_API ScriptReloader {
 	int debounce_ms_ = 300;
 
 	// Per-file last reload time for debounce.
+	// Protected by file_reload_mutex_ — accessed from watcher thread
+	// (OnFilesChanged) and main thread (ReloadFile, ReloadAll).
 	std::unordered_map<std::string, std::chrono::steady_clock::time_point>
 		file_reload_times_;
+	mutable std::mutex file_reload_mutex_;
 
 	// Rollback state: global name → typed value
 	std::unordered_map<std::string, SnapshotValue> global_snapshot_;
