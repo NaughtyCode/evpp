@@ -62,6 +62,11 @@ add_unit_test(test_length_prefixed_codec network/test_length_prefixed_codec.cpp)
 add_test(NAME unit.network.length_prefixed_codec COMMAND test_length_prefixed_codec)
 set_tests_properties(unit.network.length_prefixed_codec PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
+# ── Rate limiter tests ───────────────────────────────────────────────
+add_unit_test(test_rate_limiter network/test_rate_limiter.cpp)
+add_test(NAME unit.network.rate_limiter COMMAND test_rate_limiter)
+set_tests_properties(unit.network.rate_limiter PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
 # ── Entity tests ────────────────────────────────────────────────────
 add_unit_test(test_entity entity/test_entity.cpp)
 add_test(NAME unit.entity COMMAND test_entity)

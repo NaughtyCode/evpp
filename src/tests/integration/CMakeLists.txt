@@ -25,10 +25,21 @@ set_tests_properties(integration.network.udp PROPERTIES
     TIMEOUT 60 LABELS "integration;network"
     WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
+add_integ_test(test_integ_conn_limit network/test_connection_limit.cpp)
+add_test(NAME integration.network.conn_limit COMMAND test_integ_conn_limit)
+set_tests_properties(integration.network.conn_limit PROPERTIES
+    TIMEOUT 120 LABELS "integration;network"
+    RUN_SERIAL TRUE
+    WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
 # ── Physics (only if engine was built with physics) ──────────────────
 if(ENGINE_PHYSICS_ENABLED)
-    add_integ_test(test_integ_physics physics/test_physics.cpp)
+    add_integ_test(test_integ_physics physics/test_physics.cpp physics/test_physics_fetch_cv.cpp)
     add_test(NAME integration.physics COMMAND test_integ_physics)
+    set_tests_properties(integration.physics PROPERTIES
+        TIMEOUT 60 LABELS "integration;physics"
+        RUN_SERIAL TRUE
+        WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 endif()
 
 # ── Client API (only if GameClient target exists) ────────────────────
