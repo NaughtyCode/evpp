@@ -108,7 +108,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	auto* logger = GetLogger();
 	std::fprintf(stderr, "[engine] logger created\n");
 
-	// 鈹€鈹€ Profiler initialization 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ---- Profiler initialization ----
 	{
 		ProfilerConfig prof_cfg;
 		prof_cfg.buffer_size_kb = 32768;
@@ -150,14 +150,14 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		std::fprintf(stderr, "[engine] EventLoop created\n");
 	}
 
-	// 鈹€鈹€ MongoDB driver initialization 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ---- MongoDB driver initialization ----
 #if defined(ENGINE_MONGODB_ENABLED)
 	{
 		bool mongo_ok = mongo::MongoSystem::Instance().Initialize();
 		ENGINE_LOG_INFO(logger, "mongo system initialized, ok=[{}]", mongo_ok);
 	}
 
-	// 鈹€鈹€ Database service initialization 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ---- Database service initialization ----
 	{
 		auto server_cfg = ConfigManager::Instance().GetServerConfig();
 		DbServiceConfig db_svc_config;
@@ -200,7 +200,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	script_vm_ = std::make_unique<ScriptVM>(sandbox_level);
 	ENGINE_LOG_INFO(logger, "lua vm initialized, version=[{}], sandbox=[{}]", ScriptVM::LuaVersion(), runtime_cfg.sandbox_level);
 
-	// 鈹€鈹€ Physics system initialization 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ---- Physics system initialization ----
 	{
 		std::fprintf(stderr, "[engine] initializing physics...\n");
 		auto phys_cfg = runtime_cfg.resource_dir + "/physics/configs";
@@ -269,7 +269,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 }
 
 //============================================================================
-// Start 鈥?standalone mode: arm frame timer and signal watchers
+// Start -- standalone mode: arm frame timer and signal watchers
 //============================================================================
 
 void Engine::Start() {
@@ -279,13 +279,13 @@ void Engine::Start() {
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "engine starting, frame_interval=[{}ms]", frame_interval_.count());
 
-	// 鈹€鈹€ Start physics simulation 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+	// ---- Start physics simulation ----
 	// Must be called after Initialize() and before the first Tick().
 	// If Initialize() failed, Start() is a safe no-op.
 	PhysicsEngineBridge::Instance().Start();
 
 #ifdef _WIN32
-	// Windows console control handler 鈥?graceful shutdown on Ctrl+C,
+	// Windows console control handler -- graceful shutdown on Ctrl+C,
 	// console close, system shutdown, or user logoff.
 	SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
 	ENGINE_LOG_INFO(logger, "Windows console control handler installed");
@@ -327,7 +327,7 @@ void Engine::Start() {
 }
 
 //============================================================================
-// Run 鈥?standalone convenience: Start + dispatch + Cleanup
+// Run -- standalone convenience: Start + dispatch + Cleanup
 //============================================================================
 
 void Engine::Run() {
@@ -345,7 +345,7 @@ void Engine::Run() {
 }
 
 //============================================================================
-// Tick 鈥?one frame of engine work
+// Tick -- one frame of engine work
 //============================================================================
 
 void Engine::Tick() {
@@ -362,7 +362,7 @@ void Engine::Tick() {
 }
 
 //============================================================================
-// Shutdown 鈥?request graceful stop
+// Shutdown -- request graceful stop
 //============================================================================
 
 void Engine::Shutdown() {
@@ -378,7 +378,7 @@ void Engine::Shutdown() {
 }
 
 //============================================================================
-// Cleanup 鈥?release all resources
+// Cleanup -- release all resources
 //============================================================================
 
 void Engine::Cleanup() {
@@ -453,7 +453,7 @@ void Engine::Cleanup() {
 }
 
 //============================================================================
-// FrameLoop 鈥?per-frame work (timer update + Lua update)
+// FrameLoop -- per-frame work (timer update + Lua update)
 //============================================================================
 
 void Engine::FrameLoop() {

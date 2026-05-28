@@ -252,7 +252,7 @@ void Connector::HandleError() {
 		reconnect_timer_.reset();
 	}
 
-	// Capture values before invoking user callback 鈥?the callback may
+	// Capture values before invoking user callback -- the callback may
 	// delete the TCPClient (owner_tcp_client_), making any subsequent
 	// access to it a use-after-free.
 	bool do_reconnect = owner_tcp_client_->auto_reconnect();

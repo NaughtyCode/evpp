@@ -140,7 +140,7 @@ class EVPP_EXPORT Buffer {
 
 	/* Convert 64-bit integer between host and network byte order.
 	 * Uses compiler builtins (always available) for byte swap.
-	 * On little-endian systems this is the correct host鈫攏etwork conversion.
+	 * On little-endian systems this is the correct host-to-network conversion.
 	 * On big-endian systems this would be a no-op, but we assume little-endian. */
 	static uint64_t HostToNetwork64(uint64_t host64) {
 #ifdef _MSC_VER
