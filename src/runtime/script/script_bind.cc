@@ -15,6 +15,9 @@
 #include "runtime/script/net_bind.h"
 #include "runtime/script/space_bind.h"
 #include "runtime/script/timer_bind.h"
+#if defined(ENGINE_MEM_STATS_ENABLED)
+#include "runtime/script/mem_bind.h"
+#endif
 #if defined(ENGINE_MONGODB_ENABLED)
 #include "runtime/database/data_service/db_service_main_bind.h"
 #include "runtime/database/mongo_bind/mongo_bind.h"
@@ -70,6 +73,12 @@ void ExportAll(ScriptVM& vm) {
 		ENGINE_PROFILE_SCRIPT_EXPORT("auth");
 		ExportAuth(vm);
 	}
+#if defined(ENGINE_MEM_STATS_ENABLED)
+	{
+		ENGINE_PROFILE_SCRIPT_EXPORT("mem");
+		ExportMem(vm);
+	}
+#endif
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("import");
 		engine::ExportImport(vm);

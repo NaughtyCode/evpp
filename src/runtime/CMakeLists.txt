@@ -83,7 +83,11 @@ set(EXPORT_HEADER ${RUNTIME_DIR}/core/engine_api.h)
 source_group("core" FILES ${EXPORT_HEADER})
 
 # ── Memory allocator wrapper ──────────────────────────────────────────
-set(MEM_SOURCES ${RUNTIME_DIR}/core/mem/mem.h)
+set(MEM_SOURCES
+    ${RUNTIME_DIR}/core/mem/mem.h
+    ${RUNTIME_DIR}/core/mem/mem_stats.h
+    ${RUNTIME_DIR}/core/mem/mem_stats.cc
+)
 source_group("core\\mem" FILES ${MEM_SOURCES})
 
 # ── Log ────────────────────────────────────────────────────────────
@@ -184,6 +188,7 @@ set(SCRIPT_SOURCES
     ${RUNTIME_DIR}/script/aoi_bind.cc ${RUNTIME_DIR}/script/aoi_bind.h
     ${RUNTIME_DIR}/script/rpc_bind.cc ${RUNTIME_DIR}/script/rpc_bind.h
     ${RUNTIME_DIR}/script/auth_bind.cc ${RUNTIME_DIR}/script/auth_bind.h
+    ${RUNTIME_DIR}/script/mem_bind.cc ${RUNTIME_DIR}/script/mem_bind.h
 )
 source_group("script" FILES ${SCRIPT_SOURCES})
 

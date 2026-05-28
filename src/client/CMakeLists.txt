@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(ENGINE_MONGODB_ENABLED "Enable MongoDB driver support" OFF)
 option(ENGINE_PROFILER_ENABLED "Enable perfetto profiler" OFF)
 option(ENGINE_PHYSICS_ENABLED "Enable Jolt Physics integration" OFF)
+option(ENGINE_MEM_STATS_ENABLED "Enable memory allocation statistics tracking" OFF)
 option(HTTPS "Enable HTTPS/SSL support" OFF)
 option(CMAKE_BENCHMARK_TESTING "Enable benchmark testing" OFF)
 option(ENGINE_WERROR "Treat compiler warnings as errors" OFF)
@@ -281,6 +282,10 @@ endif()
 
 if(ENGINE_MONGODB_ENABLED)
     target_compile_definitions(GameClient PUBLIC ENGINE_MONGODB_ENABLED)
+endif()
+
+if(ENGINE_MEM_STATS_ENABLED)
+    target_compile_definitions(GameClient PUBLIC ENGINE_MEM_STATS_ENABLED)
 endif()
 
 # ── Link libraries ───────────────────────────────────────────────────

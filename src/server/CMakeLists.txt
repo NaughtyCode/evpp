@@ -13,6 +13,7 @@ get_filename_component(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}" DIRECTORY)
 option(ENGINE_PROFILER_ENABLED "Enable perfetto profiler" ON)
 option(ENGINE_MONGODB_ENABLED "Enable MongoDB driver support" ON)
 option(ENGINE_PHYSICS_ENABLED "Enable Jolt Physics integration" ON)
+option(ENGINE_MEM_STATS_ENABLED "Enable memory allocation statistics tracking" OFF)
 option(HTTPS "Enable HTTPS/SSL support" OFF)
 option(CMAKE_BENCHMARK_TESTING "Enable benchmark testing" OFF)
 option(ENGINE_WERROR "Treat compiler warnings as errors" OFF)
@@ -259,6 +260,10 @@ if(NOT TARGET CloudEngine)
 
     if(ENGINE_MONGODB_ENABLED)
         target_compile_definitions(CloudEngine PUBLIC ENGINE_MONGODB_ENABLED)
+    endif()
+
+    if(ENGINE_MEM_STATS_ENABLED)
+        target_compile_definitions(CloudEngine PUBLIC ENGINE_MEM_STATS_ENABLED)
     endif()
 
     # ── JoltPhysics ───────────────────────────────────────────────────
