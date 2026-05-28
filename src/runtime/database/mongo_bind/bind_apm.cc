@@ -72,13 +72,15 @@ int l_apm_cmd_started_new(lua_State* L) {
 	if (!raw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "raw event pointer required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* ev = new (std::nothrow) mongo::MongoApmCommandStartedEvent(raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoApmCommandStartedEvent>(L, kMetaCmdStarted);
 	*ud = ev;
@@ -205,13 +207,15 @@ int l_apm_cmd_succeeded_new(lua_State* L) {
 	if (!raw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "raw event pointer required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* ev = new (std::nothrow) mongo::MongoApmCommandSucceededEvent(raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoApmCommandSucceededEvent>(L, kMetaCmdSucceeded);
 	*ud = ev;
@@ -345,13 +349,15 @@ int l_apm_cmd_failed_new(lua_State* L) {
 	if (!raw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "raw event pointer required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* ev = new (std::nothrow) mongo::MongoApmCommandFailedEvent(raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoApmCommandFailedEvent>(L, kMetaCmdFailed);
 	*ud = ev;
@@ -501,13 +507,15 @@ int l_apm_server_changed_new(lua_State* L) {
 	if (!raw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "raw event pointer required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* ev = new (std::nothrow) mongo::MongoApmServerChangedEvent(raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoApmServerChangedEvent>(L, kMetaServerChanged);
 	*ud = ev;
@@ -584,13 +592,15 @@ int l_apm_server_opening_new(lua_State* L) {
 	if (!raw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "raw event pointer required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* ev = new (std::nothrow) mongo::MongoApmServerOpeningEvent(raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoApmServerOpeningEvent>(L, kMetaServerOpening);
 	*ud = ev;
@@ -653,13 +663,15 @@ int l_apm_server_closed_new(lua_State* L) {
 	if (!raw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "raw event pointer required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* ev = new (std::nothrow) mongo::MongoApmServerClosedEvent(raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoApmServerClosedEvent>(L, kMetaServerClosed);
 	*ud = ev;
@@ -722,13 +734,15 @@ int l_apm_topology_changed_new(lua_State* L) {
 	if (!raw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "raw event pointer required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* ev = new (std::nothrow) mongo::MongoApmTopologyChangedEvent(raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoApmTopologyChangedEvent>(L, kMetaTopologyChanged);
 	*ud = ev;
@@ -798,13 +812,15 @@ int l_apm_topology_opening_new(lua_State* L) {
 	if (!raw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "raw event pointer required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* ev = new (std::nothrow) mongo::MongoApmTopologyOpeningEvent(raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoApmTopologyOpeningEvent>(L, kMetaTopologyOpening);
 	*ud = ev;
@@ -860,13 +876,15 @@ int l_apm_topology_closed_new(lua_State* L) {
 	if (!raw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "raw event pointer required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* ev = new (std::nothrow) mongo::MongoApmTopologyClosedEvent(raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoApmTopologyClosedEvent>(L, kMetaTopologyClosed);
 	*ud = ev;
@@ -922,13 +940,15 @@ int l_apm_hb_started_new(lua_State* L) {
 	if (!raw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "raw event pointer required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* ev = new (std::nothrow) mongo::MongoApmServerHeartbeatStartedEvent(raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoApmServerHeartbeatStartedEvent>(L, kMetaHbStarted);
 	*ud = ev;
@@ -983,13 +1003,15 @@ int l_apm_hb_succeeded_new(lua_State* L) {
 	if (!raw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "raw event pointer required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* ev = new (std::nothrow) mongo::MongoApmServerHeartbeatSucceededEvent(raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoApmServerHeartbeatSucceededEvent>(L, kMetaHbSucceeded);
 	*ud = ev;
@@ -1062,13 +1084,15 @@ int l_apm_hb_failed_new(lua_State* L) {
 	if (!raw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "raw event pointer required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* ev = new (std::nothrow) mongo::MongoApmServerHeartbeatFailedEvent(raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoApmServerHeartbeatFailedEvent>(L, kMetaHbFailed);
 	*ud = ev;
@@ -1146,7 +1170,8 @@ int l_apm_callbacks_new(lua_State* L) {
 	if (!cb) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoApmCallbacks>(L, kMetaCallbacks);
 	*ud = cb;

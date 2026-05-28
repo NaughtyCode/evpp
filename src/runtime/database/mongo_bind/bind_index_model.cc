@@ -31,13 +31,15 @@ int l_index_model_new(lua_State* L) {
 	if (!keys) {
 		lua_pushnil(L);
 		lua_pushstring(L, "keys document required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* m = new (std::nothrow) mongo::MongoIndexModel(*keys, opts);
 	if (!m) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoIndexModel>(L, kMetaName);
 	*ud = m;

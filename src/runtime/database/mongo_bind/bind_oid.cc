@@ -38,7 +38,8 @@ int l_oid_from_string(lua_State* L) {
 	if (!oid.IsValid(str, strlen(str))) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid OID string");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	oid.InitFromString(str);
 	std::string s = oid.ToString();
@@ -53,7 +54,8 @@ int l_oid_compare(lua_State* L) {
 	if (!a.IsValid(a_str, strlen(a_str)) || !b.IsValid(b_str, strlen(b_str))) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid OID string");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	a.InitFromString(a_str);
 	b.InitFromString(b_str);
@@ -67,7 +69,8 @@ int l_oid_hash(lua_State* L) {
 	if (!oid.IsValid(str, strlen(str))) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid OID string");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	oid.InitFromString(str);
 	lua_pushinteger(L, oid.Hash());
@@ -80,7 +83,8 @@ int l_oid_get_time(lua_State* L) {
 	if (!oid.IsValid(str, strlen(str))) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid OID string");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	oid.InitFromString(str);
 	lua_pushinteger(L, static_cast<lua_Integer>(oid.GetTimeT()));
@@ -93,7 +97,8 @@ int l_oid_init_from_data(lua_State* L) {
 	if (len != 12) {
 		lua_pushnil(L);
 		lua_pushstring(L, "OID data must be exactly 12 bytes");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoOid oid;
 	oid.InitFromData(reinterpret_cast<const uint8_t*>(data));
@@ -108,7 +113,8 @@ int l_oid_get_bytes(lua_State* L) {
 	if (!oid.IsValid(str, strlen(str))) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid OID string");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	oid.InitFromString(str);
 	const uint8_t* bytes = oid.GetBytes();
@@ -123,7 +129,8 @@ int l_oid_equal(lua_State* L) {
 	if (!a.IsValid(a_str, strlen(a_str)) || !b.IsValid(b_str, strlen(b_str))) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid OID string");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	a.InitFromString(a_str);
 	b.InitFromString(b_str);
@@ -137,7 +144,8 @@ int l_oid_set_bytes(lua_State* L) {
 	if (len != 12) {
 		lua_pushnil(L);
 		lua_pushstring(L, "expected 12 bytes");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoOid oid;
 	oid.SetBytes(reinterpret_cast<const uint8_t*>(data));
@@ -152,7 +160,8 @@ int l_oid_copy(lua_State* L) {
 	if (!src.IsValid(src_str, strlen(src_str))) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid OID string");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	src.InitFromString(src_str);
 	mongo::MongoOid dst;

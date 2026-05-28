@@ -47,6 +47,7 @@ inline constexpr int kDefaultSlowThresholdMultiplier = 2;
 
 inline constexpr double kDefaultHttpTimeoutSec = 10.0;
 inline constexpr int kDefaultMsgpackMaxNestingDepth = 16;
+inline constexpr size_t kDefaultMsgpackMaxPayloadSize = 1024 * 1024;  // 1 MB
 
 //============================================================================
 // Database service defaults

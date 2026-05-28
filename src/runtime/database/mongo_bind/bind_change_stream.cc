@@ -40,7 +40,8 @@ int l_change_stream_next(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;
@@ -71,7 +72,8 @@ int l_change_stream_get_resume_token(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;
@@ -92,7 +94,8 @@ int l_change_stream_error_document(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 const luaL_Reg kLib[] = {

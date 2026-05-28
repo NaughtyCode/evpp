@@ -35,7 +35,8 @@ int l_auto_encrypt_opts_new(lua_State* L) {
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoAutoEncryptionOpts>(L, kAeoMeta);
 	*ud = opts;
@@ -176,7 +177,8 @@ int l_client_encrypt_opts_new(lua_State* L) {
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClientEncryptionOpts>(L, kCeoMeta);
 	*ud = opts;
@@ -268,7 +270,8 @@ int l_encrypt_opts_new(lua_State* L) {
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClientEncryptionEncryptOpts>(L, kEncMeta);
 	*ud = opts;
@@ -377,7 +380,8 @@ int l_encrypt_range_opts_new(lua_State* L) {
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClientEncryptionEncryptRangeOpts>(L, kErMeta);
 	*ud = opts;
@@ -468,7 +472,8 @@ int l_encrypt_text_prefix_opts_new(lua_State* L) {
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClientEncryptionEncryptTextPrefixOpts>(L, kTpMeta);
 	*ud = opts;
@@ -537,7 +542,8 @@ int l_encrypt_text_suffix_opts_new(lua_State* L) {
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClientEncryptionEncryptTextSuffixOpts>(L, kTsMeta);
 	*ud = opts;
@@ -606,7 +612,8 @@ int l_encrypt_text_substring_opts_new(lua_State* L) {
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClientEncryptionEncryptTextSubstringOpts>(L, kTssMeta);
 	*ud = opts;
@@ -683,7 +690,8 @@ int l_encrypt_text_opts_new(lua_State* L) {
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClientEncryptionEncryptTextOpts>(L, kTxtMeta);
 	*ud = opts;
@@ -783,7 +791,8 @@ int l_datakey_opts_new(lua_State* L) {
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClientEncryptionDatakeyOpts>(L, kDkMeta);
 	*ud = opts;
@@ -867,7 +876,8 @@ int l_rewrap_result_new(lua_State* L) {
 	if (!result) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClientEncryptionRewrapManyDatakeyResult>(L, kRwrMeta);
 	*ud = result;
@@ -895,7 +905,8 @@ int l_rewrap_result_get_bulk_write_result(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;
@@ -943,14 +954,16 @@ int l_client_encryption_new(lua_State* L) {
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid opts");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	auto* enc = mongo::MongoClientEncryption::New(opts, &error);
 	if (!enc) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClientEncryption>(L, kCeMeta);
 	*ud = enc;
@@ -976,7 +989,8 @@ int l_client_encryption_create_datakey(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_client_encryption_rewrap_many_datakey(lua_State* L) {
@@ -988,7 +1002,8 @@ int l_client_encryption_rewrap_many_datakey(lua_State* L) {
 	if (!enc || !filter) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoClientEncryptionRewrapManyDatakeyResult result;
 	mongo::MongoError error;
@@ -1042,7 +1057,8 @@ int l_client_encryption_delete_key(lua_State* L) {
 	if (!enc) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid encryption");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -1057,7 +1073,8 @@ int l_client_encryption_get_key(lua_State* L) {
 	if (!enc) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid encryption");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -1077,7 +1094,8 @@ int l_client_encryption_get_keys(lua_State* L) {
 	if (!cursor) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoCursor>(L, "mongoc.cursor");
 	*ud = cursor;
@@ -1091,7 +1109,8 @@ int l_client_encryption_add_key_alt_name(lua_State* L) {
 	if (!enc) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid encryption");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -1107,7 +1126,8 @@ int l_client_encryption_remove_key_alt_name(lua_State* L) {
 	if (!enc) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid encryption");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -1122,7 +1142,8 @@ int l_client_encryption_get_key_by_alt_name(lua_State* L) {
 	if (!enc) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid encryption");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -1145,7 +1166,8 @@ int l_client_encryption_encrypt(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_client_encryption_encrypt_expression(lua_State* L) {
@@ -1157,7 +1179,8 @@ int l_client_encryption_encrypt_expression(lua_State* L) {
 	if (!enc || !expr) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument expr_out;
 	mongo::MongoError error;
@@ -1177,7 +1200,8 @@ int l_client_encryption_decrypt(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_client_encryption_create_encrypted_collection(lua_State* L) {
@@ -1193,7 +1217,8 @@ int l_client_encryption_create_encrypted_collection(lua_State* L) {
 	if (!enc || !out_opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	void* coll = enc->CreateEncryptedCollection(
@@ -1201,7 +1226,8 @@ int l_client_encryption_create_encrypted_collection(lua_State* L) {
 	if (!coll) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_pushlightuserdata(L, coll);
 	return 1;

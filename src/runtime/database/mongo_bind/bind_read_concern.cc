@@ -25,7 +25,8 @@ int l_read_concern_new(lua_State* L) {
 	if (!concern) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoReadConcern>(L, kMetaName);
 	*ud = concern;
@@ -68,7 +69,8 @@ int l_read_concern_copy(lua_State* L) {
 	if (!copy) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoReadConcern>(L, kMetaName);
 	*ud = copy;

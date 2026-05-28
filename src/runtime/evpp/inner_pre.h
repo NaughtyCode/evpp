@@ -16,8 +16,12 @@
 #include "runtime/evpp/sys_sockets.h"
 
 struct event;
+struct event_base;
 namespace evpp {
 int EventAdd(struct event* ev, const struct timeval* timeout);
 int EventDel(struct event*);
 EVPP_EXPORT int GetActiveEventCount();
+void SetTlsEventBase(struct event_base* base);
+void ClearTlsEventBase();
+struct event_base* GetTlsEventBase();
 }

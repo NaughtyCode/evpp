@@ -28,7 +28,8 @@ int l_bulk_write_result_new(lua_State* L) {
 	if (!result) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoBulkWriteResult>(L, kMetaName);
 	*ud = result;
@@ -91,7 +92,8 @@ int l_bwr_insert_results(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;
@@ -113,7 +115,8 @@ int l_bwr_update_results(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;
@@ -135,7 +138,8 @@ int l_bwr_delete_results(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;

@@ -51,6 +51,9 @@ const char* kClientMetaName = "net.client.instance";
 std::mutex g_client_ctxs_mutex;
 std::unordered_map<evpp::TCPClient*, ClientCtx*> g_client_ctxs;
 
+// Shared ownership — replaces RunInLoop([del_ctx]{ delete del_ctx; })
+std::unordered_map<ClientCtx*, std::shared_ptr<ClientCtx>> g_client_shared;
+
 void RegisterClientCtx(ClientCtx* ctx) {
 	std::lock_guard<std::mutex> lock(g_client_ctxs_mutex);
 	g_client_ctxs[ctx->client.get()] = ctx;
@@ -74,7 +77,9 @@ int l_net_client_connect(lua_State* L) {
 		return luaL_error(L, "EventLoop not available");
 	}
 
-	auto* ctx = new ClientCtx();
+	auto sp = std::make_shared<ClientCtx>();
+	g_client_shared[sp.get()] = sp;
+	auto* ctx = sp.get();
 	ctx->L = L;
 
 	// Build Lua class instance table
@@ -126,12 +131,7 @@ int l_net_client_connect(lua_State* L) {
 					luaL_unref(L_ptr, LUA_REGISTRYINDEX, inst_ref);
 					ctx_ptr->instance_ref = LUA_NOREF;
 				}
-				auto* loop = Engine::Instance().GetEventLoop();
-				if (loop) {
-					loop->RunInLoop([ctx_ptr] { delete ctx_ptr; });
-				} else {
-					delete ctx_ptr;
-				}
+				g_client_shared.erase(ctx_ptr);
 			}
 		}
 	});
@@ -212,11 +212,7 @@ int l_client_disconnect(lua_State* L) {
 
 	auto* loop = Engine::Instance().GetEventLoop();
 	if (loop) {
-		ClientCtx* del_ctx = ctx;
-		loop->RunInLoop([del_ctx] { delete del_ctx; });
-	} else {
-		delete ctx;
-	}
+		g_client_shared.erase(ctx);
 
 	lua_pushboolean(L, 1);
 	return 1;
@@ -261,13 +257,7 @@ int l_client_gc(lua_State* L) {
 	ctx->client->SetMessageCallback(evpp::MessageCallback());
 	ctx->client->Disconnect();
 
-	auto* loop = Engine::Instance().GetEventLoop();
-	if (loop) {
-		ClientCtx* del_ctx = ctx;
-		loop->RunInLoop([del_ctx] { delete del_ctx; });
-	} else {
-		delete ctx;
-	}
+	g_client_shared.erase(ctx);
 
 	return 0;
 }
@@ -375,12 +365,7 @@ void ShutdownClientBindings() {
 			ctx->instance_ref = LUA_NOREF;
 		}
 
-		auto* loop = Engine::Instance().GetEventLoop();
-		if (loop) {
-			loop->RunInLoop([ctx] { delete ctx; });
-		} else {
-			delete ctx;
-		}
+		g_client_shared.erase(ctx);
 	}
 }
 

@@ -19,6 +19,10 @@ int GetMaxNesting() {
 	return ConfigManager::Instance().GetServerConfig().msgpack.max_nesting_depth;
 }
 
+size_t GetMaxPayloadSize() {
+	return ConfigManager::Instance().GetServerConfig().msgpack.max_payload_size;
+}
+
 // ============================================================================
 // Endian helper
 // ============================================================================
@@ -48,13 +52,21 @@ inline void MemRevIfLE(void* ptr, size_t len) noexcept {
 
 struct EncodeBuf {
 	std::vector<uint8_t> data;
+	size_t max_size = 0;
+	bool overflow = false;
 
 	void Append(const unsigned char* s, size_t len) {
+		if (overflow) return;
+		if (max_size > 0 && data.size() + len > max_size) {
+			overflow = true;
+			return;
+		}
 		data.insert(data.end(), s, s + len);
 	}
 
 	void Clear() {
 		data.clear();
+		overflow = false;
 	}
 
 	size_t Size() const noexcept {
@@ -704,9 +716,14 @@ int l_msgpack_pack(lua_State* L) {
 	luaL_checkstack(L, nargs, "Too many arguments for MessagePack pack.");
 
 	EncodeBuf buf;
+	buf.max_size = GetMaxPayloadSize();
 	for (int i = 1; i <= nargs; ++i) {
 		lua_pushvalue(L, i);
 		EncodeLuaType(L, buf, 0);
+		if (buf.overflow) {
+			return luaL_error(L, "msgpack encode: payload exceeds maximum size (%zu bytes)",
+							  buf.max_size);
+		}
 		lua_pushlstring(L, reinterpret_cast<const char*>(buf.Data()), buf.Size());
 		buf.Clear();
 	}

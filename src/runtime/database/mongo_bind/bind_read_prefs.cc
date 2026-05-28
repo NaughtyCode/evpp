@@ -29,7 +29,8 @@ int l_read_prefs_new(lua_State* L) {
 	if (!prefs) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoReadPrefs>(L, kMetaName);
 	*ud = prefs;
@@ -77,7 +78,8 @@ int l_read_prefs_copy(lua_State* L) {
 	if (!copy) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoReadPrefs>(L, kMetaName);
 	*ud = copy;
@@ -126,7 +128,8 @@ int l_read_prefs_get_tags(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;
@@ -148,7 +151,8 @@ int l_read_prefs_get_hedge(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;

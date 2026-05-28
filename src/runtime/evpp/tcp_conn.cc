@@ -9,6 +9,11 @@
 #include "runtime/evpp/libevent.h"
 #include "runtime/evpp/sockets.h"
 
+#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+#endif
+
 namespace evpp {
 TCPConn::TCPConn(EventLoop* l,
 				 const std::string& n,
@@ -175,22 +180,50 @@ void TCPConn::SendInLoop(const void* data, size_t len) {
 
 	// if no data in output queue, writing directly
 	if (!chan_->IsWritable() && output_buffer_.length() == 0) {
-		nwritten = ::send(chan_->fd(), static_cast<const char*>(data), len, MSG_NOSIGNAL);
-		if (nwritten >= 0) {
-			remaining = len - nwritten;
-			if (remaining == 0 && write_complete_fn_) {
-				loop_->QueueInLoop(std::bind(write_complete_fn_, shared_from_this()));
-			}
-		} else {
-			int serrno = EVPP_ERRNO;
-			nwritten = 0;
-			if (!EVUTIL_ERR_RW_RETRIABLE(serrno)) {
-				ENGINE_LOG_ERROR(engine::GetLogger(),
-								 "SendInLoop write failed errno={} {}",
-								 serrno,
-								 strerror(serrno));
-				if (serrno == EPIPE || serrno == ECONNRESET) {
+#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+		if (ssl_) {
+			int ssl_ret = SSL_write(ssl_, data, static_cast<int>(len));
+			if (ssl_ret > 0) {
+				nwritten = ssl_ret;
+				remaining = len - nwritten;
+				if (remaining == 0 && write_complete_fn_) {
+					loop_->QueueInLoop(std::bind(write_complete_fn_, shared_from_this()));
+				}
+			} else {
+				int ssl_err = SSL_get_error(ssl_, ssl_ret);
+				nwritten = 0;
+				if (ssl_err == SSL_ERROR_WANT_WRITE || ssl_err == SSL_ERROR_WANT_READ) {
+					// Normal for non-blocking — buffer and re-enable write
+				} else if (ssl_err == SSL_ERROR_ZERO_RETURN) {
+					ENGINE_LOG_TRACE(engine::GetLogger(), "SSL connection closed by peer");
 					write_error = true;
+				} else {
+					ENGINE_LOG_ERROR(engine::GetLogger(),
+									 "SSL_write failed: {}",
+									 ERR_error_string(ERR_get_error(), nullptr));
+					write_error = true;
+				}
+			}
+		} else
+#endif
+		{
+			nwritten = ::send(chan_->fd(), static_cast<const char*>(data), len, MSG_NOSIGNAL);
+			if (nwritten >= 0) {
+				remaining = len - nwritten;
+				if (remaining == 0 && write_complete_fn_) {
+					loop_->QueueInLoop(std::bind(write_complete_fn_, shared_from_this()));
+				}
+			} else {
+				int serrno = EVPP_ERRNO;
+				nwritten = 0;
+				if (!EVUTIL_ERR_RW_RETRIABLE(serrno)) {
+					ENGINE_LOG_ERROR(engine::GetLogger(),
+									 "SendInLoop write failed errno={} {}",
+									 serrno,
+									 strerror(serrno));
+					if (serrno == EPIPE || serrno == ECONNRESET) {
+						write_error = true;
+					}
 				}
 			}
 		}
@@ -223,7 +256,40 @@ void TCPConn::SendInLoop(const void* data, size_t len) {
 void TCPConn::HandleRead() {
 	assert(loop_->IsInLoopThread());
 	int serrno = 0;
-	ssize_t n = input_buffer_.ReadFromFD(chan_->fd(), &serrno);
+	ssize_t n = 0;
+#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+	if (ssl_) {
+		input_buffer_.EnsureWritableBytes(65536);
+		int ssl_ret = SSL_read(ssl_, input_buffer_.WriteBegin(),
+							   static_cast<int>(input_buffer_.WritableBytes()));
+		if (ssl_ret > 0) {
+			n = ssl_ret;
+			input_buffer_.WriteBytes(static_cast<size_t>(n));
+			msg_fn_(shared_from_this(), &input_buffer_);
+			return;
+		}
+		int ssl_err = SSL_get_error(ssl_, ssl_ret);
+		if (ssl_err == SSL_ERROR_WANT_READ) {
+			return;
+		}
+		if (ssl_err == SSL_ERROR_WANT_WRITE) {
+			chan_->EnableWriteEvent();
+			return;
+		}
+		if (ssl_err == SSL_ERROR_ZERO_RETURN) {
+			n = 0;  // Clean shutdown
+		} else {
+			ENGINE_LOG_ERROR(engine::GetLogger(),
+							 "SSL_read failed: {}",
+							 ERR_error_string(ERR_get_error(), nullptr));
+			HandleError();
+			return;
+		}
+	} else
+#endif
+	{
+		n = input_buffer_.ReadFromFD(chan_->fd(), &serrno);
+	}
 	if (n > 0) {
 		msg_fn_(shared_from_this(), &input_buffer_);
 	} else if (n == 0) {
@@ -275,6 +341,63 @@ void TCPConn::HandleRead() {
 void TCPConn::HandleWrite() {
 	assert(loop_->IsInLoopThread());
 	assert(!chan_->attached() || chan_->IsWritable());
+
+#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+	if (ssl_) {
+		// If no data to write, try advancing the SSL handshake
+		if (output_buffer_.length() == 0) {
+			int hs_ret = SSL_do_handshake(ssl_);
+			if (hs_ret == 1) {
+				chan_->DisableWriteEvent();
+				return;
+			}
+			int hs_err = SSL_get_error(ssl_, hs_ret);
+			if (hs_err == SSL_ERROR_WANT_READ) {
+				chan_->DisableWriteEvent();
+				return;
+			}
+			if (hs_err == SSL_ERROR_WANT_WRITE) {
+				return;
+			}
+			ENGINE_LOG_ERROR(engine::GetLogger(),
+							 "SSL handshake failed: {}",
+							 ERR_error_string(ERR_get_error(), nullptr));
+			HandleError();
+			return;
+		}
+
+		int ssl_ret = SSL_write(ssl_, output_buffer_.data(),
+								static_cast<int>(output_buffer_.length()));
+		if (ssl_ret > 0) {
+			output_buffer_.Next(static_cast<size_t>(ssl_ret));
+			if (output_buffer_.length() == 0) {
+				chan_->DisableWriteEvent();
+				while (!pending_messages_.empty()) {
+					PendingMessage msg = pending_messages_.top();
+					pending_messages_.pop();
+					SendInLoop(msg.data.data(), msg.data.size());
+					if (output_buffer_.length() > 0) {
+						chan_->EnableWriteEvent();
+						break;
+					}
+				}
+				if (write_complete_fn_ && pending_messages_.empty()) {
+					loop_->QueueInLoop(std::bind(write_complete_fn_, shared_from_this()));
+				}
+			}
+		} else {
+			int ssl_err = SSL_get_error(ssl_, ssl_ret);
+			if (ssl_err == SSL_ERROR_WANT_WRITE || ssl_err == SSL_ERROR_WANT_READ) {
+				return;  // Retry later
+			}
+			ENGINE_LOG_ERROR(engine::GetLogger(),
+							 "SSL_write HandleWrite failed: {}",
+							 ERR_error_string(ERR_get_error(), nullptr));
+			HandleError();
+		}
+		return;
+	}
+#endif
 
 	ssize_t n = ::send(fd_, output_buffer_.data(), output_buffer_.length(), MSG_NOSIGNAL);
 	if (n > 0) {
@@ -346,6 +469,13 @@ void TCPConn::HandleClose() {
 	// This setting is required, it indicates connecting state and must not be removed
 	status_ = kDisconnecting;
 	assert(loop_->IsInLoopThread());
+#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+	if (ssl_) {
+		SSL_shutdown(ssl_);
+		SSL_free(ssl_);
+		ssl_ = nullptr;
+	}
+#endif
 	if (chan_) {
 		chan_->DisableAllEvent();
 		chan_->Close();
@@ -393,6 +523,19 @@ void TCPConn::HandleError() {
 void TCPConn::OnAttachedToLoop() {
 	assert(loop_->IsInLoopThread());
 	status_ = kConnected;
+#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+	if (ssl_ctx_) {
+		ssl_ = SSL_new(ssl_ctx_);
+		if (ssl_) {
+			SSL_set_fd(ssl_, fd_);
+			if (type_ == kIncoming) {
+				SSL_set_accept_state(ssl_);
+			} else {
+				SSL_set_connect_state(ssl_);
+			}
+		}
+	}
+#endif
 	chan_->EnableReadEvent();
 
 	if (conn_fn_) {

@@ -48,6 +48,7 @@ struct ServerCtx {
 	std::unique_ptr<evpp::TCPServer> server;
 	lua_State* L = nullptr;
 	int instance_ref = LUA_NOREF;  // Lua server instance table
+	evpp::EventLoop* event_loop = nullptr;  // owning event loop (DI instead of Engine::Instance)
 	engine::LengthPrefixedCodec codec;  /* message framing, shared by all connections */
 	bool disposed = false;
 };
@@ -59,6 +60,14 @@ const char* kConnMetaName = "net.server.conn.instance";
 // ShutdownServerBindings to find and stop all servers during engine shutdown.
 // Normal operations (send, close, stop, set_on_*) never touch this set.
 std::unordered_set<ServerCtx*> g_server_ctxs;
+
+// Shared ownership of connection and server contexts.
+// Raw pointers are still used everywhere (GetCtxFromTable, callbacks) for
+// minimal churn; shared_ptr here keeps the context alive until explicitly
+// released via erase(). Replaces the RunInLoop([del_ctx]{ delete del_ctx; })
+// delayed-delete pattern with deterministic RAII lifetime.
+std::unordered_map<ConnCtx*, std::shared_ptr<ConnCtx>> g_conn_shared;
+std::unordered_map<ServerCtx*, std::shared_ptr<ServerCtx>> g_server_shared;
 
 
 // ── Callback dispatchers ─────────────────────────────────────────────
@@ -129,13 +138,7 @@ int l_conn_close(lua_State* L) {
 	// checks ctx->disposed and returns early �?on_close is NOT called
 	// for a manual close.
 
-	auto* loop = Engine::Instance().GetEventLoop();
-	if (loop) {
-		ConnCtx* del_ctx = ctx;
-		loop->RunInLoop([del_ctx] { delete del_ctx; });
-	} else {
-		delete ctx;
-	}
+	g_conn_shared.erase(ctx);
 
 	lua_pushboolean(L, 1);
 	return 1;
@@ -192,13 +195,7 @@ int l_conn_gc(lua_State* L) {
 	ctx->conn->set_context(evpp::Any());
 	ctx->conn->Close();
 
-	auto* loop = Engine::Instance().GetEventLoop();
-	if (loop) {
-		ConnCtx* del_ctx = ctx;
-		loop->RunInLoop([del_ctx] { delete del_ctx; });
-	} else {
-		delete ctx;
-	}
+	g_conn_shared.erase(ctx);
 
 	return 0;
 }
@@ -233,14 +230,14 @@ int l_server_stop(lua_State* L) {
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "[net.server] server stopped");
 
-	auto* loop = Engine::Instance().GetEventLoop();
+	// Use QueueInLoop so HandleClose (queued by Close() in StopInLoop)
+	// fires first, allowing ConnCtx cleanup before ServerCtx is freed.
+	auto* loop = ctx->event_loop;
 	if (loop) {
 		ServerCtx* del_ctx = ctx;
-		// Use QueueInLoop so HandleClose (queued by Close() in StopInLoop)
-		// fires first, allowing ConnCtx cleanup before ServerCtx is freed.
-		loop->QueueInLoop([del_ctx] { delete del_ctx; });
+		loop->QueueInLoop([del_ctx] { g_server_shared.erase(del_ctx); });
 	} else {
-		delete ctx;
+		g_server_shared.erase(ctx);
 	}
 
 	lua_pushboolean(L, 1);
@@ -300,14 +297,12 @@ int l_server_gc(lua_State* L) {
 		ctx->instance_ref = LUA_NOREF;
 	}
 
-	auto* loop = Engine::Instance().GetEventLoop();
+	auto* loop = ctx->event_loop;
 	if (loop) {
 		ServerCtx* del_ctx = ctx;
-		// Use QueueInLoop so HandleClose (queued by Close() in StopInLoop)
-		// fires first, allowing ConnCtx cleanup before ServerCtx is freed.
-		loop->QueueInLoop([del_ctx] { delete del_ctx; });
+		loop->QueueInLoop([del_ctx] { g_server_shared.erase(del_ctx); });
 	} else {
-		delete ctx;
+		g_server_shared.erase(ctx);
 	}
 
 	return 0;
@@ -326,8 +321,11 @@ int l_net_server_listen(lua_State* L) {
 		return luaL_error(L, "EventLoop not available");
 	}
 
-	auto* ctx = new ServerCtx();
+	auto sp = std::make_shared<ServerCtx>();
+	g_server_shared[sp.get()] = sp;
+	auto* ctx = sp.get();
 	ctx->L = L;
+	ctx->event_loop = loop;  // explicit DI instead of Engine::Instance()
 
 	PushInstanceTable(L, ctx, kServerMetaName);  // t
 
@@ -354,7 +352,9 @@ int l_net_server_listen(lua_State* L) {
 				// Skip new connections if server is shutting down.
 				if (ctx_ptr->disposed) return;
 
-				auto* conn_ctx = new ConnCtx();
+				auto conn_sp = std::make_shared<ConnCtx>();
+				g_conn_shared[conn_sp.get()] = conn_sp;
+				auto* conn_ctx = conn_sp.get();
 				conn_ctx->L = L_ptr;
 				conn_ctx->conn = conn;
 				conn_ctx->server_inst_ref = server_inst_ref;
@@ -427,13 +427,7 @@ int l_net_server_listen(lua_State* L) {
 				}
 				conn->set_context(evpp::Any());
 
-				auto* loop = Engine::Instance().GetEventLoop();
-				if (loop) {
-					ConnCtx* del_ctx = conn_ctx;
-					loop->RunInLoop([del_ctx] { delete del_ctx; });
-				} else {
-					delete conn_ctx;
-				}
+				g_conn_shared.erase(conn_ctx);
 			}
 		});
 
@@ -465,7 +459,7 @@ int l_net_server_listen(lua_State* L) {
 		ctx->instance_ref = LUA_NOREF;
 		lua_pushnil(L);
 		lua_setfield(L, -2, "_ctx");
-		delete ctx;
+		g_server_shared.erase(ctx);
 		return luaL_error(L, "server init failed");
 	}
 
@@ -475,7 +469,7 @@ int l_net_server_listen(lua_State* L) {
 		ctx->instance_ref = LUA_NOREF;
 		lua_pushnil(L);
 		lua_setfield(L, -2, "_ctx");
-		delete ctx;
+		g_server_shared.erase(ctx);
 		return luaL_error(L, "server start failed");
 	}
 
@@ -548,7 +542,7 @@ void ShutdownServerBindings() {
 			luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->instance_ref);
 			ctx->instance_ref = LUA_NOREF;
 		}
-		delete ctx;
+		g_server_shared.erase(ctx);
 	}
 
 	if (!ctxs.empty()) {

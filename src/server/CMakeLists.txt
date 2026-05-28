@@ -15,6 +15,7 @@ option(ENGINE_MONGODB_ENABLED "Enable MongoDB driver support" ON)
 option(ENGINE_PHYSICS_ENABLED "Enable Jolt Physics integration" ON)
 option(HTTPS "Enable HTTPS/SSL support" OFF)
 option(CMAKE_BENCHMARK_TESTING "Enable benchmark testing" OFF)
+option(ENGINE_WERROR "Treat compiler warnings as errors" OFF)
 
 # ── Platform settings ────────────────────────────────────────────────
 if (UNIX)
@@ -51,6 +52,15 @@ if (UNIX)
     SET(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -ggdb -DNDEBUG")
 endif (UNIX)
 
+if(ENGINE_WERROR)
+    if(MSVC)
+        message(STATUS "ENGINE_WERROR=ON: /WX enabled")
+    else()
+        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+        message(STATUS "ENGINE_WERROR=ON: -Werror enabled")
+    endif()
+endif()
+
 if (HTTPS)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEVPP_HTTP_CLIENT_SUPPORTS_SSL")
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEVPP_HTTP_SERVER_SUPPORTS_SSL")
@@ -60,14 +70,25 @@ if (CMAKE_BENCHMARK_TESTING)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DH_BENCHMARK_TESTING=1")
 endif (CMAKE_BENCHMARK_TESTING)
 
-# ── MSVC compile options (from runtime) ────────────────────────────────
+# ── MSVC compile options ────────────────────────────────────────────────
 if(MSVC)
     add_definitions(-D_WIN32_WINNT=0x0A00)
     add_compile_options(/bigobj /Zc:preprocessor /utf-8)
-    add_compile_options(
-        /wd4005 /wd4244 /wd4251 /wd4267 /wd4355 /wd4503 /wd4530
-        /wd4577 /wd4715 /wd4800 /wd4819 /wd4996
-    )
+
+    # Enable warning level 4 (equivalent to -Wall -Wextra)
+    add_compile_options(/W4)
+
+    # Minimal warning suppressions — only noise that cannot be fixed in code:
+    # C4100: unreferenced formal parameter (common in callback stubs / virtual overrides)
+    # C4127: conditional expression is constant (common in template instantiations)
+    # C4201: nonstandard extension: nameless struct/union (used in evpp net layer)
+    # C4503: decorated name length exceeded (compiler limitation for template-heavy code)
+    add_compile_options(/wd4100 /wd4127 /wd4201 /wd4503)
+
+    if(ENGINE_WERROR)
+        add_compile_options(/WX)
+    endif()
+
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 

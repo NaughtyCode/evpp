@@ -34,13 +34,15 @@ int l_sd_new(lua_State* L) {
 	if (!raw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "raw server_description pointer required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* sd = new (std::nothrow) mongo::MongoServerDescription(raw);
 	if (!sd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoServerDescription>(L, kSdMeta);
 	*ud = sd;
@@ -62,7 +64,8 @@ int l_sd_new_copy(lua_State* L) {
 	if (!copy) {
 		lua_pushnil(L);
 		lua_pushstring(L, "copy failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoServerDescription>(L, kSdMeta);
 	*ud = copy;
@@ -129,7 +132,8 @@ int l_sd_hello_response(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;
@@ -185,13 +189,15 @@ int l_td_new(lua_State* L) {
 	if (!raw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "raw topology_description pointer required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* td = new (std::nothrow) mongo::MongoTopologyDescription(raw);
 	if (!td) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoTopologyDescription>(L, kTdMeta);
 	*ud = td;
@@ -213,7 +219,8 @@ int l_td_new_copy(lua_State* L) {
 	if (!copy) {
 		lua_pushnil(L);
 		lua_pushstring(L, "copy failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoTopologyDescription>(L, kTdMeta);
 	*ud = copy;

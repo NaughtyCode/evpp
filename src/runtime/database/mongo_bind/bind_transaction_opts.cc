@@ -26,7 +26,8 @@ int l_txn_opts_new(lua_State* L) {
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoTransactionOpts>(L, kMetaName);
 	*ud = opts;
@@ -48,7 +49,8 @@ int l_txn_opts_clone(lua_State* L) {
 	if (!copy) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoTransactionOpts>(L, kMetaName);
 	*ud = copy;

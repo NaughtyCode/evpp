@@ -44,7 +44,8 @@ int l_context_new(lua_State* L) {
 	if (!ctx) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonContext>(L, kMetaContext);
 	*ud = ctx;
@@ -91,7 +92,8 @@ int l_string_new(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonString>(L, kMetaString);
 	*ud = s;
@@ -104,7 +106,8 @@ int l_string_new_from(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonString>(L, kMetaString);
 	*ud = s;
@@ -205,7 +208,8 @@ int l_json_reader_new_from_fd(lua_State* L) {
 	if (!p) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonJsonReader>(L, kMetaJsonReader);
 	*ud = p;
@@ -220,7 +224,8 @@ int l_json_reader_new_from_file(lua_State* L) {
 	if (!p) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonJsonReader>(L, kMetaJsonReader);
 	*ud = p;
@@ -235,7 +240,8 @@ int l_json_reader_new_from_data(lua_State* L) {
 	if (!p) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonJsonReader>(L, kMetaJsonReader);
 	*ud = p;
@@ -257,14 +263,16 @@ int l_json_reader_read(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	if (!reader->Read(doc, &error)) {
 		delete doc;
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message() ? error.Message() : "read error");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;
@@ -321,7 +329,8 @@ int l_json_data_reader_new(lua_State* L) {
 	if (!p) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonJsonDataReader>(L, kMetaJsonDataReader);
 	*ud = p;
@@ -377,7 +386,8 @@ int l_reader_new_from_data(lua_State* L) {
 	if (!p) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonReader>(L, kMetaReader);
 	*ud = p;
@@ -392,7 +402,8 @@ int l_reader_new_from_file(lua_State* L) {
 	if (!p) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonReader>(L, kMetaReader);
 	*ud = p;
@@ -407,7 +418,8 @@ int l_reader_new_from_fd(lua_State* L) {
 	if (!p) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonReader>(L, kMetaReader);
 	*ud = p;
@@ -429,14 +441,16 @@ int l_reader_read(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	if (!reader->Read(doc, &error)) {
 		delete doc;
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message() ? error.Message() : "read error");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;
@@ -448,13 +462,15 @@ int l_reader_read_raw(lua_State* L) {
 	if (!reader) {
 		lua_pushnil(L);
 		lua_pushboolean(L, true);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	bool eof = false;
 	const void* raw = reader->Read(&eof);
 	lua_pushlightuserdata(L, const_cast<void*>(raw));
 	lua_pushboolean(L, eof);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_reader_set_data(lua_State* L) {
@@ -516,7 +532,8 @@ int l_writer_new(lua_State* L) {
 	if (!p) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonWriter>(L, kMetaWriter);
 	*ud = p;
@@ -558,7 +575,8 @@ int l_writer_end(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	writer->End(doc);
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
@@ -629,7 +647,8 @@ int l_json_opts_new(lua_State* L) {
 	if (!p) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonJsonOpts>(L, kMetaJsonOpts);
 	*ud = p;
@@ -681,7 +700,8 @@ int l_value_new(lua_State* L) {
 	if (!p) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonValue>(L, kMetaValue);
 	*ud = p;
@@ -698,7 +718,8 @@ int l_value_new_copy(lua_State* L) {
 	if (!p) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonValue>(L, kMetaValue);
 	*ud = p;
@@ -798,7 +819,8 @@ int l_clock_get_time_of_day(lua_State* L) {
 	mongo::BsonClock::GetTimeOfDay(&tv);
 	lua_pushinteger(L, static_cast<lua_Integer>(tv.tv_sec));
 	lua_pushinteger(L, static_cast<lua_Integer>(tv.tv_usec));
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_str_dup(lua_State* L) {

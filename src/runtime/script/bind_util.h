@@ -2,6 +2,7 @@
 
 #include "runtime/core/engine_api.h"
 
+#include <memory>
 #include <string>
 
 extern "C" {
@@ -176,6 +177,61 @@ inline void CallInstMethodTableStr(lua_State* L, int inst_ref, const char* metho
 
 inline void PushLibrary(lua_State* L, const luaL_Reg* funcs) {
 	luaL_newlib(L, funcs);
+}
+
+//------------------------------------------------------------------------------
+// SharedPtr lifetime management — full userdata wrapper for shared_ptr<T>
+//
+// Replaces the RunInLoop([del_ctx]{ delete del_ctx; }) delayed-delete pattern.
+// The shared_ptr is stored in a full userdata on the Lua table; Lua GC
+// destroys the userdata, releasing the shared_ptr. The context is deleted
+// when the last shared_ptr reference drops (from TCPConn, callbacks, etc.).
+//
+// Usage:
+//   auto ctx = std::make_shared<MyCtx>();
+//   PushInstanceTableShared(L, ctx, meta_name);
+//   GetCtxFromTable<MyCtx>(L, idx);  // still works (returns raw ptr)
+//------------------------------------------------------------------------------
+
+template <typename T>
+struct SharedCtx {
+	std::shared_ptr<T> ptr;
+};
+
+template <typename T>
+int SharedCtxGC(lua_State* L) {
+	auto* sc = static_cast<SharedCtx<T>*>(lua_touserdata(L, 1));
+	sc->ptr.reset();
+	return 0;
+}
+
+template <typename T>
+void PushInstanceTableShared(lua_State* L, std::shared_ptr<T> ctx, const char* meta_name) {
+	// Create a tiny full userdata to hold the shared_ptr with its own GC.
+	auto* sc = static_cast<SharedCtx<T>*>(lua_newuserdata(L, sizeof(SharedCtx<T>)));
+	new (sc) SharedCtx<T>{std::move(ctx)};
+
+	// Attach a metatable with __gc to the userdata so Lua GC releases the shared_ptr.
+	if (luaL_newmetatable(L, "__SharedCtx_gc")) {
+		lua_pushcfunction(L, SharedCtxGC<T>);
+		lua_setfield(L, -2, "__gc");
+	}
+	lua_setmetatable(L, -2);
+
+	// Store the userdata as a field on the instance table.
+	int ud_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+	lua_newtable(L);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, ud_ref);
+	lua_setfield(L, -2, "_shared_owner");
+	luaL_unref(L, LUA_REGISTRYINDEX, ud_ref);
+
+	// Also store raw pointer for backward compat with GetCtxFromTable<T>.
+	lua_pushlightuserdata(L, sc->ptr.get());
+	lua_setfield(L, -2, "_ctx");
+
+	luaL_getmetatable(L, meta_name);
+	lua_setmetatable(L, -2);
 }
 
 }  // namespace script

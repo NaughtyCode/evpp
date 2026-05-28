@@ -186,8 +186,8 @@ void DNSResolver::AsyncDNSResolve() {
 
 
 	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} call shared_from_this", (void*) this);
-	std::shared_ptr<DNSResolver> p = shared_from_this();
-	evdns_cb_arg_ = new std::shared_ptr<DNSResolver>(p);
+	auto holder = std::make_unique<std::shared_ptr<DNSResolver>>(shared_from_this());
+	evdns_cb_arg_ = holder.get();
 	dnsbase_ = evdns_base_new(loop_->event_base(), 1);
 	assert(dnsbase_);
 	dns_req_ = evdns_getaddrinfo(dnsbase_,
@@ -196,7 +196,7 @@ void DNSResolver::AsyncDNSResolve() {
 								 ,
 								 &hints,
 								 &DNSResolver::OnResolved,
-								 evdns_cb_arg_);
+								 holder.release());  // transfer ownership to C callback
 	if (!dns_req_) {
 		ENGINE_LOG_ERROR(engine::GetLogger(), "evdns_getaddrinfo failed.");
 		delete evdns_cb_arg_;
@@ -273,7 +273,8 @@ void DNSResolver::OnResolved(int errcode, struct addrinfo* addr) {
 	ClearTimer();
 
 	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} delete DNS base", (void*) this);
-	evdns_base_free(dnsbase_, 0);  //TODO Do we need to free dns_req_?
+	// evdns_base_free() cancels and frees all outstanding dns_req_ requests.
+	evdns_base_free(dnsbase_, 0);
 	dnsbase_ = nullptr;
 	OnResolved();
 }

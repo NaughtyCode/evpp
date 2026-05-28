@@ -47,7 +47,8 @@ int l_cursor_next(lua_State* L) {
 		if (cursor->HasError(&error)) {
 			lua_pushnil(L);
 			lua_pushstring(L, error.Message());
-			return 2;
+			lua_pushnil(L);
+			return 3;
 		}
 		lua_pushboolean(L, false);`r`n			return 1;`r`n		}`r`n		*ud = doc.release();`r`n		return 1;
 }
@@ -143,7 +144,8 @@ int l_cursor_error_document(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_cursor_current(lua_State* L) {
@@ -162,7 +164,8 @@ int l_cursor_current(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;

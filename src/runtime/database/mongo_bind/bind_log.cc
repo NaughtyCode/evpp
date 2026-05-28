@@ -30,7 +30,8 @@ int l_log_opts_new(lua_State* L) {
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoStructuredLogOpts>(L, kOptsMeta);
 	*ud = opts;
@@ -182,13 +183,15 @@ int l_log_entry_new(lua_State* L) {
 	if (!raw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid raw entry pointer");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* e = new (std::nothrow) mongo::MongoStructuredLogEntry(raw);
 	if (!e) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoStructuredLogEntry>(L, kEntryMeta);
 	*ud = e;
@@ -210,7 +213,8 @@ int l_log_entry_message_as_bson(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	e->MessageAsBson(doc);
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");

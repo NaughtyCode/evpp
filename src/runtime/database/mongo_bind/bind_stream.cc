@@ -44,13 +44,15 @@ int l_stream_new_buffered(lua_State* L) {
 	if (!base) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid base stream");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* s = mongo::MongoStream::NewBuffered(base, buf_size);
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "stream creation failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoStream>(L, kMetaName);
 	*ud = s;
@@ -63,7 +65,8 @@ int l_stream_new_file(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "stream creation failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoStream>(L, kMetaName);
 	*ud = s;
@@ -78,7 +81,8 @@ int l_stream_new_file_for_path(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "stream creation failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoStream>(L, kMetaName);
 	*ud = s;
@@ -90,13 +94,15 @@ int l_stream_new_socket(lua_State* L) {
 	if (!socket) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid socket");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* s = mongo::MongoStream::NewSocket(socket);
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "stream creation failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoStream>(L, kMetaName);
 	*ud = s;
@@ -111,13 +117,15 @@ int l_stream_new_tls(lua_State* L) {
 	if (!base) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid base stream");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* s = mongo::MongoStream::NewTls(base, host, ssl_opts, client ? 1 : 0);
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "stream creation failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoStream>(L, kMetaName);
 	*ud = s;
@@ -130,7 +138,8 @@ int l_stream_new_gridfs(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "stream creation failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoStream>(L, kMetaName);
 	*ud = s;
@@ -145,13 +154,15 @@ int l_stream_new_tls_openssl(lua_State* L) {
 	if (!base) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid base stream");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* s = mongo::MongoStream::NewTlsOpenssl(base, host, ssl_opts, client);
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "stream creation failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoStream>(L, kMetaName);
 	*ud = s;
@@ -166,13 +177,15 @@ int l_stream_new_tls_secure_channel(lua_State* L) {
 	if (!base) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid base stream");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* s = mongo::MongoStream::NewTlsSecureChannel(base, host, ssl_opts, client);
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "stream creation failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoStream>(L, kMetaName);
 	*ud = s;
@@ -187,13 +200,15 @@ int l_stream_new_tls_secure_transport(lua_State* L) {
 	if (!base) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid base stream");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* s = mongo::MongoStream::NewTlsSecureTransport(base, host, ssl_opts, client);
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "stream creation failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoStream>(L, kMetaName);
 	*ud = s;
@@ -260,7 +275,8 @@ int l_stream_write(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid stream");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	ssize_t written = s->Write(const_cast<char*>(data), len, timeout);
 	lua_pushinteger(L, static_cast<lua_Integer>(written));
@@ -275,7 +291,8 @@ int l_stream_read(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid stream");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	if (count == 0) {
 		lua_pushstring(L, "");
@@ -296,7 +313,8 @@ int l_stream_writev(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid stream");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	luaL_checktype(L, 2, LUA_TTABLE);
 	int32_t timeout = static_cast<int32_t>(luaL_checkinteger(L, 3));
@@ -321,7 +339,8 @@ int l_stream_readv(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid stream");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	luaL_checktype(L, 2, LUA_TTABLE);
 	size_t min_bytes = static_cast<size_t>(luaL_optinteger(L, 3, 0));
@@ -362,7 +381,8 @@ int l_stream_set_sockopt(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid stream");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	int rc = s->SetSockopt(level, optname, const_cast<char*>(optval), static_cast<int>(optlen));
 	lua_pushinteger(L, rc);
@@ -396,7 +416,8 @@ int l_stream_tls_handshake(lua_State* L) {
 	if (!s) {
 		lua_pushboolean(L, false);
 		lua_pushinteger(L, 0);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	int events = 0;
@@ -407,7 +428,8 @@ int l_stream_tls_handshake(lua_State* L) {
 	} else {
 		lua_pushstring(L, error.Message() ? error.Message() : "TLS handshake failed");
 	}
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_stream_tls_handshake_block(lua_State* L) {
@@ -417,7 +439,8 @@ int l_stream_tls_handshake_block(lua_State* L) {
 	if (!s) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid stream");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	bool ok = s->TlsHandshakeBlock(host, timeout, &error);
@@ -426,7 +449,8 @@ int l_stream_tls_handshake_block(lua_State* L) {
 		lua_pushstring(L, error.Message() ? error.Message() : "TLS handshake failed");
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 // ── File / Socket / Raw accessors ─────────────────────────────────────────

@@ -81,7 +81,8 @@ int l_db_drop(lua_State* L) {
 	if (!db) {
 		lua_pushboolean(L, false);
 		lua_pushnil(L);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	bool ok = db->Drop(&error);
@@ -90,7 +91,8 @@ int l_db_drop(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_db_command_simple(lua_State* L) {
@@ -99,7 +101,8 @@ int l_db_command_simple(lua_State* L) {
 	if (!db || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -200,7 +203,8 @@ int l_db_get_collection_names(lua_State* L) {
 	if (!names) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_newtable(L);
 	int i = 1;
@@ -235,7 +239,8 @@ int l_db_command_with_opts(lua_State* L) {
 	if (!db || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -266,14 +271,16 @@ int l_db_create_collection(lua_State* L) {
 	if (!db || !name) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	auto* coll = db->CreateCollection(name, opts, &error);
 	if (!coll) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoCollection>(L, "mongoc.collection");
 	*ud = coll;
@@ -306,7 +313,8 @@ int l_db_drop_with_opts(lua_State* L) {
 	if (!db) {
 		lua_pushboolean(L, false);
 		lua_pushnil(L);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	bool ok = db->DropWithOpts(opts, &error);
@@ -315,7 +323,8 @@ int l_db_drop_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_db_read_command_with_opts(lua_State* L) {
@@ -329,7 +338,8 @@ int l_db_read_command_with_opts(lua_State* L) {
 	if (!db || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -360,7 +370,8 @@ int l_db_write_command_with_opts(lua_State* L) {
 	if (!db || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -396,7 +407,8 @@ int l_db_get_collection_names_with_opts(lua_State* L) {
 	if (!names) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_newtable(L);
 	int i = 1;
@@ -437,7 +449,8 @@ int l_db_read_write_command_with_opts(lua_State* L) {
 	if (!db || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -473,7 +486,8 @@ int l_db_add_user(lua_State* L) {
 	if (!db || !username || !password) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	bool ok = db->AddUser(username, password, roles, custom_data, &error);
@@ -482,7 +496,8 @@ int l_db_add_user(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_db_remove_user(lua_State* L) {

@@ -31,7 +31,8 @@ int l_uri_new(lua_State* L) {
 	if (!uri) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoUri>(L, kMetaName);
 	*ud = uri;
@@ -301,7 +302,8 @@ int l_uri_copy(lua_State* L) {
 	if (!copy) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoUri>(L, kMetaName);
 	*ud = copy;
@@ -404,7 +406,8 @@ int l_uri_get_mechanism_properties(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	if (!uri->GetMechanismProperties(*doc)) {
 		delete doc;
@@ -424,7 +427,8 @@ int l_uri_new_with_error(lua_State* L) {
 	if (!uri_ptr) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoUri>(L, kMetaName);
 	*ud = uri_ptr;
@@ -433,7 +437,8 @@ int l_uri_new_with_error(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_uri_new_for_host_port(lua_State* L) {
@@ -443,7 +448,8 @@ int l_uri_new_for_host_port(lua_State* L) {
 	if (!uri) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoUri>(L, kMetaName);
 	*ud = uri;

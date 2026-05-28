@@ -26,7 +26,8 @@ int l_server_api_new(lua_State* L) {
 	if (!api) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoServerApi>(L, kMetaName);
 	*ud = api;
@@ -48,7 +49,8 @@ int l_server_api_copy(lua_State* L) {
 	if (!copy) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoServerApi>(L, kMetaName);
 	*ud = copy;
@@ -101,7 +103,8 @@ int l_server_api_version_from_string(lua_State* L) {
 	bool ok = mongo::MongoServerApi::VersionFromString(str, &version);
 	lua_pushboolean(L, ok);
 	lua_pushinteger(L, ok ? static_cast<lua_Integer>(version) : 0);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 const luaL_Reg kLib[] = {

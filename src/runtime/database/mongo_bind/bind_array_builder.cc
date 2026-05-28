@@ -30,7 +30,8 @@ int l_array_builder_new(lua_State* L) {
 	if (!builder) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonArrayBuilder>(L, kMetaName);
 	*ud = builder;
@@ -52,7 +53,8 @@ int l_array_builder_build(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	if (!builder->Build(doc)) {
 		delete doc;
@@ -150,7 +152,8 @@ int l_array_builder_append_binary_uninit(lua_State* L) {
 		lua_pushlightuserdata(L, data_out);
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_array_builder_append_regex(lua_State* L) {
@@ -316,13 +319,15 @@ int l_array_builder_append_array_builder_begin(lua_State* L) {
 	if (!builder) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid builder");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	void* child = nullptr;
 	if (!builder->AppendArrayBuilderBegin(&child)) {
 		lua_pushnil(L);
 		lua_pushstring(L, "append array builder failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_pushlightuserdata(L, child);
 	return 1;

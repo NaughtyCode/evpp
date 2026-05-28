@@ -44,7 +44,8 @@ int l_coll_insert_one(lua_State* L) {
 	if (!coll || !doc) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -54,7 +55,8 @@ int l_coll_insert_one(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_coll_find(lua_State* L) {
@@ -85,7 +87,8 @@ int l_coll_update_one(lua_State* L) {
 	if (!coll || !selector || !update) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -95,7 +98,8 @@ int l_coll_update_one(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_coll_update_many(lua_State* L) {
@@ -107,7 +111,8 @@ int l_coll_update_many(lua_State* L) {
 	if (!coll || !selector || !update) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -117,7 +122,8 @@ int l_coll_update_many(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_coll_delete_one(lua_State* L) {
@@ -128,7 +134,8 @@ int l_coll_delete_one(lua_State* L) {
 	if (!coll || !selector) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -138,7 +145,8 @@ int l_coll_delete_one(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_coll_delete_many(lua_State* L) {
@@ -149,7 +157,8 @@ int l_coll_delete_many(lua_State* L) {
 	if (!coll || !selector) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -159,7 +168,8 @@ int l_coll_delete_many(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_coll_count(lua_State* L) {
@@ -170,7 +180,8 @@ int l_coll_count(lua_State* L) {
 	if (!coll || !filter) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -178,7 +189,8 @@ int l_coll_count(lua_State* L) {
 	if (count < 0) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_pushinteger(L, static_cast<lua_Integer>(count));
 	return 1;
@@ -189,7 +201,8 @@ int l_coll_drop(lua_State* L) {
 	if (!coll) {
 		lua_pushboolean(L, false);
 		lua_pushnil(L);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	bool ok = coll->Drop(&error);
@@ -198,7 +211,8 @@ int l_coll_drop(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_coll_copy(lua_State* L) {
@@ -304,7 +318,8 @@ int l_coll_find_and_modify(lua_State* L) {
 	if (!coll || !query) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -335,7 +350,8 @@ int l_coll_create_index(lua_State* L) {
 	if (!coll || !keys) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -452,7 +468,8 @@ int l_coll_estimated_document_count(lua_State* L) {
 	if (count < 0) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_pushinteger(L, static_cast<lua_Integer>(count));
 	return 1;
@@ -497,7 +514,8 @@ int l_coll_replace_one(lua_State* L) {
 	if (!coll || !selector || !replacement) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -507,7 +525,8 @@ int l_coll_replace_one(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_coll_insert_many(lua_State* L) {
@@ -515,14 +534,16 @@ int l_coll_insert_many(lua_State* L) {
 	if (!coll || !lua_istable(L, 2)) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 
 	int n = static_cast<int>(lua_rawlen(L, 2));
 	if (n <= 0) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "empty table");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 
 	std::vector<const mongo::BsonDocument*> docs(n);
@@ -533,7 +554,8 @@ int l_coll_insert_many(lua_State* L) {
 		if (!docs[i - 1]) {
 			lua_pushboolean(L, false);
 			lua_pushstring(L, "invalid doc in table");
-			return 2;
+			lua_pushnil(L);
+			return 3;
 		}
 	}
 
@@ -547,7 +569,8 @@ int l_coll_insert_many(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_coll_aggregate(lua_State* L) {
@@ -578,7 +601,8 @@ int l_coll_command_simple(lua_State* L) {
 	if (!coll || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -612,7 +636,8 @@ int l_coll_command_with_opts(lua_State* L) {
 	if (!coll || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -646,7 +671,8 @@ int l_coll_read_command_with_opts(lua_State* L) {
 	if (!coll || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -677,7 +703,8 @@ int l_coll_write_command_with_opts(lua_State* L) {
 	if (!coll || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -711,7 +738,8 @@ int l_coll_read_write_command_with_opts(lua_State* L) {
 	if (!coll || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -741,7 +769,8 @@ int l_coll_drop_with_opts(lua_State* L) {
 	if (!coll) {
 		lua_pushboolean(L, false);
 		lua_pushnil(L);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	bool ok = coll->DropWithOpts(opts, &error);
@@ -750,7 +779,8 @@ int l_coll_drop_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_coll_create_indexes_with_opts(lua_State* L) {
@@ -758,13 +788,15 @@ int l_coll_create_indexes_with_opts(lua_State* L) {
 	if (!coll || !lua_istable(L, 2)) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	int n = static_cast<int>(lua_rawlen(L, 2));
 	if (n <= 0) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "empty models table");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	// models[] are raw mongoc_index_model_t* pointers passed as lightuserdata
 	// Lua table of lightuserdata for index models
@@ -776,7 +808,8 @@ int l_coll_create_indexes_with_opts(lua_State* L) {
 		if (!models[i - 1]) {
 			lua_pushboolean(L, false);
 			lua_pushstring(L, "invalid index model");
-			return 2;
+			lua_pushnil(L);
+			return 3;
 		}
 	}
 	auto* opts =

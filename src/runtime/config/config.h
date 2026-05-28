@@ -67,6 +67,7 @@ struct HttpConfig {
 
 struct MsgpackConfig {
 	int max_nesting_depth = config::kDefaultMsgpackMaxNestingDepth;
+	size_t max_payload_size = config::kDefaultMsgpackMaxPayloadSize;
 };
 
 //============================================================================

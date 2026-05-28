@@ -26,11 +26,27 @@ struct OnStartup {
 } __s_onstartup;
 }
 
-
 #ifdef H_DEBUG_MODE
 static std::map<struct event*, std::thread::id> evmap;
 static std::mutex mutex;
 #endif
+
+// Thread-local tracking of the active event_base.
+// Set by EventLoop::Run() before event_base_dispatch, cleared after.
+// Used by lightweight cross-thread check in Release builds.
+static thread_local struct event_base* tls_event_base = nullptr;
+
+void SetTlsEventBase(struct event_base* base) {
+	tls_event_base = base;
+}
+
+void ClearTlsEventBase() {
+	tls_event_base = nullptr;
+}
+
+struct event_base* GetTlsEventBase() {
+	return tls_event_base;
+}
 
 int EventAdd(struct event* ev, const struct timeval* timeout) {
 #ifdef H_DEBUG_MODE
@@ -51,6 +67,20 @@ int EventAdd(struct event* ev, const struct timeval* timeout) {
 					 ev->ev_fd,
 					 ev->ev_arg,
 					 std::hash<std::thread::id>{}(std::this_thread::get_id()));
+#else
+	// Lightweight cross-thread check: detect event_add from a non-owning thread.
+	// libevent requires event_add/event_del on the owning loop thread.
+	if (tls_event_base) {
+		struct event_base* ev_base = event_get_base(ev);
+		if (ev_base && ev_base != tls_event_base) {
+			ENGINE_LOG_ERROR(engine::GetLogger(),
+							 "event_add from wrong thread! ev={} fd={} ev_base={} tls_base={}",
+							 (void*)ev,
+							 ev->ev_fd,
+							 (void*)ev_base,
+							 (void*)tls_event_base);
+		}
+	}
 #endif
 	return event_add(ev, timeout);
 }
@@ -84,6 +114,19 @@ int EventDel(struct event* ev) {
 					 ev->ev_fd,
 					 ev->ev_arg,
 					 std::hash<std::thread::id>{}(std::this_thread::get_id()));
+#else
+	// Lightweight cross-thread check (same as EventAdd)
+	if (tls_event_base) {
+		struct event_base* ev_base = event_get_base(ev);
+		if (ev_base && ev_base != tls_event_base) {
+			ENGINE_LOG_ERROR(engine::GetLogger(),
+							 "event_del from wrong thread! ev={} fd={} ev_base={} tls_base={}",
+							 (void*)ev,
+							 ev->ev_fd,
+							 (void*)ev_base,
+							 (void*)tls_event_base);
+		}
+	}
 #endif
 	return event_del(ev);
 }

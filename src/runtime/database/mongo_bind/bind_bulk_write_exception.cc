@@ -29,7 +29,8 @@ int l_bulk_write_exc_new(lua_State* L) {
 	if (!exc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoBulkWriteException>(L, kMetaName);
 	*ud = exc;
@@ -46,7 +47,8 @@ int l_bulk_write_exc_error(lua_State* L) {
 	if (!exc) {
 		lua_pushboolean(L, false);
 		lua_pushnil(L);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	bool ok = exc->Error(&error);
@@ -55,7 +57,8 @@ int l_bulk_write_exc_error(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bwe_write_errors(lua_State* L) {
@@ -73,7 +76,8 @@ int l_bwe_write_errors(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;
@@ -95,7 +99,8 @@ int l_bwe_write_concern_errors(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;
@@ -117,7 +122,8 @@ int l_bwe_error_reply(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;

@@ -130,7 +130,13 @@ void EventLoop::Run() {
 	// After everything have initialized, we set the status to kRunning
 	status_.store(kRunning);
 
+	// Set thread-local event base for cross-thread safety checks
+	SetTlsEventBase(evbase_);
+
 	rc = event_base_dispatch(evbase_);
+
+	ClearTlsEventBase();
+
 	if (rc == 1) {
 		ENGINE_LOG_ERROR(engine::GetLogger(), "event_base_dispatch error: no event registered");
 	} else if (rc == -1) {
@@ -319,7 +325,7 @@ void EventLoop::QueueInLoop(Functor&& cb) {
 	++pending_functor_count_;
 	{
 #ifdef H_HAVE_BOOST
-		auto f = new Functor(std::move(cb));  // TODO Add test code for it
+		auto f = new Functor(std::move(cb));  // Deleted by consumer in DoPendingFunctors
 		while (!pending_functors_->push(f)) {
 		}
 #elif defined(H_HAVE_CAMERON314_CONCURRENTQUEUE)

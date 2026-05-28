@@ -28,7 +28,8 @@ int l_bulk_new(lua_State* L) {
 	if (!bulk) {
 		lua_pushnil(L);
 		lua_pushstring(L, "failed to create bulk operation");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoBulkOperation>(L, kMetaName);
 	*ud = bulk;
@@ -77,7 +78,8 @@ int l_bulk_execute(lua_State* L) {
 	if (!bulk) {
 		lua_pushnil(L);
 		lua_pushstring(L, "no bulk operation");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -85,18 +87,21 @@ int l_bulk_execute(lua_State* L) {
 	if (server_id == 0) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* doc = new (std::nothrow) mongo::BsonDocument(std::move(reply));
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;
 	lua_pushinteger(L, server_id);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bulk_set_write_concern(lua_State* L) {
@@ -165,7 +170,8 @@ int l_bulk_insert_with_opts(lua_State* L) {
 	if (!bulk || !doc) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	lua_pushboolean(L, bulk->InsertWithOpts(*doc, opts, &error));
@@ -173,7 +179,8 @@ int l_bulk_insert_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bulk_remove_one_with_opts(lua_State* L) {
@@ -184,7 +191,8 @@ int l_bulk_remove_one_with_opts(lua_State* L) {
 	if (!bulk || !selector) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	lua_pushboolean(L, bulk->RemoveOneWithOpts(*selector, opts, &error));
@@ -192,7 +200,8 @@ int l_bulk_remove_one_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bulk_remove_many_with_opts(lua_State* L) {
@@ -203,7 +212,8 @@ int l_bulk_remove_many_with_opts(lua_State* L) {
 	if (!bulk || !selector) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	lua_pushboolean(L, bulk->RemoveManyWithOpts(*selector, opts, &error));
@@ -211,7 +221,8 @@ int l_bulk_remove_many_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bulk_replace_one_with_opts(lua_State* L) {
@@ -223,7 +234,8 @@ int l_bulk_replace_one_with_opts(lua_State* L) {
 	if (!bulk || !selector || !doc) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	lua_pushboolean(L, bulk->ReplaceOneWithOpts(*selector, *doc, opts, &error));
@@ -231,7 +243,8 @@ int l_bulk_replace_one_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bulk_update_one_with_opts(lua_State* L) {
@@ -243,7 +256,8 @@ int l_bulk_update_one_with_opts(lua_State* L) {
 	if (!bulk || !selector || !doc) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	lua_pushboolean(L, bulk->UpdateOneWithOpts(*selector, *doc, opts, &error));
@@ -251,7 +265,8 @@ int l_bulk_update_one_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bulk_update_many_with_opts(lua_State* L) {
@@ -263,7 +278,8 @@ int l_bulk_update_many_with_opts(lua_State* L) {
 	if (!bulk || !selector || !doc) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	lua_pushboolean(L, bulk->UpdateManyWithOpts(*selector, *doc, opts, &error));
@@ -271,7 +287,8 @@ int l_bulk_update_many_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bulk_set_server_id(lua_State* L) {

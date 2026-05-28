@@ -45,7 +45,8 @@ int l_session_start_transaction(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_session_commit_transaction(lua_State* L) {
@@ -53,7 +54,8 @@ int l_session_commit_transaction(lua_State* L) {
 	if (!session) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "no session");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* reply =
 		lua_isnoneornil(L, 2) ? nullptr : GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
@@ -64,7 +66,8 @@ int l_session_commit_transaction(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_session_abort_transaction(lua_State* L) {
@@ -72,7 +75,8 @@ int l_session_abort_transaction(lua_State* L) {
 	if (!session) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "no session");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	bool ok = session->AbortTransaction(&error);
@@ -81,7 +85,8 @@ int l_session_abort_transaction(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_session_in_transaction(lua_State* L) {
@@ -120,13 +125,15 @@ int l_session_get_operation_time(lua_State* L) {
 	if (!session) {
 		lua_pushinteger(L, 0);
 		lua_pushinteger(L, 0);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	uint32_t timestamp = 0, increment = 0;
 	session->GetOperationTime(&timestamp, &increment);
 	lua_pushinteger(L, timestamp);
 	lua_pushinteger(L, increment);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_session_advance_operation_time(lua_State* L) {
@@ -153,7 +160,8 @@ int l_session_get_cluster_time_raw(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;
@@ -176,7 +184,8 @@ int l_session_get_session_id_raw(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;

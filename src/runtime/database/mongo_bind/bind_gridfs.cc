@@ -34,7 +34,8 @@ int l_file_opts_new(lua_State* L) {
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoGridFsFileOpts>(L, kFileOptsMeta);
 	*ud = opts;
@@ -174,7 +175,8 @@ int l_file_get_id(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	file->GetId(doc);
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
@@ -192,7 +194,8 @@ int l_file_get_metadata(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	file->GetMetadata(doc);
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
@@ -230,7 +233,8 @@ int l_file_get_aliases(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	file->GetAliases(doc);
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
@@ -249,7 +253,8 @@ int l_file_readv(lua_State* L) {
 	if (!file) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid file");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	size_t size = static_cast<size_t>(luaL_checkinteger(L, 2));
 	if (size == 0) {
@@ -266,7 +271,8 @@ int l_file_readv(lua_State* L) {
 		file->Error(&error);
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message() ? error.Message() : "read error");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_pushlstring(L, buf.data(), static_cast<size_t>(nread));
 	return 1;
@@ -277,7 +283,8 @@ int l_file_writev(lua_State* L) {
 	if (!file) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid file");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	size_t len;
 	const char* data = luaL_checklstring(L, 2, &len);
@@ -290,7 +297,8 @@ int l_file_writev(lua_State* L) {
 		file->Error(&error);
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message() ? error.Message() : "write error");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_pushinteger(L, static_cast<lua_Integer>(written));
 	return 1;
@@ -375,7 +383,8 @@ int l_file_error(lua_State* L) {
 	if (!file) {
 		lua_pushboolean(L, false);
 		lua_pushnil(L);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	bool has_error = file->Error(&error);
@@ -389,7 +398,8 @@ int l_file_error(lua_State* L) {
 	} else {
 		lua_pushnil(L);
 	}
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 const luaL_Reg kFileLib[] = {
@@ -450,7 +460,8 @@ int l_file_list_next(lua_State* L) {
 		if (const char* msg = error.Message()) {
 			lua_pushnil(L);
 			lua_pushstring(L, msg);
-			return 2;
+			lua_pushnil(L);
+			return 3;
 		}
 		lua_pushnil(L);
 		return 1;
@@ -465,7 +476,8 @@ int l_file_list_error(lua_State* L) {
 	if (!list) {
 		lua_pushboolean(L, false);
 		lua_pushnil(L);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	bool has_error = list->Error(&error);
@@ -479,7 +491,8 @@ int l_file_list_error(lua_State* L) {
 	} else {
 		lua_pushnil(L);
 	}
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 const luaL_Reg kFileListLib[] = {
@@ -535,13 +548,15 @@ int l_gridfs_new_file_from_stream(lua_State* L) {
 	if (!gridfs) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid gridfs");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* file = gridfs->NewFileFromStream(stream, opts);
 	if (!file) {
 		lua_pushnil(L);
 		lua_pushstring(L, "new_file_from_stream failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoGridFsFile>(L, kFileMeta);
 	*ud = file;
@@ -563,7 +578,8 @@ int l_gridfs_find_one_by_filename(lua_State* L) {
 			lua_pushstring(L, msg);
 		else
 			lua_pushnil(L);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoGridFsFile>(L, kFileMeta);
 	*ud = file;
@@ -587,7 +603,8 @@ int l_gridfs_find_one_with_opts(lua_State* L) {
 			lua_pushstring(L, msg);
 		else
 			lua_pushnil(L);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoGridFsFile>(L, kFileMeta);
 	*ud = file;
@@ -706,14 +723,16 @@ int l_bucket_new(lua_State* L) {
 	if (!raw_db) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid database");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	auto* bucket = mongo::MongoGridFsBucket::New(raw_db, opts, prefs, &error);
 	if (!bucket) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoGridFsBucket>(L, kBucketMeta);
 	*ud = bucket;
@@ -735,12 +754,14 @@ int l_bucket_open_upload_stream(lua_State* L) {
 	if (!stream) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_pushlightuserdata(L, stream);
 	// file_id_out is a bson_value_t*; we may set it on return
 	lua_pushlightuserdata(L, file_id_out);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bucket_open_upload_stream_with_id(lua_State* L) {
@@ -752,14 +773,16 @@ int l_bucket_open_upload_stream_with_id(lua_State* L) {
 	if (!bucket) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid bucket");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	void* stream = bucket->OpenUploadStreamWithId(file_id, filename, opts, &error);
 	if (!stream) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_pushlightuserdata(L, stream);
 	return 1;
@@ -777,7 +800,8 @@ int l_bucket_open_download_stream(lua_State* L) {
 	if (!stream) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_pushlightuserdata(L, stream);
 	return 1;
@@ -792,7 +816,8 @@ int l_bucket_upload_from_stream(lua_State* L) {
 	if (!bucket) {
 		lua_pushboolean(L, false);
 		lua_pushnil(L);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	void* file_id_out = nullptr;
@@ -807,7 +832,8 @@ int l_bucket_upload_from_stream(lua_State* L) {
 	} else {
 		lua_pushnil(L);
 	}
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bucket_upload_from_stream_with_id(lua_State* L) {
@@ -820,7 +846,8 @@ int l_bucket_upload_from_stream_with_id(lua_State* L) {
 	if (!bucket) {
 		lua_pushboolean(L, false);
 		lua_pushnil(L);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	bool ok = bucket->UploadFromStreamWithId(file_id, filename, source_stream, opts, &error);
@@ -834,7 +861,8 @@ int l_bucket_upload_from_stream_with_id(lua_State* L) {
 	} else {
 		lua_pushnil(L);
 	}
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bucket_download_to_stream(lua_State* L) {
@@ -844,7 +872,8 @@ int l_bucket_download_to_stream(lua_State* L) {
 	if (!bucket) {
 		lua_pushboolean(L, false);
 		lua_pushnil(L);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	bool ok = bucket->DownloadToStream(file_id, destination, &error);
@@ -858,7 +887,8 @@ int l_bucket_download_to_stream(lua_State* L) {
 	} else {
 		lua_pushnil(L);
 	}
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bucket_delete_by_id(lua_State* L) {
@@ -897,7 +927,8 @@ int l_bucket_stream_error(lua_State* L) {
 	if (!stream) {
 		lua_pushboolean(L, false);
 		lua_pushnil(L);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	bool has_error = mongo::MongoGridFsBucket::StreamError(stream, &error);
@@ -911,7 +942,8 @@ int l_bucket_stream_error(lua_State* L) {
 	} else {
 		lua_pushnil(L);
 	}
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bucket_abort_upload(lua_State* L) {

@@ -10,6 +10,10 @@
 #include "runtime/evpp/tcp_callbacks.h"
 #include "runtime/evpp/thread_dispatch_policy.h"
 
+#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+#include "runtime/evpp/ssl_context.h"
+#endif
+
 namespace evpp {
 
 class Listener;
@@ -105,6 +109,18 @@ class EVPP_EXPORT TCPServer : public ThreadDispatchPolicy, public ServerStatus {
 	uint32_t max_connections() const {
 		return max_connections_;
 	}
+
+#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+	bool EnableSSL(const std::string& cert_file,
+				   const std::string& key_file,
+				   const std::string& ca_file    = "",
+				   bool verify_client             = false) {
+		if (!ssl_ctx_.Init(SSLContext::kServer, cert_file, key_file, ca_file, verify_client)) {
+			return false;
+		}
+		return true;
+	}
+#endif
 	uint32_t connection_count() const {
 		return connection_count_.load();
 	}
@@ -135,5 +151,9 @@ class EVPP_EXPORT TCPServer : public ThreadDispatchPolicy, public ServerStatus {
 	std::atomic<uint32_t> connection_count_{0};
 	typedef std::map<uint64_t /*the id of the connection*/, TCPConnPtr> ConnectionMap;
 	ConnectionMap connections_;
+
+#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+	SSLContext ssl_ctx_;
+#endif
 };
 }

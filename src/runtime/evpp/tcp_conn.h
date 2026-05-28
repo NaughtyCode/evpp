@@ -12,6 +12,9 @@
 #include "runtime/evpp/slice.h"
 #include "runtime/evpp/tcp_callbacks.h"
 
+struct ssl_ctx_st;
+struct ssl_st;
+
 namespace evpp {
 
 class EventLoop;
@@ -156,6 +159,13 @@ class EVPP_EXPORT TCPConn : public std::enable_shared_from_this<TCPConn> {
 		return rate_limiter_.max_bytes_per_sec();
 	}
 
+	void SetSSLContext(ssl_ctx_st* ctx) {
+		ssl_ctx_ = ctx;
+	}
+	bool IsSSLEnabled() const {
+		return ssl_ != nullptr;
+	}
+
 	protected:
 	friend class TCPClient;
 	friend class TCPServer;
@@ -232,5 +242,8 @@ class EVPP_EXPORT TCPConn : public std::enable_shared_from_this<TCPConn> {
 
 	std::priority_queue<PendingMessage> pending_messages_;
 	RateLimiter rate_limiter_;
+
+	ssl_ctx_st* ssl_ctx_ = nullptr;
+	ssl_st* ssl_ = nullptr;
 };
 }

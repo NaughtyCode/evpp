@@ -25,7 +25,8 @@ int l_ssl_opts_new(lua_State* L) {
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoSslOpts>(L, kMetaName);
 	*ud = opts;

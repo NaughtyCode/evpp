@@ -9,6 +9,10 @@
 #include "runtime/evpp/inner_pre.h"
 #include "runtime/evpp/tcp_callbacks.h"
 
+#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+#include "runtime/evpp/ssl_context.h"
+#endif
+
 namespace evpp {
 class Connector;
 
@@ -87,6 +91,14 @@ class EVPP_EXPORT TCPClient {
 	const Any& context() const {
 		return context_;
 	}
+
+#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+	bool EnableSSL(const std::string& ca_file = "",
+				   bool verify_server            = true) {
+		return ssl_ctx_.Init(SSLContext::kClient, "", "", ca_file, verify_server);
+	}
+#endif
+
 	TCPConnPtr conn() const;
 
 	// Return the remote address with the format of 'host:port'
@@ -129,5 +141,9 @@ class EVPP_EXPORT TCPClient {
 
 	ConnectionCallback conn_fn_;
 	MessageCallback msg_fn_;
+
+#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+	SSLContext ssl_ctx_;
+#endif
 };
 }

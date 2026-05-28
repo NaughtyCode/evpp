@@ -34,7 +34,8 @@ int l_bson_iter_new(lua_State* L) {
 	if (!iter) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonIter>(L, kMetaName);
 	*ud = iter;
@@ -137,7 +138,8 @@ int l_bson_iter_recurse(lua_State* L) {
 	if (!sub) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonIter>(L, kMetaName);
 	*ud = sub;
@@ -156,7 +158,8 @@ int l_bson_iter_as_binary(lua_State* L) {
 	iter->AsBinary(&subtype, &len, &data);
 	lua_pushlstring(L, reinterpret_cast<const char*>(data), len);
 	lua_pushinteger(L, subtype);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bson_iter_offset(lua_State* L) {
@@ -180,7 +183,8 @@ int l_bson_iter_as_document(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;
@@ -200,7 +204,8 @@ int l_bson_iter_as_array(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = doc;
@@ -217,7 +222,8 @@ int l_bson_iter_as_timestamp(lua_State* L) {
 	iter->AsTimestamp(&timestamp, &increment);
 	lua_pushinteger(L, timestamp);
 	lua_pushinteger(L, increment);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bson_iter_as_int64_coerce(lua_State* L) {
@@ -258,7 +264,8 @@ int l_bson_iter_as_regex(lua_State* L) {
 	iter->AsRegex(&regex, &options);
 	lua_pushstring(L, regex ? regex : "");
 	lua_pushstring(L, options ? options : "");
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bson_iter_as_symbol(lua_State* L) {
@@ -295,7 +302,8 @@ int l_bson_iter_find_descendant(lua_State* L) {
 	if (!desc) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	bool ok = iter->FindDescendant(dotkey, desc);
 	if (!ok) {
@@ -306,7 +314,8 @@ int l_bson_iter_find_descendant(lua_State* L) {
 	auto** ud = NewUserdata<mongo::BsonIter>(L, kMetaName);
 	*ud = desc;
 	lua_pushboolean(L, true);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bson_iter_find_wlen(lua_State* L) {
@@ -417,7 +426,8 @@ int l_bson_iter_as_dbref(lua_State* L) {
 		lua_pushlstring(L, s.data(), s.size());
 	} else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 // ── Raw value access ───────────────────────────────────────────────────
@@ -543,7 +553,8 @@ int l_bson_iter_as_code_with_scope(lua_State* L) {
 	if (!scope) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	iter->AsCodeWithScope(&code_len, &code_cstr, scope);
 	if (!code_cstr) {
@@ -554,7 +565,8 @@ int l_bson_iter_as_code_with_scope(lua_State* L) {
 	lua_pushlstring(L, code_cstr, code_len);
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = scope;
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bson_iter_as_time_t(lua_State* L) {
@@ -568,13 +580,15 @@ int l_bson_iter_as_timeval(lua_State* L) {
 	if (!iter) {
 		lua_pushinteger(L, 0);
 		lua_pushinteger(L, 0);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	struct timeval tv;
 	iter->AsTimeval(&tv);
 	lua_pushinteger(L, static_cast<lua_Integer>(tv.tv_sec));
 	lua_pushinteger(L, static_cast<lua_Integer>(tv.tv_usec));
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bson_iter_binary_equal(lua_State* L) {

@@ -33,7 +33,8 @@ int l_bson_doc_new(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, kMetaName);
 	*ud = doc;
@@ -53,7 +54,8 @@ int l_bson_doc_from_json(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, kMetaName);
 	*ud = doc;
@@ -68,7 +70,8 @@ int l_bson_doc_from_data(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, kMetaName);
 	*ud = doc;
@@ -306,7 +309,8 @@ int l_bson_doc_copy(lua_State* L) {
 	if (!copy) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, kMetaName);
 	*ud = copy;
@@ -362,7 +366,8 @@ int l_bson_doc_validate(lua_State* L) {
 	if (!doc) {
 		lua_pushboolean(L, false);
 		lua_pushnil(L);
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	bool ok = doc->Validate(&error);
@@ -373,7 +378,8 @@ int l_bson_doc_validate(lua_State* L) {
 		const char* msg = error.Message();
 		lua_pushstring(L, msg ? msg : "unknown error");
 	}
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 // ── Sub-document building ──────────────────────────────────────────────
@@ -385,7 +391,8 @@ int l_bson_doc_append_document_begin(lua_State* L) {
 	if (!subdoc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	if (!doc || !doc->AppendDocumentBegin(key, subdoc)) {
 		delete subdoc;
@@ -411,7 +418,8 @@ int l_bson_doc_append_array_begin(lua_State* L) {
 	if (!array) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	if (!doc || !doc->AppendArrayBegin(key, array)) {
 		delete array;
@@ -437,7 +445,8 @@ int l_bson_doc_append_array_unsafe_begin(lua_State* L) {
 	if (!child) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	if (!doc || !doc->AppendArrayUnsafeBegin(key, child)) {
 		delete child;
@@ -455,13 +464,15 @@ int l_bson_doc_append_array_builder_begin(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid document");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	void* builder = nullptr;
 	if (!doc->AppendArrayBuilderBegin(key, &builder)) {
 		lua_pushnil(L);
 		lua_pushstring(L, "append array builder failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_pushlightuserdata(L, builder);
 	return 1;
@@ -547,7 +558,8 @@ int l_bson_doc_append_binary_uninit(lua_State* L) {
 		lua_pushlightuserdata(L, data_out);
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bson_doc_append_array_from_vector(lua_State* L) {
@@ -669,7 +681,8 @@ int l_bson_doc_new_from_buffer(lua_State* L) {
 	// Takes existing data + realloc func as lightuserdata; advanced use.
 	lua_pushnil(L);
 	lua_pushstring(L, "new_from_buffer requires buffer and realloc — use from_data");
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bson_doc_sized_new(lua_State* L) {
@@ -678,7 +691,8 @@ int l_bson_doc_sized_new(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, kMetaName);
 	*ud = doc;

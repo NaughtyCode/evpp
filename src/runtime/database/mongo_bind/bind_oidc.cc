@@ -33,7 +33,8 @@ int l_oidc_cred_new(lua_State* L) {
 	if (!cred) {
 		lua_pushnil(L);
 		lua_pushstring(L, "credential creation failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoOidcCredential>(L, kCredMeta);
 	*ud = cred;
@@ -47,7 +48,8 @@ int l_oidc_cred_new_with_expiry(lua_State* L) {
 	if (!cred) {
 		lua_pushnil(L);
 		lua_pushstring(L, "credential creation failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoOidcCredential>(L, kCredMeta);
 	*ud = cred;
@@ -144,13 +146,15 @@ int l_oidc_params_new(lua_State* L) {
 	if (!raw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid params pointer");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* p = new (std::nothrow) mongo::MongoOidcCallbackParams(raw);
 	if (!p) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoOidcCallbackParams>(L, kParamsMeta);
 	*ud = p;

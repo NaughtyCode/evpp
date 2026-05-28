@@ -31,7 +31,8 @@ int l_vi8c_new(lua_State* L) {
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonVectorInt8ConstView>(L, kVi8cMeta);
 	*ud = v;
@@ -116,7 +117,8 @@ int l_vi8_new(lua_State* L) {
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonVectorInt8View>(L, kVi8Meta);
 	*ud = v;
@@ -180,7 +182,8 @@ int l_vi8_as_const(lua_State* L) {
 	if (!cv) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonVectorInt8ConstView>(L, kVi8cMeta);
 	*ud = cv;
@@ -229,7 +232,8 @@ int l_vf32c_new(lua_State* L) {
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonVectorFloat32ConstView>(L, kVf32cMeta);
 	*ud = v;
@@ -318,7 +322,8 @@ int l_vf32_new(lua_State* L) {
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonVectorFloat32View>(L, kVf32Meta);
 	*ud = v;
@@ -395,7 +400,8 @@ int l_vf32_as_const(lua_State* L) {
 	if (!cv) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonVectorFloat32ConstView>(L, kVf32cMeta);
 	*ud = cv;
@@ -444,7 +450,8 @@ int l_vpb_new(lua_State* L) {
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonVectorPackedBitConstView>(L, kVpbMeta);
 	*ud = v;
@@ -513,7 +520,8 @@ int l_vpb_unpack_bool(lua_State* L) {
 	if (!buf) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	if (v->UnpackBool(buf, count, offset)) {
 		lua_createtable(L, (int) count, 0);
@@ -571,7 +579,8 @@ int l_vpbw_new(lua_State* L) {
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonVectorPackedBitView>(L, kVpbwMeta);
 	*ud = v;
@@ -640,7 +649,8 @@ int l_vpbw_unpack_bool(lua_State* L) {
 	if (!buf) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	if (v->UnpackBool(buf, count, offset)) {
 		lua_createtable(L, (int) count, 0);
@@ -697,7 +707,8 @@ int l_vpbw_as_const(lua_State* L) {
 	if (!cv) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonVectorPackedBitConstView>(L, kVpbMeta);
 	*ud = cv;

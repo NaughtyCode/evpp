@@ -11,7 +11,8 @@ class EventLoop;
 class TimerEventWatcher;
 class EVPP_EXPORT DNSResolver : public std::enable_shared_from_this<DNSResolver> {
 	public:
-	//TODO IPv6 DNS resolver
+	// IPv6 DNS resolution is not yet implemented. When needed, extend
+	// the resolver to support AF_INET6 via struct in6_addr and getaddrinfo.
 	typedef std::function<void(const std::vector<struct in_addr>& addrs)> Functor;
 
 	DNSResolver(EventLoop* evloop, const std::string& host, Duration timeout, const Functor& f);

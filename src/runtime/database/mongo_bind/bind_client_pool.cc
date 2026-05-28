@@ -32,7 +32,8 @@ int l_pool_new(lua_State* L) {
 	if (!pool) {
 		lua_pushnil(L);
 		lua_pushstring(L, "failed to create client pool");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClientPool>(L, kMetaName);
 	*ud = pool;
@@ -47,7 +48,8 @@ int l_pool_new_with_error(lua_State* L) {
 	if (!pool) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClientPool>(L, kMetaName);
 	*ud = pool;
@@ -69,7 +71,8 @@ int l_pool_pop(lua_State* L) {
 	if (!client) {
 		lua_pushnil(L);
 		lua_pushstring(L, "pool pop failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClient>(L, "mongoc.client");
 	*ud = client;
@@ -169,7 +172,8 @@ int l_pool_enable_auto_encryption(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_pool_set_structured_log_opts(lua_State* L) {

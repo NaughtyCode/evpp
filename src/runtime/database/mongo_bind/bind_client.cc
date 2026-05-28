@@ -37,7 +37,8 @@ int l_client_new(lua_State* L) {
 	if (!client) {
 		lua_pushnil(L);
 		lua_pushstring(L, "failed to create client");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClient>(L, kMetaName);
 	*ud = client;
@@ -50,7 +51,8 @@ int l_client_new_from_uri(lua_State* L) {
 	if (!client) {
 		lua_pushnil(L);
 		lua_pushstring(L, "failed to create client");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClient>(L, kMetaName);
 	*ud = client;
@@ -64,7 +66,8 @@ int l_client_new_from_uri_with_error(lua_State* L) {
 	if (!client) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClient>(L, kMetaName);
 	*ud = client;
@@ -148,7 +151,8 @@ int l_client_command_simple(lua_State* L) {
 	if (!client || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -185,7 +189,8 @@ int l_client_start_session(lua_State* L) {
 	if (!session) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoSession>(L, "mongoc.session");
 	*ud = session;
@@ -268,7 +273,8 @@ int l_client_get_uri(lua_State* L) {
 	if (!uri) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoUri>(L, "mongoc.uri");
 	*ud = uri;
@@ -317,7 +323,8 @@ int l_client_get_database_names(lua_State* L) {
 	if (!names) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_newtable(L);
 	int i = 1;
@@ -341,7 +348,8 @@ int l_client_command_with_opts(lua_State* L) {
 	if (!client || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -376,7 +384,8 @@ int l_client_read_command_with_opts(lua_State* L) {
 	if (!client || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -408,7 +417,8 @@ int l_client_write_command_with_opts(lua_State* L) {
 	if (!client || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -443,7 +453,8 @@ int l_client_read_write_command_with_opts(lua_State* L) {
 	if (!client || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -477,7 +488,8 @@ int l_client_command_simple_with_server_id(lua_State* L) {
 	if (!client || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::BsonDocument reply;
 	mongo::MongoError error;
@@ -532,13 +544,15 @@ int l_client_from_pooled(lua_State* L) {
 	if (!raw_client) {
 		lua_pushnil(L);
 		lua_pushstring(L, "raw client pointer required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* client = mongo::MongoClient::FromPooled(raw_client);
 	if (!client) {
 		lua_pushnil(L);
 		lua_pushstring(L, "failed to wrap pooled client");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoClient>(L, kMetaName);
 	*ud = client;
@@ -558,7 +572,8 @@ int l_client_get_database_names_with_opts(lua_State* L) {
 	if (!names) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_newtable(L);
 	int i = 1;
@@ -624,7 +639,8 @@ int l_client_enable_auto_encryption(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_client_append_metadata(lua_State* L) {
@@ -649,7 +665,8 @@ int l_client_get_gridfs(lua_State* L) {
 	if (!raw_gridfs) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	// Return as lightuserdata — caller wraps with gridfs binding if available
 	lua_pushlightuserdata(L, raw_gridfs);
@@ -665,14 +682,16 @@ int l_client_select_server(lua_State* L) {
 	if (!client) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	void* server_id = client->SelectServer(for_writes, prefs, &error);
 	if (!server_id) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_pushlightuserdata(L, server_id);
 	return 1;
@@ -712,7 +731,8 @@ int l_client_get_server_descriptions(lua_State* L) {
 		lua_rawseti(L, -2, static_cast<int>(i + 1));
 	}
 	lua_pushinteger(L, static_cast<lua_Integer>(n));
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_client_server_descriptions_destroy_all(lua_State* L) {
@@ -739,14 +759,16 @@ int l_client_get_handshake_description(lua_State* L) {
 	if (!client) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	void* desc = client->GetHandshakeDescription(server_id, opts, &error);
 	if (!desc) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_pushlightuserdata(L, desc);
 	return 1;

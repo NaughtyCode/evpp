@@ -44,7 +44,8 @@ int l_socket_new(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "socket creation failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoSocket>(L, kMetaName);
 	*ud = s;
@@ -59,7 +60,8 @@ int l_socket_accept(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid socket");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* accepted = s->Accept(expire_at);
 	if (!accepted) {
@@ -78,7 +80,8 @@ int l_socket_bind(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid socket");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	struct sockaddr_in addr;
 	memset(&addr, 0, sizeof(addr));
@@ -104,7 +107,8 @@ int l_socket_connect(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid socket");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	struct sockaddr_in addr;
 	memset(&addr, 0, sizeof(addr));
@@ -137,7 +141,8 @@ int l_socket_get_sock_name(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid socket");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	struct sockaddr_storage addr;
 	memset(&addr, 0, sizeof(addr));
@@ -146,7 +151,8 @@ int l_socket_get_sock_name(lua_State* L) {
 	if (rc != 0) {
 		lua_pushnil(L);
 		lua_pushstring(L, "getsockname failed");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	char ip[INET6_ADDRSTRLEN];
 	int port = 0;
@@ -161,11 +167,13 @@ int l_socket_get_sock_name(lua_State* L) {
 	} else {
 		lua_pushnil(L);
 		lua_pushstring(L, "unknown address family");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_pushstring(L, ip);
 	lua_pushinteger(L, port);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_socket_get_error(lua_State* L) {
@@ -189,7 +197,8 @@ int l_socket_receive(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid socket");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	std::vector<char> buf(buf_size);
 	ssize_t n = s->Receive(buf.data(), buf_size, flags, expire_at);
@@ -209,7 +218,8 @@ int l_socket_send(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid socket");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	ssize_t sent = s->SendData(data, len, expire_at);
 	lua_pushinteger(L, static_cast<lua_Integer>(sent));
@@ -221,7 +231,8 @@ int l_socket_sendv(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid socket");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	luaL_checktype(L, 2, LUA_TTABLE);
 	int64_t expire_at = static_cast<int64_t>(luaL_checkinteger(L, 3));
@@ -250,7 +261,8 @@ int l_socket_set_sockopt(lua_State* L) {
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid socket");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	int rc = s->SetSockOpt(level, optname, &optval, sizeof(optval));
 	lua_pushinteger(L, rc);

@@ -25,7 +25,8 @@ int l_host_list_new(lua_State* L) {
 	if (!hl) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoHostList>(L, kMetaName);
 	*ud = hl;

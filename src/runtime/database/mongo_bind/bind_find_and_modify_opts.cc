@@ -26,7 +26,8 @@ int l_find_and_modify_new(lua_State* L) {
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoFindAndModifyOpts>(L, kMetaName);
 	*ud = opts;
@@ -55,7 +56,8 @@ int l_find_and_modify_get_sort(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	opts->GetSort(*doc);
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
@@ -80,7 +82,8 @@ int l_find_and_modify_get_update(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	opts->GetUpdate(*doc);
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
@@ -105,7 +108,8 @@ int l_find_and_modify_get_fields(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	opts->GetFields(*doc);
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
@@ -168,7 +172,8 @@ int l_find_and_modify_get_extra(lua_State* L) {
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	opts->GetExtra(*doc);
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");

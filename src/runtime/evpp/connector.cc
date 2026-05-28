@@ -146,7 +146,8 @@ void Connector::Connect() {
 			HandleError();
 			return;
 		} else {
-			// TODO how to do it
+			// Retriable error (EINTR/EAGAIN): the connect will be retried
+			// when the fd becomes writable again (libevent re-fires the event).
 		}
 	}
 

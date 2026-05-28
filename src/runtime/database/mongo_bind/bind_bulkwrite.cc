@@ -27,7 +27,8 @@ int l_bulkwrite_new(lua_State* L) {
 	if (!bw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "failed to create bulk write");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoBulkWrite>(L, kMetaName);
 	*ud = bw;
@@ -46,7 +47,8 @@ int l_bulkwrite_append_insert_one(lua_State* L) {
 	if (!bw || !doc) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* ins_opts = lua_isnoneornil(L, 4) ? nullptr
 										   : GetUserdata<mongo::MongoBulkWriteInsertOneOpts>(
@@ -58,7 +60,8 @@ int l_bulkwrite_append_insert_one(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bulkwrite_append_update_one(lua_State* L) {
@@ -69,7 +72,8 @@ int l_bulkwrite_append_update_one(lua_State* L) {
 	if (!bw || !filter || !update) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	auto* upd_opts = lua_isnoneornil(L, 5) ? nullptr
@@ -81,7 +85,8 @@ int l_bulkwrite_append_update_one(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bulkwrite_append_delete_one(lua_State* L) {
@@ -91,7 +96,8 @@ int l_bulkwrite_append_delete_one(lua_State* L) {
 	if (!bw || !filter) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	auto* del_opts = lua_isnoneornil(L, 4) ? nullptr
@@ -103,7 +109,8 @@ int l_bulkwrite_append_delete_one(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bulkwrite_append_update_many(lua_State* L) {
@@ -114,7 +121,8 @@ int l_bulkwrite_append_update_many(lua_State* L) {
 	if (!bw || !filter || !update) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	auto* upm_opts = lua_isnoneornil(L, 5) ? nullptr
@@ -126,7 +134,8 @@ int l_bulkwrite_append_update_many(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bulkwrite_append_replace_one(lua_State* L) {
@@ -137,7 +146,8 @@ int l_bulkwrite_append_replace_one(lua_State* L) {
 	if (!bw || !filter || !replacement) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	auto* rep_opts = lua_isnoneornil(L, 5) ? nullptr
@@ -149,7 +159,8 @@ int l_bulkwrite_append_replace_one(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bulkwrite_append_delete_many(lua_State* L) {
@@ -159,7 +170,8 @@ int l_bulkwrite_append_delete_many(lua_State* L) {
 	if (!bw || !filter) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid args");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	auto* dem_opts = lua_isnoneornil(L, 4) ? nullptr
@@ -171,7 +183,8 @@ int l_bulkwrite_append_delete_many(lua_State* L) {
 		lua_pushstring(L, error.Message());
 	else
 		lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bulkwrite_execute(lua_State* L) {
@@ -179,7 +192,8 @@ int l_bulkwrite_execute(lua_State* L) {
 	if (!bw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid bulk write");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 
 	auto* opts = lua_isnoneornil(L, 2)
@@ -194,7 +208,8 @@ int l_bulkwrite_execute(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		delete ret.exception;
 		delete ret.result;
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 
 	auto* result_doc = new (std::nothrow) mongo::BsonDocument();
@@ -202,7 +217,8 @@ int l_bulkwrite_execute(lua_State* L) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
 		delete ret.result;
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::BsonDocument>(L, "bson.doc");
 	*ud = result_doc;
@@ -220,13 +236,15 @@ int l_bulk_write_new_from_client(lua_State* L) {
 	if (!raw_client) {
 		lua_pushnil(L);
 		lua_pushstring(L, "raw client pointer required");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto* bw = mongo::MongoBulkWrite::New(raw_client);
 	if (!bw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	auto** ud = NewUserdata<mongo::MongoBulkWrite>(L, kMetaName);
 	*ud = bw;
@@ -238,18 +256,21 @@ int l_bulk_write_check_acknowledged(lua_State* L) {
 	if (!bw) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid bulk write");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	auto ret = bw->CheckAcknowledged(&error);
 	if (!ret.is_ok) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_pushboolean(L, ret.is_acknowledged);
 	lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bulk_write_server_id(lua_State* L) {
@@ -257,18 +278,21 @@ int l_bulk_write_server_id(lua_State* L) {
 	if (!bw) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid bulk write");
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	mongo::MongoError error;
 	auto ret = bw->ServerId(&error);
 	if (!ret.is_ok) {
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		return 2;
+		lua_pushnil(L);
+		return 3;
 	}
 	lua_pushinteger(L, ret.server_id);
 	lua_pushnil(L);
-	return 2;
+	lua_pushnil(L);
+	return 3;
 }
 
 int l_bulk_write_set_session(lua_State* L) {
