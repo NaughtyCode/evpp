@@ -107,7 +107,7 @@ void CoroutineScheduler::Update(int max_yield_ms) {
 		lua_setfield(main_L_, LUA_REGISTRYINDEX, kCurrentHandleKey);
 
 		int nargs = lua_gettop(cs.thread) > 0 ? 1 : 0;
-		int ret = lua_resume(cs.thread, main_L_, nargs);
+		int ret = lua_resume(cs.thread, main_L_, nargs, nullptr);
 
 		// Clear current handle
 		lua_pushnil(main_L_);

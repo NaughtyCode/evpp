@@ -127,7 +127,7 @@ int l_net_http_get(lua_State* L) {
 	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
 	{
 		std::lock_guard<std::mutex> lock(g_http_mutex);
-		g_http_pending_refs.push_back(ref);
+		g_http_pending_refs.insert(ref);
 	}
 
 	double timeout = ConfigManager::Instance().GetServerConfig().http.timeout_sec;
@@ -156,7 +156,7 @@ int l_net_http_post(lua_State* L) {
 	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
 	{
 		std::lock_guard<std::mutex> lock(g_http_mutex);
-		g_http_pending_refs.push_back(ref);
+		g_http_pending_refs.insert(ref);
 	}
 
 	double timeout = ConfigManager::Instance().GetServerConfig().http.timeout_sec;
@@ -200,7 +200,8 @@ void ShutdownHttpBindings() {
 	std::vector<int> pending;
 	{
 		std::lock_guard<std::mutex> lock(g_http_mutex);
-		pending = std::move(g_http_pending_refs);
+		pending.assign(g_http_pending_refs.begin(), g_http_pending_refs.end());
+		g_http_pending_refs.clear();
 	}
 	if (!pending.empty()) {
 		if (L) {

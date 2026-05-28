@@ -1,7 +1,9 @@
 #include "runtime/vm/file_watcher.h"
 
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
+#include <thread>
 
 #include "runtime/core/log/log.h"
 

@@ -2,6 +2,7 @@
 
 #include "runtime/core/log/log.h"
 #include "runtime/space/space_manager.h"
+#include "runtime/vm/vm.h"
 
 namespace engine {
 namespace space {

@@ -48,14 +48,18 @@ void ExportAll(ScriptVM& vm) {
 		ENGINE_PROFILE_SCRIPT_EXPORT("space");
 		ExportSpace(vm);
 	}
+#if 0  // AOI subsystem not yet compiled (aoi .cc files not in build)
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("aoi");
 		ExportAOI(vm);
 	}
+#endif
+#if 0  // ORM subsystem not yet compiled (orm_bind.cc requires EntityCache fixes)
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("orm");
 		ExportOrm(vm);
 	}
+#endif
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("import");
 		engine::ExportImport(vm);

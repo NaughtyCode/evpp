@@ -41,6 +41,21 @@
 #include "runtime/vm/sandbox.h"
 #include "runtime/vm/vm.h"
 
+#ifdef _WIN32
+static BOOL WINAPI ConsoleCtrlHandler(DWORD ctrl_type) {
+	switch (ctrl_type) {
+	case CTRL_C_EVENT:
+	case CTRL_CLOSE_EVENT:
+	case CTRL_SHUTDOWN_EVENT:
+	case CTRL_LOGOFF_EVENT:
+		engine::Engine::Instance().Shutdown();
+		return TRUE;
+	default:
+		return FALSE;
+	}
+}
+#endif
+
 namespace engine {
 
 namespace {
@@ -272,22 +287,8 @@ void Engine::Start() {
 #ifdef _WIN32
 	// Windows console control handler 鈥?graceful shutdown on Ctrl+C,
 	// console close, system shutdown, or user logoff.
-	{
-		static BOOL WINAPI ConsoleCtrlHandler(DWORD ctrl_type) {
-			switch (ctrl_type) {
-			case CTRL_C_EVENT:
-			case CTRL_CLOSE_EVENT:
-			case CTRL_SHUTDOWN_EVENT:
-			case CTRL_LOGOFF_EVENT:
-				Engine::Instance().Shutdown();
-				return TRUE;
-			default:
-				return FALSE;
-			}
-		}
-		SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
-		ENGINE_LOG_INFO(logger, "Windows console control handler installed");
-	}
+	SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
+	ENGINE_LOG_INFO(logger, "Windows console control handler installed");
 #else
 	sigint_watcher_ = std::make_unique<evpp::SignalEventWatcher>(SIGINT, loop_, [this]() {
 		auto* logger = GetLogger();

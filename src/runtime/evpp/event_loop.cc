@@ -153,7 +153,11 @@ void EventLoop::Stop() {
 	assert(status_.load() == kRunning);
 	status_.store(kStopping);
 	EVPP_TRACE("this={} EventLoop::Stop", (void*) this);
-	QueueInLoop(std::bind(&EventLoop::StopInLoop, this));
+	if (IsInLoopThread()) {
+		StopInLoop();
+	} else {
+		QueueInLoop(std::bind(&EventLoop::StopInLoop, this));
+	}
 }
 
 void EventLoop::StopInLoop() {
@@ -176,9 +180,9 @@ void EventLoop::StopInLoop() {
 
 	f();
 
-	EVPP_TRACE("this={} start event_base_loopexit", (void*) this);
-	event_base_loopexit(evbase_, nullptr);
-	EVPP_TRACE("this={} after event_base_loopexit, we invoke DoPendingFunctors", (void*) this);
+	EVPP_TRACE("this={} start event_base_loopbreak", (void*) this);
+	event_base_loopbreak(evbase_);
+	EVPP_TRACE("this={} after event_base_loopbreak, we invoke DoPendingFunctors", (void*) this);
 
 	f();
 

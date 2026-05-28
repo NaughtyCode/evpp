@@ -26,18 +26,18 @@ FdChannel::~FdChannel() {
 
 void FdChannel::Close() {
 	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} fd={}", (void*) this, fd_);
-	assert(event_);
-	if (event_) {
-		// Callers should detach before Close(); if they didn't (e.g.
-		// during error recovery) detach now to avoid leaking the event.
-		if (attached_) {
-			EventDel(event_);
-			attached_ = false;
-		}
-
-		delete (event_);
-		event_ = nullptr;
+	if (!event_) {
+		return;
 	}
+	// Callers should detach before Close(); if they didn't (e.g.
+	// during error recovery) detach now to avoid leaking the event.
+	if (attached_) {
+		EventDel(event_);
+		attached_ = false;
+	}
+
+	delete (event_);
+	event_ = nullptr;
 	read_fn_ = ReadEventCallback();
 	write_fn_ = EventCallback();
 }

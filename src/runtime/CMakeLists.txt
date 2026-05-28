@@ -118,6 +118,9 @@ set(VM_SOURCES
     ${RUNTIME_DIR}/vm/sandbox.cc ${RUNTIME_DIR}/vm/sandbox.h
     ${RUNTIME_DIR}/vm/script_importer.cc ${RUNTIME_DIR}/vm/script_importer.h
     ${RUNTIME_DIR}/vm/custom_ptr_store.cc ${RUNTIME_DIR}/vm/custom_ptr_store.h
+    ${RUNTIME_DIR}/vm/coroutine_scheduler.cc ${RUNTIME_DIR}/vm/coroutine_scheduler.h
+    ${RUNTIME_DIR}/vm/script_reloader.cc ${RUNTIME_DIR}/vm/script_reloader.h
+    ${RUNTIME_DIR}/vm/file_watcher.cc ${RUNTIME_DIR}/vm/file_watcher.h
 )
 source_group("vm" FILES ${VM_SOURCES})
 
@@ -129,6 +132,15 @@ set(ENTITY_SOURCES
     ${RUNTIME_DIR}/entity/entity_manager.cc ${RUNTIME_DIR}/entity/entity_manager.h
 )
 source_group("entity" FILES ${ENTITY_SOURCES})
+
+# ── Space / connection routing ──────────────────────────────────────
+set(SPACE_SOURCES
+    ${RUNTIME_DIR}/space/connection_router.cc ${RUNTIME_DIR}/space/connection_router.h
+    ${RUNTIME_DIR}/space/space_manager.cc ${RUNTIME_DIR}/space/space_manager.h
+    ${RUNTIME_DIR}/space/space.cc ${RUNTIME_DIR}/space/space.h
+    ${RUNTIME_DIR}/space/space_message.cc ${RUNTIME_DIR}/space/space_message.h
+)
+source_group("space" FILES ${SPACE_SOURCES})
 
 # ── Script bindings ────────────────────────────────────────────────
 set(SCRIPT_SOURCES
@@ -148,6 +160,7 @@ set(SCRIPT_SOURCES
     ${RUNTIME_DIR}/script/msgpack_bind.cc ${RUNTIME_DIR}/script/msgpack_bind.h
     ${RUNTIME_DIR}/script/import_bind.cc ${RUNTIME_DIR}/script/import_bind.h
     ${RUNTIME_DIR}/script/entity_bind.cc ${RUNTIME_DIR}/script/entity_bind.h
+    ${RUNTIME_DIR}/script/space_bind.cc ${RUNTIME_DIR}/script/space_bind.h
 )
 source_group("script" FILES ${SCRIPT_SOURCES})
 
@@ -308,6 +321,7 @@ set(SERVERENGINE_SOURCES
     ${ENGINE_SOURCES}
     ${VM_SOURCES}
     ${ENTITY_SOURCES}
+    ${SPACE_SOURCES}
     ${SCRIPT_SOURCES}
     ${PROFILER_SOURCES}
     ${PHYSICS_HEADERS}

@@ -107,7 +107,7 @@ void ScriptReloader::OnFilesChanged(const std::vector<std::string>& files) {
 }
 
 bool ScriptReloader::ValidateScript(const std::string& filepath) {
-	// Create a sandbox VM for isolated validation.
+	// Create a temporary Lua VM for isolated validation.
 	// This VM shares no state with the real ScriptVM, so syntax errors
 	// and load-time errors here do not affect the running system.
 
@@ -118,17 +118,12 @@ bool ScriptReloader::ValidateScript(const std::string& filepath) {
 		return false;
 	}
 
-	Sandbox sandbox;
-	if (!sandbox.Create()) {
-		ENGINE_LOG_ERROR(logger, "ScriptReloader: failed to create sandbox for validation");
-		return false;
-	}
-
-	lua_State* L = sandbox.GetState();
+	lua_State* L = luaL_newstate();
 	if (!L) {
-		ENGINE_LOG_ERROR(logger, "ScriptReloader: sandbox has no Lua state");
+		ENGINE_LOG_ERROR(logger, "ScriptReloader: failed to create validation Lua state");
 		return false;
 	}
+	luaL_openlibs_sandboxed(L, LuaSandboxLevel::Strict);
 
 	// Load the file as a Lua chunk. Do NOT execute — just compile.
 	int ret = luaL_loadfile(L, filepath.c_str());
@@ -138,6 +133,7 @@ bool ScriptReloader::ValidateScript(const std::string& filepath) {
 						filepath,
 						lua_tostring(L, -1));
 		lua_pop(L, 1);
+		lua_close(L);
 		return false;
 	}
 
@@ -152,9 +148,11 @@ bool ScriptReloader::ValidateScript(const std::string& filepath) {
 						filepath,
 						lua_tostring(L, -1));
 		lua_pop(L, 1);
+		lua_close(L);
 		return false;
 	}
 
+	lua_close(L);
 	return true;
 }
 
@@ -168,7 +166,7 @@ bool ScriptReloader::ReloadFile(const std::string& filepath) {
 	SnapshotGlobals(L);
 
 	// Clear the import cache so the file is re-loaded fresh
-	ScriptImporter::ClearCache();
+	vm_->GetImporter().ClearCache(L);
 
 	// Extract module name from file path
 	std::string module_name =

@@ -17,6 +17,11 @@ namespace engine {
 
 class ScriptVM;
 
+}  // namespace engine
+
+struct lua_State;
+
+namespace engine {
 namespace space {
 
 using SpaceId = uint64_t;
