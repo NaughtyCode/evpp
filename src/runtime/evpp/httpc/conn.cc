@@ -78,12 +78,16 @@ bool Conn::Init() {
 		X509_VERIFY_PARAM_set_hostflags(param, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
 		X509_VERIFY_PARAM_set1_host(param, host_.c_str(), 0);
 		SSL_set_verify(ssl_, SSL_VERIFY_PEER, nullptr);
+#ifdef EVENT__HAVE_OPENSSL
 		bufferevent_ =
 			bufferevent_openssl_socket_new(loop_->event_base(),
 										   -1,
 										   ssl_,
 										   BUFFEREVENT_SSL_CONNECTING,
 										   BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
+#else
+		bufferevent_ = bufferevent_socket_new(loop_->event_base(), -1, BEV_OPT_CLOSE_ON_FREE);
+#endif
 	} else {
 		bufferevent_ = bufferevent_socket_new(loop_->event_base(), -1, BEV_OPT_CLOSE_ON_FREE);
 	}
@@ -96,7 +100,9 @@ bool Conn::Init() {
 		return false;
 	}
 	if (enable_ssl()) {
-		bufferevent_openssl_set_allow_dirty_shutdown(bufferevent_, 1);
+	#ifdef EVENT__HAVE_OPENSSL
+	bufferevent_openssl_set_allow_dirty_shutdown(bufferevent_, 1);
+#endif
 	}
 	evhttp_conn_ = evhttp_connection_base_bufferevent_new(
 		loop_->event_base(), NULL, bufferevent_, host_.c_str(), port_);

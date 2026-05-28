@@ -64,6 +64,15 @@ endif()
 if (HTTPS)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEVPP_HTTP_CLIENT_SUPPORTS_SSL")
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEVPP_HTTP_SERVER_SUPPORTS_SSL")
+
+    # ── BoringSSL (bundled) ──────────────────────────────────────────
+    if(NOT TARGET ssl)
+        set(OPENSSL_NO_ASM ON CACHE BOOL "Disable assembly when NASM not available")
+        add_subdirectory(${ENGINE_ROOT}/thirdparty/boringssl
+                         ${CMAKE_BINARY_DIR}/boringssl EXCLUDE_FROM_ALL)
+        set_property(TARGET crypto PROPERTY FOLDER "thirdparty")
+        set_property(TARGET ssl PROPERTY FOLDER "thirdparty")
+    endif()
 endif (HTTPS)
 
 if (CMAKE_BENCHMARK_TESTING)
@@ -273,6 +282,13 @@ if(NOT TARGET CloudEngine)
         if(WIN32)
             target_link_libraries(CloudEngine PUBLIC secur32 crypt32 Bcrypt ncrypt Dnsapi)
         endif()
+    endif()
+
+    # ── Link BoringSSL ────────────────────────────────────────────────
+    if(HTTPS)
+        target_include_directories(CloudEngine PUBLIC
+            ${ENGINE_ROOT}/thirdparty/boringssl/include)
+        target_link_libraries(CloudEngine PUBLIC ssl crypto)
     endif()
 
     # ── Link system libraries ────────────────────────────────────────

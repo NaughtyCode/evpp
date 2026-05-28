@@ -12,8 +12,10 @@
 #include "runtime/evpp/slice.h"
 #include "runtime/evpp/tcp_callbacks.h"
 
+#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
 struct ssl_ctx_st;
 struct ssl_st;
+#endif
 
 namespace evpp {
 
@@ -159,12 +161,14 @@ class EVPP_EXPORT TCPConn : public std::enable_shared_from_this<TCPConn> {
 		return rate_limiter_.max_bytes_per_sec();
 	}
 
+#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
 	void SetSSLContext(ssl_ctx_st* ctx) {
 		ssl_ctx_ = ctx;
 	}
 	bool IsSSLEnabled() const {
 		return ssl_ != nullptr;
 	}
+#endif
 
 	protected:
 	friend class TCPClient;
@@ -243,7 +247,9 @@ class EVPP_EXPORT TCPConn : public std::enable_shared_from_this<TCPConn> {
 	std::priority_queue<PendingMessage> pending_messages_;
 	RateLimiter rate_limiter_;
 
+#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
 	ssl_ctx_st* ssl_ctx_ = nullptr;
 	ssl_st* ssl_ = nullptr;
+#endif
 };
 }

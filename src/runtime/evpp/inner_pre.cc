@@ -68,17 +68,14 @@ int EventAdd(struct event* ev, const struct timeval* timeout) {
 					 ev->ev_arg,
 					 std::hash<std::thread::id>{}(std::this_thread::get_id()));
 #else
-	// Lightweight cross-thread check: detect event_add from a non-owning thread.
-	// libevent requires event_add/event_del on the owning loop thread.
+	// Lightweight cross-thread check for Release builds.
 	if (tls_event_base) {
 		struct event_base* ev_base = event_get_base(ev);
 		if (ev_base && ev_base != tls_event_base) {
 			ENGINE_LOG_ERROR(engine::GetLogger(),
 							 "event_add from wrong thread! ev={} fd={} ev_base={} tls_base={}",
-							 (void*)ev,
-							 ev->ev_fd,
-							 (void*)ev_base,
-							 (void*)tls_event_base);
+							 (void*)ev, ev->ev_fd,
+							 (void*)ev_base, (void*)tls_event_base);
 		}
 	}
 #endif
@@ -115,16 +112,14 @@ int EventDel(struct event* ev) {
 					 ev->ev_arg,
 					 std::hash<std::thread::id>{}(std::this_thread::get_id()));
 #else
-	// Lightweight cross-thread check (same as EventAdd)
+	// Lightweight cross-thread check for Release builds.
 	if (tls_event_base) {
 		struct event_base* ev_base = event_get_base(ev);
 		if (ev_base && ev_base != tls_event_base) {
 			ENGINE_LOG_ERROR(engine::GetLogger(),
 							 "event_del from wrong thread! ev={} fd={} ev_base={} tls_base={}",
-							 (void*)ev,
-							 ev->ev_fd,
-							 (void*)ev_base,
-							 (void*)tls_event_base);
+							 (void*)ev, ev->ev_fd,
+							 (void*)ev_base, (void*)tls_event_base);
 		}
 	}
 #endif

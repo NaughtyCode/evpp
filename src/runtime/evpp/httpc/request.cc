@@ -250,7 +250,13 @@ void Request::HandleResponse(struct evhttp_request* r) {
 		unsigned long oslerr;
 		bool printed_some_error = false;
 		char buffer[256];
-		while ((oslerr = bufferevent_get_openssl_error(conn_->bufferevent()))) {
+	#ifdef EVENT__HAVE_OPENSSL
+	while ((oslerr = bufferevent_get_openssl_error(conn_->bufferevent()))) {
+#else
+	while (0) {
+	unsigned long oslerr = 0;
+	(void)oslerr;
+#endif
 			ERR_error_string_n(oslerr, buffer, sizeof(buffer));
 			ENGINE_LOG_ERROR(engine::GetLogger(), "Openssl error: {}", buffer);
 			printed_some_error = true;

@@ -144,8 +144,14 @@ bool Service::initSSL(bool force_enable) {
 	auto bevcb = [](struct event_base* base, void* arg) -> struct bufferevent* {
 		struct bufferevent* r;
 		SSL_CTX* sslctx = (SSL_CTX*) arg;
+#ifdef EVENT__HAVE_OPENSSL
 		r = bufferevent_openssl_socket_new(
 			base, -1, SSL_new(sslctx), BUFFEREVENT_SSL_ACCEPTING, BEV_OPT_CLOSE_ON_FREE);
+#else
+		r = nullptr;
+		(void)base;
+		(void)sslctx;
+#endif
 		return r;
 	};
 	evhttp_set_bevcb(evhttp_, bevcb, ctx);

@@ -23,7 +23,9 @@ bool SSLContext::Init(Role role,
                       const std::string& key_file,
                       const std::string& ca_file,
                       bool verify_peer) {
-    const SSL_METHOD* method = (role == kServer) ? TLS_server_method() : TLS_client_method();
+    // BoringSSL provides only TLS_method(); accept/connect state is set on SSL*.
+    (void)role;
+    const SSL_METHOD* method = TLS_method();
     ctx_ = SSL_CTX_new(method);
     if (!ctx_) {
         ENGINE_LOG_ERROR(engine::GetLogger(), "SSL_CTX_new failed");

@@ -11,16 +11,14 @@ namespace httpc {
 static SSL_CTX* g_ssl_ctx = nullptr;
 
 bool InitSSL() {
-	SSL_library_init();
-	ERR_load_crypto_strings();
-	SSL_load_error_strings();
-	OpenSSL_add_all_algorithms();
+	// BoringSSL auto-initializes; no explicit library/algorithm init needed.
+	// RAND_poll may be a no-op on some platforms but is harmless.
 	int r = RAND_poll();
 	if (r == 0) {
 		ENGINE_LOG_ERROR(engine::GetLogger(), "RAND_poll failed");
 		return false;
 	}
-	g_ssl_ctx = SSL_CTX_new(SSLv23_method());
+	g_ssl_ctx = SSL_CTX_new(TLS_method());
 	if (!g_ssl_ctx) {
 		ENGINE_LOG_ERROR(engine::GetLogger(), "SSL_CTX_new failed");
 		return false;
@@ -40,16 +38,13 @@ void CleanSSL() {
 		SSL_CTX_free(g_ssl_ctx);
 		g_ssl_ctx = nullptr;
 	}
-	ERR_free_strings();
-	EVP_cleanup();
-	ERR_remove_thread_state(nullptr);
-	CRYPTO_cleanup_all_ex_data();
+	// BoringSSL auto-cleans up; no explicit ERR/EVP/CRYPTO cleanup needed.
 }
 
 SSL_CTX* GetSSLCtx() {
 	return g_ssl_ctx;
 }
-}  // httpc
-}  // evpp
+}  // namespace httpc
+}  // namespace evpp
 
 #endif

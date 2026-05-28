@@ -64,6 +64,15 @@ endif()
 if (HTTPS)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEVPP_HTTP_CLIENT_SUPPORTS_SSL")
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEVPP_HTTP_SERVER_SUPPORTS_SSL")
+
+    # ── BoringSSL (bundled) ──────────────────────────────────────────
+    if(NOT TARGET ssl)
+        set(OPENSSL_NO_ASM ON CACHE BOOL "Disable assembly when NASM not available")
+        add_subdirectory(${ENGINE_ROOT}/thirdparty/boringssl
+                         ${CMAKE_BINARY_DIR}/boringssl EXCLUDE_FROM_ALL)
+        set_property(TARGET crypto PROPERTY FOLDER "thirdparty")
+        set_property(TARGET ssl PROPERTY FOLDER "thirdparty")
+    endif()
 endif (HTTPS)
 
 if (CMAKE_BENCHMARK_TESTING)
@@ -274,6 +283,12 @@ if(ENGINE_MONGODB_ENABLED)
 endif()
 
 # ── Link libraries ───────────────────────────────────────────────────
+if(HTTPS)
+    target_include_directories(GameClient PRIVATE
+        ${ENGINE_ROOT}/thirdparty/boringssl/include)
+    target_link_libraries(GameClient PRIVATE ssl crypto)
+endif()
+
 target_link_directories(GameClient PRIVATE "${CMAKE_BINARY_DIR}/libevent/lib/$<CONFIG>")
 target_link_libraries(GameClient PRIVATE ${LIBRARIES})
 

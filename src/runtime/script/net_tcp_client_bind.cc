@@ -210,9 +210,7 @@ int l_client_disconnect(lua_State* L) {
 	ctx->client->SetMessageCallback(evpp::MessageCallback());
 	ctx->client->Disconnect();
 
-	auto* loop = Engine::Instance().GetEventLoop();
-	if (loop) {
-		g_client_shared.erase(ctx);
+	g_client_shared.erase(ctx);
 
 	lua_pushboolean(L, 1);
 	return 1;
