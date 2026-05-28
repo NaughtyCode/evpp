@@ -6,9 +6,7 @@
 #include <new>
 
 #include "runtime/database/mongo/mongo_host_list.h"
-#include "runtime/core/mem/mem.h"
 #include "runtime/database/mongo/mongo_settings.h"
-#include "runtime/core/mem/mem.h"
 
 #include <mongoc/mongoc.h>
 

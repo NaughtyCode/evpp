@@ -6,7 +6,6 @@
 #include <new>
 
 #include "runtime/database/mongo/mongo_iovec.h"
-#include "runtime/core/mem/mem.h"
 
 #include <mongoc/mongoc.h>
 
