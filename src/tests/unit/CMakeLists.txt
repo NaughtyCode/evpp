@@ -37,6 +37,11 @@ add_unit_test(test_sandbox vm/test_sandbox.cpp)
 add_test(NAME unit.sandbox COMMAND test_sandbox)
 set_tests_properties(unit.sandbox PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
+# ── VM coverage tests (comprehensive gap-filling) ──────────────────────
+add_unit_test(test_vm_coverage vm/test_vm_coverage.cpp)
+add_test(NAME unit.vm_coverage COMMAND test_vm_coverage)
+set_tests_properties(unit.vm_coverage PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
 # ── luaL_error safety tests ─────────────────────────────────────────────
 add_unit_test(test_lual_error_safety vm/test_lual_error_safety.cpp)
 add_test(NAME unit.lual_error_safety COMMAND test_lual_error_safety)

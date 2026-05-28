@@ -36,10 +36,8 @@ int CoroutineScheduler::CreateCoroutine(lua_State* L) {
 	}
 
 	// Function should be at top of stack
-	if (!lua_isfunction(L, -1)) {
-		auto* logger = GetLogger();
-		ENGINE_LOG_ERROR(logger, "CoroutineScheduler: CreateCoroutine called without function on stack");
-		lua_pop(L, 1);
+	if (lua_gettop(L) == 0 || !lua_isfunction(L, -1)) {
+		if (lua_gettop(L) > 0) lua_pop(L, 1);
 		return 0;
 	}
 
@@ -50,8 +48,10 @@ int CoroutineScheduler::CreateCoroutine(lua_State* L) {
 		return 0;
 	}
 
-	// Move function to the new thread's stack
-	lua_xmove(L, thread, 1);  // function is now on thread's stack
+	// Stack after lua_newthread: ..., func, thread_ref.
+	// Rotate func to top, then move it to the new thread.
+	lua_insert(L, -2);        // ..., thread_ref, func
+	lua_xmove(L, thread, 1);  // func moved to thread; thread_ref stays on L
 
 	int handle = next_handle_++;
 
@@ -106,7 +106,8 @@ void CoroutineScheduler::Update(int max_yield_ms) {
 		lua_pushinteger(main_L_, handle);
 		lua_setfield(main_L_, LUA_REGISTRYINDEX, kCurrentHandleKey);
 
-		int nargs = lua_gettop(cs.thread) > 0 ? 1 : 0;
+		int top = lua_gettop(cs.thread);
+		int nargs = top > 0 ? top - 1 : 0;
 		int ret = lua_resume(cs.thread, main_L_, nargs, nullptr);
 
 		// Clear current handle
