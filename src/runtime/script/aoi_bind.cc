@@ -16,6 +16,7 @@ namespace script {
 namespace {
 
 std::unique_ptr<aoi::AOIManager> g_aoi_manager;
+int g_aoi_callback_ref = LUA_NOREF;
 
 // aoi.init(world_width, world_height, cell_size)
 int l_aoi_init(lua_State* L) {
@@ -26,11 +27,44 @@ int l_aoi_init(lua_State* L) {
 	auto grid = std::make_unique<aoi::SpatialGrid>(world_width, world_height, cell_size);
 	g_aoi_manager = std::make_unique<aoi::AOIManager>(std::move(grid));
 
-	g_aoi_manager->SetEventCallback([](entity::EntityId observer,
-										entity::EntityId target, bool entered) {
-		auto* logger = GetLogger();
-		ENGINE_LOG_DEBUG(logger, "AOI: entity [{}] {} [{}]",
-						 observer, entered ? "sees" : "loses", target);
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+// aoi.set_event_callback(function)
+// Registers a Lua function to receive AOI enter/leave events.
+// The callback receives: function(observer_id, target_id, entered)
+int l_aoi_set_event_callback(lua_State* L) {
+	if (!g_aoi_manager) {
+		lua_pushnil(L);
+		lua_pushstring(L, "AOI not initialized");
+		return 2;
+	}
+
+	luaL_checktype(L, 1, LUA_TFUNCTION);
+
+	// Release previous callback reference
+	if (g_aoi_callback_ref != LUA_NOREF) {
+		luaL_unref(L, LUA_REGISTRYINDEX, g_aoi_callback_ref);
+	}
+
+	// Store new callback reference
+	lua_pushvalue(L, 1);
+	g_aoi_callback_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+	// Register C++ callback that invokes the Lua function
+	g_aoi_manager->SetEventCallback([L](entity::EntityId observer,
+	                                     entity::EntityId target, bool entered) {
+		if (g_aoi_callback_ref == LUA_NOREF) return;
+		lua_rawgeti(L, LUA_REGISTRYINDEX, g_aoi_callback_ref);
+		lua_pushinteger(L, static_cast<lua_Integer>(observer));
+		lua_pushinteger(L, static_cast<lua_Integer>(target));
+		lua_pushboolean(L, entered ? 1 : 0);
+		if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
+			auto* logger = GetLogger();
+			ENGINE_LOG_ERROR(logger, "AOI callback error: {}", lua_tostring(L, -1));
+			lua_pop(L, 1);
+		}
 	});
 
 	lua_pushboolean(L, 1);
@@ -127,19 +161,24 @@ int l_aoi_count(lua_State* L) {
 
 // aoi.shutdown()
 int l_aoi_shutdown(lua_State* L) {
+	if (g_aoi_callback_ref != LUA_NOREF) {
+		luaL_unref(L, LUA_REGISTRYINDEX, g_aoi_callback_ref);
+		g_aoi_callback_ref = LUA_NOREF;
+	}
 	g_aoi_manager.reset();
 	return 0;
 }
 
 static const luaL_Reg kAOIFuncs[] = {
-	{"init",              l_aoi_init},
-	{"register_entity",   l_aoi_register_entity},
-	{"update_entity",     l_aoi_update_entity},
-	{"unregister_entity", l_aoi_unregister_entity},
-	{"get_visible",       l_aoi_get_visible},
-	{"query_radius",      l_aoi_query_radius},
-	{"count",             l_aoi_count},
-	{"shutdown",          l_aoi_shutdown},
+	{"init",                l_aoi_init},
+	{"set_event_callback",  l_aoi_set_event_callback},
+	{"register_entity",     l_aoi_register_entity},
+	{"update_entity",       l_aoi_update_entity},
+	{"unregister_entity",   l_aoi_unregister_entity},
+	{"get_visible",         l_aoi_get_visible},
+	{"query_radius",        l_aoi_query_radius},
+	{"count",               l_aoi_count},
+	{"shutdown",            l_aoi_shutdown},
 	{nullptr, nullptr}
 };
 

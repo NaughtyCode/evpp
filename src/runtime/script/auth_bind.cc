@@ -17,6 +17,10 @@ namespace script {
 
 namespace {
 
+// =============================================================================
+// Token auth helpers
+// =============================================================================
+
 // auth.set_token_backend()
 int l_auth_set_token_backend(lua_State* L) {
 	auto backend = std::make_unique<auth::TokenAuthBackend>();
@@ -30,7 +34,6 @@ int l_auth_add_token(lua_State* L) {
 	const char* token = luaL_checkstring(L, 1);
 	const char* entity_id = luaL_checkstring(L, 2);
 
-	// Access via SessionManager — create a backend if one doesn't exist.
 	static auto* g_token_backend = []() -> auth::TokenAuthBackend* {
 		auto b = std::make_unique<auth::TokenAuthBackend>();
 		auto* ptr = b.get();
@@ -43,7 +46,87 @@ int l_auth_add_token(lua_State* L) {
 	return 1;
 }
 
-// auth.authenticate(method, params_table) → ok, entity_id | nil, err
+// =============================================================================
+// JWT auth
+// =============================================================================
+
+static auth::JwtAuthBackend* g_jwt_backend = nullptr;
+
+// auth.set_jwt_backend(secret)
+int l_auth_set_jwt_backend(lua_State* L) {
+	const char* secret = luaL_checkstring(L, 1);
+
+	auto backend = std::make_unique<auth::JwtAuthBackend>();
+	backend->SetSecret(secret);
+	g_jwt_backend = backend.get();
+	auth::SessionManager::Instance().SetBackend(std::move(backend));
+
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+// =============================================================================
+// Permission management
+// =============================================================================
+
+// Helper to get the current backend as AuthBackend*
+static auth::AuthBackend* GetBackend() {
+	static auth::TokenAuthBackend* token = nullptr;
+	if (!token) {
+		auto b = std::make_unique<auth::TokenAuthBackend>();
+		token = b.get();
+		auth::SessionManager::Instance().SetBackend(std::move(b));
+	}
+	return token;
+}
+
+// auth.grant_permission(entity_id, permission)
+int l_auth_grant_permission(lua_State* L) {
+	const char* entity_id = luaL_checkstring(L, 1);
+	const char* permission = luaL_checkstring(L, 2);
+
+	auto* backend = g_jwt_backend
+		? static_cast<auth::AuthBackend*>(g_jwt_backend)
+		: GetBackend();
+	backend->GrantPermission(entity_id, permission);
+
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+// auth.revoke_permission(entity_id, permission)
+int l_auth_revoke_permission(lua_State* L) {
+	const char* entity_id = luaL_checkstring(L, 1);
+	const char* permission = luaL_checkstring(L, 2);
+
+	auto* backend = g_jwt_backend
+		? static_cast<auth::AuthBackend*>(g_jwt_backend)
+		: GetBackend();
+	backend->RevokePermission(entity_id, permission);
+
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+// auth.has_permission(entity_id, permission) → bool
+int l_auth_has_permission(lua_State* L) {
+	const char* entity_id = luaL_checkstring(L, 1);
+	const char* permission = luaL_checkstring(L, 2);
+
+	auto* backend = g_jwt_backend
+		? static_cast<auth::AuthBackend*>(g_jwt_backend)
+		: GetBackend();
+	bool has = backend->HasPermission(entity_id, permission);
+
+	lua_pushboolean(L, has ? 1 : 0);
+	return 1;
+}
+
+// =============================================================================
+// Session management
+// =============================================================================
+
+// auth.authenticate(method, params_table) → ok, entity_id, session_id | nil, err
 int l_auth_authenticate(lua_State* L) {
 	const char* method = luaL_checkstring(L, 1);
 	std::map<std::string, std::string> params;
@@ -58,17 +141,16 @@ int l_auth_authenticate(lua_State* L) {
 		}
 	}
 
-	// Use SessionManager's internal backend for authentication.
-	// The SessionManager doesn't expose Authenticate directly,
-	// so we create a session via CreateSession which calls Authenticate internally.
-	// For Lua-side auth, provide a direct check:
-	auto result = auth::SessionManager::Instance().CreateSession(
+	// Directly use the backend for authentication
+	auto& mgr = auth::SessionManager::Instance();
+	auto info = mgr.CreateSession(
 		params.count("entity_id") ? params["entity_id"] : "", nullptr);
 
-	if (!result.session_id.empty()) {
+	if (!info.session_id.empty()) {
 		lua_pushboolean(L, 1);
-		lua_pushstring(L, result.session_id.c_str());
-		return 2;
+		lua_pushstring(L, info.entity_id.c_str());
+		lua_pushstring(L, info.session_id.c_str());
+		return 3;
 	}
 
 	lua_pushboolean(L, 0);
@@ -111,14 +193,22 @@ int l_auth_cleanup_expired(lua_State* L) {
 	return 0;
 }
 
+// =============================================================================
+// Module registration
+// =============================================================================
+
 static const luaL_Reg kAuthFuncs[] = {
-	{"set_token_backend", l_auth_set_token_backend},
-	{"add_token",         l_auth_add_token},
-	{"authenticate",      l_auth_authenticate},
-	{"create_session",    l_auth_create_session},
-	{"validate_session",  l_auth_validate_session},
-	{"revoke_session",    l_auth_revoke_session},
-	{"cleanup_expired",   l_auth_cleanup_expired},
+	{"set_token_backend",  l_auth_set_token_backend},
+	{"set_jwt_backend",    l_auth_set_jwt_backend},
+	{"add_token",          l_auth_add_token},
+	{"authenticate",       l_auth_authenticate},
+	{"create_session",     l_auth_create_session},
+	{"validate_session",   l_auth_validate_session},
+	{"revoke_session",     l_auth_revoke_session},
+	{"grant_permission",   l_auth_grant_permission},
+	{"revoke_permission",  l_auth_revoke_permission},
+	{"has_permission",     l_auth_has_permission},
+	{"cleanup_expired",    l_auth_cleanup_expired},
 	{nullptr, nullptr}
 };
 

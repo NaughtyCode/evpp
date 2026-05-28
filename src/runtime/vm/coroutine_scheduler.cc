@@ -12,7 +12,9 @@ extern "C" {
 
 namespace engine {
 
-const char* CoroutineScheduler::kCurrentHandleKey = "__coro_handle";
+namespace {
+thread_local int tls_current_handle = 0;
+}
 
 CoroutineScheduler& CoroutineScheduler::Instance() {
 	static CoroutineScheduler sched;
@@ -102,17 +104,14 @@ void CoroutineScheduler::Update(int max_yield_ms) {
 		if (it == coroutines_.end()) continue;
 		auto& cs = it->second;
 
-		// Store current handle in registry so Suspend/CurrentHandle work
-		lua_pushinteger(main_L_, handle);
-		lua_setfield(main_L_, LUA_REGISTRYINDEX, kCurrentHandleKey);
+		tls_current_handle = handle;
 
 		int top = lua_gettop(cs.thread);
 		int nargs = top > 0 ? top - 1 : 0;
-		int ret = lua_resume(cs.thread, main_L_, nargs, nullptr);
+		int nresults = 0;
+		int ret = lua_resume(cs.thread, main_L_, nargs, &nresults);
 
-		// Clear current handle
-		lua_pushnil(main_L_);
-		lua_setfield(main_L_, LUA_REGISTRYINDEX, kCurrentHandleKey);
+		tls_current_handle = 0;
 
 		if (ret == LUA_OK) {
 			cs.state = State::Dead;
@@ -157,18 +156,8 @@ void CoroutineScheduler::CancelAll() {
 }
 
 void CoroutineScheduler::Suspend(int64_t wake_at_ms) {
-	// Sets the wake time for the currently running coroutine.
-	// Must be called from within a coroutine context.
-	// The coroutine handle is stored in the registry before resume.
-	// After setting the wake time, the coroutine should call coroutine.yield().
-	if (!Instance().main_L_) return;
-
-	lua_getfield(Instance().main_L_, LUA_REGISTRYINDEX, kCurrentHandleKey);
-	int handle = static_cast<int>(lua_tointeger(Instance().main_L_, -1));
-	lua_pop(Instance().main_L_, 1);
-
-	if (handle > 0) {
-		auto it = Instance().coroutines_.find(handle);
+	if (tls_current_handle > 0) {
+		auto it = Instance().coroutines_.find(tls_current_handle);
 		if (it != Instance().coroutines_.end()) {
 			it->second.wake_at_ms = wake_at_ms;
 		}
@@ -176,11 +165,7 @@ void CoroutineScheduler::Suspend(int64_t wake_at_ms) {
 }
 
 int CoroutineScheduler::CurrentHandle() {
-	if (!Instance().main_L_) return 0;
-	lua_getfield(Instance().main_L_, LUA_REGISTRYINDEX, kCurrentHandleKey);
-	int handle = static_cast<int>(lua_tointeger(Instance().main_L_, -1));
-	lua_pop(Instance().main_L_, 1);
-	return handle;
+	return tls_current_handle;
 }
 
 size_t CoroutineScheduler::ActiveCount() const {

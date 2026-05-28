@@ -93,8 +93,6 @@ class ENGINE_API CoroutineScheduler {
 	int next_handle_ = 1;
 	uint32_t max_coroutines_ = 10000;
 
-	// Registry key for storing current coroutine handle in the Lua state.
-	static const char* kCurrentHandleKey;
 };
 
 }  // namespace engine

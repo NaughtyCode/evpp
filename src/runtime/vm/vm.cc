@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <stdexcept>
 
 #include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
@@ -17,7 +18,7 @@ ScriptVM::ScriptVM(LuaSandboxLevel level) {
 	L_ = luaL_newstate();
 	if (!L_) {
 		ENGINE_LOG_CRITICAL(logger, "ScriptVM: luaL_newstate() returned nullptr");
-		std::exit(EXIT_FAILURE);
+		throw std::runtime_error("ScriptVM: luaL_newstate() failed — out of memory");
 	}
 
 	luaL_openlibs_sandboxed(L_, level);
