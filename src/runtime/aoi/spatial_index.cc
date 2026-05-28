@@ -5,6 +5,7 @@
 #include <unordered_set>
 
 #include "runtime/core/log/log.h"
+#include "runtime/profiler/profiler_events.h"
 
 namespace engine {
 namespace aoi {
@@ -46,6 +47,7 @@ void SpatialGrid::GetPosition(entity::EntityId id, float& x, float& y) const {
 }
 
 void SpatialGrid::Insert(entity::EntityId id, float x, float y) {
+	ENGINE_PROFILE_AOI_GRID_INSERT();
 	int col = std::clamp(static_cast<int>(x * inv_cell_size_), 0, cols_ - 1);
 	int row = std::clamp(static_cast<int>(y * inv_cell_size_), 0, rows_ - 1);
 	int idx = CellIndex(col, row);
@@ -57,6 +59,7 @@ void SpatialGrid::Insert(entity::EntityId id, float x, float y) {
 }
 
 void SpatialGrid::Update(entity::EntityId id, float x, float y) {
+	ENGINE_PROFILE_AOI_GRID_UPDATE();
 	auto it = entity_cell_.find(id);
 	if (it == entity_cell_.end()) {
 		Insert(id, x, y);
@@ -83,6 +86,7 @@ void SpatialGrid::Update(entity::EntityId id, float x, float y) {
 }
 
 void SpatialGrid::Remove(entity::EntityId id) {
+	ENGINE_PROFILE_AOI_GRID_REMOVE();
 	auto it = entity_cell_.find(id);
 	if (it == entity_cell_.end()) return;
 
@@ -96,6 +100,7 @@ void SpatialGrid::Remove(entity::EntityId id) {
 }
 
 std::vector<entity::EntityId> SpatialGrid::QueryRadius(float x, float y, float radius) const {
+	ENGINE_PROFILE_AOI_QUERY();
 	int min_col, min_row, max_col, max_row;
 	CellIndices(x, y, radius, min_col, min_row, max_col, max_row);
 
@@ -120,12 +125,14 @@ std::vector<entity::EntityId> SpatialGrid::QueryRadius(float x, float y, float r
 }
 
 std::vector<entity::EntityId> SpatialGrid::QueryAOI(entity::EntityId id) const {
+	ENGINE_PROFILE_SCOPE("engine.aoi", "GridQueryAOI");
 	float x, y;
 	GetPosition(id, x, y);
 	return QueryAOIAt(x, y);
 }
 
 std::vector<entity::EntityId> SpatialGrid::QueryAOIAt(float x, float y) const {
+	ENGINE_PROFILE_SCOPE("engine.aoi", "GridQueryAOIAt");
 	int col = std::clamp(static_cast<int>(x * inv_cell_size_), 0, cols_ - 1);
 	int row = std::clamp(static_cast<int>(y * inv_cell_size_), 0, rows_ - 1);
 

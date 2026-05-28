@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "runtime/evpp/buffer.h"
+#include "runtime/profiler/profiler_events.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -20,6 +21,7 @@ LengthPrefixedCodec::LengthPrefixedCodec(uint32_t max_message_size)
 }
 
 std::string LengthPrefixedCodec::Encode(const std::string& payload) {
+	ENGINE_PROFILE_SCOPE("engine.script", "NetEncode");
 	if (max_message_size_ > 0 && payload.size() > max_message_size_) {
 		return {};
 	}
@@ -35,6 +37,7 @@ std::string LengthPrefixedCodec::Encode(const std::string& payload) {
 }
 
 void LengthPrefixedCodec::Encode(const std::string& payload, evpp::Buffer* output) {
+	ENGINE_PROFILE_SCOPE("engine.script", "NetEncodeBuf");
 	if (max_message_size_ > 0 && payload.size() > max_message_size_) {
 		return;
 	}
@@ -45,6 +48,7 @@ void LengthPrefixedCodec::Encode(const std::string& payload, evpp::Buffer* outpu
 }
 
 std::vector<std::string> LengthPrefixedCodec::Decode(evpp::Buffer* buffer) {
+	ENGINE_PROFILE_SCOPE("engine.script", "NetDecode");
 	std::vector<std::string> messages;
 	size_t readable = buffer->length();
 

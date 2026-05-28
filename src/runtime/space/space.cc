@@ -1,6 +1,7 @@
 #include "runtime/space/space.h"
 
 #include "runtime/core/log/log.h"
+#include "runtime/profiler/profiler_events.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {
@@ -39,6 +40,7 @@ lua_State* Space::GetLuaState() {
 }
 
 entity::Entity* Space::CreateEntity(entity::EntityId id) {
+	ENGINE_PROFILE_ENTITY_CREATE();
 	if (entities_.size() >= config_.max_entities) {
 		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger, "Space [{}]: entity limit reached [{}]", id_, config_.max_entities);
@@ -63,12 +65,14 @@ entity::Entity* Space::CreateEntity(entity::EntityId id) {
 }
 
 entity::Entity* Space::GetEntity(entity::EntityId id) {
+	ENGINE_PROFILE_ENTITY_GET();
 	auto it = entities_.find(id);
 	if (it == entities_.end()) return nullptr;
 	return it->second.get();
 }
 
 void Space::DestroyEntity(entity::EntityId id) {
+	ENGINE_PROFILE_ENTITY_DESTROY();
 	auto it = entities_.find(id);
 	if (it == entities_.end()) return;
 	it->second->Destroy();
@@ -77,6 +81,7 @@ void Space::DestroyEntity(entity::EntityId id) {
 }
 
 void Space::OnPlayerJoin(entity::EntityId player_id, evpp::TCPConnPtr conn) {
+	ENGINE_PROFILE_SPACE_JOIN();
 	auto* entity = GetEntity(player_id);
 	if (!entity) {
 		auto* logger = GetLogger();
@@ -89,6 +94,7 @@ void Space::OnPlayerJoin(entity::EntityId player_id, evpp::TCPConnPtr conn) {
 }
 
 void Space::OnPlayerLeave(entity::EntityId player_id) {
+	ENGINE_PROFILE_SPACE_LEAVE();
 	auto* entity = GetEntity(player_id);
 	if (entity) {
 		entity->Suspend();  // suspend, not destroy — enables reconnect
@@ -103,11 +109,13 @@ evpp::TCPConnPtr Space::GetPlayerConnection(entity::EntityId player_id) const {
 }
 
 void Space::Update(int64_t delta_ms) {
+	ENGINE_PROFILE_SPACE_UPDATE();
 	if (!vm_) return;
 	vm_->UpdateScript();
 }
 
 bool Space::LoadScripts(const std::vector<std::string>& script_paths) {
+	ENGINE_PROFILE_SPACE_LOAD_SCRIPTS();
 	if (!vm_) return false;
 
 	auto* logger = GetLogger();

@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "runtime/core/log/log.h"
+#include "runtime/profiler/profiler_events.h"
 
 namespace engine {
 namespace aoi {
@@ -12,11 +13,13 @@ AOIManager::AOIManager(std::unique_ptr<SpatialGrid> grid)
 }
 
 void AOIManager::RegisterEntity(entity::EntityId id, float aoi_radius) {
+	ENGINE_PROFILE_AOI_REGISTER();
 	aoi_radii_[id] = aoi_radius;
 	visible_[id] = {};
 }
 
 void AOIManager::UnregisterEntity(entity::EntityId id) {
+	ENGINE_PROFILE_AOI_UNREGISTER();
 	grid_->Remove(id);
 	aoi_radii_.erase(id);
 	entity_x_.erase(id);
@@ -32,6 +35,7 @@ void AOIManager::UnregisterEntity(entity::EntityId id) {
 }
 
 void AOIManager::OnEntityMove(entity::EntityId id, float x, float y) {
+	ENGINE_PROFILE_AOI_MOVE();
 	if (aoi_radii_.find(id) == aoi_radii_.end()) return;
 
 	float old_x = entity_x_[id];
@@ -53,6 +57,7 @@ std::vector<entity::EntityId> AOIManager::GetVisibleEntities(entity::EntityId id
 }
 
 std::vector<entity::EntityId> AOIManager::QueryRadius(float x, float y, float radius) const {
+	ENGINE_PROFILE_AOI_QUERY();
 	return grid_->QueryRadius(x, y, radius);
 }
 
@@ -61,6 +66,7 @@ void AOIManager::SetEventCallback(AOIEventCallback callback) {
 }
 
 void AOIManager::RecomputeVisibility(entity::EntityId id) {
+	ENGINE_PROFILE_AOI_VISIBILITY();
 	auto it = aoi_radii_.find(id);
 	if (it == aoi_radii_.end()) return;
 

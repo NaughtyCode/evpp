@@ -12,6 +12,7 @@
 #include "runtime/physics/physics_bindings.h"
 #include "runtime/physics/physics_log.h"
 #include "runtime/physics/physics_vm.h"
+#include "runtime/profiler/profiler_events.h"
 #include "runtime/script/import_bind.h"
 #include "runtime/vm/custom_ptr_store.h"
 #include "runtime/vm/vm.h"
@@ -34,6 +35,7 @@ PhysicsSystem& PhysicsSystem::Instance() {
 bool PhysicsSystem::Initialize(const std::string& config_dir,
 							   const std::string& assets_path,
 							   const std::string& scripts_dir) {
+	ENGINE_PROFILE_SCOPE("engine.physics", "Initialize");
 	if (is_initialized_) {
 		ENGINE_LOG_WARN(GetLogger(), "PhysicsSystem: already initialized");
 		return false;
@@ -126,6 +128,7 @@ PhysicsScriptVM* PhysicsSystem::GetScriptVMFromState(lua_State* L) {
 //============================================================================
 
 bool PhysicsSystem::Start() {
+	ENGINE_PROFILE_SCOPE("engine.physics", "Start");
 	if (!is_initialized_) {
 		ENGINE_LOG_WARN(GetLogger(), "PhysicsSystem: not initialized, cannot start");
 		return false;
@@ -160,6 +163,7 @@ bool PhysicsSystem::Start() {
 //============================================================================
 
 void PhysicsSystem::Shutdown() {
+	ENGINE_PROFILE_SCOPE("engine.physics", "Shutdown");
 	if (physics_thread_.IsRunning()) {
 		PHYSICS_LOG_INFO(physics_thread_.GetLogger(), "PhysicsSystem: shutdown commencing...");
 		physics_thread_.Stop();
@@ -197,6 +201,7 @@ void PhysicsSystem::EnqueueSpawn(const std::string& proto_id,
 								 float qz,
 								 float qw,
 								 uint64_t user_data) {
+	ENGINE_PROFILE_SCOPE("engine.physics", "EnqueueSpawn");
 	SpawnArgs args;
 	args.proto_id = proto_id;
 	args.position = JPH::RVec3(x, y, z);
@@ -206,6 +211,7 @@ void PhysicsSystem::EnqueueSpawn(const std::string& proto_id,
 }
 
 void PhysicsSystem::EnqueueDestroy(uint32_t body_id) {
+	ENGINE_PROFILE_SCOPE("engine.physics", "EnqueueDestroy");
 	DestroyArgs args;
 	args.body_id = body_id;
 	physics_thread_.EnqueueCommand(PhysicsCommand::MakeDestroy(args));
@@ -228,6 +234,7 @@ void PhysicsSystem::EnqueueSetVelocity(uint32_t body_id, float vx, float vy, flo
 }
 
 void PhysicsSystem::Tick(uint64_t frame_id, float delta_time) {
+	ENGINE_PROFILE_SCOPE("engine.physics", "EnqueueTick");
 	TickArgs args;
 	args.frame_id = frame_id;
 	args.delta_time = delta_time;
@@ -239,6 +246,7 @@ void PhysicsSystem::Tick(uint64_t frame_id, float delta_time) {
 //============================================================================
 
 std::optional<PhysicsFrameResult> PhysicsSystem::FetchResult(uint64_t frame_id, int timeout_ms) {
+	ENGINE_PROFILE_PHYSICS_FETCH(frame_id);
 	auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
 
 	while (true) {
@@ -291,6 +299,7 @@ bool PhysicsSystem::ReloadLogLevel() {
 //============================================================================
 
 std::optional<BodyTransform> PhysicsSystem::GetTransform(uint32_t body_id) const {
+	ENGINE_PROFILE_SCOPE("engine.physics", "GetTransform");
 	if (!is_initialized_) return std::nullopt;
 	auto result = physics_thread_.GetWorld().GetTransform(body_id);
 	if (!result.has_value()) return std::nullopt;
@@ -364,6 +373,7 @@ bool PhysicsSystem::Recover(const std::string& saved_state) {
 //============================================================================
 
 void PhysicsSystem::UpdateScript(const std::vector<CollisionEvent>& collision_events) {
+	ENGINE_PROFILE_SCRIPT_CALLBACK();
 	// This method must only execute on the physics thread. It is invoked
 	// via the PostStepCallback inside PhysicsThread::EventLoop(). Calling
 	// it from any other thread (e.g. the main thread) would race with the

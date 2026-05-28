@@ -96,6 +96,77 @@ inline thread_local uint64_t g_profiler_physics_frame_id = UINT64_MAX;
 #define ENGINE_PROFILE_PHYSICS_RESULT_ENQUEUE() \
 	ENGINE_PROFILE_SCOPE("engine.physics", "ResultEnqueue")
 
+// ── Entity system ───────────────────────────────────────────────────────
+
+#define ENGINE_PROFILE_ENTITY_CREATE() ENGINE_PROFILE_SCOPE("engine.entity", "CreateEntity")
+
+#define ENGINE_PROFILE_ENTITY_DESTROY() ENGINE_PROFILE_SCOPE("engine.entity", "DestroyEntity")
+
+#define ENGINE_PROFILE_ENTITY_GET() ENGINE_PROFILE_SCOPE("engine.entity", "GetEntity")
+
+#define ENGINE_PROFILE_ENTITY_ACTIVATE() ENGINE_PROFILE_SCOPE("engine.entity", "Activate")
+
+#define ENGINE_PROFILE_ENTITY_SUSPEND() ENGINE_PROFILE_SCOPE("engine.entity", "Suspend")
+
+// ── Space system ────────────────────────────────────────────────────────
+
+#define ENGINE_PROFILE_SPACE_CREATE() ENGINE_PROFILE_SCOPE("engine.space", "CreateSpace")
+
+#define ENGINE_PROFILE_SPACE_DESTROY() ENGINE_PROFILE_SCOPE("engine.space", "DestroySpace")
+
+#define ENGINE_PROFILE_SPACE_GET() ENGINE_PROFILE_SCOPE("engine.space", "GetSpace")
+
+#define ENGINE_PROFILE_SPACE_JOIN() ENGINE_PROFILE_SCOPE("engine.space", "OnPlayerJoin")
+
+#define ENGINE_PROFILE_SPACE_LEAVE() ENGINE_PROFILE_SCOPE("engine.space", "OnPlayerLeave")
+
+#define ENGINE_PROFILE_SPACE_UPDATE() ENGINE_PROFILE_SCOPE("engine.space", "Update")
+
+#define ENGINE_PROFILE_SPACE_LOAD_SCRIPTS() ENGINE_PROFILE_SCOPE("engine.space", "LoadScripts")
+
+#define ENGINE_PROFILE_SPACE_MSG_SEND() ENGINE_PROFILE_SCOPE("engine.space", "SendMessage")
+
+#define ENGINE_PROFILE_SPACE_MSG_PROCESS() ENGINE_PROFILE_SCOPE("engine.space", "ProcessPending")
+
+#define ENGINE_PROFILE_SPACE_ROUTE_CONN() ENGINE_PROFILE_SCOPE("engine.space", "RouteConnection")
+
+#define ENGINE_PROFILE_SPACE_ROUTE_MSG() ENGINE_PROFILE_SCOPE("engine.space", "RouteMessage")
+
+#define ENGINE_PROFILE_SPACE_ROUTE_DISCONN() \
+	ENGINE_PROFILE_SCOPE("engine.space", "RouteDisconnection")
+
+// ── AOI system ──────────────────────────────────────────────────────────
+
+#define ENGINE_PROFILE_AOI_REGISTER() ENGINE_PROFILE_SCOPE("engine.aoi", "RegisterEntity")
+
+#define ENGINE_PROFILE_AOI_UNREGISTER() ENGINE_PROFILE_SCOPE("engine.aoi", "UnregisterEntity")
+
+#define ENGINE_PROFILE_AOI_MOVE() ENGINE_PROFILE_SCOPE("engine.aoi", "OnEntityMove")
+
+#define ENGINE_PROFILE_AOI_VISIBILITY() ENGINE_PROFILE_SCOPE("engine.aoi", "RecomputeVisibility")
+
+#define ENGINE_PROFILE_AOI_QUERY() ENGINE_PROFILE_SCOPE("engine.aoi", "QueryRadius")
+
+#define ENGINE_PROFILE_AOI_GRID_INSERT() ENGINE_PROFILE_SCOPE("engine.aoi", "GridInsert")
+
+#define ENGINE_PROFILE_AOI_GRID_UPDATE() ENGINE_PROFILE_SCOPE("engine.aoi", "GridUpdate")
+
+#define ENGINE_PROFILE_AOI_GRID_REMOVE() ENGINE_PROFILE_SCOPE("engine.aoi", "GridRemove")
+
+// ── Auth system ─────────────────────────────────────────────────────────
+
+#define ENGINE_PROFILE_AUTH_AUTHENTICATE() ENGINE_PROFILE_SCOPE("engine.auth", "Authenticate")
+
+#define ENGINE_PROFILE_AUTH_VALIDATE() ENGINE_PROFILE_SCOPE("engine.auth", "ValidateSession")
+
+#define ENGINE_PROFILE_AUTH_CREATE_SESSION() ENGINE_PROFILE_SCOPE("engine.auth", "CreateSession")
+
+#define ENGINE_PROFILE_AUTH_GET_SESSION() ENGINE_PROFILE_SCOPE("engine.auth", "GetSession")
+
+#define ENGINE_PROFILE_AUTH_REVOKE() ENGINE_PROFILE_SCOPE("engine.auth", "RevokeSession")
+
+#define ENGINE_PROFILE_AUTH_CLEANUP() ENGINE_PROFILE_SCOPE("engine.auth", "CleanupExpired")
+
 // ── Script system ───────────────────────────────────────────────────────
 
 #define ENGINE_PROFILE_SCRIPT_DOFILE(path) \
@@ -157,6 +228,99 @@ inline thread_local uint64_t g_profiler_physics_frame_id = UINT64_MAX;
 	} while (0)
 #define ENGINE_PROFILE_SCRIPT_EXPORT(name) \
 	do {                                   \
+	} while (0)
+#define ENGINE_PROFILE_ENTITY_CREATE() \
+	do {                               \
+	} while (0)
+#define ENGINE_PROFILE_ENTITY_DESTROY() \
+	do {                                \
+	} while (0)
+#define ENGINE_PROFILE_ENTITY_GET() \
+	do {                            \
+	} while (0)
+#define ENGINE_PROFILE_ENTITY_ACTIVATE() \
+	do {                                 \
+	} while (0)
+#define ENGINE_PROFILE_ENTITY_SUSPEND() \
+	do {                                \
+	} while (0)
+#define ENGINE_PROFILE_SPACE_CREATE() \
+	do {                              \
+	} while (0)
+#define ENGINE_PROFILE_SPACE_DESTROY() \
+	do {                               \
+	} while (0)
+#define ENGINE_PROFILE_SPACE_GET() \
+	do {                           \
+	} while (0)
+#define ENGINE_PROFILE_SPACE_JOIN() \
+	do {                            \
+	} while (0)
+#define ENGINE_PROFILE_SPACE_LEAVE() \
+	do {                             \
+	} while (0)
+#define ENGINE_PROFILE_SPACE_UPDATE() \
+	do {                              \
+	} while (0)
+#define ENGINE_PROFILE_SPACE_LOAD_SCRIPTS() \
+	do {                                    \
+	} while (0)
+#define ENGINE_PROFILE_SPACE_MSG_SEND() \
+	do {                                \
+	} while (0)
+#define ENGINE_PROFILE_SPACE_MSG_PROCESS() \
+	do {                                   \
+	} while (0)
+#define ENGINE_PROFILE_SPACE_ROUTE_CONN() \
+	do {                                  \
+	} while (0)
+#define ENGINE_PROFILE_SPACE_ROUTE_MSG() \
+	do {                                 \
+	} while (0)
+#define ENGINE_PROFILE_SPACE_ROUTE_DISCONN() \
+	do {                                     \
+	} while (0)
+#define ENGINE_PROFILE_AOI_REGISTER() \
+	do {                              \
+	} while (0)
+#define ENGINE_PROFILE_AOI_UNREGISTER() \
+	do {                                \
+	} while (0)
+#define ENGINE_PROFILE_AOI_MOVE() \
+	do {                          \
+	} while (0)
+#define ENGINE_PROFILE_AOI_VISIBILITY() \
+	do {                                \
+	} while (0)
+#define ENGINE_PROFILE_AOI_QUERY() \
+	do {                           \
+	} while (0)
+#define ENGINE_PROFILE_AOI_GRID_INSERT() \
+	do {                                 \
+	} while (0)
+#define ENGINE_PROFILE_AOI_GRID_UPDATE() \
+	do {                                 \
+	} while (0)
+#define ENGINE_PROFILE_AOI_GRID_REMOVE() \
+	do {                                 \
+	} while (0)
+#define ENGINE_PROFILE_AUTH_AUTHENTICATE() \
+	do {                                   \
+	} while (0)
+#define ENGINE_PROFILE_AUTH_VALIDATE() \
+	do {                               \
+	} while (0)
+#define ENGINE_PROFILE_AUTH_CREATE_SESSION() \
+	do {                                     \
+	} while (0)
+#define ENGINE_PROFILE_AUTH_GET_SESSION() \
+	do {                                  \
+	} while (0)
+#define ENGINE_PROFILE_AUTH_REVOKE() \
+	do {                             \
+	} while (0)
+#define ENGINE_PROFILE_AUTH_CLEANUP() \
+	do {                              \
 	} while (0)
 
 #endif	// ENGINE_PROFILER_ENABLED

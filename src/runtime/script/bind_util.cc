@@ -8,10 +8,13 @@ extern "C" {
 #include "lua.h"
 }
 
+#include "runtime/profiler/profiler_events.h"
+
 namespace engine {
 namespace script {
 
 int LuaError(lua_State* L, const char* fmt, ...) {
+	ENGINE_PROFILE_SCOPE("engine.script", "LuaError");
     char buf[512];
     va_list args;
     va_start(args, fmt);

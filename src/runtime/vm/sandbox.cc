@@ -1,6 +1,7 @@
 #include "runtime/vm/sandbox.h"
 
 #include "runtime/core/log/log.h"
+#include "runtime/profiler/profiler_events.h"
 
 extern "C" {
 #include "lauxlib.h"
@@ -11,6 +12,7 @@ extern "C" {
 namespace engine {
 
 void luaL_openlibs_sandboxed(lua_State* L, LuaSandboxLevel level) {
+	ENGINE_PROFILE_SCOPE("engine.vm", "OpenLibsSandboxed");
 	auto* logger = GetLogger();
 
 	/* ── Always safe — pure computation, no OS access ─────────────── */

@@ -4,6 +4,7 @@
 #include <sstream>
 
 #include "runtime/core/log/log.h"
+#include "runtime/profiler/profiler_events.h"
 
 namespace engine {
 namespace auth {
@@ -14,6 +15,7 @@ void TokenAuthBackend::AddToken(const std::string& token, const std::string& ent
 
 AuthResult TokenAuthBackend::Authenticate(const std::string& method,
 										   const std::map<std::string, std::string>& params) {
+	ENGINE_PROFILE_AUTH_AUTHENTICATE();
 	AuthResult result;
 
 	if (method != "token") {
@@ -56,6 +58,7 @@ AuthResult TokenAuthBackend::Authenticate(const std::string& method,
 }
 
 bool TokenAuthBackend::ValidateSession(const std::string& session_id) {
+	ENGINE_PROFILE_AUTH_VALIDATE();
 	return sessions_.find(session_id) != sessions_.end();
 }
 

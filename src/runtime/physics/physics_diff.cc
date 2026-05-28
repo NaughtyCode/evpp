@@ -5,6 +5,8 @@
 
 #include <cmath>
 
+#include "runtime/profiler/profiler_events.h"
+
 namespace engine {
 
 //============================================================================
@@ -15,6 +17,7 @@ std::optional<DiffPacket> GenerateDiff(uint32_t body_id,
 									   const BodyStateSnapshot& current,
 									   const BodyStateSnapshot& previous,
 									   const ThresholdsConfig& thresholds) {
+	ENGINE_PROFILE_SCOPE("engine.physics", "GenerateDiff");
 	DiffPacket packet;
 	packet.object_id = body_id;
 	packet.change_mask = 0;
@@ -93,6 +96,7 @@ std::optional<DiffPacket> GenerateDiff(uint32_t body_id,
 //============================================================================
 
 void ObjectRegistry::Register(uint32_t body_id, const std::string& asset_name) {
+	ENGINE_PROFILE_SCOPE("engine.physics", "ObjRegistryRegister");
 	// If this body_id was already registered with a different name,
 	// remove the stale name-to-id mapping before overwriting.
 	auto it = id_to_name_.find(body_id);
@@ -106,6 +110,7 @@ void ObjectRegistry::Register(uint32_t body_id, const std::string& asset_name) {
 }
 
 void ObjectRegistry::Unregister(uint32_t body_id) {
+	ENGINE_PROFILE_SCOPE("engine.physics", "ObjRegistryUnregister");
 	auto it = id_to_name_.find(body_id);
 	if (it != id_to_name_.end()) {
 		if (!it->second.empty()) {

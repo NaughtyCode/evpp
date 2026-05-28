@@ -1,6 +1,7 @@
 #include "runtime/space/space_manager.h"
 
 #include "runtime/core/log/log.h"
+#include "runtime/profiler/profiler_events.h"
 
 namespace engine {
 namespace space {
@@ -11,11 +12,13 @@ SpaceManager& SpaceManager::Instance() {
 }
 
 Space* SpaceManager::CreateSpace(const SpaceConfig& config) {
+	ENGINE_PROFILE_SPACE_CREATE();
 	SpaceId id = next_space_id_.fetch_add(1, std::memory_order_relaxed);
 	return CreateSpaceWithId(id, config);
 }
 
 Space* SpaceManager::CreateSpaceWithId(SpaceId id, const SpaceConfig& config) {
+	ENGINE_PROFILE_SPACE_CREATE();
 	if (spaces_.find(id) != spaces_.end()) {
 		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger, "SpaceManager: space [{}] already exists", id);
@@ -33,12 +36,14 @@ Space* SpaceManager::CreateSpaceWithId(SpaceId id, const SpaceConfig& config) {
 }
 
 Space* SpaceManager::GetSpace(SpaceId id) {
+	ENGINE_PROFILE_SPACE_GET();
 	auto it = spaces_.find(id);
 	if (it == spaces_.end()) return nullptr;
 	return it->second.get();
 }
 
 void SpaceManager::DestroySpace(SpaceId id) {
+	ENGINE_PROFILE_SPACE_DESTROY();
 	auto* logger = GetLogger();
 	if (id == default_space_id_) {
 		ENGINE_LOG_INFO(logger, "SpaceManager: destroying default space [{}]", id);
@@ -61,6 +66,7 @@ Space* SpaceManager::GetDefaultSpace() {
 }
 
 Space* SpaceManager::CreateDefaultSpace(const SpaceConfig& config) {
+	ENGINE_PROFILE_SPACE_CREATE();
 	if (default_space_id_ != kInvalidSpaceId) {
 		return GetSpace(default_space_id_);
 	}

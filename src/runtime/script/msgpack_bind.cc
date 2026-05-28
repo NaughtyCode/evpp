@@ -8,6 +8,7 @@
 
 #include "runtime/config/config.h"
 #include "runtime/core/log/log.h"
+#include "runtime/profiler/profiler_events.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {
@@ -708,6 +709,7 @@ int UnpackFull(lua_State* L, int limit, int offset) {
 // ============================================================================
 
 int l_msgpack_pack(lua_State* L) {
+	ENGINE_PROFILE_SCOPE("engine.script", "MsgPackPack");
 	int nargs = lua_gettop(L);
 	if (nargs == 0) {
 		return luaL_argerror(L, 0, "MessagePack pack needs input.");
@@ -732,16 +734,19 @@ int l_msgpack_pack(lua_State* L) {
 }
 
 int l_msgpack_unpack(lua_State* L) {
+	ENGINE_PROFILE_SCOPE("engine.script", "MsgPackUnpack");
 	return UnpackFull(L, 0, 0);
 }
 
 int l_msgpack_unpack_one(lua_State* L) {
+	ENGINE_PROFILE_SCOPE("engine.script", "MsgPackUnpackOne");
 	int offset = static_cast<int>(luaL_optinteger(L, 2, 0));
 	lua_pop(L, lua_gettop(L) - 1);
 	return UnpackFull(L, 1, offset);
 }
 
 int l_msgpack_unpack_limit(lua_State* L) {
+	ENGINE_PROFILE_SCOPE("engine.script", "MsgPackUnpackLimit");
 	int limit = static_cast<int>(luaL_checkinteger(L, 2));
 	int offset = static_cast<int>(luaL_optinteger(L, 3, 0));
 	lua_pop(L, lua_gettop(L) - 1);
@@ -798,6 +803,7 @@ void SetModuleMeta(lua_State* L) {
 // ============================================================================
 
 void ExportMsgPack(ScriptVM& vm) {
+	ENGINE_PROFILE_SCOPE("engine.script", "ExportMsgPack");
 	lua_State* L = vm.GetState();
 	if (!L) return;
 

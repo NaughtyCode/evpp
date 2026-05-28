@@ -6,6 +6,8 @@ extern "C" {
 #include "lauxlib.h"
 }
 
+#include "runtime/profiler/profiler_events.h"
+
 namespace engine {
 namespace script {
 
@@ -14,6 +16,7 @@ namespace script {
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 bool NetAliveGuard::TryAcquire() {
+	ENGINE_PROFILE_SCOPE("engine.script", "NetGuardAcquire");
     /* Fast path: check alive_ before taking the mutex.
      * After Shutdown sets alive_=false, almost all TryAcquire calls
      * return here without touching the mutex. */
@@ -28,6 +31,7 @@ bool NetAliveGuard::TryAcquire() {
 }
 
 void NetAliveGuard::Release() {
+	ENGINE_PROFILE_SCOPE("engine.script", "NetGuardRelease");
     std::lock_guard<std::mutex> lock(mutex_);
     pending_count_--;
     if (pending_count_ == 0) {

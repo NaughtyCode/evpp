@@ -1,6 +1,7 @@
 #include "runtime/space/space_message.h"
 
 #include "runtime/core/log/log.h"
+#include "runtime/profiler/profiler_events.h"
 #include "runtime/space/space_manager.h"
 #include "runtime/vm/vm.h"
 
@@ -13,10 +14,12 @@ SpaceMessageRouter& SpaceMessageRouter::Instance() {
 }
 
 void SpaceMessageRouter::SendMessage(SpaceMessage msg) {
+	ENGINE_PROFILE_SPACE_MSG_SEND();
 	pending_.enqueue(std::move(msg));
 }
 
 void SpaceMessageRouter::ProcessPending() {
+	ENGINE_PROFILE_SPACE_MSG_PROCESS();
 	SpaceMessage msg;
 	size_t processed = 0;
 	auto& manager = SpaceManager::Instance();

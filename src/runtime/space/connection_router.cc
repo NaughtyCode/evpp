@@ -1,6 +1,7 @@
 #include "runtime/space/connection_router.h"
 
 #include "runtime/core/log/log.h"
+#include "runtime/profiler/profiler_events.h"
 #include "runtime/space/space_manager.h"
 #include "runtime/vm/vm.h"
 
@@ -14,6 +15,7 @@ ConnectionRouter& ConnectionRouter::Instance() {
 
 entity::EntityId ConnectionRouter::RouteNewConnection(SpaceId space_id,
                                                        evpp::TCPConnPtr conn) {
+	ENGINE_PROFILE_SPACE_ROUTE_CONN();
 	auto& manager = SpaceManager::Instance();
 	auto* space = manager.GetSpace(space_id);
 	if (!space) {
@@ -46,6 +48,7 @@ entity::EntityId ConnectionRouter::RouteNewConnection(SpaceId space_id,
 }
 
 void ConnectionRouter::RouteMessage(evpp::TCPConnPtr conn, const std::string& data) {
+	ENGINE_PROFILE_SPACE_ROUTE_MSG();
 	SpaceId space_id;
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
@@ -89,6 +92,7 @@ void ConnectionRouter::RouteMessage(evpp::TCPConnPtr conn, const std::string& da
 }
 
 void ConnectionRouter::RouteDisconnection(evpp::TCPConnPtr conn) {
+	ENGINE_PROFILE_SPACE_ROUTE_DISCONN();
 	SpaceId space_id;
 	entity::EntityId eid;
 

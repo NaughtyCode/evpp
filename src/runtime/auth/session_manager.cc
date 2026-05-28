@@ -6,6 +6,7 @@
 
 #include "runtime/auth/auth_backend.h"
 #include "runtime/core/log/log.h"
+#include "runtime/profiler/profiler_events.h"
 
 namespace engine {
 namespace auth {
@@ -31,6 +32,7 @@ std::string SessionManager::GenerateSessionId() {
 
 SessionInfo SessionManager::CreateSession(const std::string& entity_id,
 										   evpp::TCPConnPtr conn) {
+	ENGINE_PROFILE_AUTH_CREATE_SESSION();
 	std::lock_guard<std::mutex> lock(mutex_);
 
 	// Enforce max sessions per account
@@ -73,6 +75,7 @@ SessionInfo SessionManager::CreateSession(const std::string& entity_id,
 }
 
 bool SessionManager::IsSessionValid(const std::string& session_id) const {
+	ENGINE_PROFILE_AUTH_VALIDATE();
 	std::lock_guard<std::mutex> lock(mutex_);
 
 	auto it = sessions_.find(session_id);
@@ -94,6 +97,7 @@ bool SessionManager::IsSessionValid(const std::string& session_id) const {
 }
 
 std::optional<SessionInfo> SessionManager::GetSession(evpp::TCPConnPtr conn) const {
+	ENGINE_PROFILE_AUTH_GET_SESSION();
 	std::lock_guard<std::mutex> lock(mutex_);
 
 	auto it = conn_to_session_.find(conn.get());
@@ -106,6 +110,7 @@ std::optional<SessionInfo> SessionManager::GetSession(evpp::TCPConnPtr conn) con
 }
 
 std::optional<SessionInfo> SessionManager::GetSessionById(const std::string& session_id) const {
+	ENGINE_PROFILE_AUTH_GET_SESSION();
 	std::lock_guard<std::mutex> lock(mutex_);
 
 	auto it = sessions_.find(session_id);
@@ -115,6 +120,7 @@ std::optional<SessionInfo> SessionManager::GetSessionById(const std::string& ses
 }
 
 void SessionManager::RevokeSession(const std::string& session_id) {
+	ENGINE_PROFILE_AUTH_REVOKE();
 	std::lock_guard<std::mutex> lock(mutex_);
 
 	if (backend_) {
@@ -141,6 +147,7 @@ void SessionManager::RevokeSession(evpp::TCPConnPtr conn) {
 }
 
 void SessionManager::CleanupExpired() {
+	ENGINE_PROFILE_AUTH_CLEANUP();
 	std::lock_guard<std::mutex> lock(mutex_);
 
 	auto now = std::chrono::system_clock::now();

@@ -1,5 +1,7 @@
 #include "entity_manager.h"
 
+#include "runtime/profiler/profiler_events.h"
+
 namespace engine {
 namespace entity {
 
@@ -9,6 +11,7 @@ EntityManager& EntityManager::Instance() {
 }
 
 Entity* EntityManager::CreateEntity(EntityId id) {
+	ENGINE_PROFILE_ENTITY_CREATE();
 	if (id == kInvalidEntityId) {
 		id = id_allocator_.Allocate();
 	}
@@ -22,11 +25,13 @@ Entity* EntityManager::CreateEntity(EntityId id) {
 }
 
 Entity* EntityManager::GetEntity(EntityId id) {
+	ENGINE_PROFILE_ENTITY_GET();
 	auto it = entities_.find(id);
 	return it != entities_.end() ? it->second.get() : nullptr;
 }
 
 void EntityManager::DestroyEntity(EntityId id) {
+	ENGINE_PROFILE_ENTITY_DESTROY();
 	auto it = entities_.find(id);
 	if (it == entities_.end()) return;
 	uint32_t body_id = it->second->GetPhysicsBodyId();
@@ -38,6 +43,7 @@ void EntityManager::DestroyEntity(EntityId id) {
 }
 
 void EntityManager::DestroyAll() {
+	ENGINE_PROFILE_SCOPE("engine.entity", "DestroyAll");
 	for (auto& pair : entities_) {
 		pair.second->Destroy();
 	}
@@ -47,6 +53,7 @@ void EntityManager::DestroyAll() {
 }
 
 Entity* EntityManager::FindByConnection(const evpp::TCPConnPtr& conn) {
+	ENGINE_PROFILE_SCOPE("engine.entity", "FindByConnection");
 	if (!conn) return nullptr;
 	auto it = conn_to_entity_.find(conn.get());
 	if (it == conn_to_entity_.end()) return nullptr;
@@ -62,6 +69,7 @@ void EntityManager::UnregisterConnectionBinding(const evpp::TCPConn* raw_conn) {
 }
 
 void EntityManager::ForEachActive(std::function<void(Entity&)> callback) {
+	ENGINE_PROFILE_SCOPE("engine.entity", "ForEachActive");
 	for (auto& pair : entities_) {
 		if (pair.second->GetState() == EntityState::Active) {
 			callback(*pair.second);
