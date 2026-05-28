@@ -6,6 +6,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -64,6 +65,7 @@ struct RpcClientCtx {
 	std::unique_ptr<rpc::RpcClient> client;
 	lua_State* L = nullptr;
 	int instance_ref = LUA_NOREF;
+	int send_cb_ref = LUA_NOREF;  // Lua registry ref for the send callback
 	bool disposed = false;
 };
 
@@ -118,6 +120,9 @@ static void DrainPendingQueue(RpcServerCtx* ctx, const char* error_msg) {
 		for (auto& req : batch) {
 			try { req->promise.set_value(error_msg); } catch (...) {}
 		}
+		// Yield between passes so in-flight handlers blocked on
+		// queue_mutex have a chance to push their requests.
+		if (pass < 2) std::this_thread::yield();
 	}
 }
 
@@ -302,30 +307,87 @@ int l_client_call(lua_State* L) {
 	return 2;
 }
 
+// client:call_async(service, method, args, callback)
+// Non-blocking — callback(body, err) is invoked when the response
+// arrives (or on timeout/error).  Does NOT block the Lua thread.
+int l_client_call_async(lua_State* L) {
+	auto* ctx = GetCtxFromTable<RpcClientCtx>(L, 1);
+	if (!ctx || ctx->disposed) return PushRpcError(L, "client: closed");
+
+	if (!ctx->client->HasTransport()) {
+		return PushRpcError(L, "client has no transport — call client:set_send_callback first");
+	}
+
+	const char* service = luaL_checkstring(L, 2);
+	const char* method = luaL_checkstring(L, 3);
+	const char* args = luaL_optstring(L, 4, "{}");
+	luaL_checktype(L, 5, LUA_TFUNCTION);
+
+	// Store callback in registry for async invocation
+	lua_pushvalue(L, 5);
+	int cb_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	lua_State* captured_L = L;
+
+	ctx->client->CallAsync(service, method, args,
+		[captured_L, cb_ref](const rpc::RpcResponse& resp) {
+			lua_rawgeti(captured_L, LUA_REGISTRYINDEX, cb_ref);  // cb
+			if (resp.success) {
+				lua_pushlstring(captured_L, resp.body.data(), resp.body.size());  // cb, body
+				lua_pushnil(captured_L);                                          // cb, body, nil
+			} else {
+				lua_pushnil(captured_L);                                                  // cb, nil
+				lua_pushlstring(captured_L, resp.error_message.data(),
+								resp.error_message.size());                                 // cb, nil, err
+			}
+
+			if (lua_pcall(captured_L, 2, 0, 0) != LUA_OK) {
+				auto* logger = GetLogger();
+				ENGINE_LOG_ERROR(logger, "RpcClient: call_async callback error: {}",
+								 lua_tostring(captured_L, -1));
+				lua_pop(captured_L, 1);
+			}
+
+			luaL_unref(captured_L, LUA_REGISTRYINDEX, cb_ref);
+		});
+
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
 int l_client_set_send_callback(lua_State* L) {
 	auto* ctx = GetCtxFromTable<RpcClientCtx>(L, 1);
 	if (!ctx || ctx->disposed) return PushRpcError(L, "client: closed");
 
 	luaL_checktype(L, 2, LUA_TFUNCTION);
+
+	// Release previous send callback if re-registering.
+	if (ctx->send_cb_ref != LUA_NOREF) {
+		luaL_unref(L, LUA_REGISTRYINDEX, ctx->send_cb_ref);
+		ctx->send_cb_ref = LUA_NOREF;
+	}
+
 	lua_pushvalue(L, 2);
 	int cb_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	ctx->send_cb_ref = cb_ref;
 
-	// The send callback is invoked from RpcClient::Call/CallAsync on the
-	// calling thread.  It receives the RpcRequest and must serialise +
-	// transmit it.  Since CallSync blocks the calling thread, the send
-	// callback runs synchronously — no need for deferred dispatch.
-	ctx->client->SetSendCallback([L, cb_ref](rpc::RpcRequest req) {
-		lua_rawgeti(L, LUA_REGISTRYINDEX, cb_ref);          // cb
-		lua_pushinteger(L, static_cast<lua_Integer>(req.header.msgid));  // cb, msgid
-		lua_pushlstring(L, req.header.service.data(), req.header.service.size());  // cb, msgid, svc
-		lua_pushlstring(L, req.header.method.data(), req.header.method.size());    // cb, msgid, svc, mtd
-		lua_pushlstring(L, req.body.data(), req.body.size());                      // cb, msgid, svc, mtd, body
+	// Weak reference to L: the send callback lambda outlives this
+	// function call (it's stored inside RpcClient).  L is guaranteed
+	// valid until ShutdownRpcBindings destroys the client.  If the
+	// client is destroyed via stop/gc, the lambda is destroyed
+	// together with RpcClient — no dangling L.
+	lua_State* captured_L = L;
+	ctx->client->SetSendCallback([captured_L, cb_ref](rpc::RpcRequest req) {
+		lua_rawgeti(captured_L, LUA_REGISTRYINDEX, cb_ref);                      // cb
+		lua_pushinteger(captured_L, static_cast<lua_Integer>(req.header.msgid));  // cb, msgid
+		lua_pushlstring(captured_L, req.header.service.data(), req.header.service.size());  // cb, msgid, svc
+		lua_pushlstring(captured_L, req.header.method.data(), req.header.method.size());    // cb, msgid, svc, mtd
+		lua_pushlstring(captured_L, req.body.data(), req.body.size());                      // cb, msgid, svc, mtd, body
 
-		if (lua_pcall(L, 4, 0, 0) != LUA_OK) {
+		if (lua_pcall(captured_L, 4, 0, 0) != LUA_OK) {
 			auto* logger = GetLogger();
 			ENGINE_LOG_ERROR(logger, "RpcClient: send callback error: {}",
-							 lua_tostring(L, -1));
-			lua_pop(L, 1);
+							 lua_tostring(captured_L, -1));
+			lua_pop(captured_L, 1);
 		}
 	});
 
@@ -346,6 +408,11 @@ int l_client_stop(lua_State* L) {
 	if (state) {
 		state->clients.erase(ctx);
 		state->client_shared.erase(ctx);
+	}
+
+	if (ctx->send_cb_ref != LUA_NOREF) {
+		luaL_unref(L, LUA_REGISTRYINDEX, ctx->send_cb_ref);
+		ctx->send_cb_ref = LUA_NOREF;
 	}
 
 	ctx->client.reset();
@@ -372,6 +439,11 @@ int l_client_gc(lua_State* L) {
 	if (state) {
 		state->clients.erase(ctx);
 		state->client_shared.erase(ctx);
+	}
+
+	if (ctx->send_cb_ref != LUA_NOREF) {
+		luaL_unref(L, LUA_REGISTRYINDEX, ctx->send_cb_ref);
+		ctx->send_cb_ref = LUA_NOREF;
 	}
 
 	ctx->client.reset();
@@ -448,6 +520,7 @@ const luaL_Reg kServerMethods[] = {
 
 const luaL_Reg kClientMethods[] = {
 	{"call",                l_client_call},
+	{"call_async",          l_client_call_async},
 	{"set_send_callback",   l_client_set_send_callback},
 	{"stop",                l_client_stop},
 	{nullptr, nullptr},
@@ -492,10 +565,18 @@ void UpdateRpcBindings(ScriptVM& vm) {
 	auto* state = GetRpcState(L);
 	if (!state) return;
 
+	// ── Process client timeouts FIRST (cheap map scan, guarantees
+	//     they run every frame regardless of server load) ─────────────
+
+	for (auto* ctx : state->clients) {
+		if (ctx->disposed) continue;
+		ctx->client->ProcessTimeouts();
+	}
+
+	// ── Process server pending queues (with 5ms time budget) ──────────
+
 	auto budget_start = std::chrono::steady_clock::now();
 	constexpr auto kMaxBudget = std::chrono::milliseconds(5);
-
-	// ── Process server pending queues ──────────────────────────────────
 
 	for (auto* ctx : state->servers) {
 		if (ctx->disposed) continue;
@@ -509,7 +590,7 @@ void UpdateRpcBindings(ScriptVM& vm) {
 		for (auto& req : batch) {
 			// Check time budget — stop processing if we've used >5ms.
 			if (std::chrono::steady_clock::now() - budget_start >= kMaxBudget)
-				goto budget_exhausted;
+				return;
 
 			std::string result = R"({"error":"service not found"})";
 
@@ -538,15 +619,6 @@ void UpdateRpcBindings(ScriptVM& vm) {
 
 			try { req->promise.set_value(result); } catch (...) {}
 		}
-	}
-
-budget_exhausted:
-
-	// ── Process client timeouts ────────────────────────────────────────
-
-	for (auto* ctx : state->clients) {
-		if (ctx->disposed) continue;
-		ctx->client->ProcessTimeouts();
 	}
 }
 

@@ -81,8 +81,11 @@ public:
 	// Number of in-flight requests.
 	size_t PendingCount() const;
 
-	// Whether a send callback is set.
-	bool HasTransport() const { return send_callback_ != nullptr; }
+	// Whether a send callback is set. Thread-safe.
+	bool HasTransport() const {
+		std::lock_guard<std::mutex> lock(mutex_);
+		return send_callback_ != nullptr;
+	}
 
 private:
 	uint32_t NextMsgId();

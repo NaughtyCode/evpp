@@ -29,6 +29,12 @@ struct RpcHeader {
 	std::string service;
 	std::string method;
 	RpcMessageType type = RpcMessageType::kRequest;
+
+	RpcHeader() = default;
+	RpcHeader(RpcHeader&&) = default;
+	RpcHeader& operator=(RpcHeader&&) = default;
+	RpcHeader(const RpcHeader&) = default;
+	RpcHeader& operator=(const RpcHeader&) = default;
 };
 
 struct RpcRequest {
@@ -55,8 +61,9 @@ struct RpcResponse {
 	RpcResponse(const RpcResponse&) = default;
 	RpcResponse& operator=(const RpcResponse&) = default;
 
-	// Create an error response without allocating error_message when unused.
-	static RpcResponse Error(uint32_t msgid, int code, std::string message) {
+	// Create an error response. The caller must consume the return value —
+	// discarding it means a response was generated but never sent.
+	[[nodiscard]] static RpcResponse Error(uint32_t msgid, int code, std::string message) {
 		RpcResponse r;
 		r.msgid = msgid;
 		r.success = false;
@@ -65,7 +72,7 @@ struct RpcResponse {
 		return r;
 	}
 
-	static RpcResponse Ok(uint32_t msgid, std::string body = {}) {
+	[[nodiscard]] static RpcResponse Ok(uint32_t msgid, std::string body = {}) {
 		RpcResponse r;
 		r.msgid = msgid;
 		r.success = true;
