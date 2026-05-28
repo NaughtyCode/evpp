@@ -5,7 +5,7 @@
 | 属性 | 值 |
 |------|-----|
 | **调用线程** | 调用者线程（通常为主线程 / EventLoop 线程）。所有 `space.*` 函数均为同步调用，直接操作 `SpaceManager` 和 `SpaceMessageRouter` 单例。 |
-| **线程安全** | 否。`SpaceManager` 是全局单例，无锁保护。Space 内部持有的 Entity 不跨线程共享。`SpaceMessageRouter` 使用内部队列（消息通过 `_pending_messages` 存储在 Lua 全局 table 中）。所有 Space 操作必须在同一线程上串行调用。 |
+| **线程安全** | 否。`SpaceManager::Instance()` 和 `SpaceMessageRouter::Instance()` 是进程级全局单例，无锁保护。Space 内部持有的 Entity 不跨线程共享。`SpaceMessageRouter` 使用内部队列（消息通过 `_pending_messages` 存储在 Lua 全局 table `space` 中）。所有 Space 操作必须在同一线程上串行调用。**注意：`_pending_messages` 存储在 Lua 全局 `space` table 中，每个 VM 有独立的 Lua state，因此每个 VM 有独立的消息队列。** |
 | **回调线程** | 无回调。采用主动轮询模式——每帧调用 `space.poll()` 从 `space._pending_messages` 队列获取跨空间消息。消息通过 `space._deliver_message` 推入队列，不由回调触发。 |
 
 ## Overview
@@ -98,7 +98,7 @@ Returns information about the default space.
 
 ### `space.poll()`
 
-Polls for the next pending cross-space message (non-blocking).
+Polls for the next pending cross-space message (non-blocking). Each call returns at most **one** message. Call in a loop until `nil` to drain all pending messages.
 
 | Returns | Type | Description |
 |---------|------|-------------|

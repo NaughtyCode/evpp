@@ -5,7 +5,7 @@
 | 属性 | 值 |
 |------|-----|
 | **调用线程** | 调用者线程（通常为主线程 / EventLoop 线程）。所有 `aoi.*` 函数均为同步调用，直接操作全局 `AOIManager` 单例（通过 `std::unique_ptr<AOIManager>` 持有）。 |
-| **线程安全** | 否。`g_aoi_manager` 是全局变量，无锁保护。AOI 管理器内部使用 `SpatialGrid` 进行空间索引，非线程安全。所有 AOI 操作必须在同一线程上串行调用。 |
+| **线程安全** | 否。`g_aoi_manager` 是进程级全局变量（`std::unique_ptr`），所有 ScriptVM 共享同一 AOI 实例。无锁保护，AOI 管理器内部使用 `SpatialGrid` 进行空间索引，非线程安全。所有 AOI 操作必须在同一线程上串行调用。多个 VM 共享 AOI 状态时需注意实体 ID 冲突。 |
 | **回调线程** | 仅事件日志。`aoi.init()` 注册了一个内置的 enter/leave 事件回调，该回调在 `RegisterEntity` / `OnEntityMove` / `UnregisterEntity` 调用期间同步触发，仅在调用者线程上打印 DEBUG 日志。没有 Lua 回调机制。 |
 
 ## Overview

@@ -182,6 +182,8 @@ Enqueues a destroy command for a physics body.
 |---------|------|--------|-------------|
 | `ok` | `boolean` | `int` (0/1 via `lua_pushboolean`) | `true` if command enqueued |
 
+失败（物理未初始化）返回 `nil, "physics not initialized"`。
+
 #### `physics.apply_force(body_id, fx, fy, fz, px, py, pz)`
 
 Applies a force to a physics body at a world-space point.
@@ -263,6 +265,8 @@ Checks if a physics body is active.
 |---------|------|--------|-------------|
 | `active` | `boolean` | `int` (0/1 via `lua_pushboolean`) | `true` if the body is active |
 
+失败（物理未初始化）返回 `nil, "physics not initialized"`。
+
 #### `physics.ray_cast(ox, oy, oz, dx, dy, dz, max_dist)`
 
 Performs a ray cast against the physics world.
@@ -288,6 +292,8 @@ Saves the current physics state to a binary blob.
 | Returns | Type | C Type | Description |
 |---------|------|--------|-------------|
 | `data` | `string` | `lua_pushlstring` | Binary state data for later restore |
+
+失败（物理未初始化）返回 `nil, "physics not initialized"`。
 
 #### `physics.restore_state(data)`
 
@@ -325,9 +331,15 @@ Returns current physics simulation statistics.
 |---------|------|--------|-------------|
 | `stats` | `table` | Lua table (via `lua_newtable`) | Stats table with fields: `bodies` (integer — total bodies), `active` (integer — active bodies), `collisions` (integer — contact constraints) |
 
+失败（物理未初始化）返回 `nil, "physics not initialized"`。
+
 ### Physics Lua Log Functions
 
-The physics bindings also register `log_trace`, `log_debug`, `log_info`, `log_warn`, `log_error`, `log_fatal` as global functions. These behave identically to the main log system but route through the physics thread's logger (if available), with `[physics_lua]` prefix.
+The physics bindings also register `log_trace`, `log_debug`, `log_info`, `log_warn`, `log_error`, `log_fatal` as **global** functions (via `vm.RegisterFunctions`). These route through the physics thread's logger with `[physics_lua]` prefix.
+
+**重要：** 如果 physics bindings 在 log bindings **之后**导出，这些同名全局函数会**覆盖**主日志系统的 `log_*` 函数，此后所有 Lua `log_info()` 等调用将使用 physics 线程 logger。如果 physics 线程未启动，日志可能丢失。建议仅在 physics 线程上的 Lua 脚本中使用这些函数，主线程脚本应使用主日志系统。
+
+Conditionally compiled — 仅在定义 `ENGINE_PHYSICS_ENABLED` 时可用。
 
 ### Example
 

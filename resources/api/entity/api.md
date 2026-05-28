@@ -5,7 +5,7 @@
 | 属性 | 值 |
 |------|-----|
 | **调用线程** | 调用者线程（通常为主线程 / EventLoop 线程）。所有 entity 实例方法必须在 ScriptVM 所属线程上调用。 |
-| **线程安全** | 否。`EntityCtx` 通过 light userdata 存储在 Lua 实例表中，与 ScriptVM 绑定。`EntityManager` 是全局单例，非线程安全。Entity 的 Lua component ref 存储在 `lua_State` registry 中，不可跨 VM 共享。 |
+| **线程安全** | 否。`EntityCtx` 通过 light userdata 存储在 Lua 实例表中，per-VM。但 `EntityManager::Instance()` 是进程级全局单例，非线程安全——多个 ScriptVM 不可并发操作 Entity。Entity 的 Lua component ref 存储在各自 `lua_State` registry 中，不可跨 VM 共享。 |
 | **回调线程** | 调用者线程。Entity 定时器回调通过 `EntityManager` 的定时器机制在调用者线程上触发。`entity:send()` 委托给绑定的 conn 实例的 `send` 方法。 |
 
 ## Overview

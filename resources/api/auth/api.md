@@ -5,7 +5,7 @@
 | 属性 | 值 |
 |------|-----|
 | **调用线程** | 调用者线程（通常为主线程 / EventLoop 线程）。所有 `auth.*` 函数均为同步调用，直接操作 `SessionManager` 单例。 |
-| **线程安全** | 取决于 `SessionManager` 的实现。Lua binding 层本身不提供额外的线程同步——所有 `auth.*` 函数直接转发到 `SessionManager::Instance()`，无锁、无队列。若 `SessionManager` 内部使用了 mutex 保护，则线程安全；否则需在单线程上调用。 |
+| **线程安全** | 取决于 `SessionManager` 的实现。Lua binding 层本身不提供额外的线程同步——所有 `auth.*` 函数直接转发到 `SessionManager::Instance()`，无锁、无队列。若 `SessionManager` 内部使用了 mutex 保护，则线程安全；否则需在单线程上调用。**注意：`SessionManager` 是进程级全局单例，所有 ScriptVM 共享同一会话状态，不可按 VM 隔离。** |
 | **回调线程** | 无回调。所有函数均为同步调用，立即返回。 |
 
 ## Overview
@@ -66,8 +66,7 @@ Creates a new session for the given entity.
 
 | Returns | Type | C Type | Description |
 |---------|------|--------|-------------|
-| `session_id` | `string` | `lua_pushstring` | Session ID string on success |
-| `nil` | `nil` | — | `nil` if session creation failed |
+| `session_id` | `string` or `nil` | `lua_pushstring` / `lua_pushnil` | Session ID string on success, `nil` if creation failed。返回 1 个值。 |
 
 ### `auth.validate_session(session_id)`
 

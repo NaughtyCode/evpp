@@ -103,7 +103,7 @@ Stops the server and releases all resources. All pending RPC calls are drained w
 
 ### `client:call(service, method, args [, timeout_ms])`
 
-Synchronous RPC call. Blocks the calling thread until a response is received or timeout.
+Synchronous RPC call. **Blocks the calling thread** until a response is received or timeout. The underlying `RpcClient::CallSync` uses `std::future::wait_for` — do not call from the main frame loop for long-running operations; use `call_async` instead.
 
 | Parameter | Type | C Type | Description |
 |-----------|------|--------|-------------|

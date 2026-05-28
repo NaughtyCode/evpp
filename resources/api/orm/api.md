@@ -5,7 +5,7 @@
 | 属性 | 值 |
 |------|-----|
 | **调用线程** | 调用者线程（通常为主线程 / EventLoop 线程）。所有 `orm.*` 函数均为同步调用，直接操作 `OrmSession` 单例。 |
-| **线程安全** | 取决于 `OrmSession` 的实现。Lua binding 层本身不提供额外的线程同步——所有 `orm.*` 函数直接转发到 `OrmSession::Instance()`，无锁、无队列。若 ORM 内部使用了 mutex 保护，则线程安全；否则需在单线程上调用。 |
+| **线程安全** | 取决于 `OrmSession` 的实现。Lua binding 层本身不提供额外的线程同步——所有 `orm.*` 函数直接转发到 `OrmSession::Instance()`，无锁、无队列。若 ORM 内部使用了 mutex 保护，则线程安全；否则需在单线程上调用。**注意：`OrmSession` 是进程级全局单例，所有 ScriptVM 共享同一 schema 注册表和缓存。** |
 | **回调线程** | 无回调。所有函数均为同步调用，立即返回。 |
 
 ## Overview
