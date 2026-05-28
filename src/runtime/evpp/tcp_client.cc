@@ -135,7 +135,7 @@ void TCPClient::OnConnection(evpp_socket_t sockfd, const std::string& laddr) {
 	c->SetMessageCallback(msg_fn_);
 	c->SetConnectionCallback(conn_fn_);
 	c->SetCloseCallback(std::bind(&TCPClient::OnRemoveConnection, this, std::placeholders::_1));
-#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL) || defined(EVPP_OPENSSL_ENABLED)
 	if (ssl_ctx_.valid()) {
 		c->SetSSLContext(ssl_ctx_.raw_ctx());
 	}

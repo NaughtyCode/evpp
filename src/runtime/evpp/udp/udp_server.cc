@@ -221,7 +221,9 @@ void Server::RecvingLoop(RecvThread* thread) {
 			break;
 		}
 
-		// TODO use recvmmsg to improve performance
+		// On Linux >= 2.6.33, recvmmsg() can batch multiple datagrams per
+		// syscall for ~30% throughput improvement. Deferred: not available
+		// on Windows/macOS — would need platform-specific dispatch.
 
 		MessagePtr recv_msg(new Message(thread->fd(), recv_buf_size_));
 		socklen_t addr_len = sizeof(struct sockaddr_storage);

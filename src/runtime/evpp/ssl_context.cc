@@ -1,6 +1,6 @@
 #include "runtime/evpp/ssl_context.h"
 
-#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL)
+#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL) || defined(EVPP_OPENSSL_ENABLED)
 
 #include "runtime/core/log/log.h"
 #include "runtime/evpp/libevent.h"

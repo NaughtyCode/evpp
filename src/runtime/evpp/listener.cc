@@ -1,5 +1,8 @@
 #include "runtime/evpp/listener.h"
 
+#include <chrono>
+#include <thread>
+
 #include "runtime/evpp/event_loop.h"
 #include "runtime/evpp/fd_channel.h"
 #include "runtime/evpp/inner_pre.h"
@@ -32,8 +35,15 @@ bool Listener::Listen(int backlog) {
 	}
 
 	struct sockaddr_storage addr = sock::ParseFromIPPort(addr_.data());
-	// TODO Add retry when failed
-	int ret = ::bind(fd_, sock::sockaddr_cast(&addr), static_cast<socklen_t>(sizeof(addr)));
+	sock::SetReuseAddr(fd_);
+	int ret = -1;
+	for (int attempt = 0; attempt < 5; ++attempt) {
+		ret = ::bind(fd_, sock::sockaddr_cast(&addr), static_cast<socklen_t>(sizeof(addr)));
+		if (ret == 0) break;
+		if (attempt < 4) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(200));
+		}
+	}
 	if (ret < 0) {
 		int serrno = EVPP_ERRNO;
 		ENGINE_LOG_CRITICAL(

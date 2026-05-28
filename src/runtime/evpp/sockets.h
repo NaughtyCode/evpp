@@ -19,6 +19,7 @@ EVPP_EXPORT void SetKeepAlive(evpp_socket_t fd, bool on);
 EVPP_EXPORT void SetReuseAddr(evpp_socket_t fd);
 EVPP_EXPORT void SetReusePort(evpp_socket_t fd);
 EVPP_EXPORT void SetTCPNoDelay(evpp_socket_t fd, bool on);
+EVPP_EXPORT void SetLinger(evpp_socket_t fd, bool on, int seconds = 0);
 EVPP_EXPORT void SetTimeout(evpp_socket_t fd, uint32_t timeout_ms);
 EVPP_EXPORT void SetTimeout(evpp_socket_t fd, const Duration& timeout);
 EVPP_EXPORT std::string ToIPPort(const struct sockaddr_storage* ss);

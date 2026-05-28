@@ -387,6 +387,22 @@ void SetTCPNoDelay(evpp_socket_t fd, bool on) {
 	}
 }
 
+void SetLinger(evpp_socket_t fd, bool on, int seconds) {
+	struct linger ling = { on ? 1 : 0, seconds };
+	int rc = ::setsockopt(fd,
+						  SOL_SOCKET,
+						  SO_LINGER,
+						  reinterpret_cast<const char*>(&ling),
+						  static_cast<socklen_t>(sizeof ling));
+	if (rc != 0) {
+		int serrno = EVPP_ERRNO;
+		ENGINE_LOG_ERROR(engine::GetLogger(),
+						 "setsockopt(SO_LINGER) failed, errno={} {}",
+						 serrno,
+						 strerror(serrno));
+	}
+}
+
 }
 }
 

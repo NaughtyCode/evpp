@@ -164,6 +164,20 @@ set(SCRIPT_SOURCES
 )
 source_group("script" FILES ${SCRIPT_SOURCES})
 
+# ── Monitoring ──────────────────────────────────────────────────────
+set(MONITORING_SOURCES
+    ${RUNTIME_DIR}/monitoring/metrics.cc ${RUNTIME_DIR}/monitoring/metrics.h
+    ${RUNTIME_DIR}/monitoring/admin_http.cc ${RUNTIME_DIR}/monitoring/admin_http.h
+)
+source_group("monitoring" FILES ${MONITORING_SOURCES})
+
+# ── AOI ──────────────────────────────────────────────────────────────
+set(AOI_SOURCES
+    ${RUNTIME_DIR}/aoi/spatial_index.cc ${RUNTIME_DIR}/aoi/spatial_index.h
+    ${RUNTIME_DIR}/aoi/aoi_manager.cc ${RUNTIME_DIR}/aoi/aoi_manager.h
+)
+source_group("aoi" FILES ${AOI_SOURCES})
+
 # ── Profiler ───────────────────────────────────────────────────────
 set(PROFILER_SOURCES
     ${RUNTIME_DIR}/profiler/profiler_categories.h ${RUNTIME_DIR}/profiler/profiler_core.cc ${RUNTIME_DIR}/profiler/profiler_core.h
@@ -323,6 +337,8 @@ set(SERVERENGINE_SOURCES
     ${ENTITY_SOURCES}
     ${SPACE_SOURCES}
     ${SCRIPT_SOURCES}
+    ${MONITORING_SOURCES}
+    ${AOI_SOURCES}
     ${PROFILER_SOURCES}
     ${PHYSICS_HEADERS}
     ${EVPP_SOURCES}

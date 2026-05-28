@@ -12,7 +12,7 @@
 #include "runtime/evpp/slice.h"
 #include "runtime/evpp/tcp_callbacks.h"
 
-#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL) || defined(EVPP_OPENSSL_ENABLED)
 struct ssl_ctx_st;
 struct ssl_st;
 #endif
@@ -139,7 +139,9 @@ class EVPP_EXPORT TCPConn : public std::enable_shared_from_this<TCPConn> {
 	public:
 	void SetTCPNoDelay(bool on);
 
-	// TODO Add : SetLinger();
+	// Control SO_LINGER: when on is true, close() will abort pending data
+	// after |seconds| delay rather than waiting indefinitely.
+	void SetLinger(bool on, int seconds = 0);
 
 	void ReserveInputBuffer(size_t len) {
 		input_buffer_.Reserve(len);
@@ -161,7 +163,7 @@ class EVPP_EXPORT TCPConn : public std::enable_shared_from_this<TCPConn> {
 		return rate_limiter_.max_bytes_per_sec();
 	}
 
-#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL) || defined(EVPP_OPENSSL_ENABLED)
 	void SetSSLContext(ssl_ctx_st* ctx) {
 		ssl_ctx_ = ctx;
 	}
@@ -223,7 +225,7 @@ class EVPP_EXPORT TCPConn : public std::enable_shared_from_this<TCPConn> {
 	std::string remote_addr_;  // the remote address with form : "ip:port"
 	std::unique_ptr<FdChannel> chan_;
 	Buffer input_buffer_;
-	Buffer output_buffer_;	// TODO use a list<Slice> ??
+	Buffer output_buffer_;  // single contiguous buffer; simpler than scatter-gather for most MTU-sized writes
 
 	enum {
 		kContextCount = 16,
@@ -247,7 +249,7 @@ class EVPP_EXPORT TCPConn : public std::enable_shared_from_this<TCPConn> {
 	std::priority_queue<PendingMessage> pending_messages_;
 	RateLimiter rate_limiter_;
 
-#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL) || defined(EVPP_OPENSSL_ENABLED)
 	ssl_ctx_st* ssl_ctx_ = nullptr;
 	ssl_st* ssl_ = nullptr;
 #endif

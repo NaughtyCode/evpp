@@ -72,6 +72,51 @@ add_unit_test(test_entity entity/test_entity.cpp)
 add_test(NAME unit.entity COMMAND test_entity)
 set_tests_properties(unit.entity PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
+# ── RPC tests ───────────────────────────────────────────────────────
+add_unit_test(test_rpc rpc/test_rpc.cpp)
+add_test(NAME unit.rpc COMMAND test_rpc)
+set_tests_properties(unit.rpc PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
+# ── Auth tests ──────────────────────────────────────────────────────
+add_unit_test(test_auth auth/test_auth.cpp)
+add_test(NAME unit.auth COMMAND test_auth)
+set_tests_properties(unit.auth PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
+# ── Hot-reload tests ────────────────────────────────────────────────
+add_unit_test(test_hotreload hotreload/test_hotreload.cpp)
+add_test(NAME unit.hotreload COMMAND test_hotreload)
+set_tests_properties(unit.hotreload PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
+# ── Database ORM tests ──────────────────────────────────────────────
+add_unit_test(test_orm database/test_orm.cpp)
+add_test(NAME unit.database.orm COMMAND test_orm)
+set_tests_properties(unit.database.orm PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
+# ── Database cache tests ────────────────────────────────────────────
+add_unit_test(test_cache database/test_cache.cpp)
+add_test(NAME unit.database.cache COMMAND test_cache)
+set_tests_properties(unit.database.cache PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
+# ── Monitoring tests ─────────────────────────────────────────────────
+add_unit_test(test_metrics monitoring/test_metrics.cpp)
+add_test(NAME unit.metrics COMMAND test_metrics)
+set_tests_properties(unit.metrics PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
+# ── AOI tests ────────────────────────────────────────────────────────
+add_unit_test(test_aoi aoi/test_aoi.cpp)
+add_test(NAME unit.aoi COMMAND test_aoi)
+set_tests_properties(unit.aoi PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
+# ── Space tests ──────────────────────────────────────────────────────
+add_unit_test(test_space space/test_space.cpp)
+add_test(NAME unit.space COMMAND test_space)
+set_tests_properties(unit.space PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
+# ── Coroutine tests ──────────────────────────────────────────────────
+add_unit_test(test_coroutine coroutine/test_coroutine.cpp)
+add_test(NAME unit.coroutine COMMAND test_coroutine)
+set_tests_properties(unit.coroutine PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
 # ── Client API tests ────────────────────────────────────────────────
 # Only if GameClient target exists
 if(TARGET GameClient)

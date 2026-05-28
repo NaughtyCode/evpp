@@ -1,6 +1,6 @@
 #pragma once
 
-#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL)
+#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL) || defined(EVPP_OPENSSL_ENABLED)
 
 #include <memory>
 #include <string>

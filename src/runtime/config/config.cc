@@ -23,9 +23,7 @@ ConfigManager& ConfigManager::Instance() {
 bool ConfigManager::LoadRuntimeFromString(const std::string& json) {
 	auto ec = glz::read_json(runtime_config_, json);
 	if (ec) {
-		std::fprintf(stderr,
-					 "ConfigManager: failed to parse runtime config: %s\n",
-					 glz::format_error(ec, json).c_str());
+		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to parse runtime config: {}", glz::format_error(ec, json));
 		return false;
 	}
 	return true;
@@ -34,9 +32,7 @@ bool ConfigManager::LoadRuntimeFromString(const std::string& json) {
 bool ConfigManager::LoadClientFromString(const std::string& json) {
 	auto ec = glz::read_json(client_config_, json);
 	if (ec) {
-		std::fprintf(stderr,
-					 "ConfigManager: failed to parse client config: %s\n",
-					 glz::format_error(ec, json).c_str());
+		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to parse client config: {}", glz::format_error(ec, json));
 		return false;
 	}
 	return true;
@@ -45,9 +41,7 @@ bool ConfigManager::LoadClientFromString(const std::string& json) {
 bool ConfigManager::LoadServerFromString(const std::string& json) {
 	auto ec = glz::read_json(server_config_, json);
 	if (ec) {
-		std::fprintf(stderr,
-					 "ConfigManager: failed to parse server config: %s\n",
-					 glz::format_error(ec, json).c_str());
+		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to parse server config: {}", glz::format_error(ec, json));
 		return false;
 	}
 	LoadMongoDbConfigsFromServer();
@@ -62,10 +56,7 @@ bool ConfigManager::LoadRuntimeFromFile(const std::string& path) {
 	std::string buf;
 	auto ec = glz::read_file_json(runtime_config_, path, buf);
 	if (ec) {
-		std::fprintf(stderr,
-					 "ConfigManager: failed to load [%s]: %s\n",
-					 path.c_str(),
-					 glz::format_error(ec, buf).c_str());
+		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to load [{}]: {}", path, glz::format_error(ec, buf));
 		return false;
 	}
 	return true;
@@ -75,10 +66,7 @@ bool ConfigManager::LoadClientFromFile(const std::string& path) {
 	std::string buf;
 	auto ec = glz::read_file_json(client_config_, path, buf);
 	if (ec) {
-		std::fprintf(stderr,
-					 "ConfigManager: failed to load [%s]: %s\n",
-					 path.c_str(),
-					 glz::format_error(ec, buf).c_str());
+		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to load [{}]: {}", path, glz::format_error(ec, buf));
 		return false;
 	}
 	return true;
@@ -88,10 +76,7 @@ bool ConfigManager::LoadServerFromFile(const std::string& path) {
 	std::string buf;
 	auto ec = glz::read_file_json(server_config_, path, buf);
 	if (ec) {
-		std::fprintf(stderr,
-					 "ConfigManager: failed to load [%s]: %s\n",
-					 path.c_str(),
-					 glz::format_error(ec, buf).c_str());
+		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to load [{}]: {}", path, glz::format_error(ec, buf));
 		return false;
 	}
 	LoadMongoDbConfigsFromServer();
@@ -239,10 +224,7 @@ bool ConfigManager::LoadMongoDbConfigFromFile(const std::string& path, MongoDbCo
 	std::string buf;
 	auto ec = glz::read_file_json(out, path, buf);
 	if (ec) {
-		std::fprintf(stderr,
-					 "ConfigManager: failed to load mongodb config [%s]: %s\n",
-					 path.c_str(),
-					 glz::format_error(ec, buf).c_str());
+		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to load mongodb config [{}]: {}", path, glz::format_error(ec, buf));
 		return false;
 	}
 	return true;
@@ -252,10 +234,7 @@ bool ConfigManager::LoadDbServiceConfigFromFile(const std::string& path, DbServi
 	std::string buf;
 	auto ec = glz::read_file_json(out, path, buf);
 	if (ec) {
-		std::fprintf(stderr,
-					 "ConfigManager: failed to load db_service config [%s]: %s\n",
-					 path.c_str(),
-					 glz::format_error(ec, buf).c_str());
+		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to load db_service config [{}]: {}", path, glz::format_error(ec, buf));
 		return false;
 	}
 	return true;

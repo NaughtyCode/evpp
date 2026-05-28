@@ -1,6 +1,7 @@
 #include "runtime/evpp/event_loop.h"
 
 #include <cstdio>
+#include <stdexcept>
 
 #include "runtime/evpp/event_watcher.h"
 #include "runtime/evpp/inner_pre.h"
@@ -9,7 +10,7 @@
 
 namespace evpp {
 
-// Safe trace macro — skips logging if the engine logger hasn't been
+// Safe trace macro - skips logging if the engine logger hasn't been
 // initialised yet.  EventLoop may be constructed before InitLogger(),
 // so every EVPP_TRACE( ...) call must be
 // null-guarded.
@@ -34,8 +35,12 @@ EventLoop::EventLoop()
 	evbase_ = event_base_new();
 #endif
 	if (!evbase_) {
-		std::fprintf(stderr, "[EventLoop] FATAL: failed to create event_base\n");
-		std::exit(EXIT_FAILURE);
+		if (auto* l = engine::GetLogger()) {
+			ENGINE_LOG_CRITICAL(l, "[EventLoop] FATAL: failed to create event_base");
+		} else {
+			std::fprintf(stderr, "[EventLoop] FATAL: failed to create event_base\n");
+		}
+		throw std::runtime_error("[EventLoop] FATAL: failed to create event_base");
 	}
 	Init();
 }
@@ -50,7 +55,6 @@ EventLoop::EventLoop(struct event_base* base)
 	// So we need to watch the task queue here.
 	bool rc = watcher_->AsyncWait();
 	if (!rc) {
-		std::fprintf(stderr, "[EventLoop] PipeEventWatcher::AsyncWait() failed (external base)\n");
 		if (auto* l = engine::GetLogger()) {
 			ENGINE_LOG_CRITICAL(l, "PipeEventWatcher init failed.");
 		}
@@ -105,7 +109,6 @@ void EventLoop::InitNotifyPipeWatcher() {
 	watcher_.reset(new PipeEventWatcher(this, std::bind(&EventLoop::DoPendingFunctors, this)));
 	int rc = watcher_->Init();
 	if (!rc) {
-		std::fprintf(stderr, "[EventLoop] PipeEventWatcher::Init() failed\n");
 		if (auto* l = engine::GetLogger()) {
 			ENGINE_LOG_CRITICAL(l, "PipeEventWatcher init failed.");
 		}
@@ -120,7 +123,6 @@ void EventLoop::Run() {
 
 	int rc = watcher_->AsyncWait();
 	if (!rc) {
-		std::fprintf(stderr, "[EventLoop] PipeEventWatcher::AsyncWait() failed\n");
 		if (auto* l = engine::GetLogger()) {
 			ENGINE_LOG_CRITICAL(l, "PipeEventWatcher AsyncWait failed.");
 		}
@@ -201,7 +203,7 @@ void EventLoop::AfterFork() {
 
 	if (rc != 0) {
 		ENGINE_LOG_CRITICAL(engine::GetLogger(), "event_reinit failed!");
-		std::exit(EXIT_FAILURE);
+		throw std::runtime_error("event_reinit failed!");
 	}
 
 	// We create EventLoopThread and initialize it in father process,

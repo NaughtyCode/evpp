@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <memory>
+#include <stdexcept>
 #include <thread>
 
 #include <runtime/evpp/event_loop.h>
@@ -85,11 +86,20 @@ Engine::~Engine() {
 
 ScriptVM& Engine::GetScriptVM() {
 	if (!script_vm_) {
-		std::fprintf(stderr,
-					 "FATAL: GetScriptVM() called but ScriptVM is null. "
-					 "Cleanup phase: %d. This is a lifecycle ordering bug.\n",
-					 static_cast<int>(cleanup_phase_));
-		std::exit(EXIT_FAILURE);
+		auto* logger = GetLogger();
+		if (logger) {
+			ENGINE_LOG_CRITICAL(logger,
+				"GetScriptVM() called but ScriptVM is null. "
+				"Cleanup phase: {}. This is a lifecycle ordering bug.",
+				static_cast<int>(cleanup_phase_));
+		} else {
+			std::fprintf(stderr,
+				"FATAL: GetScriptVM() called but ScriptVM is null. "
+				"Cleanup phase: %d. This is a lifecycle ordering bug.\n",
+				static_cast<int>(cleanup_phase_));
+		}
+		throw std::runtime_error(
+			"GetScriptVM() called but ScriptVM is null — lifecycle ordering bug");
 	}
 	return *script_vm_;
 }
@@ -106,7 +116,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	InitLogger(runtime_cfg.log);
 
 	auto* logger = GetLogger();
-	std::fprintf(stderr, "[engine] logger created\n");
+	ENGINE_LOG_INFO(logger, "logger created");
 
 	// ---- Profiler initialization ----
 	{
@@ -119,7 +129,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 						"enabled=[{}]",
 						ProfilerManager::IsEnabled());
 	}
-	std::fprintf(stderr, "[engine] profiler initialized\n");
+	ENGINE_LOG_INFO(logger, "profiler initialized");
 
 	ENGINE_PROFILE_SCOPE("engine", "Init");
 
@@ -136,7 +146,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 					runtime_cfg.frame.interval_ms,
 					(external_loop != nullptr));
 
-	std::fprintf(stderr, "[engine] creating TimerManager...\n");
+	ENGINE_LOG_INFO(logger, "creating TimerManager...");
 	TimerManager::create_instance();
 	ENGINE_LOG_INFO(logger, "timer manager initialized");
 
@@ -144,10 +154,10 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		loop_ = external_loop;
 		running_ = true;  // library mode: engine is immediately "running"
 	} else {
-		std::fprintf(stderr, "[engine] creating EventLoop...\n");
+		ENGINE_LOG_INFO(logger, "creating EventLoop...");
 		owned_loop_ = std::make_unique<evpp::EventLoop>();
 		loop_ = owned_loop_.get();
-		std::fprintf(stderr, "[engine] EventLoop created\n");
+		ENGINE_LOG_INFO(logger, "EventLoop created");
 	}
 
 	// ---- MongoDB driver initialization ----
@@ -202,7 +212,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 
 	// ---- Physics system initialization ----
 	{
-		std::fprintf(stderr, "[engine] initializing physics...\n");
+		ENGINE_LOG_INFO(logger, "initializing physics...");
 		auto phys_cfg = runtime_cfg.resource_dir + "/physics/configs";
 		auto phys_data = runtime_cfg.resource_dir + runtime_cfg.physics_scene_path;
 		bool ok = PhysicsEngineBridge::Instance().Initialize(
@@ -214,7 +224,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 			ENGINE_LOG_INFO(
 				logger, "physics system initialized, fixed_delta_time=[{}s]", fixed_delta_time_);
 		}
-		std::fprintf(stderr, "[engine] physics init done (ok=%d)\n", ok);
+		ENGINE_LOG_INFO(logger, "physics init done (ok={})", ok);
 	}
 
 	// Set import search path to the shared scripts root (parent of runtime/,
@@ -255,17 +265,27 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	last_work_time_ = last_frame_time_;
 
 	if (!entry_scripts_dir.empty()) {
-		std::fprintf(stderr, "[engine] loading scripts from [%s]...\n", entry_scripts_dir.c_str());
+		ENGINE_LOG_INFO(logger, "loading scripts from [{}]...", entry_scripts_dir);
 		size_t failed = script_vm_->DoDirectory(entry_scripts_dir);
 		if (failed > 0) {
 			ENGINE_LOG_WARN(
 				logger, "scripts dir [{}]: [{}] file(s) failed to load", entry_scripts_dir, failed);
 		}
 		script_vm_->InitScript();
-		std::fprintf(stderr, "[engine] scripts loaded\n");
+		ENGINE_LOG_INFO(logger, "scripts loaded");
 	}
 
-	std::fprintf(stderr, "[engine] Init() complete\n");
+	// Start admin HTTP server (/health, /stats, /metrics) if configured.
+	{
+		int admin_port = ConfigManager::Instance().GetServerConfig().admin_port;
+		if (admin_port > 0 && loop_) {
+			if (admin_server_.Start(loop_, admin_port)) {
+				ENGINE_LOG_INFO(logger, "admin HTTP server started on port {}", admin_port);
+			}
+		}
+	}
+
+	ENGINE_LOG_INFO(logger, "Init() complete");
 }
 
 //============================================================================
@@ -273,10 +293,10 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 //============================================================================
 
 void Engine::Start() {
-	std::fprintf(stderr, "[engine] Start() begin\n");
+	auto* logger = GetLogger();
+	ENGINE_LOG_INFO(logger, "Start() begin");
 	ENGINE_PROFILE_SCOPE("engine", "Start");
 
-	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "engine starting, frame_interval=[{}ms]", frame_interval_.count());
 
 	// ---- Start physics simulation ----
@@ -323,7 +343,7 @@ void Engine::Start() {
 	}
 
 
-	std::fprintf(stderr, "[engine] Start() complete, running_=true\n");
+	ENGINE_LOG_INFO(logger, "Start() complete, running_=true");
 }
 
 //============================================================================
@@ -331,15 +351,15 @@ void Engine::Start() {
 //============================================================================
 
 void Engine::Run() {
-	std::fprintf(stderr, "[engine] Run() begin, calling Start()\n");
+	auto* logger = GetLogger();
+	ENGINE_LOG_INFO(logger, "Run() begin, calling Start()");
 	Start();
 
-	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger, "entering main loop");
-	std::fprintf(stderr, "[engine] entering main loop (loop_->Run())\n");
+
+	ENGINE_LOG_INFO(logger, "entering main loop (loop_->Run())");
 	loop_->Run();
 	ENGINE_LOG_INFO(logger, "main loop exited, frame_count=[{}]", frame_count_.load());
-	std::fprintf(stderr, "[engine] main loop exited\n");
+	ENGINE_LOG_INFO(logger, "main loop exited");
 
 	Cleanup();
 }
@@ -403,6 +423,8 @@ void Engine::Cleanup() {
 	if (script_reloader_) {
 		script_reloader_->Stop();
 	}
+
+	admin_server_.Stop();
 
 	cleanup_phase_ = CleanupPhase::NetworkShutdown;
 	assert(script_vm_ != nullptr);

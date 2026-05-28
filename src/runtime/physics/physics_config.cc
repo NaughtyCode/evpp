@@ -5,6 +5,9 @@
 #include <cstdio>
 #include <fstream>
 
+#include "runtime/core/log/log.h"
+#include "runtime/core/log/log_macros.h"
+
 #include <glaze/glaze.hpp>
 
 namespace engine {
@@ -41,25 +44,25 @@ bool FileExists(const std::string& path) {
 
 bool PhysicsConfigManager::Load(const std::string& config_dir) {
 	if (!LoadPhysics(config_dir + "/physics.json")) {
-		std::fprintf(stderr, "PhysicsConfigManager: failed to load physics.json\n");
+		ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: failed to load physics.json");
 		return false;
 	}
 	if (!LoadThreading(config_dir + "/threading.json")) {
-		std::fprintf(stderr, "PhysicsConfigManager: failed to load threading.json\n");
+		ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: failed to load threading.json");
 		return false;
 	}
 	if (!LoadLogging(config_dir + "/logging.json")) {
-		std::fprintf(stderr, "PhysicsConfigManager: failed to load logging.json\n");
+		ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: failed to load logging.json");
 		return false;
 	}
 	if (!LoadThresholds(config_dir + "/thresholds.json")) {
-		std::fprintf(stderr, "PhysicsConfigManager: failed to load thresholds.json\n");
+		ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: failed to load thresholds.json");
 		return false;
 	}
 
 	std::string error;
 	if (!ValidateConfigs(error)) {
-		std::fprintf(stderr, "PhysicsConfigManager: validation failed: %s\n", error.c_str());
+		ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: validation failed: {}", error);
 		return false;
 	}
 
@@ -72,17 +75,16 @@ bool PhysicsConfigManager::Load(const std::string& config_dir) {
 
 bool PhysicsConfigManager::LoadPhysics(const std::string& path) {
 	if (!FileExists(path)) {
-		std::fprintf(stderr, "PhysicsConfigManager: file not found [%s]\n", path.c_str());
+		ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: file not found [{}]", path);
 		return false;
 	}
 	std::string buf = ReadFile(path);
 	glz::context ctx{};
 	auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(physics_config_, buf, ctx);
 	if (ec) {
-		std::fprintf(stderr,
-					 "PhysicsConfigManager: parse error in [%s]: %s\n",
-					 path.c_str(),
-					 glz::format_error(ec, buf).c_str());
+		ENGINE_LOG_ERROR(engine::GetLogger(),
+						 "PhysicsConfigManager: parse error in [{}]: {}", path,
+						 glz::format_error(ec, buf));
 		return false;
 	}
 	return true;
@@ -90,17 +92,16 @@ bool PhysicsConfigManager::LoadPhysics(const std::string& path) {
 
 bool PhysicsConfigManager::LoadThreading(const std::string& path) {
 	if (!FileExists(path)) {
-		std::fprintf(stderr, "PhysicsConfigManager: file not found [%s]\n", path.c_str());
+		ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: file not found [{}]", path);
 		return false;
 	}
 	std::string buf = ReadFile(path);
 	glz::context ctx{};
 	auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(threading_config_, buf, ctx);
 	if (ec) {
-		std::fprintf(stderr,
-					 "PhysicsConfigManager: parse error in [%s]: %s\n",
-					 path.c_str(),
-					 glz::format_error(ec, buf).c_str());
+		ENGINE_LOG_ERROR(engine::GetLogger(),
+						 "PhysicsConfigManager: parse error in [{}]: {}", path,
+						 glz::format_error(ec, buf));
 		return false;
 	}
 	return true;
@@ -108,17 +109,16 @@ bool PhysicsConfigManager::LoadThreading(const std::string& path) {
 
 bool PhysicsConfigManager::LoadLogging(const std::string& path) {
 	if (!FileExists(path)) {
-		std::fprintf(stderr, "PhysicsConfigManager: file not found [%s]\n", path.c_str());
+		ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: file not found [{}]", path);
 		return false;
 	}
 	std::string buf = ReadFile(path);
 	glz::context ctx{};
 	auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(log_config_, buf, ctx);
 	if (ec) {
-		std::fprintf(stderr,
-					 "PhysicsConfigManager: parse error in [%s]: %s\n",
-					 path.c_str(),
-					 glz::format_error(ec, buf).c_str());
+		ENGINE_LOG_ERROR(engine::GetLogger(),
+						 "PhysicsConfigManager: parse error in [{}]: {}", path,
+						 glz::format_error(ec, buf));
 		return false;
 	}
 	return true;
@@ -126,17 +126,16 @@ bool PhysicsConfigManager::LoadLogging(const std::string& path) {
 
 bool PhysicsConfigManager::LoadThresholds(const std::string& path) {
 	if (!FileExists(path)) {
-		std::fprintf(stderr, "PhysicsConfigManager: file not found [%s]\n", path.c_str());
+		ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: file not found [{}]", path);
 		return false;
 	}
 	std::string buf = ReadFile(path);
 	glz::context ctx{};
 	auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(thresholds_config_, buf, ctx);
 	if (ec) {
-		std::fprintf(stderr,
-					 "PhysicsConfigManager: parse error in [%s]: %s\n",
-					 path.c_str(),
-					 glz::format_error(ec, buf).c_str());
+		ENGINE_LOG_ERROR(engine::GetLogger(),
+						 "PhysicsConfigManager: parse error in [{}]: {}", path,
+						 glz::format_error(ec, buf));
 		return false;
 	}
 	return true;
@@ -246,23 +245,23 @@ bool PhysicsConfigManager::ReloadThresholds(const std::string& config_dir) {
 	std::string path = config_dir + "/thresholds.json";
 	std::string buf = ReadFile(path);
 	if (buf.empty()) {
-		std::fprintf(stderr, "PhysicsConfigManager: thresholds.json not found\n");
+		ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: thresholds.json not found");
 		return false;
 	}
 
 	glz::context ctx{};
 	auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(new_cfg, buf, ctx);
 	if (ec) {
-		std::fprintf(stderr,
-					 "PhysicsConfigManager: thresholds reload parse error: %s\n",
-					 glz::format_error(ec, buf).c_str());
+		ENGINE_LOG_ERROR(engine::GetLogger(),
+						 "PhysicsConfigManager: thresholds reload parse error: {}",
+						 glz::format_error(ec, buf));
 		return false;
 	}
 
 	// Validate new thresholds
 	if (new_cfg.position_epsilon < 0.0f || new_cfg.rotation_epsilon < 0.0f ||
 		new_cfg.linear_velocity_epsilon < 0.0f || new_cfg.angular_velocity_epsilon < 0.0f) {
-		std::fprintf(stderr, "PhysicsConfigManager: invalid threshold values\n");
+		ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: invalid threshold values");
 		return false;
 	}
 
@@ -274,7 +273,7 @@ bool PhysicsConfigManager::ReloadLogLevel(const std::string& config_dir) {
 	std::string path = config_dir + "/logging.json";
 	std::string buf = ReadFile(path);
 	if (buf.empty()) {
-		std::fprintf(stderr, "PhysicsConfigManager: logging.json not found\n");
+		ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: logging.json not found");
 		return false;
 	}
 
@@ -282,9 +281,9 @@ bool PhysicsConfigManager::ReloadLogLevel(const std::string& config_dir) {
 	glz::context ctx{};
 	auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(new_cfg, buf, ctx);
 	if (ec) {
-		std::fprintf(stderr,
-					 "PhysicsConfigManager: logging reload parse error: %s\n",
-					 glz::format_error(ec, buf).c_str());
+		ENGINE_LOG_ERROR(engine::GetLogger(),
+						 "PhysicsConfigManager: logging reload parse error: {}",
+						 glz::format_error(ec, buf));
 		return false;
 	}
 

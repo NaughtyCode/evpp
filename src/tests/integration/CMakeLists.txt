@@ -32,6 +32,13 @@ set_tests_properties(integration.network.conn_limit PROPERTIES
     RUN_SERIAL TRUE
     WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
+# ── Entity + AOI integration ──────────────────────────────────────────
+add_integ_test(test_integ_entity_aoi entity/test_entity_aoi.cpp)
+add_test(NAME integration.entity.aoi COMMAND test_integ_entity_aoi)
+set_tests_properties(integration.entity.aoi PROPERTIES
+    TIMEOUT 60 LABELS "integration;entity;aoi"
+    WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
 # ── Physics (only if engine was built with physics) ──────────────────
 if(ENGINE_PHYSICS_ENABLED)
     add_integ_test(test_integ_physics physics/test_physics.cpp physics/test_physics_fetch_cv.cpp)
@@ -41,6 +48,13 @@ if(ENGINE_PHYSICS_ENABLED)
         RUN_SERIAL TRUE
         WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 endif()
+
+# ── Space + Entity integration ──────────────────────────────────────
+add_integ_test(test_integ_space_entity space/test_space_entity.cpp)
+add_test(NAME integration.space.entity COMMAND test_integ_space_entity)
+set_tests_properties(integration.space.entity PROPERTIES
+    TIMEOUT 60 LABELS "integration;space;entity"
+    WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
 # ── Client API (only if GameClient target exists) ────────────────────
 if(TARGET GameClient)

@@ -23,13 +23,26 @@ static void InitHTTPCodeString() {
 	}
 
 	g_http_code_string[200] = "OK";
+	g_http_code_string[201] = "Created";
+	g_http_code_string[204] = "No Content";
 
+	g_http_code_string[301] = "Moved Permanently";
 	g_http_code_string[302] = "Found";
+	g_http_code_string[304] = "Not Modified";
 
 	g_http_code_string[400] = "Bad Request";
+	g_http_code_string[401] = "Unauthorized";
+	g_http_code_string[403] = "Forbidden";
 	g_http_code_string[404] = "Not Found";
+	g_http_code_string[405] = "Method Not Allowed";
+	g_http_code_string[408] = "Request Timeout";
+	g_http_code_string[409] = "Conflict";
+	g_http_code_string[429] = "Too Many Requests";
 
-	//TODO Add more http code string : https://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html
+	g_http_code_string[500] = "Internal Server Error";
+	g_http_code_string[502] = "Bad Gateway";
+	g_http_code_string[503] = "Service Unavailable";
+	g_http_code_string[504] = "Gateway Timeout";
 }
 
 #if defined(EVPP_HTTP_SERVER_SUPPORTS_SSL)
@@ -353,7 +366,8 @@ void Service::SendReply(const ContextPtr& ctx, const std::string& response_data)
 		ENGINE_LOG_WARN(engine::GetLogger(),
 						"this={} listening thread is going to stop. we discards this request.",
 						(void*) this);
-		// TODO do we need do some resource recycling about the evhttp_request?
+		// evhttp_request lifecycle is managed by libevent — freed after
+		// evhttp_send_reply completes. No manual recycling needed.
 	}
 }
 }

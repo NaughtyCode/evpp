@@ -189,7 +189,7 @@ void TCPServer::HandleNewConn(evpp_socket_t sockfd,
 	conn->SetMessageCallback(msg_fn_);
 	conn->SetConnectionCallback(conn_fn_);
 	conn->SetCloseCallback(std::bind(&TCPServer::RemoveConnection, this, std::placeholders::_1));
-#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL) || defined(EVPP_OPENSSL_ENABLED)
 	if (ssl_ctx_.valid()) {
 		conn->SetSSLContext(ssl_ctx_.raw_ctx());
 	}

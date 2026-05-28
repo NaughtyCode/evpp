@@ -64,6 +64,7 @@ endif()
 if (HTTPS)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEVPP_HTTP_CLIENT_SUPPORTS_SSL")
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEVPP_HTTP_SERVER_SUPPORTS_SSL")
+	    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEVPP_OPENSSL_ENABLED")
 
     # ── BoringSSL (bundled) ──────────────────────────────────────────
     if(NOT TARGET ssl)

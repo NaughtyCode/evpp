@@ -12,6 +12,7 @@
 
 #include "runtime/config/config.h"
 #include "runtime/core/engine_api.h"
+#include "runtime/monitoring/admin_http.h"
 
 namespace evpp {
 class EventLoop;
@@ -159,6 +160,8 @@ class ENGINE_API Engine {
 	std::unique_ptr<ScriptVM> script_vm_;
 	std::unique_ptr<ScriptReloader> script_reloader_;
 	CleanupPhase cleanup_phase_{CleanupPhase::NotStarted};
+
+	monitoring::AdminHttpServer admin_server_;
 
 	// Standalone-mode resources (owned, created in Start, destroyed in Cleanup).
 	std::unique_ptr<evpp::SignalEventWatcher> sigint_watcher_;

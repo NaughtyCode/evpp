@@ -9,7 +9,7 @@
 #include "runtime/evpp/libevent.h"
 #include "runtime/evpp/sockets.h"
 
-#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL) || defined(EVPP_OPENSSL_ENABLED)
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #endif
@@ -180,7 +180,7 @@ void TCPConn::SendInLoop(const void* data, size_t len) {
 
 	// if no data in output queue, writing directly
 	if (!chan_->IsWritable() && output_buffer_.length() == 0) {
-#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL) || defined(EVPP_OPENSSL_ENABLED)
 		if (ssl_) {
 			int ssl_ret = SSL_write(ssl_, data, static_cast<int>(len));
 			if (ssl_ret > 0) {
@@ -257,7 +257,7 @@ void TCPConn::HandleRead() {
 	assert(loop_->IsInLoopThread());
 	int serrno = 0;
 	ssize_t n = 0;
-#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL) || defined(EVPP_OPENSSL_ENABLED)
 	if (ssl_) {
 		input_buffer_.EnsureWritableBytes(65536);
 		int ssl_ret = SSL_read(ssl_, input_buffer_.WriteBegin(),
@@ -320,7 +320,7 @@ void TCPConn::HandleRead() {
 				delay_close_timer_ = loop_->RunAfter(
 					close_delay_,
 					std::bind(&TCPConn::DelayClose,
-							  shared_from_this()));  // TODO leave it to user layer close.
+							  shared_from_this()));
 			}
 		}
 	} else {
@@ -342,7 +342,7 @@ void TCPConn::HandleWrite() {
 	assert(loop_->IsInLoopThread());
 	assert(!chan_->attached() || chan_->IsWritable());
 
-#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL) || defined(EVPP_OPENSSL_ENABLED)
 	if (ssl_) {
 		// If no data to write, try advancing the SSL handshake
 		if (output_buffer_.length() == 0) {
@@ -469,7 +469,7 @@ void TCPConn::HandleClose() {
 	// This setting is required, it indicates connecting state and must not be removed
 	status_ = kDisconnecting;
 	assert(loop_->IsInLoopThread());
-#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL) || defined(EVPP_OPENSSL_ENABLED)
 	if (ssl_) {
 		SSL_shutdown(ssl_);
 		SSL_free(ssl_);
@@ -523,7 +523,7 @@ void TCPConn::HandleError() {
 void TCPConn::OnAttachedToLoop() {
 	assert(loop_->IsInLoopThread());
 	status_ = kConnected;
-#ifdef EVPP_HTTP_CLIENT_SUPPORTS_SSL
+#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL) || defined(EVPP_OPENSSL_ENABLED)
 	if (ssl_ctx_) {
 		ssl_ = SSL_new(ssl_ctx_);
 		if (ssl_) {
@@ -550,6 +550,10 @@ void TCPConn::SetHighWaterMarkCallback(const HighWaterMarkCallback& cb, size_t m
 
 void TCPConn::SetTCPNoDelay(bool on) {
 	sock::SetTCPNoDelay(fd_, on);
+}
+
+void TCPConn::SetLinger(bool on, int seconds) {
+	sock::SetLinger(fd_, on, seconds);
 }
 
 std::string TCPConn::StatusToString() const {

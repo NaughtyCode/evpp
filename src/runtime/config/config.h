@@ -172,6 +172,8 @@ struct ServerConfig {
 	MsgpackConfig msgpack;
 	std::string scripts_dir = config::kDefaultServerScriptsDir;
 
+	int admin_port = 8081;  // admin HTTP port; 0 = disabled
+
 	// MongoDB cluster config file paths (relative to working dir).
 	// These are separate JSON files with full cluster topology details.
 	std::string mongodb_dev;  // development / local cluster

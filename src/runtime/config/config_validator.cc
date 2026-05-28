@@ -2,6 +2,9 @@
 
 #include <cstdio>
 
+#include "runtime/core/log/log.h"
+#include "runtime/core/log/log_macros.h"
+
 namespace engine {
 
 ConfigValidator::Result ConfigValidator::Validate(const RuntimeConfig& config) {
@@ -19,7 +22,7 @@ ConfigValidator::Result ConfigValidator::Validate(const RuntimeConfig& config) {
 	}
 
 	if (!r.valid) {
-		std::fprintf(stderr, "[config] validation failed: %s\n", r.errors.c_str());
+		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "[config] validation failed: {}", r.errors);
 	}
 
 	return r;

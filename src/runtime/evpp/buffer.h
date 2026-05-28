@@ -138,21 +138,45 @@ class EVPP_EXPORT Buffer {
 		UnwriteBytes(1);
 	}
 
-	/* Convert 64-bit integer between host and network byte order.
-	 * Uses compiler builtins (always available) for byte swap.
-	 * On little-endian systems this is the correct host-to-network conversion.
-	 * On big-endian systems this would be a no-op, but we assume little-endian. */
+	// Convert 64-bit integer between host and network byte order.
+	// On little-endian systems (x86, ARM64 in LE mode) this byte-swaps;
+	// on big-endian systems (s390x, some ARM configs) this is a no-op.
 	static uint64_t HostToNetwork64(uint64_t host64) {
-#ifdef _MSC_VER
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+		return host64;
+#elif defined(_MSC_VER)
 		return _byteswap_uint64(host64);
 #else
 		return __builtin_bswap64(host64);
 #endif
 	}
 
+	static uint32_t HostToNetwork32(uint32_t host32) {
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+		return host32;
+#else
+		return htonl(host32);
+#endif
+	}
+
+	static uint16_t HostToNetwork16(uint16_t host16) {
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+		return host16;
+#else
+		return htons(host16);
+#endif
+	}
+
 	static uint64_t NetworkToHost64(uint64_t net64) {
-		/* HostToNetwork64 and NetworkToHost64 are identical operations */
 		return HostToNetwork64(net64);
+	}
+
+	static uint32_t NetworkToHost32(uint32_t net32) {
+		return HostToNetwork32(net32);
+	}
+
+	static uint16_t NetworkToHost16(uint16_t net16) {
+		return HostToNetwork16(net16);
 	}
 
 	// Write

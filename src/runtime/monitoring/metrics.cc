@@ -16,6 +16,9 @@ void Histogram::Observe(double value) {
 	count_.fetch_add(1, std::memory_order_relaxed);
 	sum_.fetch_add(value, std::memory_order_relaxed);
 
+	// Skip bucket recording when no buckets are configured.
+	if (bucket_counts_.empty()) return;
+
 	// Find the right bucket
 	size_t i = 0;
 	for (; i < buckets_.size(); ++i) {
