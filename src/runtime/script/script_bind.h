@@ -32,7 +32,11 @@ ENGINE_API void ShutdownEntityBindings();
 ENGINE_API void ExportSpace(ScriptVM& vm);
 
 ENGINE_API void ExportAOI(ScriptVM& vm);
+#if defined(ENGINE_MONGODB_ENABLED)
 ENGINE_API void ExportOrm(ScriptVM& vm);
+#endif
+ENGINE_API void ExportRpc(ScriptVM& vm);
+ENGINE_API void ExportAuth(ScriptVM& vm);
 
 }  // namespace script
 }  // namespace engine

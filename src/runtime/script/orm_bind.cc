@@ -56,7 +56,6 @@ int l_orm_define(lua_State* L) {
 							if (lua_isstring(L, -1)) {
 								idx.fields.push_back(lua_tostring(L, -1));
 							}
-							idx.fields.push_back(lua_tostring(L, -1));
 							lua_pop(L, 1);
 						}
 					}

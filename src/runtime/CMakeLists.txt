@@ -142,6 +142,22 @@ set(SPACE_SOURCES
 )
 source_group("space" FILES ${SPACE_SOURCES})
 
+# ── RPC ──────────────────────────────────────────────────────────────
+set(RPC_SOURCES
+    ${RUNTIME_DIR}/rpc/rpc_client.cc ${RUNTIME_DIR}/rpc/rpc_client.h
+    ${RUNTIME_DIR}/rpc/rpc_server.cc ${RUNTIME_DIR}/rpc/rpc_server.h
+    ${RUNTIME_DIR}/rpc/rpc_protocol.h
+)
+source_group("rpc" FILES ${RPC_SOURCES})
+
+# ── Auth ─────────────────────────────────────────────────────────────
+set(AUTH_SOURCES
+    ${RUNTIME_DIR}/auth/auth_backend.cc ${RUNTIME_DIR}/auth/auth_backend.h
+    ${RUNTIME_DIR}/auth/session_manager.cc ${RUNTIME_DIR}/auth/session_manager.h
+    ${RUNTIME_DIR}/auth/auth_protocol.h
+)
+source_group("auth" FILES ${AUTH_SOURCES})
+
 # ── Script bindings ────────────────────────────────────────────────
 set(SCRIPT_SOURCES
     ${RUNTIME_DIR}/script/bind_util.cc ${RUNTIME_DIR}/script/bind_util.h
@@ -161,6 +177,9 @@ set(SCRIPT_SOURCES
     ${RUNTIME_DIR}/script/import_bind.cc ${RUNTIME_DIR}/script/import_bind.h
     ${RUNTIME_DIR}/script/entity_bind.cc ${RUNTIME_DIR}/script/entity_bind.h
     ${RUNTIME_DIR}/script/space_bind.cc ${RUNTIME_DIR}/script/space_bind.h
+    ${RUNTIME_DIR}/script/aoi_bind.cc ${RUNTIME_DIR}/script/aoi_bind.h
+    ${RUNTIME_DIR}/script/rpc_bind.cc ${RUNTIME_DIR}/script/rpc_bind.h
+    ${RUNTIME_DIR}/script/auth_bind.cc ${RUNTIME_DIR}/script/auth_bind.h
 )
 source_group("script" FILES ${SCRIPT_SOURCES})
 
@@ -216,7 +235,12 @@ file(GLOB EVPP_SOURCES CONFIGURE_DEPENDS
 )
 source_group("evpp" FILES ${EVPP_SOURCES})
 
-# ── Mongo wrapper (database/mongo/) ───────────────────────────────────
+# ── ORM + Cache ────────────────────────────────────────────────────
+set(ORM_SOURCES
+    ${RUNTIME_DIR}/database/orm.cc ${RUNTIME_DIR}/database/orm.h
+    ${RUNTIME_DIR}/database/cache.h
+)
+source_group("database" FILES ${ORM_SOURCES})
 set(MONGO_SOURCES
     ${RUNTIME_DIR}/database/mongo/mongo_apm.cc ${RUNTIME_DIR}/database/mongo/mongo_apm.h
     ${RUNTIME_DIR}/database/mongo/mongo_bson.cc ${RUNTIME_DIR}/database/mongo/mongo_bson.h
@@ -336,6 +360,8 @@ set(SERVERENGINE_SOURCES
     ${VM_SOURCES}
     ${ENTITY_SOURCES}
     ${SPACE_SOURCES}
+    ${RPC_SOURCES}
+    ${AUTH_SOURCES}
     ${SCRIPT_SOURCES}
     ${MONITORING_SOURCES}
     ${AOI_SOURCES}
@@ -345,7 +371,8 @@ set(SERVERENGINE_SOURCES
 )
 
 if(ENGINE_MONGODB_ENABLED)
-    list(APPEND SERVERENGINE_SOURCES ${MONGO_SOURCES} ${MONGO_BIND_SOURCES} ${DB_SERVICE_SOURCES})
+    list(APPEND SERVERENGINE_SOURCES ${MONGO_SOURCES} ${MONGO_BIND_SOURCES} ${DB_SERVICE_SOURCES} ${ORM_SOURCES}
+        ${RUNTIME_DIR}/script/orm_bind.cc ${RUNTIME_DIR}/script/orm_bind.h)
 endif()
 
 if(ENGINE_PHYSICS_ENABLED)

@@ -41,8 +41,8 @@ TEST_CASE("EntityManager entity registered in AOI is queryable by position", "[i
     REQUIRE(nearby[0] == player->GetId());
 
     // Query far away should return empty
-    auto far = aoi.QueryRadius(900.0f, 900.0f, 10.0f);
-    REQUIRE(far.empty());
+    auto far_away = aoi.QueryRadius(900.0f, 900.0f, 10.0f);
+    REQUIRE(far_away.empty());
 
     aoi.UnregisterEntity(player->GetId());
     mgr.DestroyAll();

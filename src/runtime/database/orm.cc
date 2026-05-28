@@ -4,6 +4,8 @@
 #include "runtime/database/data_service/database_service.h"
 #include "runtime/database/data_service/db_request.h"
 
+using engine::DatabaseService;
+
 namespace engine {
 namespace database {
 

@@ -55,6 +55,15 @@ local function Class(classname, super)
         cls.__name = classname
         cls.__super = super
 
+        -- Rebuild ancestor set for O(1) isinstanceof.
+        local ancestors = {}
+        local cursor = super
+        while cursor do
+            ancestors[cursor] = true
+            cursor = rawget(cursor, "__super")
+        end
+        cls.__ancestors = ancestors
+
         local cls_mt = getmetatable(cls)
         if super then
             cls_mt.__index = super
@@ -71,6 +80,16 @@ local function Class(classname, super)
     if super then
         cls.__super = super
     end
+
+    -- Build ancestor set for O(1) isinstanceof checks.
+    -- Stored on the class table so all instances share it via __index.
+    local ancestors = {}
+    local cursor = super
+    while cursor do
+        ancestors[cursor] = true
+        cursor = rawget(cursor, "__super")
+    end
+    cls.__ancestors = ancestors
 
     -- Metatable applied to the class table itself.
     -- __call makes cls(...) create instances.
@@ -96,17 +115,22 @@ local function Class(classname, super)
     setmetatable(cls, mt)
 
     -- Returns true if self is an instance (or subclass instance) of target.
-    -- Walks the __index chain to find target among class ancestors.
+    -- O(1) hash lookup via precomputed ancestor set on the class.
     function cls:isinstanceof(target)
         if target == nil then
             return false
         end
-        local mt = getmetatable(self)
-        while mt do
-            if mt.__index == target then
-                return true
-            end
-            mt = getmetatable(mt.__index)
+        local inst_mt = getmetatable(self)
+        if not inst_mt then
+            return false
+        end
+        local class = inst_mt.__index
+        if class == target then
+            return true
+        end
+        local anc = rawget(class, "__ancestors")
+        if anc then
+            return anc[target] == true
         end
         return false
     end

@@ -87,10 +87,12 @@ add_unit_test(test_hotreload hotreload/test_hotreload.cpp)
 add_test(NAME unit.hotreload COMMAND test_hotreload)
 set_tests_properties(unit.hotreload PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
-# ── Database ORM tests ──────────────────────────────────────────────
-add_unit_test(test_orm database/test_orm.cpp)
-add_test(NAME unit.database.orm COMMAND test_orm)
-set_tests_properties(unit.database.orm PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+# ── Database ORM tests (only if MongoDB is enabled) ─────────────────
+if(ENGINE_MONGODB_ENABLED)
+    add_unit_test(test_orm database/test_orm.cpp)
+    add_test(NAME unit.database.orm COMMAND test_orm)
+    set_tests_properties(unit.database.orm PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+endif()
 
 # ── Database cache tests ────────────────────────────────────────────
 add_unit_test(test_cache database/test_cache.cpp)

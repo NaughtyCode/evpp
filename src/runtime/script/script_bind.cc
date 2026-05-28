@@ -3,9 +3,13 @@
 #include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
 #include "runtime/script/aoi_bind.h"
+#include "runtime/script/auth_bind.h"
 #include "runtime/script/import_bind.h"
 #include "runtime/script/log_bind.h"
+#if defined(ENGINE_MONGODB_ENABLED)
 #include "runtime/script/orm_bind.h"
+#endif
+#include "runtime/script/rpc_bind.h"
 #include "runtime/script/entity_bind.h"
 #include "runtime/script/msgpack_bind.h"
 #include "runtime/script/net_bind.h"
@@ -48,18 +52,24 @@ void ExportAll(ScriptVM& vm) {
 		ENGINE_PROFILE_SCRIPT_EXPORT("space");
 		ExportSpace(vm);
 	}
-#if 0  // AOI subsystem not yet compiled (aoi .cc files not in build)
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("aoi");
 		ExportAOI(vm);
 	}
-#endif
-#if 0  // ORM subsystem not yet compiled (orm_bind.cc requires EntityCache fixes)
+#if defined(ENGINE_MONGODB_ENABLED)
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("orm");
 		ExportOrm(vm);
 	}
 #endif
+	{
+		ENGINE_PROFILE_SCRIPT_EXPORT("rpc");
+		ExportRpc(vm);
+	}
+	{
+		ENGINE_PROFILE_SCRIPT_EXPORT("auth");
+		ExportAuth(vm);
+	}
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("import");
 		engine::ExportImport(vm);

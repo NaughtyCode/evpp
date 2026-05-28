@@ -32,6 +32,29 @@ set_tests_properties(integration.network.conn_limit PROPERTIES
     RUN_SERIAL TRUE
     WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
+# ── Entity + Network integration ──────────────────────────────────────
+add_integ_test(test_integ_entity_net entity/test_entity_net.cpp)
+add_test(NAME integration.entity.net COMMAND test_integ_entity_net)
+set_tests_properties(integration.entity.net PROPERTIES
+    TIMEOUT 60 LABELS "integration;entity;net"
+    WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
+# ── Entity + Auth integration ──────────────────────────────────────────
+add_integ_test(test_integ_auth_entity entity/test_auth_entity.cpp)
+add_test(NAME integration.auth.entity COMMAND test_integ_auth_entity)
+set_tests_properties(integration.auth.entity PROPERTIES
+    TIMEOUT 60 LABELS "integration;auth;entity"
+    WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
+# ── Entity + ORM integration (only if MongoDB is enabled) ────────────
+if(ENGINE_MONGODB_ENABLED)
+    add_integ_test(test_integ_orm_entity entity/test_orm_entity.cpp)
+    add_test(NAME integration.orm.entity COMMAND test_integ_orm_entity)
+    set_tests_properties(integration.orm.entity PROPERTIES
+        TIMEOUT 60 LABELS "integration;orm;entity"
+        WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+endif()
+
 # ── Entity + AOI integration ──────────────────────────────────────────
 add_integ_test(test_integ_entity_aoi entity/test_entity_aoi.cpp)
 add_test(NAME integration.entity.aoi COMMAND test_integ_entity_aoi)

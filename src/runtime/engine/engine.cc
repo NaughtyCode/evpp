@@ -285,6 +285,19 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		}
 	}
 
+	// Register config reload subscribers.
+	// These callbacks are invoked after each successful ConfigManager::Reload().
+	{
+		ConfigManager::Instance().RegisterReloadCallback([]() {
+			auto* logger = GetLogger();
+			auto rt = ConfigManager::Instance().GetRuntimeConfig();
+			ENGINE_LOG_INFO(logger,
+				"config reloaded: frame_interval=[{}ms], log_level=[{}], sandbox=[{}]",
+				rt.frame.interval_ms, rt.log.level, rt.sandbox_level);
+		});
+		ENGINE_LOG_INFO(logger, "config reload subscriber registered");
+	}
+
 	ENGINE_LOG_INFO(logger, "Init() complete");
 }
 

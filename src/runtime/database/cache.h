@@ -77,11 +77,14 @@ public:
 	size_t HitCount() const { return hit_count_; }
 	size_t MissCount() const { return miss_count_; }
 	size_t EvictCount() const { return evict_count_; }
+	size_t Size() const {
+		std::lock_guard<std::mutex> lock(mutex_);
+		return lru_list_.size();
+	}
 	double HitRate() const {
 		size_t total = hit_count_ + miss_count_;
 		return total > 0 ? static_cast<double>(hit_count_) / static_cast<double>(total) : 0.0;
 	}
-	size_t Size() const { return lru_list_.size(); }
 
 private:
 	size_t max_entries_;

@@ -78,7 +78,7 @@ void HandleHttpResponse(lua_State* L, int ref, const std::shared_ptr<evpp::httpc
 		std::lock_guard<std::mutex> lock(g_http_mutex);
 		if (!g_net_alive.load()) return;
 
-		auto it = std::find(g_http_pending_refs.begin(), g_http_pending_refs.end(), ref);
+		auto it = g_http_pending_refs.find(ref);
 		if (it != g_http_pending_refs.end()) {
 			g_http_pending_refs.erase(it);
 		} else {
