@@ -1,0 +1,22 @@
+test_id,test_name,category,failure_type,error_location,detail
+1,smoke.engine_init,Timeout,Timeout,engine.cc Init,MongoDB URI空导致引擎挂起
+36,lua.msgpack,Timeout,Timeout,engine.cc Init,MongoDB URI空导致引擎挂起
+37,lua.net.client_server,Timeout,Failed,engine.cc Init,MongoDB URI空 + 860s后失败
+38,lua.net.udp,Timeout,Timeout,engine.cc Init,MongoDB URI空导致引擎挂起
+39,lua.net.kcp,Timeout,Timeout,engine.cc Init,MongoDB URI空导致引擎挂起
+40,lua.timer.once,Timeout,Timeout,engine.cc Init,MongoDB URI空导致引擎挂起
+41,lua.timer.interval,Timeout,Timeout,engine.cc Init,MongoDB URI空导致引擎挂起
+42,lua.log,Timeout,Timeout,engine.cc Init,MongoDB URI空导致引擎挂起
+43,lua.import,Timeout,Timeout,engine.cc Init,MongoDB URI空导致引擎挂起
+44,smoke.lua,Timeout,Timeout,engine.cc Init,MongoDB URI空导致引擎挂起
+19,unit.hotreload,Segfault,SIGSEGV,test_hotreload.cpp:106,ReloadAll with no target set
+20,unit.database.orm,Segfault,SIGSEGV,test_orm.cpp:127,FindById on unregistered collection
+24,unit.space,Segfault,SIGSEGV,test_space.cpp:49,Space creation with id and name
+25,unit.coroutine,Segfault,SIGSEGV,test_coroutine.cpp:129,CreateCoroutine with empty stack
+18,unit.auth,Assertion,Assertion,test_auth.cpp:275,IsSessionValid返回false(6处)
+31,integration.auth.entity,Assertion,Assertion,test_auth_entity.cpp:93,IsSessionValid返回false(2处)
+33,integration.entity.aoi,Assertion,Assertion,test_entity_aoi.cpp:163,AOI可见性检查失败(3处)
+34,integration.space.entity,Assertion,Assertion,test_space_entity.cpp:117,Entity状态!=Created + 跨空间隔离泄漏
+5,unit.buffer,Assertion,Assertion,buffer.h:81,len <= length() 断言失败
+13,unit.engine,Assertion,Failed,engine.cc,library_mode引擎初始化后测试失败
+27,integration.network.tcp,Assertion,Assertion,tcp_server.cc:30,connections_.empty() 断言失败
