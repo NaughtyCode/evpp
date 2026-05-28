@@ -4,6 +4,9 @@
 
 #include <cstdio>
 
+#include "runtime/core/log/log.h"
+#include "runtime/core/log/log_macros.h"
+
 #include <mongoc/mongoc.h>
 
 namespace engine {

@@ -58,15 +58,17 @@ void ExportMongo(ScriptVM& vm) {
 	lua_State* L = vm.GetState();
 	if (!L) return;
 
-	// ── Register all metatables (auto-generated from mongo_types.def) ──
+	// ── Register all metatables (auto-generated from mongo_types.inl) ──
 	#define MONGOC_TYPE(module, CppName) Register##CppName##Meta(L);
-	#include "runtime/database/mongo_bind/mongo_types.def"
+	#include "runtime/database/mongo_bind/mongo_types.inl"
 
 	// ── Build "bson" module ───────────────────────────────────────────
 	BeginModule(L);
+	#define STRINGIFY_(x) #x
 	#define MONGOC_TYPE(module, CppName) \
-		if (module[0] == 'b') AddToModule(L, Get##CppName##Lib());
-	#include "runtime/database/mongo_bind/mongo_types.def"
+		if (STRINGIFY_(module)[0] == 'b') AddToModule(L, Get##CppName##Lib());
+	#include "runtime/database/mongo_bind/mongo_types.inl"
+	#undef STRINGIFY_
 	// Library-only types (no metatable)
 	AddToModule(L, GetOidLib());
 	AddToModule(L, GetBsonExtLib());
@@ -74,9 +76,11 @@ void ExportMongo(ScriptVM& vm) {
 
 	// ── Build "mongoc" module ─────────────────────────────────────────
 	BeginModule(L);
+	#define STRINGIFY_(x) #x
 	#define MONGOC_TYPE(module, CppName) \
-		if (module[0] == 'm') AddToModule(L, Get##CppName##Lib());
-	#include "runtime/database/mongo_bind/mongo_types.def"
+		if (STRINGIFY_(module)[0] == 'm') AddToModule(L, Get##CppName##Lib());
+	#include "runtime/database/mongo_bind/mongo_types.inl"
+	#undef STRINGIFY_
 	// Library-only types (no metatable)
 	AddToModule(L, GetMongoLogLib());
 	AddToModule(L, GetMongoMiscLib());

@@ -9,7 +9,7 @@
 // The old 3-point registration (include + RegisterMeta + AddToModule) is gone.
 
 #ifndef MONGOC_TYPE
-#error "MONGOC_TYPE must be defined before including mongo_types.def"
+#error "MONGOC_TYPE must be defined before including mongo_types.inl"
 #endif
 
 // ── bson module ──────────────────────────────────────────────────────

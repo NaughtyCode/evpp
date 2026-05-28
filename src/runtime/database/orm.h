@@ -99,6 +99,10 @@ public:
 
 private:
 	OrmSession() = default;
+	OrmSession(const OrmSession&) = delete;
+	OrmSession& operator=(const OrmSession&) = delete;
+	OrmSession(OrmSession&&) = delete;
+	OrmSession& operator=(OrmSession&&) = delete;
 
 	CollectionSchema* GetMutableSchema(const std::string& collection);
 

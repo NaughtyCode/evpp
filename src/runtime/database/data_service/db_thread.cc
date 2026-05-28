@@ -752,12 +752,12 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 		case DbOperation::kDeleteOne: {
 			mongo::BsonDocument selector;
 			if (!ParseJsonDoc(req.bson_data, "bson_data", &selector, &resp)) break;
-			if (selector.IsEmpty() && !req.allow_empty_filter) {
+			if (selector.Empty() && !req.allow_empty_filter) {
 				resp.success = false;
 				resp.error_message =
 					"Empty filter rejected: set allow_empty_filter=true to confirm";
 				EnqueueResponse(std::move(resp));
-				return false;
+				return;
 			}
 			mongo::BsonDocument reply;
 			mongo::MongoError err;
@@ -779,13 +779,13 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 		case DbOperation::kDeleteMany: {
 			mongo::BsonDocument selector;
 			if (!ParseJsonDoc(req.bson_data, "bson_data", &selector, &resp)) break;
-			if (selector.IsEmpty() && !req.allow_empty_filter) {
+			if (selector.Empty() && !req.allow_empty_filter) {
 				resp.success = false;
 				resp.error_message =
 					"Empty filter rejected: set allow_empty_filter=true to confirm "
 					"intentional full-collection delete";
 				EnqueueResponse(std::move(resp));
-				return false;
+				return;
 			}
 			mongo::BsonDocument reply;
 			mongo::MongoError err;

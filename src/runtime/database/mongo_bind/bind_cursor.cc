@@ -50,7 +50,11 @@ int l_cursor_next(lua_State* L) {
 			lua_pushnil(L);
 			return 3;
 		}
-		lua_pushboolean(L, false);`r`n			return 1;`r`n		}`r`n		*ud = doc.release();`r`n		return 1;
+		lua_pushboolean(L, false);
+		return 1;
+	}
+	*ud = doc.release();
+	return 1;
 }
 
 int l_cursor_more(lua_State* L) {

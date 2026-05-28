@@ -1,12 +1,15 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include "runtime/entity/entity.h"
 #include "runtime/space/connection_router.h"
 #include "runtime/space/space.h"
 #include "runtime/space/space_manager.h"
 #include "runtime/space/space_message.h"
+#include "runtime/vm/vm.h"
 
 using namespace engine::space;
 using namespace engine::entity;
+namespace entity = engine::entity;
 
 // =============================================================================
 // SpaceConfig & constants

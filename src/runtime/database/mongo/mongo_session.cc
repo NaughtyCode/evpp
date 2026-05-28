@@ -4,6 +4,9 @@
 
 #include <cstdio>
 
+#include "runtime/core/log/log.h"
+#include "runtime/core/log/log_macros.h"
+
 #include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_error.h"
 #include "runtime/database/mongo/mongo_settings.h"
