@@ -28,7 +28,7 @@ PhysicsThread::~PhysicsThread() {
 }
 
 //============================================================================
-// CreatePhysicsLogger �?map PhysicsLogConfig to engine::LogConfig [D7][D8]
+// CreatePhysicsLogger - map PhysicsLogConfig to engine::LogConfig [D7][D8]
 //============================================================================
 
 quill::Logger* PhysicsThread::CreatePhysicsLogger(const PhysicsLogConfig& log_config) {
@@ -138,7 +138,7 @@ void PhysicsThread::Stop() {
 }
 
 //============================================================================
-// Recover �?restart physics thread after a crash [D21]
+// Recover - restart physics thread after a crash [D21]
 //============================================================================
 
 bool PhysicsThread::Recover(const std::string& saved_state) {
@@ -146,38 +146,37 @@ bool PhysicsThread::Recover(const std::string& saved_state) {
 	PHYSICS_LOG_WARN(
 		logger_, "PhysicsThread: was healthy=[{}], running=[{}]", healthy_.load(), running_.load());
 
-	// Stop the old thread (safe even if thread already exited)
+	// Stop the old thread (Stop joins, so the thread is fully done here).
 	Stop();
-
-	// Brief pause to ensure clean shutdown
-	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 	// Restart with the same config
 	bool ok =
 		Start(physics_config_, threading_config_, thresholds_config_, log_config_, assets_path_);
 	if (!ok) {
-		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: recovery failed �?Start() returned false");
+		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: recovery failed Start() returned false");
 		return false;
 	}
 
-	// Wait for the event loop to initialize the world
-	int wait_attempts = 0;
-	while (!healthy_.load(std::memory_order_acquire) && wait_attempts < 50) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
-		++wait_attempts;
-	}
-	if (!healthy_.load(std::memory_order_acquire)) {
-		PHYSICS_LOG_ERROR(logger_,
-						  "PhysicsThread: recovery failed �?"
-						  "world did not become healthy after restart");
-		return false;
+	// Wait for the event loop to initialize the world — condition_variable
+	// replaces the old 50×100ms sleep polling loop.
+	{
+		std::unique_lock<std::mutex> lock(health_cv_mutex_);
+		bool became_healthy = health_cv_.wait_for(
+			lock, std::chrono::milliseconds(5000),
+			[this]() { return healthy_.load(std::memory_order_acquire); });
+		if (!became_healthy) {
+			PHYSICS_LOG_ERROR(logger_,
+					  "PhysicsThread: recovery failed --- "
+					  "world did not become healthy within 5000ms");
+			return false;
+		}
 	}
 
 	// Optionally restore state
 	if (!saved_state.empty()) {
 		if (!world_.RestoreState(saved_state)) {
 			PHYSICS_LOG_ERROR(logger_,
-							  "PhysicsThread: recovery �?"
+							  "PhysicsThread: recovery?"
 							  "state restoration failed");
 			return false;
 		}
@@ -238,7 +237,7 @@ void PhysicsThread::WaitForResult(std::chrono::milliseconds timeout) {
 }
 
 //============================================================================
-// VerifyIsPhysicsThread �?runtime guard for PT-only code
+// VerifyIsPhysicsThread - runtime guard for PT-only code
 //============================================================================
 
 void PhysicsThread::VerifyIsPhysicsThread() const {
@@ -252,7 +251,7 @@ void PhysicsThread::VerifyIsPhysicsThread() const {
 }
 
 //============================================================================
-// EventLoop �?runs on the dedicated physics thread
+// EventLoop - runs on the dedicated physics thread
 //============================================================================
 
 void PhysicsThread::EventLoop() {
@@ -272,6 +271,7 @@ void PhysicsThread::EventLoop() {
 		return;
 	}
 	healthy_.store(true, std::memory_order_release);
+	health_cv_.notify_one();  // wake Recover() waiter
 	PHYSICS_LOG_INFO(logger_, "PhysicsThread: world initialized, entering event loop");
 
 	// ── Main event loop ──────────────────────────────────────────────
@@ -315,7 +315,7 @@ void PhysicsThread::EventLoop() {
 				}
 				case CommandType::Tick: {
 					auto& args = std::get<TickArgs>(cmd.args);
-					// delta=0 is wakeup sentinel �?skip simulation
+					// delta=0 is wakeup sentinel - skip simulation
 					if (args.delta_time > 0.0f) {
 						PhysicsFrameResult result = world_.Step(args.delta_time, args.frame_id);
 
@@ -350,7 +350,7 @@ void PhysicsThread::EventLoop() {
 				PHYSICS_LOG_ERROR(logger_, "PhysicsThread: exception in event loop: {}", e.what());
 				healthy_.store(false, std::memory_order_release);
 				running_.store(false, std::memory_order_release);
-				break;	// exit event loop �?world may be in corrupted state
+				break;	// exit event loop - world may be in corrupted state
 			} catch (...) {
 				PHYSICS_LOG_ERROR(logger_, "PhysicsThread: unknown exception in event loop");
 				healthy_.store(false, std::memory_order_release);

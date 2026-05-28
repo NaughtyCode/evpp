@@ -249,6 +249,9 @@ class PhysicsThread {
 	std::mutex result_cv_mutex_;
 	std::condition_variable result_cv_;
 
+	std::mutex health_cv_mutex_;
+	std::condition_variable health_cv_;
+
 	// Atomic flags (acquire/release semantics, lock-free)
 	std::atomic<bool> running_{false};	// [ATOM] MT writes, PT reads
 	std::atomic<bool> healthy_{false};	// [ATOM] PT writes, MT reads
