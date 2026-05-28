@@ -42,6 +42,16 @@ void ScriptReloader::Start(int poll_interval_ms, int debounce_ms) {
 		return;
 	}
 
+	// Stop any existing watcher and reset state for a clean restart.
+	Stop();
+	file_reload_times_.clear();
+	global_snapshot_.clear();
+	{
+		std::lock_guard<std::mutex> lock(pending_mutex_);
+		pending_reloads_.clear();
+		pending_failures_.clear();
+	}
+
 	debounce_ms_ = debounce_ms;
 
 	watcher_ = std::make_unique<FileWatcher>();
@@ -52,6 +62,9 @@ void ScriptReloader::Start(int poll_interval_ms, int debounce_ms) {
 	watcher_->SetChangeCallback(
 		[this](const std::vector<std::string>& files) { OnFilesChanged(files); });
 
+	// Prime known files so the first scan doesn't report all existing
+	// scripts as changes (which would trigger unnecessary mass reload).
+	watcher_->PrimeKnownFiles();
 	watcher_->Start(poll_interval_ms);
 
 	auto* logger = GetLogger();
@@ -414,6 +427,7 @@ bool ScriptReloader::ReloadAll() {
 	auto initial_snapshot = std::move(global_snapshot_);
 
 	bool all_ok = true;
+	auto now = std::chrono::steady_clock::now();
 	for (const auto& fe : files) {
 		// Snapshot this file's package.loaded entry individually.
 		SnapshotPackageLoaded(L, fe.module_name);
@@ -422,6 +436,7 @@ bool ScriptReloader::ReloadAll() {
 				"ScriptReloader: reload failed for [{}], rolling back all",
 				fe.filepath);
 			RestorePackageLoaded(L, fe.module_name);
+			file_reload_times_[fe.filepath] = now;
 			all_ok = false;
 			break;
 		}
@@ -430,6 +445,7 @@ bool ScriptReloader::ReloadAll() {
 			luaL_unref(L, LUA_REGISTRYINDEX, package_loaded_snapshot_ref_);
 			package_loaded_snapshot_ref_ = LUA_NOREF;
 		}
+		file_reload_times_[fe.filepath] = now;
 	}
 
 	if (!all_ok) {

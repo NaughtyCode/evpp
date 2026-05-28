@@ -53,6 +53,11 @@ class ENGINE_API FileWatcher {
 	// Start monitoring. Poll interval in milliseconds (default 1000ms).
 	void Start(int poll_interval_ms = 1000);
 
+	// Prime the known-files set with all existing files in watched
+	// directories, without invoking the change callback. Call before
+	// Start() to prevent the first scan from reporting all files as new.
+	void PrimeKnownFiles();
+
 	// Stop monitoring and join the watcher thread.
 	void Stop();
 

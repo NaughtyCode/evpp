@@ -46,9 +46,38 @@ void FileWatcher::Start(int poll_interval_ms) {
 	                watch_entries_.size(),
 	                poll_interval_ms);
 
-	running_.store(true, std::memory_order_release);
 	thread_ = std::make_unique<std::thread>(
 		[this, poll_interval_ms]() { WatchLoop(poll_interval_ms); });
+	running_.store(true, std::memory_order_release);
+}
+
+void FileWatcher::PrimeKnownFiles() {
+	std::error_code ec;
+	for (const auto& entry : watch_entries_) {
+		if (!std::filesystem::exists(entry.path, ec)) {
+			if (ec) ec.clear();
+			continue;
+		}
+		for (auto it = std::filesystem::recursive_directory_iterator(
+		         entry.path, ec);
+		     it != std::filesystem::recursive_directory_iterator();
+		     ++it) {
+			if (ec) { ec.clear(); continue; }
+			const auto& de = *it;
+			if (!de.is_regular_file(ec)) continue;
+			if (ec) { ec.clear(); continue; }
+			auto ext = de.path().extension().string();
+			if (!entry.extension.empty() && ext != entry.extension) continue;
+			auto path_str = de.path().string();
+			known_files_.insert(path_str);
+			auto ftime = std::filesystem::last_write_time(de, ec);
+			if (!ec) {
+				file_times_[path_str] = ToSystemClock(ftime);
+			} else {
+				ec.clear();
+			}
+		}
+	}
 }
 
 void FileWatcher::Stop() {
@@ -91,14 +120,19 @@ void FileWatcher::WatchLoop(int poll_interval_ms) {
 }
 
 // Convert filesystem file_time_type to system_clock time_point.
-// Uses the approach: (file_time - file_clock::now) + system_clock::now
-// This computes the age of the file and applies it to system_clock,
-// which works correctly even when the clocks have different epochs.
+// Uses the approach: system_clock::now() - (file_clock::now() - ftime)
+// = system_clock::now() - age_of_file. This works correctly even when
+// the clocks have different epochs.
+// Clamp age to zero so files with timestamps in the future
+// do not produce a time_point far in the future.
 static std::chrono::system_clock::time_point ToSystemClock(
     std::filesystem::file_time_type ftime) {
 	auto file_now = std::filesystem::file_time_type::clock::now();
 	auto sys_now = std::chrono::system_clock::now();
 	auto age = file_now - ftime;
+	if (age.count() < 0) {
+		age = decltype(age)::zero();
+	}
 	return sys_now - std::chrono::duration_cast<
 	                    std::chrono::system_clock::duration>(age);
 }
