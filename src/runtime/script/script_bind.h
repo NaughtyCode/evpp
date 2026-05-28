@@ -36,6 +36,8 @@ ENGINE_API void ExportAOI(ScriptVM& vm);
 ENGINE_API void ExportOrm(ScriptVM& vm);
 #endif
 ENGINE_API void ExportRpc(ScriptVM& vm);
+ENGINE_API void UpdateRpcBindings(ScriptVM& vm);
+ENGINE_API void ShutdownRpcBindings(ScriptVM& vm);
 ENGINE_API void ExportAuth(ScriptVM& vm);
 
 }  // namespace script

@@ -1,4 +1,4 @@
-﻿// NOMINMAX must be defined before any windows.h inclusion,
+// NOMINMAX must be defined before any windows.h inclusion,
 // which can come via engine.h -> invoke_timer.h -> ...
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -442,6 +442,7 @@ void Engine::Cleanup() {
 	cleanup_phase_ = CleanupPhase::NetworkShutdown;
 	assert(script_vm_ != nullptr);
 	if (script_vm_) {
+		script::ShutdownRpcBindings(*script_vm_);
 		script::ShutdownNetBindings();
 	}
 
@@ -519,6 +520,7 @@ void Engine::FrameLoop() {
 		ENGINE_PROFILE_SCRIPT_UPDATE();
 		if (script_vm_) {
 			script_vm_->UpdateScript();
+			script::UpdateRpcBindings(*script_vm_);
 		}
 	}  // ScriptUpdate slice ends
 
