@@ -1,8 +1,6 @@
 #pragma once
 
-// ═══════════════════════════════════════════════════════════════════════════
 // Platform detection
-// ═══════════════════════════════════════════════════════════════════════════
 
 #if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
 #ifndef H_OS_WINDOWS
@@ -23,9 +21,7 @@
 #endif
 #endif
 
-// ═══════════════════════════════════════════════════════════════════════════
 // Windows platform adapters
-// ═══════════════════════════════════════════════════════════════════════════
 
 #ifdef H_OS_WINDOWS
 #define usleep(us) Sleep((us) / 1000)
@@ -36,9 +32,7 @@
 #define __PRETTY_FUNCTION__ __FUNCTION__
 #endif
 
-// ═══════════════════════════════════════════════════════════════════════════
 // PRIu64 — platform-specific printf format specifier for uint64_t
-// ═══════════════════════════════════════════════════════════════════════════
 
 #include <inttypes.h>
 #ifndef PRIu64
@@ -47,4 +41,15 @@
 #else
 #define PRIu64 "lu"
 #endif
+#endif
+
+// DLL export/import fallback
+// CLOUD_ENGINE_API is normally set by per-target CMake compile definitions:
+//   __declspec(dllexport) for CloudEngine.dll
+//   __declspec(dllimport) for consumers (GameServer, etc.)
+//   empty for static linkage (GameClient, tests)
+// When not defined (e.g. test targets, IDE intellisense), default to empty.
+
+#ifndef CLOUD_ENGINE_API
+#define CLOUD_ENGINE_API
 #endif

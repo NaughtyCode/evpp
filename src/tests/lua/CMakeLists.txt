@@ -5,6 +5,7 @@
 # Lua test runner executable
 add_executable(lua_test_runner lua_runner/lua_test_runner.cpp)
 target_include_directories(lua_test_runner PRIVATE ${TEST_COMMON_INCLUDES})
+target_compile_definitions(lua_test_runner PRIVATE "CLOUD_ENGINE_API=")
 target_link_libraries(lua_test_runner PRIVATE CloudEngine)
 set_target_properties(lua_test_runner PROPERTIES FOLDER "tests/lua")
 
