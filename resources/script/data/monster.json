@@ -1,0 +1,7 @@
+[
+  {"id": 1, "name": "Slime", "hp": 50, "atk": 5, "def": 2, "exp_reward": 10, "drop_table_id": 1},
+  {"id": 2, "name": "Goblin", "hp": 80, "atk": 12, "def": 5, "exp_reward": 25, "drop_table_id": 2},
+  {"id": 3, "name": "Wolf", "hp": 120, "atk": 18, "def": 8, "exp_reward": 40, "drop_table_id": 2},
+  {"id": 4, "name": "Orc", "hp": 200, "atk": 25, "def": 15, "exp_reward": 75, "drop_table_id": 3},
+  {"id": 5, "name": "Dragon", "hp": 500, "atk": 50, "def": 30, "exp_reward": 200, "drop_table_id": 4}
+]

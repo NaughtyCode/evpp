@@ -4,6 +4,7 @@
 #include "runtime/profiler/profiler_events.h"
 #include "runtime/script/aoi_bind.h"
 #include "runtime/script/auth_bind.h"
+#include "runtime/config/config_bind.h"
 #include "runtime/script/import_bind.h"
 #include "runtime/script/log_bind.h"
 #if defined(ENGINE_MONGODB_ENABLED)
@@ -79,6 +80,10 @@ void ExportAll(ScriptVM& vm, TimerManager& tm) {
 		ExportMem(vm);
 	}
 #endif
+	{
+		ENGINE_PROFILE_SCRIPT_EXPORT("config");
+		ExportConfigBindings(vm);
+	}
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("import");
 		engine::ExportImport(vm);

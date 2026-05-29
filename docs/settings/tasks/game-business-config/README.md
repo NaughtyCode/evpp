@@ -1,7 +1,7 @@
 # Task 11: Game Business Config Framework
 
 **Priority:** P1 — Lua/game logic blocker
-**Status:** pending
+**Status:** done
 **Dependencies:** Task 1 (core-validation-fix), Task 3 (hotreload-consumer-fix)
 
 ## Scope

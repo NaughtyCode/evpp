@@ -22,6 +22,11 @@ add_unit_test(test_config config/test_config.cpp)
 add_test(NAME unit.config COMMAND test_config)
 set_tests_properties(unit.config PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
+# ── Game business config tests ────────────────────────────────────────
+add_unit_test(test_game_config config/test_game_config.cpp)
+add_test(NAME unit.game_config COMMAND test_game_config)
+set_tests_properties(unit.game_config PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
 # ── Timer tests ─────────────────────────────────────────────────────
 add_unit_test(test_timer timer/test_timer.cpp)
 add_test(NAME unit.timer COMMAND test_timer)

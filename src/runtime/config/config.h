@@ -39,6 +39,24 @@ inline Environment EnvironmentFromEnvVar() {
     return Environment::development;
 }
 
+// SandboxLevel — Lua VM sandbox security tier.
+// Controls which standard libraries and dangerous functions are enabled.
+enum class SandboxLevel { Strict, Server, Full };
+
+inline SandboxLevel ParseSandboxLevel(const std::string& str) {
+    if (str == "full")    return SandboxLevel::Full;
+    if (str == "server")  return SandboxLevel::Server;
+    return SandboxLevel::Strict;  // "strict" or unknown → safe default
+}
+
+inline const char* SandboxLevelToString(SandboxLevel level) {
+    switch (level) {
+    case SandboxLevel::Full:   return "full";
+    case SandboxLevel::Server: return "server";
+    default:                    return "strict";
+    }
+}
+
 // ── TCP keepalive config ──
 
 struct TcpKeepaliveConfig {

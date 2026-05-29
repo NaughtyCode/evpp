@@ -1,0 +1,6 @@
+[
+  {"id": 1, "name": "Slime Drops", "items": [{"item_id": 1, "weight": 100, "min": 1, "max": 3}]},
+  {"id": 2, "name": "Goblin Loot", "items": [{"item_id": 1, "weight": 50, "min": 1, "max": 2}, {"item_id": 2, "weight": 10, "min": 1, "max": 1}]},
+  {"id": 3, "name": "Orc Spoils", "items": [{"item_id": 1, "weight": 30, "min": 1, "max": 3}, {"item_id": 4, "weight": 15, "min": 1, "max": 1}, {"item_id": 3, "weight": 5, "min": 1, "max": 1}]},
+  {"id": 4, "name": "Dragon Hoard", "items": [{"item_id": 5, "weight": 50, "min": 1, "max": 3}, {"item_id": 6, "weight": 20, "min": 1, "max": 1}, {"item_id": 7, "weight": 10, "min": 1, "max": 2}]}
+]

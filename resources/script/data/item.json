@@ -1,0 +1,9 @@
+[
+  {"id": 1, "name": "Potion", "type": "consumable", "atk_bonus": 0, "price": 10},
+  {"id": 2, "name": "Iron Sword", "type": "weapon", "atk_bonus": 15, "price": 100},
+  {"id": 3, "name": "Steel Sword", "type": "weapon", "atk_bonus": 30, "price": 300},
+  {"id": 4, "name": "Leather Armor", "type": "armor", "atk_bonus": 0, "price": 80},
+  {"id": 5, "name": "Dragon Scale", "type": "material", "atk_bonus": 0, "price": 500},
+  {"id": 6, "name": "Fire Staff", "type": "weapon", "atk_bonus": 45, "price": 600},
+  {"id": 7, "name": "Elixir", "type": "consumable", "atk_bonus": 0, "price": 50}
+]

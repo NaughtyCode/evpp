@@ -40,6 +40,7 @@ ENGINE_API void UpdateRpcBindings(ScriptVM& vm);
 ENGINE_API void ShutdownRpcBindings(ScriptVM& vm);
 ENGINE_API void ExportAuth(ScriptVM& vm);
 ENGINE_API void ExportMem(ScriptVM& vm);
+ENGINE_API void ExportConfigBindings(ScriptVM& vm);
 
 }  // namespace script
 }  // namespace engine

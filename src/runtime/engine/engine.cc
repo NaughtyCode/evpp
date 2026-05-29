@@ -219,16 +219,18 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		frame_interval_ = std::chrono::milliseconds(runtime_cfg.frame.interval_ms);
 	}
 
-	/* Map config string to sandbox level enum */
-	LuaSandboxLevel sandbox_level = LuaSandboxLevel::Strict;
-	if (runtime_cfg.sandbox_level == "server") {
-			sandbox_level = LuaSandboxLevel::Server;
-	} else if (runtime_cfg.sandbox_level == "full") {
-			sandbox_level = LuaSandboxLevel::Full;
+	/* Map config SandboxLevel to LuaSandboxLevel */
+	SandboxLevel config_sl = ParseSandboxLevel(runtime_cfg.sandbox_level);
+	LuaSandboxLevel vm_sl;
+	switch (config_sl) {
+	case SandboxLevel::Full:   vm_sl = LuaSandboxLevel::Full;   break;
+	case SandboxLevel::Server: vm_sl = LuaSandboxLevel::Server; break;
+	default:                    vm_sl = LuaSandboxLevel::Strict; break;
 	}
 
-	script_vm_ = std::make_unique<ScriptVM>(sandbox_level);
-	ENGINE_LOG_INFO(logger, "lua vm initialized, version=[{}], sandbox=[{}]", ScriptVM::LuaVersion(), runtime_cfg.sandbox_level);
+	script_vm_ = std::make_unique<ScriptVM>(vm_sl);
+	ENGINE_LOG_INFO(logger, "lua vm initialized, version=[{}], sandbox=[{}]",
+		ScriptVM::LuaVersion(), SandboxLevelToString(config_sl));
 
 	// ---- Physics system initialization ----
 	{
@@ -270,7 +272,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		if (reload_root.empty()) reload_root = ".";
 		script_reloader_ = std::make_unique<ScriptReloader>();
 		script_reloader_->SetTarget(script_vm_.get(), {reload_root});
-		script_reloader_->SetSandboxLevel(sandbox_level);
+		script_reloader_->SetSandboxLevel(vm_sl);
 		script_reloader_->SetEventLoop(loop_);
 		script_reloader_->SetReloadCallback(
 			[](const std::string& file, bool success) {

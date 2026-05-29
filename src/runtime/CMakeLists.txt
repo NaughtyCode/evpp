@@ -107,7 +107,13 @@ set(TIMER_SOURCES
 source_group("core\\timer" FILES ${TIMER_SOURCES})
 
 # ── Config ─────────────────────────────────────────────────────────
-set(CONFIG_SOURCES ${RUNTIME_DIR}/config/config.cc ${RUNTIME_DIR}/config/config.h)
+set(CONFIG_SOURCES
+    ${RUNTIME_DIR}/config/config.cc ${RUNTIME_DIR}/config/config.h
+    ${RUNTIME_DIR}/config/config_constants.h ${RUNTIME_DIR}/config/limits.h
+    ${RUNTIME_DIR}/config/config_validator.cc ${RUNTIME_DIR}/config/config_validator.h
+    ${RUNTIME_DIR}/config/config_bind.cc ${RUNTIME_DIR}/config/config_bind.h
+    ${RUNTIME_DIR}/config/config_table.cc ${RUNTIME_DIR}/config/config_table.h
+    ${RUNTIME_DIR}/config/reference_validator.cc ${RUNTIME_DIR}/config/reference_validator.h)
 source_group("config" FILES ${CONFIG_SOURCES})
 
 # ── Network codec ───────────────────────────────────────────────────

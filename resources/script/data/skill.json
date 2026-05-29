@@ -1,0 +1,7 @@
+[
+  {"id": 1, "name": "Slash", "damage_formula": "atk * 1.5", "cooldown_ms": 2000, "mp_cost": 10},
+  {"id": 2, "name": "Fireball", "damage_formula": "atk * 2.0 + 30", "cooldown_ms": 5000, "mp_cost": 30},
+  {"id": 3, "name": "Heal", "damage_formula": "atk * 0.5", "cooldown_ms": 8000, "mp_cost": 25},
+  {"id": 4, "name": "Berserk", "damage_formula": "atk * 2.5", "cooldown_ms": 30000, "mp_cost": 50},
+  {"id": 5, "name": "Thunder Strike", "damage_formula": "atk * 3.0 + 50", "cooldown_ms": 10000, "mp_cost": 40}
+]
