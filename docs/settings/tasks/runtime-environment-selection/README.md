@@ -1,7 +1,7 @@
 # Task 4: Runtime Environment Selection
 
 **Priority:** P0 — compile-time → runtime switch
-**Status:** pending
+**Status:** done
 **Dependencies:** Task 1 (core-validation-fix), Task 3 (hotreload-consumer-fix)
 
 ## Scope

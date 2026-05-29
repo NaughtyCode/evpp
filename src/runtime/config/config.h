@@ -7,10 +7,36 @@
 #include <string>
 #include <vector>
 
+#include <cstdlib>
+
 #include "runtime/config/config_constants.h"
 #include "runtime/core/engine_api.h"
 
 namespace engine {
+
+// Environment — runtime deployment target.
+// Replaces compile-time #ifndef NDEBUG for dev/prod behaviour.
+enum class Environment { development, staging, production };
+
+inline Environment ParseEnvironment(const std::string& str) {
+    if (str == "production" || str == "prod") return Environment::production;
+    if (str == "staging" || str == "stage") return Environment::staging;
+    return Environment::development;  // "development", "dev", or unknown → safe default
+}
+
+inline const char* EnvironmentToString(Environment env) {
+    switch (env) {
+    case Environment::production: return "production";
+    case Environment::staging:    return "staging";
+    default:                       return "development";
+    }
+}
+
+inline Environment EnvironmentFromEnvVar() {
+    const char* val = std::getenv("EVPP_ENV");
+    if (val && val[0] != '\0') return ParseEnvironment(val);
+    return Environment::development;
+}
 
 // Forward declarations
 struct DbServiceConfig;
@@ -63,6 +89,7 @@ struct RuntimeConfig {
 	std::string scripts_dir = config::kDefaultRuntimeScriptsDir;
 	std::string sandbox_level = "strict";
 	std::string physics_scene_path = "/physics/data/scene.json";
+	std::string environment = "development";  // deployment target (dev/staging/prod)
 };
 
 // Client config — loaded from resources/config/client/client.json.
@@ -191,6 +218,11 @@ struct ServerConfig {
 
 	// Database service config file path (relative to working dir).
 	std::string db_service = "resources/config/server/db_service.json";
+
+	// Explicit MongoDB selection override. When non-empty, this forces
+	// which MongoDB cluster to use ("dev" or "public"), overriding the
+	// environment-based default. Empty (default) = use environment.
+	std::string active_mongodb;  // "dev", "public", or "" (auto)
 };
 
 // ConfigManager — loads configs from JSON files at startup
@@ -253,8 +285,15 @@ class ENGINE_API ConfigManager {
 	bool LoadClientFromFile(const std::string& path);
 	bool LoadServerFromFile(const std::string& path);
 
+	// Set/get the active deployment environment. Must be called
+	// BEFORE Load() for profile layering to take effect.
+	// Default is development. Overridden by --env CLI / EVPP_ENV.
+	void SetActiveEnvironment(Environment env) { active_environment_ = env; }
+	Environment GetActiveEnvironment() const { return active_environment_; }
+
 	// Load all configs from a directory tree:
 	//   {config_dir}/runtime/runtime.json
+	//   {config_dir}/profiles/{env}.json  (profile overlay, optional)
 	//   {config_dir}/client/client.json   (optional)
 	//   {config_dir}/server/server.json   (optional)
 	bool Load(const std::string& config_dir);
@@ -360,6 +399,13 @@ class ENGINE_API ConfigManager {
 
 	private:
 	ConfigManager() = default;
+
+	// Active deployment environment — set before Load(), reused by Reload().
+	Environment active_environment_ = Environment::development;
+
+	// Apply environment profile overlay on top of the currently loaded
+	// runtime config. Reads profiles/{env}.json and merges matching fields.
+	void ApplyProfileOverlay(const std::string& config_dir);
 
 	// Shared loading helper: after server config is populated, load
 	// any referenced mongodb config files.

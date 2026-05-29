@@ -43,16 +43,25 @@ int main(int argc, char* argv[]) {
     std::fprintf(stderr, "[main] starting\n");
     WinSockGuard winsock_guard;
 
-    // Load config from JSON files (config path is fixed; resource_dir
-    // in the config controls where scripts/physics/etc. live).
-    // CLI override: --config_dir= can change the config location.
+    // Determine deployment environment (highest priority first):
+    //   1. --env=<name> CLI flag
+    //   2. EVPP_ENV environment variable
+    //   3. Default: development (set by ConfigManager constructor)
+    engine::Environment active_env = engine::EnvironmentFromEnvVar();
     std::string config_dir(engine::config::kConfigDir);
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
-        if (arg.rfind("--config_dir=", 0) == 0) {
+        if (arg.rfind("--env=", 0) == 0) {
+            active_env = engine::ParseEnvironment(arg.substr(6));
+        } else if (arg.rfind("--config_dir=", 0) == 0) {
             config_dir = arg.substr(13);
         }
     }
+    std::fprintf(stderr, "[main] environment: %s\n",
+                 engine::EnvironmentToString(active_env));
+
+    // Set environment before Load() so profile layering works.
+    engine::ConfigManager::Instance().SetActiveEnvironment(active_env);
     if (!engine::ConfigManager::Instance().Load(config_dir)) {
         std::cerr << "{\"event\":\"startup_failed\",\"exit_code\":3,"
                   << "\"reason\":\"config_load_failed\","

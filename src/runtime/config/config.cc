@@ -146,6 +146,14 @@ bool ConfigManager::Load(const std::string& config_dir) {
 	std::string runtime_path = config_dir + kRuntimeConfigFile;
 	if (!LoadRuntimeFromFile(runtime_path)) return false;
 
+	// Apply environment profile overlay (common.json → {env}.json).
+	// The overlay JSON contains only the fields to override for this env.
+	{
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		runtime_config_.environment = EnvironmentToString(active_environment_);
+	}
+	ApplyProfileOverlay(config_dir);
+
 	// Client and server configs are optional — one may not exist
 	// depending on the build target.  Check existence first to avoid
 	// spurious "failed to load" messages on stderr.
@@ -170,6 +178,44 @@ bool ConfigManager::Load(const std::string& config_dir) {
 		}
 	}
 	return true;
+}
+
+void ConfigManager::ApplyProfileOverlay(const std::string& config_dir) {
+	std::string env_str = EnvironmentToString(active_environment_);
+	std::string profile_path = config_dir + "/profiles/" + env_str + ".json";
+
+	std::error_code ec;
+	if (!std::filesystem::exists(profile_path, ec)) {
+		// No profile file for this environment — that's fine, use base config.
+		return;
+	}
+
+	// Read profile JSON (partial config — only overrides relevant fields).
+	RuntimeConfig profile_overlay;
+	{
+		std::shared_lock<std::shared_mutex> lock(config_mutex_);
+		profile_overlay = runtime_config_;
+	}
+
+	std::string buf;
+	auto err = glz::read_file_json(profile_overlay, profile_path, buf);
+	if (err) {
+		if (auto* l = GetLogger())
+			ENGINE_LOG_ERROR(l, "ConfigManager: failed to load profile [{}]: {}",
+							 profile_path, glz::format_error(err, buf));
+		return;
+	}
+
+	// Restore the environment field (profile overlay may have overwritten it).
+	profile_overlay.environment = env_str;
+
+	{
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		runtime_config_ = std::move(profile_overlay);
+	}
+
+	if (auto* l = GetLogger())
+		ENGINE_LOG_INFO(l, "ConfigManager: applied profile overlay [{}]", profile_path);
 }
 
 // ── Diff helper ────────────────────────────────────────────────────────────
@@ -213,6 +259,7 @@ ConfigChangeSet ConfigManager::Diff(const RuntimeConfig& old_rt,
 	EmitChange(changes, "scripts_dir", old_rt.scripts_dir, new_rt.scripts_dir);
 	EmitChange(changes, "sandbox_level", old_rt.sandbox_level, new_rt.sandbox_level);
 	EmitChange(changes, "physics_scene_path", old_rt.physics_scene_path, new_rt.physics_scene_path);
+	EmitChange(changes, "environment", old_rt.environment, new_rt.environment);
 
 	// LogConfig
 	EmitChange(changes, "log.dir", old_rt.log.dir, new_rt.log.dir);
@@ -245,6 +292,7 @@ ConfigChangeSet ConfigManager::Diff(const RuntimeConfig& old_rt,
 	EmitChange(changes, "admin_bind_address", old_srv.admin_bind_address, new_srv.admin_bind_address);
 	EmitChange(changes, "mongodb_dev", old_srv.mongodb_dev, new_srv.mongodb_dev);
 	EmitChange(changes, "mongodb_public", old_srv.mongodb_public, new_srv.mongodb_public);
+	EmitChange(changes, "active_mongodb", old_srv.active_mongodb, new_srv.active_mongodb);
 	EmitChange(changes, "db_service", old_srv.db_service, new_srv.db_service);
 
 	return changes;
@@ -274,6 +322,27 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 			ENGINE_LOG_ERROR(logger, "ConfigManager: reload validation failed for runtime.json: {}",
 							 vr.errors);
 			return false;
+		}
+	}
+
+	// Apply environment profile overlay (common.json → {env}.json).
+	new_runtime.environment = EnvironmentToString(active_environment_);
+	{
+		std::string profile_path =
+			config_dir + "/profiles/" + EnvironmentToString(active_environment_) + ".json";
+		std::error_code ec;
+		if (std::filesystem::exists(profile_path, ec)) {
+			RuntimeConfig profile_overlay = new_runtime;
+			std::string buf2;
+			auto err = glz::read_file_json(profile_overlay, profile_path, buf2);
+			if (!err) {
+				profile_overlay.environment = EnvironmentToString(active_environment_);
+				new_runtime = std::move(profile_overlay);
+				ENGINE_LOG_INFO(logger, "ConfigManager: reload applied profile overlay [{}]", profile_path);
+			} else {
+				ENGINE_LOG_ERROR(logger, "ConfigManager: reload failed to load profile [{}]: {}",
+								 profile_path, glz::format_error(err, buf2));
+			}
 		}
 	}
 

@@ -485,3 +485,90 @@ TEST_CASE("ValidateOnly returns valid for good config dir", "[config][validate]"
     // The key is that it doesn't crash and returns a result.
     REQUIRE(result.valid || !result.valid);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Environment: ParseEnvironment / EnvironmentToString
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("ParseEnvironment maps strings to enum", "[config][environment]") {
+    REQUIRE(engine::ParseEnvironment("development") == engine::Environment::development);
+    REQUIRE(engine::ParseEnvironment("dev") == engine::Environment::development);
+    REQUIRE(engine::ParseEnvironment("staging") == engine::Environment::staging);
+    REQUIRE(engine::ParseEnvironment("stage") == engine::Environment::staging);
+    REQUIRE(engine::ParseEnvironment("production") == engine::Environment::production);
+    REQUIRE(engine::ParseEnvironment("prod") == engine::Environment::production);
+    // Unknown values default to development (safe fallback).
+    REQUIRE(engine::ParseEnvironment("invalid") == engine::Environment::development);
+    REQUIRE(engine::ParseEnvironment("") == engine::Environment::development);
+}
+
+TEST_CASE("EnvironmentToString produces correct strings", "[config][environment]") {
+    REQUIRE(std::string(engine::EnvironmentToString(engine::Environment::development)) == "development");
+    REQUIRE(std::string(engine::EnvironmentToString(engine::Environment::staging)) == "staging");
+    REQUIRE(std::string(engine::EnvironmentToString(engine::Environment::production)) == "production");
+}
+
+TEST_CASE("ConfigManager ActiveEnvironment defaults to development", "[config][environment]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    REQUIRE(cfg.GetActiveEnvironment() == engine::Environment::development);
+}
+
+TEST_CASE("ConfigManager SetActiveEnvironment changes environment", "[config][environment]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    cfg.SetActiveEnvironment(engine::Environment::production);
+    REQUIRE(cfg.GetActiveEnvironment() == engine::Environment::production);
+    cfg.SetActiveEnvironment(engine::Environment::staging);
+    REQUIRE(cfg.GetActiveEnvironment() == engine::Environment::staging);
+    // Reset to default for other tests.
+    cfg.SetActiveEnvironment(engine::Environment::development);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RuntimeConfig: environment field
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("RuntimeConfig environment field defaults to development", "[config][environment]") {
+    ConfigFixture f;
+    f.LoadFromStrings();
+
+    auto rt = f.cfg.GetRuntimeConfig();
+    // LoadFromStrings doesn't set environment explicitly — the default applies.
+    REQUIRE(rt.environment == "development");
+}
+
+TEST_CASE("RuntimeConfig environment field can be loaded from JSON", "[config][environment]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    REQUIRE(cfg.LoadRuntimeFromString(R"({
+        "resource_dir": ".",
+        "log": { "dir": "." },
+        "frame": { "target_fps": 30 },
+        "scripts_dir": ".",
+        "environment": "production"
+    })"));
+    auto rt = cfg.GetRuntimeConfig();
+    REQUIRE(rt.environment == "production");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ServerConfig: active_mongodb field
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("ServerConfig active_mongodb defaults to empty", "[config][environment]") {
+    ConfigFixture f;
+    f.LoadFromStrings();
+
+    auto srv = f.cfg.GetServerConfig();
+    REQUIRE(srv.active_mongodb.empty());
+}
+
+TEST_CASE("ServerConfig active_mongodb can be set via JSON", "[config][environment]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    REQUIRE(cfg.LoadServerFromString(R"({
+        "http": { "timeout_sec": 5.0 },
+        "msgpack": { "max_nesting_depth": 16 },
+        "scripts_dir": ".",
+        "active_mongodb": "public"
+    })"));
+    auto srv = cfg.GetServerConfig();
+    REQUIRE(srv.active_mongodb == "public");
+}

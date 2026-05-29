@@ -132,10 +132,11 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	ENGINE_PROFILE_SCOPE("engine", "Init");
 
 	ENGINE_LOG_INFO(logger,
-					"engine initializing, resource_dir=[{}], "
+					"engine initializing, environment=[{}], resource_dir=[{}], "
 					"log_dir=[{}], log_level=[{}], "
 					"runtime_scripts_dir=[{}], entry_scripts_dir=[{}], "
 					"frame_interval=[{}ms], library_mode=[{}]",
+					runtime_cfg.environment,
 					runtime_cfg.resource_dir,
 					runtime_cfg.log.dir,
 					runtime_cfg.log.level,
@@ -175,11 +176,25 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 			ConfigManager::LoadDbServiceConfigFromFile(server_cfg.db_service, db_svc_config);
 		}
 
-#ifndef NDEBUG
-		auto mongo_cfg = ConfigManager::Instance().GetMongoDbDevConfig();
-#else
-		auto mongo_cfg = ConfigManager::Instance().GetMongoDbPublicConfig();
-#endif
+		// Runtime environment selects MongoDB cluster.
+		// Explicit active_mongodb in server config takes priority.
+		MongoDbConfig mongo_cfg;
+		{
+			auto server_cfg2 = ConfigManager::Instance().GetServerConfig();
+			const auto& active = server_cfg2.active_mongodb;
+			if (active == "public") {
+				mongo_cfg = ConfigManager::Instance().GetMongoDbPublicConfig();
+			} else if (active == "dev") {
+				mongo_cfg = ConfigManager::Instance().GetMongoDbDevConfig();
+			} else {
+				Environment env = ParseEnvironment(runtime_cfg.environment);
+				if (env == Environment::production) {
+					mongo_cfg = ConfigManager::Instance().GetMongoDbPublicConfig();
+				} else {
+					mongo_cfg = ConfigManager::Instance().GetMongoDbDevConfig();
+				}
+			}
+		}
 		auto uri = mongo::MongoUri::New(mongo_cfg.connection.uri.c_str());
 
 		if (db_svc_config.connection_pool.wait_queue_timeout_ms > 0) {
