@@ -5,6 +5,7 @@
 namespace engine {
 
 class ScriptVM;
+class TimerManager;
 
 namespace script {
 

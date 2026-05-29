@@ -72,7 +72,7 @@ void FileWatcher::PrimeKnownFiles() {
 			known_files_.insert(path_str);
 			auto ftime = std::filesystem::last_write_time(de, ec);
 			if (!ec) {
-				file_times_[path_str] = ToSystemClock(ftime);
+				file_times_[path_str] = std::chrono::clock_cast<std::chrono::system_clock>(ftime);
 			} else {
 				ec.clear();
 			}

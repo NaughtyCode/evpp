@@ -12,6 +12,7 @@
 
 #include <WinSock2.h>
 #include <io.h>
+#include <mstcpip.h>
 #include <windows.h>
 #include <ws2ipdef.h>
 #include <ws2tcpip.h>

@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include "runtime/core/engine_api.h"
+
 namespace engine {
 
 // Unified validation result used by all config managers.
@@ -14,7 +16,7 @@ struct ValidationResult {
 // Abstract interface for config managers — allows ConfigManager and
 // PhysicsConfigManager to be used polymorphically for loading, reloading,
 // validation, and snapshot/dump.
-class IConfigManager {
+class ENGINE_API IConfigManager {
 public:
 	virtual ~IConfigManager() = default;
 	virtual bool Load(const std::string& config_dir) = 0;

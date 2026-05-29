@@ -246,12 +246,17 @@ ValidationResult PhysicsConfigManager::Validate() const {
 
 std::string PhysicsConfigManager::Dump() const {
 	std::shared_lock<std::shared_mutex> lock(config_mutex_);
+	auto phys_json = glz::write_json(physics_config_);
+	auto thread_json = glz::write_json(threading_config_);
+	auto log_json = glz::write_json(log_config_);
+	auto thresholds_json = glz::write_json(thresholds_config_);
+
 	std::ostringstream oss;
 	oss << "{";
-	oss << "\"physics\":" << glz::write_json(physics_config_);
-	oss << ",\"threading\":" << glz::write_json(threading_config_);
-	oss << ",\"logging\":" << glz::write_json(log_config_);
-	oss << ",\"thresholds\":" << glz::write_json(thresholds_config_);
+	oss << "\"physics\":" << (phys_json ? *phys_json : "\"\"");
+	oss << ",\"threading\":" << (thread_json ? *thread_json : "\"\"");
+	oss << ",\"logging\":" << (log_json ? *log_json : "\"\"");
+	oss << ",\"thresholds\":" << (thresholds_json ? *thresholds_json : "\"\"");
 	oss << "}";
 	return oss.str();
 }

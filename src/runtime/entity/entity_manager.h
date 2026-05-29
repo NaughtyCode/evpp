@@ -11,6 +11,9 @@
 #include "entity_id.h"
 
 namespace engine {
+
+class TimerManager;
+
 namespace entity {
 
 class EntityManager {

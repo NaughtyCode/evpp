@@ -25,6 +25,7 @@
 #include "runtime/core/log/log.h"
 #include "runtime/core/timer/timer_manager.h"
 #include "runtime/engine/engine.h"
+#include "runtime/entity/entity_manager.h"
 #if defined(ENGINE_MONGODB_ENABLED)
 #include "runtime/database/data_service/database_service.h"
 #include "runtime/database/data_service/db_service_config.h"

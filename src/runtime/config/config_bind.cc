@@ -40,6 +40,16 @@ int PushConfigValue(lua_State* L, bool val) {
     return 1;
 }
 
+int PushConfigValue(lua_State* L, lua_Integer val) {
+    lua_pushinteger(L, val);
+    return 1;
+}
+
+int PushConfigValue(lua_State* L, size_t val) {
+    lua_pushinteger(L, static_cast<lua_Integer>(val));
+    return 1;
+}
+
 // ── config.get(path) ───────────────────────────────────────────────────
 
 int l_config_get(lua_State* L) {
@@ -88,7 +98,7 @@ int l_config_get(lua_State* L) {
     if (p == "server.mongodb_dev")            return PushConfigValue(L, srv.mongodb_dev);
     if (p == "server.mongodb_public")         return PushConfigValue(L, srv.mongodb_public);
     if (p == "server.msgpack.max_nesting_depth") return PushConfigValue(L, srv.msgpack.max_nesting_depth);
-    if (p == "server.msgpack.max_payload_size")  return PushConfigValue(L, static_cast<lua_Integer>(srv.msgpack.max_payload_size));
+    if (p == "server.msgpack.max_payload_size")  return PushConfigValue(L, srv.msgpack.max_payload_size);
 
     lua_pushnil(L);
     return 1;
@@ -419,8 +429,6 @@ void ExportConfigBindings(ScriptVM& vm) {
     ENGINE_LOG_INFO(logger,
         "ScriptBind: config module exported (config.get/get_module/on_change/flush_changes)");
 }
-
-}  // namespace
 
 int FlushConfigCallbacks(lua_State* L) {
     std::vector<PendingConfigEvent> pending;

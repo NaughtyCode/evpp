@@ -15,6 +15,7 @@
 #include "runtime/config/i_config_manager.h"
 #include "runtime/config/limits.h"
 #include "runtime/core/engine_api.h"
+#include "runtime/vm/file_watcher.h"
 
 namespace engine {
 
@@ -79,7 +80,6 @@ struct InstanceIdentity {
 
 // Forward declarations
 struct DbServiceConfig;
-class FileWatcher;
 
 // ConfigChangeEntry — describes a single field change in a config reload.
 struct ConfigChangeEntry {

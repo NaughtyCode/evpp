@@ -11,6 +11,9 @@
 #include "runtime/core/engine_api.h"
 #include "runtime/vm/sandbox.h"
 
+#include "lua.h"
+#include "lauxlib.h"
+
 struct lua_State;
 
 namespace evpp {

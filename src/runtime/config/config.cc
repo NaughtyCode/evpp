@@ -39,7 +39,8 @@ void CheckPlaintextCredentials(const std::string& uri, const std::string& contex
 template <typename T>
 void InterpolateConfigStrings(T& config) {
 	auto* logger = GetLogger();
-	glz::for_each_field(config, [&](auto& member, std::string_view name) {
+	(void)logger;
+	glz::for_each_field(config, [&](auto& member) {
 		using MemberType = std::decay_t<decltype(member)>;
 		if constexpr (std::is_same_v<MemberType, std::string>) {
 			member = ConfigManager::InterpolateEnvVars(member);
@@ -49,7 +50,7 @@ void InterpolateConfigStrings(T& config) {
 			}
 		}
 		// Recursively interpolate nested structs
-		if constexpr (glz::detail::is_glaze_object<MemberType>) {
+		if constexpr (glz::reflectable<MemberType> || glz::glaze_object_t<MemberType>) {
 			InterpolateConfigStrings(member);
 		}
 	});
@@ -65,7 +66,7 @@ ConfigManager& ConfigManager::Instance() {
 }
 
 std::unique_ptr<IConfigManager> ConfigManager::Create() {
-	return std::make_unique<ConfigManager>();
+	return std::unique_ptr<IConfigManager>(new ConfigManager());
 }
 
 // From JSON strings (text)

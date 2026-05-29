@@ -3,6 +3,7 @@
 #include "runtime/physics/physics_assets.h"
 
 #include <cmath>
+#include "runtime/core/log/log.h"
 #include <cstdio>
 #include <fstream>
 #include <string>

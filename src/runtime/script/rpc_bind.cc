@@ -1,4 +1,4 @@
-﻿#include "runtime/script/rpc_bind.h"
+#include "runtime/script/rpc_bind.h"
 
 #include <atomic>
 #include <chrono>
@@ -27,12 +27,12 @@ namespace script {
 
 namespace {
 
-// ── Metatable names ─────────────────────────────────────────────────────
+// Metatable names
 
 const char* kServerMetaName = "rpc.server.instance";
 const char* kClientMetaName = "rpc.client.instance";
 
-// ── Pending request (deferred execution queue) ──────────────────────────
+// Pending request (deferred execution queue)
 
 struct PendingRpcCall {
 	std::string service;
@@ -41,7 +41,7 @@ struct PendingRpcCall {
 	std::promise<std::string> promise;
 };
 
-// ── Server context ──────────────────────────────────────────────────────
+// Server context
 
 struct RpcServerCtx {
 	std::unique_ptr<rpc::RpcServer> server;
@@ -59,7 +59,7 @@ struct RpcServerCtx {
 	bool disposed = false;
 };
 
-// ── Client context ──────────────────────────────────────────────────────
+// Client context
 
 struct RpcClientCtx {
 	std::unique_ptr<rpc::RpcClient> client;
@@ -74,7 +74,7 @@ struct RpcClientCtx {
 	std::vector<std::pair<int, rpc::RpcResponse>> deferred_responses;
 };
 
-// ── Per-VM state ────────────────────────────────────────────────────────
+// Per-VM state
 
 struct RpcBindState {
 	std::unordered_set<RpcServerCtx*> servers;
@@ -100,7 +100,7 @@ RpcBindState* CheckRpcState(lua_State* L) {
 	return state;
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────
+// Helpers
 
 int PushRpcError(lua_State* L, const char* msg) {
 	lua_pushnil(L);
@@ -144,10 +144,7 @@ static void DrainResponseQueue(RpcClientCtx* ctx, lua_State* L) {
 		if (cb_ref != LUA_NOREF) luaL_unref(L, LUA_REGISTRYINDEX, cb_ref);
 	}
 }
-
-// ══════════════════════════════════════════════════════════════════════ - 
 // Server methods (called as server:method())
-// ══════════════════════════════════════════════════════════════════════ - 
 
 int l_server_register_service(lua_State* L) {
 	auto* ctx = GetCtxFromTable<RpcServerCtx>(L, 1);
@@ -304,9 +301,7 @@ int l_server_gc(lua_State* L) {
 	return 0;
 }
 
-// ══════════════════════════════════════════════════════════════════════ - 
 // Client methods (called as client:method())
-// ══════════════════════════════════════════════════════════════════════ - 
 
 int l_client_call(lua_State* L) {
 	auto* ctx = GetCtxFromTable<RpcClientCtx>(L, 1);
@@ -416,7 +411,7 @@ int l_client_set_send_callback(lua_State* L) {
 							 lua_tostring(captured_L, -1));
 			lua_pop(captured_L, 1);
 		}
-t		}
+		}
 	});
 
 	lua_pushboolean(L, 1);
@@ -503,9 +498,7 @@ int l_client_gc(lua_State* L) {
 	return 0;
 }
 
-// ══════════════════════════════════════════════════════════════════════ - 
 // Module-level functions (rpc.new_server / rpc.new_client)
-// ══════════════════════════════════════════════════════════════════════ - 
 
 // rpc.new_server()  - server_table
 int l_rpc_new_server(lua_State* L) {
@@ -553,7 +546,7 @@ int l_rpc_new_client(lua_State* L) {
 	return 1;
 }
 
-// ── Metatable registrations ─────────────────────────────────────────────
+// Metatable registrations
 
 const luaL_Reg kServerMethods[] = {
 	{"register_service",   l_server_register_service},
@@ -578,9 +571,7 @@ const luaL_Reg kRpcFuncs[] = {
 
 }  // namespace
 
-// ════════════════════════════════════════════════════════════════════════ - 
 // Public API
-// ════════════════════════════════════════════════════════════════════════ - 
 
 void ExportRpc(ScriptVM& vm) {
 	auto* L = vm.GetState();
@@ -609,15 +600,15 @@ void UpdateRpcBindings(ScriptVM& vm) {
 	auto* state = GetRpcState(L);
 	if (!state) return;
 
-	// ── Process client timeouts FIRST (cheap map scan, guarantees
-	//     they run every frame regardless of server load) ─────────────
+	// Process client timeouts FIRST (cheap map scan, guarantees
+	// they run every frame regardless of server load)
 
 	for (auto* ctx : state->clients) {
 		if (ctx->disposed) continue;
 		ctx->client->ProcessTimeouts();
 	}
 
-	// ── Drain client deferred response queues (call_async responses) ──
+	// Drain client deferred response queues (call_async responses)
 
 	for (auto* ctx : state->clients) {
 		if (ctx->disposed) continue;
@@ -653,7 +644,7 @@ void UpdateRpcBindings(ScriptVM& vm) {
 		}
 	}
 
-	// ── Process server pending queues (with 5ms time budget) ──────────
+	// Process server pending queues (with 5ms time budget)
 
 	auto budget_start = std::chrono::steady_clock::now();
 	constexpr auto kMaxBudget = std::chrono::milliseconds(5);
