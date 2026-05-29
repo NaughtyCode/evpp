@@ -248,7 +248,7 @@ if(NOT TARGET CloudEngine)
         ${ENGINE_ROOT}/thirdparty/concurrentqueue/concurrentqueue
     )
 
-    target_compile_definitions(CloudEngine PRIVATE ENGINE_BUILD LUA_BUILD_AS_DLL LUA_CORE LUA_LIB)
+    target_compile_definitions(CloudEngine PRIVATE ENGINE_BUILD LUA_BUILD_AS_DLL)
 
 # CLOUD_ENGINE_API — platform-differentiated DLL export/import
 if(WIN32)
