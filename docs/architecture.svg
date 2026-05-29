@@ -107,7 +107,7 @@
   <!-- ============================================================ -->
   <rect x="40" y="292" width="1120" height="40" rx="8" fill="#e7f5ff" stroke="#1c7ed6" stroke-width="1.5"/>
   <text x="60" y="310" fill="#1864ab" font-size="12" font-weight="bold">SERVER ENTRY  (src/server/)</text>
-  <text x="300" y="323" fill="#495057" font-size="11">main.cc — WinSock → ConfigManager::Load("resources/config") → Engine::Init() → Engine::Run()</text>
+  <text x="300" y="323" fill="#495057" font-size="11">main.cc — ConfigManager::Load("resources/config") → Engine::Init() → Engine::Run()</text>
   <line x1="518" y1="332" x2="518" y2="357" stroke="#666" stroke-width="1.5" marker-end="url(#arrow)"/>
 
   <!-- ============================================================ -->
@@ -610,23 +610,21 @@
   <text x="60" y="1856" fill="#74c0fc" font-size="13" font-weight="bold">启动流程 (Startup Flow)</text>
 
   <rect x="55" y="1868" width="510" height="24" rx="4" fill="#2d2d4e"/>
-  <text x="65" y="1885" fill="#adb5bd" font-size="9">1. WinSockGuard (WSAStartup/WSACleanup RAII)</text>
-  <rect x="55" y="1896" width="510" height="24" rx="4" fill="#2d2d4e"/>
-  <text x="65" y="1913" fill="#adb5bd" font-size="9">2. ConfigManager::Load("resources/config")</text>
+  <text x="65" y="1885" fill="#adb5bd" font-size="9">1. ConfigManager::Load("resources/config")</text>
   <rect x="55" y="1924" width="510" height="24" rx="4" fill="#2d2d4e"/>
   <text x="65" y="1941" fill="#adb5bd" font-size="9">    → runtime.json + server.json + client.json + mongodb configs + db_service.json</text>
   <rect x="55" y="1952" width="510" height="24" rx="4" fill="#2d2d4e"/>
-  <text x="65" y="1969" fill="#adb5bd" font-size="9">3. Engine::Init(cfg, entry_scripts_dir, [external_loop])</text>
+  <text x="65" y="1969" fill="#adb5bd" font-size="9">2. Engine::Init(cfg, entry_scripts_dir, [external_loop])</text>
   <rect x="55" y="1980" width="510" height="24" rx="4" fill="#2d2d4e"/>
   <text x="65" y="1997" fill="#adb5bd" font-size="9">    → Logger → Profiler → TimerMgr → EventLoop → ScriptVM → PhysicsBridge</text>
   <rect x="55" y="2008" width="510" height="24" rx="4" fill="#2d2d4e"/>
-  <text x="65" y="2025" fill="#adb5bd" font-size="9">4. DoDirectory(scripts_dir) · InitScript() → 调用 Lua OnInit()</text>
+  <text x="65" y="2025" fill="#adb5bd" font-size="9">3. DoDirectory(scripts_dir) · InitScript() → 调用 Lua OnInit()</text>
   <rect x="55" y="2036" width="510" height="24" rx="4" fill="#2d2d4e"/>
-  <text x="65" y="2053" fill="#adb5bd" font-size="9">5. Engine::Run() → Start() (帧定时器+信号) → EventLoop::Run() (阻塞)</text>
+  <text x="65" y="2053" fill="#adb5bd" font-size="9">4. Engine::Run() → Start() (帧定时器+信号) → EventLoop::Run() (阻塞)</text>
   <rect x="55" y="2064" width="510" height="24" rx="4" fill="#2d2d4e"/>
-  <text x="65" y="2081" fill="#adb5bd" font-size="9">6. [可选] Library Mode: host owns EventLoop, 手动调用 Tick()</text>
+  <text x="65" y="2081" fill="#adb5bd" font-size="9">5. [可选] Library Mode: host owns EventLoop, 手动调用 Tick()</text>
   <rect x="55" y="2092" width="510" height="18" rx="4" fill="#3b3b6e"/>
-  <text x="65" y="2106" fill="#74c0fc" font-size="9">7. Cleanup (6-phase): Physics → Database → Network → Timer → Script → Log</text>
+  <text x="65" y="2106" fill="#74c0fc" font-size="9">6. Cleanup (6-phase): Physics → Database → Network → Timer → Script → Log</text>
 
   <!-- Per-Frame Loop -->
   <rect x="600" y="1830" width="560" height="310" rx="8" fill="#1a1a2e" filter="url(#shadow)"/>

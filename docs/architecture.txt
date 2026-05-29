@@ -30,7 +30,7 @@ CloudEngine - 全景架构图
 │                                                                              │
 │  ┌─────────────────────────────────────────────────────────────────────┐     │
 │  │                        SERVER  (src/server/)                         │     │
-│  │  main.cc - WinSock -> ConfigManager -> Engine::Init() -> Run()       │     │
+│  │  main.cc - ConfigManager::Load() -> Engine::Init() -> Run()      │     │
 │  └───────────────────────────────┬─────────────────────────────────────┘     │
 │                                  │                                           │
 │  ┌───────────────────────────────▼─────────────────────────────────────┐     │
@@ -259,16 +259,14 @@ CloudEngine - 全景架构图
 
   main()
     │
-    +-[1] WinSockGuard (WSAStartup)
-    │
-    +-[2] ConfigManager::Instance().Load("resources/config")
+    +-[1] ConfigManager::Instance().Load("resources/config")
     │     + runtime/runtime.json -> RuntimeConfig { log, frame, scripts_dir, sandbox }
     │     + server/server.json   -> ServerConfig { http, msgpack, admin_port, mongodb_*, db_service }
     │     + client/client.json   -> ClientConfig { scripts_dir }
     │     + MongoDB cluster configs (auto-loaded from paths in server.json)
     │     + DbServiceConfig (from db_service.json)
     │
-    +-[3] Engine::Instance().Init(runtime_config, entry_scripts_dir, [external_loop])
+    +-[2] Engine::Instance().Init(runtime_config, entry_scripts_dir, [external_loop])
     │     + InitLogger()              -> Quill async logger
     │     + ProfilerManager::Init()   -> Perfetto tracing
     │     + TimerManager::create()    -> non-singleton, owned by Engine
@@ -279,7 +277,7 @@ CloudEngine - 全景架构图
     │     + ScriptVM::DoDirectory(entry_scripts_dir)         -> role-specific scripts
     │     + ScriptVM::InitScript()    -> calls global Lua OnInit()
     │
-    +-[4] Engine::Run()  [standalone mode]
+    +-[3] Engine::Run()  [standalone mode]
     │     + Engine::Start()
     │     │     + frame_timer_ = loop_->setInterval(frame_interval)
     │     │     │     -> each tick: Engine::FrameLoop()
@@ -288,7 +286,7 @@ CloudEngine - 全景架构图
     │     │
     │     + loop_->Run()  -> blocks until Shutdown()
     │
-    +-[5] Engine::Cleanup()  [ordered CleanupPhase]
+    +-[4] Engine::Cleanup()  [ordered CleanupPhase]
     │     + CleanupPhase::PhysicsShutdown   -> stop physics VM + thread
     │     + CleanupPhase::DatabaseShutdown  -> stop DB threads + drain queues
     │     + CleanupPhase::NetworkShutdown   -> [REQUIRES script_vm_ alive]
@@ -296,7 +294,7 @@ CloudEngine - 全景架构图
     │     + CleanupPhase::ScriptDestroyed   -> lua_close + lifecycle hooks
     │     + CleanupPhase::FinalLogs         -> GC stats, cleanup confirmation
     │
-    +-[6] ShutdownLogger()
+    +-[5] ShutdownLogger()
 
 
      [Library mode (host provides EventLoop)]
