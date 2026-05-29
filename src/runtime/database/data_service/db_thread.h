@@ -18,6 +18,7 @@ DATABASE_SERVICE_INTERNAL_ACCESS before including this header."
 
 #include <quill/Logger.h>
 
+#include "runtime/core/timer/timer_manager.h"
 #include "runtime/database/data_service/db_request.h"
 #include "runtime/database/data_service/db_script_vm.h"
 #include "runtime/database/data_service/db_service_config.h"
@@ -103,6 +104,8 @@ class DBThread {
 		return script_vm_;
 	}
 
+	TimerManager& GetTimerManager() { return *timer_mgr_; }
+
 	private:
 	// ── Logger ─────────────────────────────────────────────────────────
 	//
@@ -144,6 +147,9 @@ class DBThread {
 
 	// ── Script VM ──────────────────────────────────────────────────────
 	DBScriptVM script_vm_;	// [DBT] exclusive, init'd in EventLoop
+
+	// ── Per-thread TimerManager ─────────────────────────────────────────
+	std::unique_ptr<TimerManager> timer_mgr_;  // [DBT] owned, init'd in EventLoop
 
 	// ── SPSC queues (moodycamel::ConcurrentQueue) ──────────────────────
 	moodycamel::ConcurrentQueue<DbRequest>

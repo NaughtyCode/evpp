@@ -18,6 +18,7 @@
 #include "runtime/database/mongo/mongo_forward.h"
 #include "runtime/database/mongo_bind/mongo_bind.h"
 #include "runtime/script/import_bind.h"
+#include "runtime/script/timer_bind.h"
 
 namespace engine {
 
@@ -300,6 +301,11 @@ void DBThread::EventLoop() {
 		// 2e. db_get_client / db_get_pool — access CustomPtr slots from Lua
 		ExportDbRuntime(script_vm_);
 
+		// 2e2. Per-thread timer API (timer.timeout / interval / cancel)
+		timer_mgr_ = std::make_unique<TimerManager>();
+		timer_mgr_->initialize();
+		script::ExportTimer(script_vm_, *timer_mgr_);
+
 		// 2f. Configure import path — db_scripts_dir searched first (R12)
 		script_vm_.SetImportPath(config_.script.db_scripts_dir + ";" +
 								 config_.script.runtime_scripts_dir);
@@ -381,6 +387,8 @@ void DBThread::EventLoop() {
 				script_vm_.CallFrameCallback(frame_count_, delta);
 			}
 
+			timer_mgr_->update();
+
 			// ── Frame rate control ─────────────────────────────────
 			if (config_.thread_pool.target_fps > 0) {
 				auto elapsed = std::chrono::steady_clock::now() - frame_start;
@@ -412,6 +420,10 @@ void DBThread::EventLoop() {
 
 	// ── Phase 4: Cleanup (always reached) ──────────────────────────────
 	healthy_.store(false, std::memory_order_release);
+	if (timer_mgr_) {
+		timer_mgr_->shutdown();
+		timer_mgr_.reset();
+	}
 	script_vm_.DestroyScript();
 	if (client_) {
 		pool_->Push(client_);

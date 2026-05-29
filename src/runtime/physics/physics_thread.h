@@ -26,6 +26,7 @@ before including this header."
 
 #include <quill/Logger.h>
 
+#include "runtime/core/timer/timer_manager.h"
 #include "runtime/physics/physics_commands.h"
 #include "runtime/physics/physics_config.h"
 #include "runtime/physics/physics_world.h"
@@ -115,6 +116,10 @@ class PhysicsThread {
 
 	void NotifyResult();
 	void WaitForResult(std::chrono::milliseconds timeout);
+
+	// ── TimerManager ──────────────────────────────────────────────────
+	void InitTimerManager();
+	TimerManager& GetTimerManager() { return *timer_mgr_; }
 
 	// ── Health and status queries ────────────────────────────────────
 	//
@@ -270,6 +275,10 @@ class PhysicsThread {
 	// PostStepCallback (executes on physics thread, PT-exclusive)
 	PostStepCallback post_step_callback_;  // [MT->] set in Start();
 	// [PT] invoked in EventLoop
+
+	// Per-thread TimerManager — created before Start(), updated in EventLoop.
+	std::unique_ptr<TimerManager> timer_mgr_;  // [MT->] created in InitTimerManager();
+	// [PT] update in EventLoop
 
 	// Physics thread ID — captured at EventLoop() entry, used by
 	// VerifyIsPhysicsThread() to detect cross-thread misuse.

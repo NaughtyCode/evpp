@@ -14,6 +14,7 @@
 #include "runtime/physics/physics_vm.h"
 #include "runtime/profiler/profiler_events.h"
 #include "runtime/script/import_bind.h"
+#include "runtime/script/timer_bind.h"
 #include "runtime/vm/custom_ptr_store.h"
 #include "runtime/vm/lua_error_handler.h"
 #include "runtime/vm/vm.h"
@@ -64,6 +65,10 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
 
 	// Register physics API bindings
 	physics_bindings::Register(*script_vm_);
+
+	// Register per-thread timer API (timer.timeout / interval / cancel)
+	physics_thread_.InitTimerManager();
+	script::ExportTimer(*script_vm_, physics_thread_.GetTimerManager());
 
 	// Register import() — physics scripts use import("runtime.common.class")
 	ExportImport(*script_vm_);

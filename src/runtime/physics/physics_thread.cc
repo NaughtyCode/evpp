@@ -19,10 +19,21 @@
 
 namespace engine {
 
+// InitTimerManager — create per-thread TimerManager (MT, before Start)
+
+void PhysicsThread::InitTimerManager() {
+	timer_mgr_ = std::make_unique<TimerManager>();
+	timer_mgr_->initialize();
+}
+
 // Destructor
 
 PhysicsThread::~PhysicsThread() {
 	Stop();
+	if (timer_mgr_) {
+		timer_mgr_->shutdown();
+		timer_mgr_.reset();
+	}
 }
 
 // CreatePhysicsLogger - map PhysicsLogConfig to engine::LogConfig [D7][D8]
@@ -305,6 +316,11 @@ void PhysicsThread::EventLoop() {
 						// before enqueuing the result for the main thread.
 						if (post_step_callback_) {
 							post_step_callback_(result.collision_events);
+						}
+
+						// Update per-thread timer subsystem
+						if (timer_mgr_) {
+							timer_mgr_->update();
 						}
 
 						{
