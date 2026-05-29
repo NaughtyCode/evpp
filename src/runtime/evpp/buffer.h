@@ -43,12 +43,14 @@ class CLOUD_ENGINE_API Buffer {
 		  capacity_(rhs.capacity_),
 		  read_index_(rhs.read_index_),
 		  write_index_(rhs.write_index_),
-		  reserved_prepend_size_(rhs.reserved_prepend_size_) {
+		  reserved_prepend_size_(rhs.reserved_prepend_size_),
+		  max_capacity_(rhs.max_capacity_) {
 		rhs.buffer_ = nullptr;
 		rhs.capacity_ = 0;
 		rhs.read_index_ = 0;
 		rhs.write_index_ = 0;
 		rhs.reserved_prepend_size_ = 0;
+		rhs.max_capacity_ = 256 * 1024;
 	}
 
 	Buffer& operator=(Buffer&& rhs) noexcept {
@@ -59,11 +61,13 @@ class CLOUD_ENGINE_API Buffer {
 			read_index_ = rhs.read_index_;
 			write_index_ = rhs.write_index_;
 			reserved_prepend_size_ = rhs.reserved_prepend_size_;
+			max_capacity_ = rhs.max_capacity_;
 			rhs.buffer_ = nullptr;
 			rhs.capacity_ = 0;
 			rhs.read_index_ = 0;
 			rhs.write_index_ = 0;
 			rhs.reserved_prepend_size_ = 0;
+			rhs.max_capacity_ = 256 * 1024;
 		}
 		return *this;
 	}

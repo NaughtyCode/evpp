@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <mutex>
 
 namespace evpp {
 
@@ -27,6 +28,7 @@ class RateLimiter {
 
 	/* Set the rate limit in bytes per second. 0 = unlimited. */
 	void SetRate(uint32_t max_bytes_per_sec) {
+		std::lock_guard<std::mutex> lock(mutex_);
 		max_bytes_per_sec_ = max_bytes_per_sec;
 		tokens_ = max_bytes_per_sec;
 		last_refill_time_ = std::chrono::steady_clock::now();
@@ -35,6 +37,7 @@ class RateLimiter {
 	/* Return the number of bytes allowed to send right now.
 	 * The caller should send up to this many bytes and queue the rest. */
 	uint32_t Consume(uint32_t requested_bytes) {
+		std::lock_guard<std::mutex> lock(mutex_);
 		if (max_bytes_per_sec_ == 0) return requested_bytes;  // unlimited
 		Refill();
 		uint32_t allowed = (std::min)(requested_bytes, tokens_);
@@ -63,6 +66,7 @@ class RateLimiter {
 	uint32_t max_bytes_per_sec_;
 	uint32_t tokens_;
 	std::chrono::steady_clock::time_point last_refill_time_;
+	mutable std::mutex mutex_;
 };
 
 }  // namespace evpp

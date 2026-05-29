@@ -1,5 +1,7 @@
 #include "runtime/evpp/udp/udp_server.h"
 
+#include <condition_variable>
+
 #include "runtime/evpp/event_loop.h"
 #include "runtime/evpp/event_loop_thread_pool.h"
 #include "runtime/evpp/inner_pre.h"
@@ -23,6 +25,7 @@ class Server::RecvThread {
 
 	~RecvThread() {
 		status_.store(kStopping);
+		cv_.notify_all();
 		if (this->thread_ && this->thread_->joinable()) {
 			try {
 				thread_->join();
@@ -47,22 +50,36 @@ class Server::RecvThread {
 
 	bool Run() {
 		this->thread_.reset(CLOUDENGINE_MEM_NEW(std::thread, std::bind(&Server::RecvingLoop, this->server_, this)));
-		return true;
+		// Wait for the thread to start (kRunning or kStopped on error).
+		std::unique_lock<std::mutex> lock(mutex_);
+		cv_.wait(lock, [this]() {
+			Status s = status_.load();
+			return s == kRunning || s == kStopped;
+		});
+		return status_.load() == kRunning;
 	}
 
 	void Stop() {
 		assert(IsRunning() || IsPaused());
 		status_.store(kStopping);
+		cv_.notify_all();
+	}
+
+	void WaitUntilStopped() {
+		std::unique_lock<std::mutex> lock(mutex_);
+		cv_.wait(lock, [this]() { return status_.load() == kStopped; });
 	}
 
 	void Pause() {
 		assert(IsRunning());
 		status_.store(kPaused);
+		cv_.notify_all();
 	}
 
 	void Continue() {
 		assert(IsPaused());
 		status_.store(kRunning);
+		cv_.notify_all();
 	}
 
 	bool IsRunning() const {
@@ -79,6 +96,7 @@ class Server::RecvThread {
 
 	void SetStatus(Status s) {
 		status_.store(s);
+		cv_.notify_all();
 	}
 
 	evpp_socket_t fd() const {
@@ -93,12 +111,23 @@ class Server::RecvThread {
 		return server_;
 	}
 
+	// Wait on the condition variable with timeout (returns false if interrupted).
+	bool WaitWhilePaused() {
+		std::unique_lock<std::mutex> lock(mutex_);
+		if (status_.load() == kPaused) {
+			cv_.wait(lock, [this]() { return status_.load() != kPaused; });
+		}
+		return status_.load() == kRunning;
+	}
+
 	private:
 	int fd_;
 	Server* server_;
 	int port_;
 	std::shared_ptr<std::thread> thread_;
 	std::atomic<Status> status_;
+	mutable std::mutex mutex_;
+	std::condition_variable cv_;
 };
 
 Server::Server() : recv_buf_size_(1472) {
@@ -159,10 +188,6 @@ bool Server::Start() {
 			return false;
 		}
 	}
-
-	while (!IsRunning()) {
-		usleep(1);
-	}
 	return true;
 }
 
@@ -172,8 +197,8 @@ void Server::Stop(bool wait_thread_exit) {
 	}
 
 	if (wait_thread_exit) {
-		while (!IsStopped()) {
-			usleep(1);
+		for (auto& it : recv_threads_) {
+			it->WaitUntilStopped();
 		}
 	}
 }
@@ -213,8 +238,9 @@ void Server::RecvingLoop(RecvThread* thread) {
 	thread->SetStatus(kRunning);
 	while (true) {
 		if (thread->IsPaused()) {
-			usleep(1);
-			continue;
+			if (!thread->WaitWhilePaused()) {
+				break;
+			}
 		}
 
 		if (!thread->IsRunning()) {
@@ -272,11 +298,9 @@ void Server::RecvingLoop(RecvThread* thread) {
 	thread->SetStatus(kStopped);
 }
 
-}
-
 
 /*
-Benchmark data��Intel(R) Xeon(R) CPU E5-2630 0 @ 2.30GHz 24 core
+Benchmark data：Intel(R) Xeon(R) CPU E5-2630 0 @ 2.30GHz 24 core
 
 The recvfrom thread is the bottleneck, other 23 working threads' load is very very low.
 
@@ -285,7 +309,7 @@ If we need to improve the performance, there two ways to achieve it:
 2. Using RAW SOCKET
 3. Using recvmmsg/sendmmsg which can achieve 40w QPS on single thread
 
-udp message length QPS��
+udp message length QPS：
 0.1k    9w+
 1k      9w+
 

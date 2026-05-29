@@ -72,6 +72,7 @@ void ScriptVM::CallGlobalFunction(std::string_view name) {
 
 	int f_idx = lua_gettop(L_);
 	int err_idx = PushLuaErrorHandler(L_);
+	(void) err_idx;
 	lua_insert(L_, f_idx);
 	int rc = lua_pcall(L_, 0, 0, f_idx);
 	if (rc != LUA_OK) {

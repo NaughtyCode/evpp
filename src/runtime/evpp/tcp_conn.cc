@@ -130,10 +130,14 @@ void TCPConn::Send(const void* data, size_t len, MessagePriority priority) {
 	}
 
 	uint32_t allowed = rate_limiter_.Consume(static_cast<uint32_t>(len));
-	if (allowed == 0) {
-		pending_messages_.push({priority, std::string(static_cast<const char*>(data), len),
+	if (allowed < static_cast<uint32_t>(len)) {
+		pending_messages_.push({priority,
+								std::string(static_cast<const char*>(data) + allowed,
+											len - static_cast<size_t>(allowed)),
 								std::chrono::duration_cast<std::chrono::nanoseconds>(
 									std::chrono::steady_clock::now().time_since_epoch()).count()});
+	}
+	if (allowed == 0) {
 		return;
 	}
 
@@ -221,9 +225,7 @@ void TCPConn::SendInLoop(const void* data, size_t len) {
 									 "SendInLoop write failed errno={} {}",
 									 serrno,
 									 strerror(serrno));
-					if (serrno == EPIPE || serrno == ECONNRESET) {
-						write_error = true;
-					}
+					write_error = true;
 				}
 			}
 		}

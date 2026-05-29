@@ -1,5 +1,7 @@
 #include "runtime/evpp/kcp/kcp_server.h"
 
+#include <condition_variable>
+
 #include "runtime/evpp/event_loop.h"
 #include "runtime/evpp/event_loop_thread_pool.h"
 #include "runtime/evpp/gettimeofday.h"
@@ -174,6 +176,7 @@ class Server::RecvThread {
 
 	~RecvThread() {
 		status_.store(kStopping);
+		cv_.notify_all();
 		if (thread_ && thread_->joinable()) {
 			try {
 				thread_->join();
@@ -199,20 +202,32 @@ class Server::RecvThread {
 
 	bool Run() {
 		thread_.reset(CLOUDENGINE_MEM_NEW(std::thread, std::bind(&Server::RecvingLoop, server_, this)));
-		return true;
+		std::unique_lock<std::mutex> lock(mutex_);
+		cv_.wait(lock, [this]() {
+			Status s = status_.load();
+			return s == kRunning || s == kStopped;
+		});
+		return status_.load() == kRunning;
 	}
 
 	void Stop() {
 		assert(IsRunning() || IsPaused());
 		status_.store(kStopping);
+		cv_.notify_all();
+	}
+	void WaitUntilStopped() {
+		std::unique_lock<std::mutex> lock(mutex_);
+		cv_.wait(lock, [this]() { return status_.load() == kStopped; });
 	}
 	void Pause() {
 		assert(IsRunning());
 		status_.store(kPaused);
+		cv_.notify_all();
 	}
 	void Continue() {
 		assert(IsPaused());
 		status_.store(kRunning);
+		cv_.notify_all();
 	}
 
 	bool IsRunning() const {
@@ -227,6 +242,7 @@ class Server::RecvThread {
 
 	void SetStatus(Status s) {
 		status_.store(s);
+		cv_.notify_all();
 	}
 
 	evpp_socket_t fd() const {
@@ -239,6 +255,15 @@ class Server::RecvThread {
 		return server_;
 	}
 
+	// Wait on the condition variable while paused (returns false if interrupted).
+	bool WaitWhilePaused() {
+		std::unique_lock<std::mutex> lock(mutex_);
+		if (status_.load() == kPaused) {
+			cv_.wait(lock, [this]() { return status_.load() != kPaused; });
+		}
+		return status_.load() == kRunning;
+	}
+
 	// Session map (only accessed from the recv thread).
 	std::unordered_map<IUINT32, std::shared_ptr<KcpSession>> sessions_;
 
@@ -248,6 +273,8 @@ class Server::RecvThread {
 	int port_;
 	std::shared_ptr<std::thread> thread_;
 	std::atomic<Status> status_;
+	mutable std::mutex mutex_;
+	std::condition_variable cv_;
 };
 
 // Server
@@ -307,10 +334,6 @@ bool Server::Start() {
 			return false;
 		}
 	}
-
-	while (!IsRunning()) {
-		usleep(1);
-	}
 	return true;
 }
 
@@ -320,8 +343,8 @@ void Server::Stop(bool wait_thread_exit) {
 	}
 
 	if (wait_thread_exit) {
-		while (!IsStopped()) {
-			usleep(1);
+		for (auto& it : recv_threads_) {
+			it->WaitUntilStopped();
 		}
 	}
 }
@@ -390,8 +413,9 @@ void Server::RecvingLoop(RecvThread* th) {
 
 	while (true) {
 		if (th->IsPaused()) {
-			usleep(1000);
-			continue;
+			if (!th->WaitWhilePaused()) {
+				break;
+			}
 		}
 		if (!th->IsRunning()) {
 			break;

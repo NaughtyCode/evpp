@@ -71,13 +71,19 @@ void TCPClient::DisconnectInLoop() {
 	auto_reconnect_.store(false);
 
 	if (conn_) {
-		ENGINE_LOG_TRACE(engine::GetLogger(),
-						 "this={} Close the TCPConn {} status={}",
-						 (void*) this,
-						 (void*) conn_.get(),
-						 conn_->StatusToString());
-		assert(!conn_->IsDisconnected() && !conn_->IsDisconnecting());
-		conn_->Close();
+		if (conn_->IsDisconnected() || conn_->IsDisconnecting()) {
+			ENGINE_LOG_TRACE(engine::GetLogger(),
+							 "this={} conn_ already closing, skip Close. status={}",
+							 (void*) this,
+							 conn_->StatusToString());
+		} else {
+			ENGINE_LOG_TRACE(engine::GetLogger(),
+							 "this={} Close the TCPConn {} status={}",
+							 (void*) this,
+							 (void*) conn_.get(),
+							 conn_->StatusToString());
+			conn_->Close();
+		}
 	}
 
 	if (connector_) {
