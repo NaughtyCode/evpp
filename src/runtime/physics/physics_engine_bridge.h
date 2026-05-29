@@ -139,6 +139,10 @@ class PhysicsEngineBridge {
 	/// Thread: any. Reads std::atomic<bool>, lock-free.
 	bool IsHealthy() const;
 
+	/// Whether the physics system was initialized.
+	/// Thread: any. Reads std::atomic<bool>, lock-free.
+	bool IsInitialized() const;
+
 	// ── ScriptVM access ───────────────────────────────────────────────
 
 	/// Get the physics-dedicated ScriptVM.
@@ -179,6 +183,9 @@ class PhysicsEngineBridge {
 		return false;
 	}
 	bool IsHealthy() const {
+		return false;
+	}
+	bool IsInitialized() const {
 		return false;
 	}
 	ScriptVM* GetScriptVM() {

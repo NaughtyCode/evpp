@@ -118,6 +118,10 @@ add_unit_test(test_metrics monitoring/test_metrics.cpp)
 add_test(NAME unit.metrics COMMAND test_metrics)
 set_tests_properties(unit.metrics PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
+add_unit_test(test_health monitoring/test_health.cpp)
+add_test(NAME unit.health COMMAND test_health)
+set_tests_properties(unit.health PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
 # ── AOI tests ────────────────────────────────────────────────────────
 add_unit_test(test_aoi aoi/test_aoi.cpp)
 add_test(NAME unit.aoi COMMAND test_aoi)

@@ -92,12 +92,12 @@ ScriptVM& Engine::GetScriptVM() {
 			ENGINE_LOG_CRITICAL(logger,
 				"GetScriptVM() called but ScriptVM is null. "
 				"Cleanup phase: {}. This is a lifecycle ordering bug.",
-				static_cast<int>(cleanup_phase_));
+				static_cast<int>(cleanup_phase_.load(std::memory_order_relaxed)));
 		} else {
 			std::fprintf(stderr,
 				"FATAL: GetScriptVM() called but ScriptVM is null. "
 				"Cleanup phase: %d. This is a lifecycle ordering bug.\n",
-				static_cast<int>(cleanup_phase_));
+				static_cast<int>(cleanup_phase_.load(std::memory_order_relaxed)));
 		}
 		throw std::runtime_error(
 			"GetScriptVM() called but ScriptVM is null — lifecycle ordering bug");
@@ -339,6 +339,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		ENGINE_LOG_INFO(logger, "config reload subscriber registered");
 	}
 
+	initialized_.store(true, std::memory_order_release);
 	ENGINE_LOG_INFO(logger, "Init() complete");
 }
 
@@ -541,7 +542,7 @@ void Engine::Cleanup() {
 		return true;
 	};
 
-	cleanup_phase_ = CleanupPhase::PhysicsShutdown;
+	cleanup_phase_.store(CleanupPhase::PhysicsShutdown, std::memory_order_release);
 	PhysicsEngineBridge::Instance().Shutdown();
 	// Stop hot-reload before any VM teardown to prevent watcher thread from accessing Lua state.
 	if (script_reloader_) {
@@ -549,7 +550,7 @@ void Engine::Cleanup() {
 	}
 	check_timeout("PhysicsShutdown");
 
-	cleanup_phase_ = CleanupPhase::DatabaseShutdown;
+	cleanup_phase_.store(CleanupPhase::DatabaseShutdown, std::memory_order_release);
 #if defined(ENGINE_MONGODB_ENABLED)
 	DatabaseService::Instance().Shutdown();
 	mongo::MongoSystem::Instance().Shutdown();
@@ -578,7 +579,7 @@ void Engine::Cleanup() {
 		ENGINE_LOG_INFO(logger, "Cleanup: drain phase complete, proceeding to network shutdown");
 	}
 
-	cleanup_phase_ = CleanupPhase::NetworkShutdown;
+	cleanup_phase_.store(CleanupPhase::NetworkShutdown, std::memory_order_release);
 	assert(script_vm_ != nullptr);
 	if (script_vm_) {
 		script::ShutdownRpcBindings(*script_vm_);
@@ -586,7 +587,7 @@ void Engine::Cleanup() {
 	}
 	check_timeout("NetworkShutdown");
 
-	cleanup_phase_ = CleanupPhase::TimerShutdown;
+	cleanup_phase_.store(CleanupPhase::TimerShutdown, std::memory_order_release);
 	assert(script_vm_ != nullptr);
 	if (script_vm_) {
 		script::ShutdownEntityBindings();
@@ -596,7 +597,7 @@ void Engine::Cleanup() {
 	}
 	check_timeout("TimerShutdown");
 
-	cleanup_phase_ = CleanupPhase::ScriptDestroyed;
+	cleanup_phase_.store(CleanupPhase::ScriptDestroyed, std::memory_order_release);
 	if (script_vm_) {
 		script_vm_->DestroyScript();
 		int mem_kb = lua_gc(script_vm_->GetState(), LUA_GCCOUNT, 0);
@@ -609,7 +610,7 @@ void Engine::Cleanup() {
 		timer_mgr_.reset();
 	}
 
-	cleanup_phase_ = CleanupPhase::FinalLogs;
+	cleanup_phase_.store(CleanupPhase::FinalLogs, std::memory_order_release);
 	ENGINE_LOG_INFO(logger, "timer manager shut down");
 
 	sigint_watcher_.reset();
@@ -630,7 +631,7 @@ void Engine::Cleanup() {
 		std::chrono::steady_clock::now() - cleanup_start).count();
 	ENGINE_LOG_INFO(logger, "Cleanup: complete, total_time={}s", total_elapsed);
 
-	cleanup_phase_ = CleanupPhase::Complete;
+	cleanup_phase_.store(CleanupPhase::Complete, std::memory_order_release);
 	ShutdownLogger();
 
 	loop_ = nullptr;

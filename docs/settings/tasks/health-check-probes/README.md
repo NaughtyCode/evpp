@@ -1,7 +1,7 @@
 # Task 6: Health Check Probes
 
 **Priority:** P0 — container orchestration
-**Status:** pending
+**Status:** done
 **Dependencies:** Task 1 (core-validation-fix), Task 4 (runtime-environment-selection)
 
 ## Scope
@@ -18,12 +18,14 @@ Differentiate startup/readiness/liveness probes. Validate backend dependencies i
 
 ## Key Changes
 
-1. Add three distinct endpoints: `/health/startup`, `/health/readiness`, `/health/liveness`
-2. Startup probe: returns 200 only after Engine::Init() completes ALL initialization
-3. Readiness probe: validates DB connection pool, physics thread, MongoDB connectivity
-4. Liveness probe: lightweight check (event loop alive + basic sanity)
-5. Expose `CleanupPhase` via `/health` for load balancer shutdown coordination
-6. Add structured error codes in health responses (which dependency failed, why)
+1. Added three distinct endpoints: `/health/startup`, `/health/readiness`, `/health/liveness` in `admin_http.cc`
+2. Startup probe: returns 503 until `Engine::Init()` completes (`initialized_` atomic), then 200
+3. Readiness probe: validates DB connection pool, physics thread, MongoDB connectivity with nested JSON status
+4. Liveness probe: lightweight check (running + initialized + uptime + frame_count)
+5. Added `/health/phase` endpoint exposing `CleanupPhase` for load balancer drain coordination
+6. Structured error codes with per-dependency `{"status": "...", "message": "..."}` objects
+7. `Engine::initialized()` and `Engine::cleanup_phase()` public accessors
+8. `PhysicsEngineBridge::IsInitialized()` added (delegates to PhysicsSystem)
 
 ## Affected Files
 

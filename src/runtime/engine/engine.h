@@ -135,6 +135,12 @@ class ENGINE_API Engine {
 	uint64_t frame_count() const {
 		return frame_count_.load(std::memory_order_relaxed);
 	}
+	bool initialized() const {
+		return initialized_.load(std::memory_order_acquire);
+	}
+	CleanupPhase cleanup_phase() const {
+		return cleanup_phase_.load(std::memory_order_acquire);
+	}
 
 	ScriptVM& GetScriptVM();
 	TimerManager& GetTimerManager() { return *timer_mgr_; }
@@ -168,7 +174,8 @@ class ENGINE_API Engine {
 	std::unique_ptr<TimerManager> timer_mgr_;
 	std::unique_ptr<ScriptVM> script_vm_;
 	std::unique_ptr<ScriptReloader> script_reloader_;
-	CleanupPhase cleanup_phase_{CleanupPhase::NotStarted};
+	std::atomic<bool> initialized_{false};
+	std::atomic<CleanupPhase> cleanup_phase_{CleanupPhase::NotStarted};
 
 	monitoring::AdminHttpServer admin_server_;
 

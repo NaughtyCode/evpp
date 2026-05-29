@@ -155,6 +155,10 @@ bool PhysicsEngineBridge::IsHealthy() const {
 	return PhysicsSystem::Instance().IsHealthy();
 }
 
+bool PhysicsEngineBridge::IsInitialized() const {
+	return PhysicsSystem::Instance().IsInitialized();
+}
+
 // ---------------------------------------------------------------------------
 // GetScriptVM — MT-only, verified
 // ---------------------------------------------------------------------------

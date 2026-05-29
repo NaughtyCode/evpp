@@ -18,7 +18,7 @@
 | 7 | `runtime-environment-selection` | P0 | #1, #6 | **done** | 2026-05-29 |
 | 8 | `server-operations` | P1 | #1, #3, #6 | **done** | 2026-05-29 |
 | 9 | `game-business-config` | P1 | #1, #6 | **done** | 2026-05-29 |
-| 10 | `health-check-probes` | P0 | #1, #7 | pending | — |
+| 10 | `health-check-probes` | P0 | #1, #7 | **done** | 2026-05-29 |
 | 11 | `config-manager-unification` | P1 | #1, #3, #2 | pending | — |
 | 12 | `client-config-framework` | P0 | #1, #7, #11 | pending | — |
 
@@ -30,7 +30,7 @@
 | B | #3 `thread-safety-fix`, #4 `secrets-management`, #5 `observability-tooling` | **done** |
 | C | #6 `hotreload-consumer-fix` | **done** |
 | D | #7 `runtime-environment-selection`, #8 `server-operations`, #9 `game-business-config` | **done** |
-| E | #10 `health-check-probes`, #11 `config-manager-unification` | blocked (#7, #2+#3) |
+| E | #10 `health-check-probes` (done), #11 `config-manager-unification` (pending) | in_progress |
 | F | #12 `client-config-framework` | blocked (#7, #11) |
 
 ## Status Legend
@@ -50,3 +50,4 @@
 | 2026-05-29 | B | #3 `thread-safety-fix`, #4 `secrets-management`, #5 `observability-tooling` |
 | 2026-05-29 | C | #6 `hotreload-consumer-fix` |
 | 2026-05-29 | D | #7 `runtime-environment-selection`, #8 `server-operations`, #9 `game-business-config` |
+| 2026-05-29 | E | #10 `health-check-probes` |
