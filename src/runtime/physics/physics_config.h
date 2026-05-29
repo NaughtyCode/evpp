@@ -3,6 +3,8 @@
 #ifdef ENGINE_PHYSICS_ENABLED
 
 #include <cstdint>
+#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -301,27 +303,32 @@ class PhysicsConfigManager : public IConfigManager {
 	bool ReloadThresholds(const std::string& config_dir);
 	bool ReloadLogLevel(const std::string& config_dir);
 
-	// ── Accessors ────────────────────────────────────────────────────
+	// ── Accessors (thread-safe by-value copy) ─────────────────────────
 
-	const PhysicsConfig& GetPhysicsConfig() const {
+	PhysicsConfig GetPhysicsConfig() const {
+		std::shared_lock<std::shared_mutex> lock(config_mutex_);
 		return physics_config_;
 	}
-	const ThreadingConfig& GetThreadingConfig() const {
+	ThreadingConfig GetThreadingConfig() const {
+		std::shared_lock<std::shared_mutex> lock(config_mutex_);
 		return threading_config_;
 	}
-	const PhysicsLogConfig& GetLogConfig() const {
+	PhysicsLogConfig GetLogConfig() const {
+		std::shared_lock<std::shared_mutex> lock(config_mutex_);
 		return log_config_;
 	}
-	const ThresholdsConfig& GetThresholdsConfig() const {
+	ThresholdsConfig GetThresholdsConfig() const {
+		std::shared_lock<std::shared_mutex> lock(config_mutex_);
 		return thresholds_config_;
 	}
 
-	// Mutable access for hot-reload atomic swap
-	ThresholdsConfig& GetThresholdsConfigMutable() {
-		return thresholds_config_;
-	}
+	// Const-ref access for physics-thread-only reads (no concurrent Load/Reload).
+	const PhysicsConfig& GetPhysicsConfigRef() const { return physics_config_; }
+	const ThreadingConfig& GetThreadingConfigRef() const { return threading_config_; }
+	const PhysicsLogConfig& GetLogConfigRef() const { return log_config_; }
+	const ThresholdsConfig& GetThresholdsConfigRef() const { return thresholds_config_; }
 
-	private:
+private:
 	bool LoadPhysics(const std::string& path);
 	bool LoadThreading(const std::string& path);
 	bool LoadLogging(const std::string& path);
@@ -329,6 +336,8 @@ class PhysicsConfigManager : public IConfigManager {
 
 	// Validate config values are within legal ranges
 	bool ValidateConfigs(std::string& error_out) const;
+
+	mutable std::shared_mutex config_mutex_;
 
 	PhysicsConfig physics_config_;
 	ThreadingConfig threading_config_;

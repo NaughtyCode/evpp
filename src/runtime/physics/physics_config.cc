@@ -1,4 +1,4 @@
-﻿#ifdef ENGINE_PHYSICS_ENABLED
+#ifdef ENGINE_PHYSICS_ENABLED
 
 #include "runtime/physics/physics_config.h"
 
@@ -40,6 +40,8 @@ bool FileExists(const std::string& path) {
 // Load all 4 JSON files
 
 bool PhysicsConfigManager::Load(const std::string& config_dir) {
+	std::lock_guard<std::shared_mutex> lock(config_mutex_);
+
 	if (!LoadPhysics(config_dir + "/physics.json")) {
 		ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: failed to load physics.json");
 		return false;
@@ -230,6 +232,7 @@ bool PhysicsConfigManager::ValidateConfigs(std::string& error_out) const {
 // ── IConfigManager::Validate ──────────────────────────────────────────────
 
 ValidationResult PhysicsConfigManager::Validate() const {
+	std::shared_lock<std::shared_mutex> lock(config_mutex_);
 	ValidationResult result;
 	std::string error;
 	if (!ValidateConfigs(error)) {
@@ -242,6 +245,7 @@ ValidationResult PhysicsConfigManager::Validate() const {
 // ── IConfigManager::Dump ──────────────────────────────────────────────────
 
 std::string PhysicsConfigManager::Dump() const {
+	std::shared_lock<std::shared_mutex> lock(config_mutex_);
 	std::ostringstream oss;
 	oss << "{";
 	oss << "\"physics\":" << glz::write_json(physics_config_);
@@ -287,26 +291,30 @@ bool PhysicsConfigManager::Reload(const std::string& config_dir) {
 	ec = glz::read<glz::opts{.error_on_unknown_keys = true}>(new_thresholds, buf, ctx);
 	if (ec) return false;
 
-	// Validate new configs before swapping
-	PhysicsConfig old_physics = physics_config_;
-	ThreadingConfig old_threading = threading_config_;
-	PhysicsLogConfig old_log = log_config_;
-	ThresholdsConfig old_thresholds = thresholds_config_;
+	// Validate new configs before swapping under lock
+	{
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
 
-	physics_config_ = std::move(new_physics);
-	threading_config_ = std::move(new_threading);
-	log_config_ = std::move(new_log);
-	thresholds_config_ = std::move(new_thresholds);
+		PhysicsConfig old_physics = std::move(physics_config_);
+		ThreadingConfig old_threading = std::move(threading_config_);
+		PhysicsLogConfig old_log = std::move(log_config_);
+		ThresholdsConfig old_thresholds = std::move(thresholds_config_);
 
-	std::string error;
-	if (!ValidateConfigs(error)) {
-		// Rollback on validation failure
-		physics_config_ = std::move(old_physics);
-		threading_config_ = std::move(old_threading);
-		log_config_ = std::move(old_log);
-		thresholds_config_ = std::move(old_thresholds);
-		ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: reload validation failed: {}", error);
-		return false;
+		physics_config_ = std::move(new_physics);
+		threading_config_ = std::move(new_threading);
+		log_config_ = std::move(new_log);
+		thresholds_config_ = std::move(new_thresholds);
+
+		std::string error;
+		if (!ValidateConfigs(error)) {
+			// Rollback on validation failure
+			physics_config_ = std::move(old_physics);
+			threading_config_ = std::move(old_threading);
+			log_config_ = std::move(old_log);
+			thresholds_config_ = std::move(old_thresholds);
+			ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: reload validation failed: {}", error);
+			return false;
+		}
 	}
 
 	return true;
@@ -315,8 +323,6 @@ bool PhysicsConfigManager::Reload(const std::string& config_dir) {
 // Hot-reload
 
 bool PhysicsConfigManager::ReloadThresholds(const std::string& config_dir) {
-	// Single-threaded: only called from PhysicsSystem::ReloadThresholds()
-	// on the main thread. No concurrent access — no lock needed.
 	ThresholdsConfig new_cfg;
 	std::string path = config_dir + "/thresholds.json";
 	std::string buf = ReadFile(path);
@@ -341,7 +347,10 @@ bool PhysicsConfigManager::ReloadThresholds(const std::string& config_dir) {
 		return false;
 	}
 
-	thresholds_config_ = new_cfg;
+	{
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		thresholds_config_ = std::move(new_cfg);
+	}
 	return true;
 }
 
@@ -363,8 +372,11 @@ bool PhysicsConfigManager::ReloadLogLevel(const std::string& config_dir) {
 		return false;
 	}
 
-	// Only update the level field (the hot-reloadable field)
-	log_config_.level = std::move(new_cfg.level);
+	{
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		// Only update the level field (the hot-reloadable field)
+		log_config_.level = std::move(new_cfg.level);
+	}
 	return true;
 }
 

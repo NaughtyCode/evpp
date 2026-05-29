@@ -312,19 +312,41 @@ int l_config_get_module(lua_State* L) {
 // ── config.on_change(module, callback) ─────────────────────────────────
 
 // Per-VM storage for on_change callbacks.
-// Keyed by module name, each entry holds a Lua function reference.
-// Stored via luaL_ref in the registry table.
+// Each entry holds a Lua function reference (via luaL_ref in the registry).
+//
+// Thread safety: the ConfigManager reload callback may fire from any thread
+// (main thread or FileWatcher thread). Lua API calls must only happen on the
+// VM's owning thread. To handle this, the reload callback enqueues change
+// sets into a pending queue; the caller is responsible for calling
+// FlushConfigCallbacks() from the VM's main thread (typically at the top of
+// the event-loop frame or from ScriptVM::OnFrame).
+
+struct PendingConfigEvent {
+    int callback_ref;
+    ConfigChangeSet changes;
+};
 
 struct ChangeCallbackEntry {
     int callback_ref;       // Lua registry reference
     int reload_cb_id;       // ConfigManager callback id
-    ScriptVM* vm;           // The VM that owns this callback
+    lua_State* L;           // Owning Lua state (only accessed from main thread)
     std::string module;     // The module name to filter on
 };
 
 // Global state — callbacks survive across config reloads.
 static std::vector<ChangeCallbackEntry> g_change_callbacks;
 static std::mutex g_change_cb_mutex;
+
+// Per-lua_State pending event queues.
+static std::unordered_map<lua_State*, std::vector<PendingConfigEvent>> g_pending_events;
+static std::mutex g_pending_mutex;
+
+// Enqueue a pending callback event. Called from any thread.
+static void EnqueuePendingEvent(lua_State* L, int cb_ref,
+                                const ConfigChangeSet& changes) {
+    std::lock_guard<std::mutex> lock(g_pending_mutex);
+    g_pending_events[L].push_back({cb_ref, changes});
+}
 
 int l_config_on_change(lua_State* L) {
     const char* module = luaL_checkstring(L, 1);
@@ -334,37 +356,13 @@ int l_config_on_change(lua_State* L) {
     lua_pushvalue(L, 2);
     int cb_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-    // Register a C++ reload callback with ConfigManager
+    // Register a C++ reload callback with ConfigManager.
+    // The callback only enqueues pending events — it does NOT call Lua
+    // directly, because it may fire from the FileWatcher thread.
     auto& cfg = ConfigManager::Instance();
     int cb_id = cfg.RegisterReloadCallback(
-        [module, cb_ref, L](const ConfigChangeSet& changes) {
-            // Check if any change affects our module's data directory
-            // For now, we fire on any reload — the Lua callback can check
-            // the change set if needed.
-            lua_rawgeti(L, LUA_REGISTRYINDEX, cb_ref);
-            if (lua_isfunction(L, -1)) {
-                // Push the change set as a table of tables
-                lua_newtable(L);
-                for (size_t i = 0; i < changes.size(); ++i) {
-                    lua_newtable(L);
-                    lua_pushstring(L, changes[i].field_path.c_str());
-                    lua_setfield(L, -2, "field");
-                    lua_pushstring(L, changes[i].old_value.c_str());
-                    lua_setfield(L, -2, "old_value");
-                    lua_pushstring(L, changes[i].new_value.c_str());
-                    lua_setfield(L, -2, "new_value");
-                    lua_rawseti(L, -2, static_cast<int>(i + 1));
-                }
-                // Call the Lua function with the change set
-                if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
-                    const char* err = lua_tostring(L, -1);
-                    auto* logger = GetLogger();
-                    if (logger) ENGINE_LOG_ERROR(logger, "config.on_change callback error: {}", err);
-                    lua_pop(L, 1);
-                }
-            } else {
-                lua_pop(L, 1);  // pop non-function
-            }
+        [L, cb_ref](const ConfigChangeSet& changes) {
+            EnqueuePendingEvent(L, cb_ref, changes);
         });
 
     std::lock_guard<std::mutex> lock(g_change_cb_mutex);
@@ -390,13 +388,25 @@ int l_config_unregister(lua_State* L) {
     return 0;
 }
 
+// ── config.flush_changes() ───────────────────────────────────────────────
+
+// Forward declaration — the implementation is FlushConfigCallbacks below.
+int FlushConfigCallbacks(lua_State* L);
+
+int l_config_flush_changes(lua_State* L) {
+    int count = FlushConfigCallbacks(L);
+    lua_pushinteger(L, static_cast<lua_Integer>(count));
+    return 1;
+}
+
 // ── Module registration table ──────────────────────────────────────────
 
 const luaL_Reg kConfigFunctions[] = {
-    {"get",         l_config_get},
-    {"get_module",  l_config_get_module},
-    {"on_change",   l_config_on_change},
-    {"unregister",  l_config_unregister},
+    {"get",            l_config_get},
+    {"get_module",     l_config_get_module},
+    {"on_change",      l_config_on_change},
+    {"unregister",     l_config_unregister},
+    {"flush_changes",  l_config_flush_changes},
     {nullptr, nullptr},
 };
 
@@ -407,7 +417,51 @@ void ExportConfigBindings(ScriptVM& vm) {
 
     auto* logger = GetLogger();
     ENGINE_LOG_INFO(logger,
-        "ScriptBind: config module exported (config.get/get_module/on_change)");
+        "ScriptBind: config module exported (config.get/get_module/on_change/flush_changes)");
+}
+
+}  // namespace
+
+int FlushConfigCallbacks(lua_State* L) {
+    std::vector<PendingConfigEvent> pending;
+    {
+        std::lock_guard<std::mutex> lock(g_pending_mutex);
+        auto it = g_pending_events.find(L);
+        if (it != g_pending_events.end()) {
+            pending = std::move(it->second);
+            g_pending_events.erase(it);
+        }
+    }
+
+    auto* logger = GetLogger();
+    for (const auto& event : pending) {
+        lua_rawgeti(L, LUA_REGISTRYINDEX, event.callback_ref);
+        if (!lua_isfunction(L, -1)) {
+            lua_pop(L, 1);
+            luaL_unref(L, LUA_REGISTRYINDEX, event.callback_ref);
+            continue;
+        }
+
+        lua_newtable(L);
+        for (size_t i = 0; i < event.changes.size(); ++i) {
+            lua_newtable(L);
+            lua_pushstring(L, event.changes[i].field_path.c_str());
+            lua_setfield(L, -2, "field");
+            lua_pushstring(L, event.changes[i].old_value.c_str());
+            lua_setfield(L, -2, "old_value");
+            lua_pushstring(L, event.changes[i].new_value.c_str());
+            lua_setfield(L, -2, "new_value");
+            lua_rawseti(L, -2, static_cast<int>(i + 1));
+        }
+
+        if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+            const char* err = lua_tostring(L, -1);
+            if (logger) ENGINE_LOG_ERROR(logger, "config.on_change callback error: {}", err);
+            lua_pop(L, 1);
+        }
+    }
+
+    return static_cast<int>(pending.size());
 }
 
 }  // namespace script

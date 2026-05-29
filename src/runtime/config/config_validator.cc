@@ -122,6 +122,33 @@ ConfigValidator::Result ConfigValidator::ValidateServer(const ServerConfig& conf
 			" is very large (>100MB), consider reducing for DoS protection");
 	}
 
+
+	// resource_limits
+	if (config.resource_limits.max_message_size == 0) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "resource_limits.max_message_size must be > 0 (0 would reject all messages)";
+	}
+	if (config.resource_limits.max_buffer_capacity == 0) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "resource_limits.max_buffer_capacity must be > 0";
+	}
+	if (config.resource_limits.max_http_body_size == 0) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "resource_limits.max_http_body_size must be > 0 (0 would reject all HTTP bodies)";
+	}
+	if (config.resource_limits.max_msgpack_depth == 0) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "resource_limits.max_msgpack_depth must be > 0";
+	}
+	if (config.resource_limits.max_message_size > 1024 * 1024 * 1024) {
+		CheckWarning(r, true,
+			"resource_limits.max_message_size=" + std::to_string(config.resource_limits.max_message_size) +
+			" is very large (>1GB), consider reducing for DoS protection");
+	}
 	if (!r.valid) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "[config] server validation failed: {}", r.errors);
 	}

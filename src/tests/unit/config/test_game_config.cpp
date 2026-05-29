@@ -608,7 +608,7 @@ TEST_CASE("Lua config.on_change requires function argument", "[game_config][lua]
     REQUIRE_FALSE(ok);
 }
 
-TEST_CASE("Lua config.on_change callback fires on reload", "[game_config][lua]") {
+TEST_CASE("Lua config.on_change callback fires after flush", "[game_config][lua]") {
     ConfigFixture f;
     f.LoadFromStrings();
 
@@ -632,11 +632,12 @@ TEST_CASE("Lua config.on_change callback fires on reload", "[game_config][lua]")
         "scripts_dir": "."
     })");
 
-    // Check that the callback was invoked.
+    // Flush pending callbacks (in production this is called from the event loop).
+    REQUIRE(vm.DoString("config.flush_changes()", "test", nullptr, &result));
+
+    // Check that the callback was invoked after flushing.
     REQUIRE(vm.DoString("return tostring(callback_fired)", "test", nullptr, &result));
-    // Note: callback_fired may be false if the reload cleared globals or
-    // the callback reference was lost. This tests that the mechanism is wired.
-    // In practice, on_change callbacks persist via the Lua registry.
+    REQUIRE(result == "true");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

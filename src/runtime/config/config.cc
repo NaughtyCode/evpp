@@ -1,4 +1,4 @@
-﻿#include "runtime/config/config.h"
+#include "runtime/config/config.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -34,6 +34,27 @@ void CheckPlaintextCredentials(const std::string& uri, const std::string& contex
 	}
 }
 
+// Recursively interpolate ${VAR} and ${VAR:-default} in all string fields of a
+// glaze-reflectable config struct. Called automatically after every Load/Reload.
+template <typename T>
+void InterpolateConfigStrings(T& config) {
+	auto* logger = GetLogger();
+	glz::for_each_field(config, [&](auto& member, std::string_view name) {
+		using MemberType = std::decay_t<decltype(member)>;
+		if constexpr (std::is_same_v<MemberType, std::string>) {
+			member = ConfigManager::InterpolateEnvVars(member);
+		} else if constexpr (std::is_same_v<MemberType, std::vector<std::string>>) {
+			for (auto& s : member) {
+				s = ConfigManager::InterpolateEnvVars(s);
+			}
+		}
+		// Recursively interpolate nested structs
+		if constexpr (glz::detail::is_glaze_object<MemberType>) {
+			InterpolateConfigStrings(member);
+		}
+	});
+}
+
 }  // namespace
 
 ConfigManager::~ConfigManager() = default;
@@ -56,6 +77,7 @@ bool ConfigManager::LoadRuntimeFromString(const std::string& json) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to parse runtime config: {}", glz::format_error(ec, json));
 		return false;
 	}
+	InterpolateConfigStrings(temp);
 	auto vr = ConfigValidator::Validate(temp);
 	if (!vr.valid) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: runtime config validation failed: {}", vr.errors);
@@ -77,8 +99,15 @@ bool ConfigManager::LoadClientFromString(const std::string& json) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to parse client config: {}", glz::format_error(ec, json));
 		return false;
 	}
+	InterpolateConfigStrings(temp);
+	auto vr = ConfigValidator::ValidateClient(temp);
+	if (!vr.valid) {
+		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: client config validation failed: {}", vr.errors);
+		return false;
+	}
 	{
 		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		previous_client_config_ = std::move(client_config_);
 		client_config_ = std::move(temp);
 	}
 	return true;
@@ -91,6 +120,7 @@ bool ConfigManager::LoadServerFromString(const std::string& json) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to parse server config: {}", glz::format_error(ec, json));
 		return false;
 	}
+	InterpolateConfigStrings(temp);
 	auto vr = ConfigValidator::ValidateServer(temp);
 	if (!vr.valid) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: server config validation failed: {}", vr.errors);
@@ -113,6 +143,7 @@ bool ConfigManager::LoadRuntimeFromFile(const std::string& path) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to load [{}]: {}", path, glz::format_error(ec, buf));
 		return false;
 	}
+	InterpolateConfigStrings(runtime_config_);
 	auto vr = ConfigValidator::Validate(runtime_config_);
 	if (!vr.valid) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: runtime config validation failed [{}]: {}", path, vr.errors);
@@ -128,6 +159,12 @@ bool ConfigManager::LoadClientFromFile(const std::string& path) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to load [{}]: {}", path, glz::format_error(ec, buf));
 		return false;
 	}
+	InterpolateConfigStrings(client_config_);
+	auto vr = ConfigValidator::ValidateClient(client_config_);
+	if (!vr.valid) {
+		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: client config validation failed [{}]: {}", path, vr.errors);
+		return false;
+	}
 	return true;
 }
 
@@ -138,6 +175,7 @@ bool ConfigManager::LoadServerFromFile(const std::string& path) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to load [{}]: {}", path, glz::format_error(ec, buf));
 		return false;
 	}
+	InterpolateConfigStrings(server_config_);
 	auto vr = ConfigValidator::ValidateServer(server_config_);
 	if (!vr.valid) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: server config validation failed [{}]: {}", path, vr.errors);
@@ -473,6 +511,7 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 						 glz::format_error(ec, buf));
 		return false;
 	}
+	InterpolateConfigStrings(new_runtime);
 	{
 		auto vr = ConfigValidator::Validate(new_runtime);
 		if (!vr.valid) {
@@ -510,6 +549,7 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 		buf.clear();
 		auto ec3 = glz::read_file_json(new_client, client_path, buf);
 		if (!ec3) {
+			InterpolateConfigStrings(new_client);
 			have_client = true;
 			// Layer 3: load user overrides on top of factory settings.
 			std::string user_path = platform::GetUserSettingsPath(config::kDefaultWindowTitle);
@@ -534,6 +574,7 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 		buf.clear();
 		auto ec3 = glz::read_file_json(new_server, server_path, buf);
 		if (!ec3) {
+			InterpolateConfigStrings(new_server);
 			have_server = true;
 		} else {
 			ENGINE_LOG_ERROR(logger, "ConfigManager: reload parse error for server.json: {}",
@@ -598,15 +639,17 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 	}
 
 	// Build field-level change set and log it.
-	ConfigChangeSet changes = Diff(previous_runtime_config_, runtime_config_,
-								   previous_server_config_, server_config_);
-	for (const auto& entry : changes) {
-		ENGINE_LOG_INFO(logger, "config: {}: {} -> {}",
-						entry.field_path, entry.old_value, entry.new_value);
+	{
+		std::shared_lock<std::shared_mutex> lock(config_mutex_);
+		ConfigChangeSet changes = Diff(previous_runtime_config_, runtime_config_,
+									   previous_server_config_, server_config_);
+		for (const auto& entry : changes) {
+			ENGINE_LOG_INFO(logger, "config: {}: {} -> {}",
+							entry.field_path, entry.old_value, entry.new_value);
+		}
+		ENGINE_LOG_INFO(logger, "ConfigManager: config reloaded ({} fields changed)", changes.size());
+		NotifyReloadCallbacks(changes);
 	}
-	ENGINE_LOG_INFO(logger, "ConfigManager: config reloaded ({} fields changed)", changes.size());
-
-	NotifyReloadCallbacks(changes);
 	return true;
 }
 
@@ -792,39 +835,46 @@ void ConfigManager::NotifyReloadCallbacks(const ConfigChangeSet& changes) {
 // ── Rollback ─────────────────────────────────────────────────────────────
 
 bool ConfigManager::Rollback() {
-	std::lock_guard<std::shared_mutex> lock(config_mutex_);
-	if (!has_previous_) return false;
+	RuntimeConfig old_runtime;
+	ClientConfig old_client;
+	ServerConfig old_server;
+	RuntimeConfig reverted_runtime;
+	ClientConfig reverted_client;
+	ServerConfig reverted_server;
+	bool has_snapshot = false;
+	{
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		if (!has_previous_) return false;
 
-	// Swap current with previous.
-	RuntimeConfig old_runtime = std::move(runtime_config_);
-	ClientConfig old_client = std::move(client_config_);
-	ServerConfig old_server = std::move(server_config_);
+		old_runtime = std::move(runtime_config_);
+		old_client = std::move(client_config_);
+		old_server = std::move(server_config_);
 
-	runtime_config_ = std::move(previous_runtime_config_);
-	client_config_ = std::move(previous_client_config_);
-	server_config_ = std::move(previous_server_config_);
+		runtime_config_ = std::move(previous_runtime_config_);
+		client_config_ = std::move(previous_client_config_);
+		server_config_ = std::move(previous_server_config_);
 
-	// The previous snapshot is now consumed; save the just-evicted config
-	// so the user can rollback again (toggle behavior).
-	previous_runtime_config_ = std::move(old_runtime);
-	previous_client_config_ = std::move(old_client);
-	previous_server_config_ = std::move(old_server);
-	// has_previous_ stays true — we just exchanged snapshots.
+		previous_runtime_config_ = std::move(old_runtime);
+		previous_client_config_ = std::move(old_client);
+		previous_server_config_ = std::move(old_server);
+		has_snapshot = true;
+
+		reverted_runtime = runtime_config_;
+		reverted_client = client_config_;
+		reverted_server = server_config_;
+	}
 
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "ConfigManager: rollback executed");
 
-	// Build change set for the reversion and notify subscribers.
-	ConfigChangeSet changes = Diff(previous_runtime_config_, runtime_config_,
-								   previous_server_config_, server_config_);
+	// Build change set (swap old/new since we reverted)
+	ConfigChangeSet changes = Diff(old_runtime, reverted_runtime,
+								   old_server, reverted_server);
 	for (const auto& entry : changes) {
 		ENGINE_LOG_INFO(logger, "config (rollback): {}: {} -> {}",
 						entry.field_path, entry.old_value, entry.new_value);
 	}
 
-	// Notify outside the lock (callbacks may be slow).
-	// We already have a lock_guard, so callbacks run with lock held —
-	// this is the same trade-off as Reload().
 	NotifyReloadCallbacks(changes);
 	return true;
 }
@@ -936,23 +986,29 @@ ValidationResult ConfigManager::Validate() const {
 
 std::string ConfigManager::Dump() const {
 	std::shared_lock<std::shared_mutex> lock(config_mutex_);
+	auto rt_json = glz::write_json(runtime_config_);
+	auto cc_json = glz::write_json(client_config_);
+	auto srv_json = glz::write_json(server_config_);
+
 	std::ostringstream oss;
 	oss << "{";
-	oss << "\"runtime\":" << glz::write_json(runtime_config_);
-	oss << ",\"client\":" << glz::write_json(client_config_);
-	oss << ",\"server\":" << glz::write_json(server_config_);
+	oss << "\"runtime\":" << (rt_json ? *rt_json : "\"\"");
+	oss << ",\"client\":" << (cc_json ? *cc_json : "\"\"");
+	oss << ",\"server\":" << (srv_json ? *srv_json : "\"\"");
 	oss << "}";
 	return oss.str();
 }
 
 std::string ConfigManager::DumpRuntime() const {
 	std::shared_lock<std::shared_mutex> lock(config_mutex_);
-	return glz::write_json(runtime_config_);
+	auto result = glz::write_json(runtime_config_);
+	return result ? *result : "{}";
 }
 
 std::string ConfigManager::DumpServer() const {
 	std::shared_lock<std::shared_mutex> lock(config_mutex_);
-	return glz::write_json(server_config_);
+	auto result = glz::write_json(server_config_);
+	return result ? *result : "{}";
 }
 
 // ── Dry-run validation ───────────────────────────────────────────────────
@@ -975,23 +1031,48 @@ ConfigValidator::Result ConfigManager::ValidateOnly(const std::string& config_di
 		}
 	}
 
-	// Parse server (optional)
-	std::error_code ec;
-	std::string server_path = config_dir + kServerConfigFile;
-	if (std::filesystem::exists(server_path, ec)) {
-		ServerConfig temp;
-		std::string buf;
-		auto ec2 = glz::read_file_json(temp, server_path, buf);
-		if (ec2) {
-			combined.valid = false;
-			if (!combined.errors.empty()) combined.errors += "; ";
-			combined.errors += "server.json: parse error: " + glz::format_error(ec2, buf);
-		} else {
-			ConfigValidator::Result vr = ConfigValidator::ValidateServer(temp);
-			if (!vr.valid) {
+	// Parse client (optional)
+	{
+		std::error_code ec;
+		std::string client_path = config_dir + kClientConfigFile;
+		if (std::filesystem::exists(client_path, ec)) {
+			ClientConfig temp;
+			std::string buf;
+			auto ec2 = glz::read_file_json(temp, client_path, buf);
+			if (ec2) {
 				combined.valid = false;
 				if (!combined.errors.empty()) combined.errors += "; ";
-				combined.errors += vr.errors;
+				combined.errors += "client.json: parse error: " + glz::format_error(ec2, buf);
+			} else {
+				ConfigValidator::Result vr = ConfigValidator::ValidateClient(temp);
+				if (!vr.valid) {
+					combined.valid = false;
+					if (!combined.errors.empty()) combined.errors += "; ";
+					combined.errors += vr.errors;
+				}
+			}
+		}
+	}
+
+	// Parse server (optional)
+	{
+		std::error_code ec;
+		std::string server_path = config_dir + kServerConfigFile;
+		if (std::filesystem::exists(server_path, ec)) {
+			ServerConfig temp;
+			std::string buf;
+			auto ec2 = glz::read_file_json(temp, server_path, buf);
+			if (ec2) {
+				combined.valid = false;
+				if (!combined.errors.empty()) combined.errors += "; ";
+				combined.errors += "server.json: parse error: " + glz::format_error(ec2, buf);
+			} else {
+				ConfigValidator::Result vr = ConfigValidator::ValidateServer(temp);
+				if (!vr.valid) {
+					combined.valid = false;
+					if (!combined.errors.empty()) combined.errors += "; ";
+					combined.errors += vr.errors;
+				}
 			}
 		}
 	}
