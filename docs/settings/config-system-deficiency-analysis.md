@@ -1,9 +1,9 @@
 # 配置系统深度缺陷分析报告
 
 **日期:** 2026-05-29
-**修订:** R5 — 顶级运维/服务器专家深度复核：优先级重分类、补充运维关切（core dump/FD/优雅降级/TCP keepalive）、修复多项事实性错误
-**范围:** 全部配置系统 + Lua 绑定层 + 游戏业务配置需求分析
-**方法:** 逐文件审查 + 多角度交叉验证 + 运维场景模拟 + 故障模式与影响分析 (FMEA) + 游戏服务器开发全生命周期模拟
+**修订:** R6 — 游戏客户端专家深度复核：新增客户端配置需求完整分析（§14）、双端配置分层模型、客户端特有持久化/热更/硬件适配需求、服务器/客户端配置差异管理策略
+**范围:** 全部配置系统 + Lua 绑定层 + 游戏业务配置需求分析 + 客户端配置需求分析
+**方法:** 逐文件审查 + 多角度交叉验证 + 运维场景模拟 + 故障模式与影响分析 (FMEA) + 游戏服务器开发全生命周期模拟 + 客户端全平台部署模拟
 
 ---
 
@@ -22,8 +22,9 @@
 11. [配置驱动的运维控制缺失](#11-配置驱动的运维控制缺失)
 12. [开发期与发布期配置差异](#12-开发期与发布期配置差异)
 13. [游戏业务配置框架缺失](#13-游戏业务配置框架缺失)
-14. [可测试性](#14-可测试性)
-15. [问题汇总与优先级](#15-问题汇总与优先级)
+14. [客户端配置需求分析](#14-客户端配置需求分析)
+15. [可测试性](#15-可测试性)
+16. [问题汇总与优先级](#16-问题汇总与优先级)
 
 ---
 
@@ -93,6 +94,36 @@ struct RuntimeConfig {
 | `DbServiceConfig` | `db_service_config.h:85` | ConfigManager::LoadDbServiceConfigFromFile() 静态方法 |
 
 这些配置没有一个共同的"可加载/可校验/可热更"接口，各自为政。
+
+### 1.5 ClientConfig 是占位符 — 客户端配置完全缺失
+
+`ClientConfig` 当前只有 **1 个字段**：
+
+```cpp
+// config.h:58-60
+struct ClientConfig {
+    std::string scripts_dir = config::kDefaultClientScriptsDir;
+};
+```
+
+对比 `ServerConfig`（6 个字段 + HttpConfig + MsgpackConfig + MongoDB 路径 + DB service 路径）和 `RuntimeConfig`（6 个字段 + LogConfig + FrameConfig），客户端配置几乎不存在。
+
+**这不是设计缺陷，而是功能尚未实现。** 引擎目前处于早期开发阶段，客户端构建目标（client target）仅需要 `scripts_dir` 来加载 Lua 入口脚本。但作为计划集成到游戏引擎中的核心组件，以下客户端配置需求必须在架构层面提前规划：
+
+| 配置类别 | 示例字段 | 当前状态 |
+|---------|---------|---------|
+| **渲染** | 后端选择（Vulkan/OpenGL/DirectX）、分辨率、全屏/窗口、VSync、MSAA | 无任何配置 |
+| **窗口** | 标题、宽高、可调整大小、无边框、显示器选择 | 无任何配置 |
+| **输入** | 键位绑定、鼠标灵敏度、手柄映射、触控 | 无任何配置 |
+| **音频** | 后端、采样率、主音量/音乐/音效、空间音频 | 无任何配置 |
+| **网络客户端** | 服务器地址/端口、重连重试/退避、预测/插值参数、超时 | `ConnectorConfig` 存在但不归 ConfigManager 管 |
+| **资产加载** | 资产根路径、streaming/LOD 预算、贴图质量预设、预加载列表 | 无任何配置 |
+| **UI** | 字体路径、默认语言、UI 缩放、主题 | 无任何配置 |
+| **平台** | 平台特定路径（iOS/Android/Windows/macOS/Linux）、存档路径 | 无任何配置 |
+| **性能** | 帧率上限（30/60/120/144）、画质预设、动态分辨率 | `FrameConfig` 共享但缺少客户端特有字段 |
+| **调试** | Debug overlay、GPU capture、线框模式、帧时间图 | 无任何配置 |
+
+**影响:** 当客户端团队开始集成时，要么在 `ClientConfig` 中快速堆砌字段（导致 §1.3 描述的扁平化问题在客户端侧重演），要么创建独立的客户端配置管理器（导致 §1.1 描述的双管理器问题扩展为三管理器）。无论哪种方式，技术债务会在客户端集成阶段集中爆发。
 
 ---
 
@@ -178,9 +209,9 @@ src/runtime/config/config_validator.cc:10:ConfigValidator::Result ConfigValidato
 
 | 配置结构体 | 字段数 | 校验状态 |
 |-----------|-------|---------|
-| RuntimeConfig | 6 (+ LogConfig 8 + FrameConfig 3) | ConfigValidator 覆盖 5 个字段 |
+| RuntimeConfig | 6 (+ LogConfig 9 + FrameConfig 3) | ConfigValidator 覆盖 5 个字段 |
 | ServerConfig | 6 (+ HttpConfig 1 + MsgpackConfig 2) | 无任何校验 |
-| ClientConfig | 1 | 无任何校验 |
+| ClientConfig | 1 | 无任何校验 — 且字段数严重不足（见 §1.5） |
 | MongoDbConfig | 嵌套 8 层，共 ~60 字段 | 无任何校验 |
 | DbServiceConfig | 嵌套 4 层，共 ~12 字段 | 无任何校验 |
 
@@ -981,6 +1012,10 @@ uint32_t max_connections_ = 10000;
 | 模拟高延迟/丢包 | ❌ | 无网络模拟配置 |
 | 压力测试模式（关闭限流） | ❌ | RateLimiter 存在但无配置暴露，最大连接数硬编码 10000 |
 | 自动化测试的配置注入 | ❌ | 测试只能通过 `LoadRuntimeFromString` 全量替换配置 |
+| **客户端: Debug overlay 开关** | ❌ | 无渲染调试配置（帧率图、GPU 时间、draw call 计数、线框模式） |
+| **客户端: 资源热重载** | ❌ | 修改贴图/模型/Shader 后需手动重启，无 FileWatcher 感知资产变更 |
+| **客户端: 离线渲染模式** | ❌ | 无 headless/离线渲染配置（CI 截图测试、自动化性能测试） |
+| **客户端: 模拟低端设备** | ❌ | 无硬件模拟配置（限制 VRAM、降级 GPU 特性集） |
 
 ### 12.3 发布期需求 vs 当前能力
 
@@ -996,6 +1031,11 @@ uint32_t max_connections_ = 10000;
 | 监控指标完整 | ⚠️ | Metrics 存在但缺少配置变更、关停进度等运维指标（见 §7.8） |
 | 审计日志 | ❌ | 无操作审计能力 |
 | 配置变更需审批记录 | ❌ | 无变更追踪（见 §10.7） |
+| **客户端: 画质预设用户可选** | ❌ | 无画质预设系统（见 §14.2.8），用户无法调整性能/画质平衡 |
+| **客户端: 崩溃报告与 minidump** | ❌ | 无崩溃报告配置（上报地址、是否包含截图/存档、用户确认弹窗） |
+| **客户端: 遥测与隐私合规** | ❌ | 无遥测开关配置（GDPR/CCPA 要求用户可禁用遥测） |
+| **客户端: 多语言本地化** | ❌ | 无 locale 配置和回退链，UI 文本语言不可配置 |
+| **客户端: 首次运行体验** | ❌ | 无 first-run 配置（是否显示开场动画、EULA、教程、硬件检测） |
 
 ### 12.4 核心问题：缺少配置 Profile 层级系统
 
@@ -1142,9 +1182,311 @@ C++ 侧的 `ConfigManager` 提供了基础设施配置（日志、帧率、网�
 
 ---
 
-## 14. 可测试性
+## 14. 客户端配置需求分析
 
-### 14.1 测试污染全局单例
+引擎定位为同时支撑客户端和服务器端的双用途核心组件。§1.5 已指出 `ClientConfig` 当前是占位符（1 个字段）。本章从客户端专家的角度系统分析：客户端需要什么配置、与服务器配置如何划分、如何管理双端共享与差异。
+
+### 14.1 客户端与服务器的配置分层模型
+
+一个双用途引擎的配置系统需要明确的三层划分：
+
+```
+┌──────────────────────────────────────────────────┐
+│                  RuntimeConfig                    │
+│           双端共享（client + server）               │
+│  log, frame, resource_dir, sandbox_level,         │
+│  runtime_scripts_dir                              │
+├────────────────────┬─────────────────────────────┤
+│   ServerConfig      │     ClientConfig             │
+│   服务器专有          │     客户端专有                │
+│  admin_port,        │  render, window, input,      │
+│  mongodb_dev/public,│  audio, network_client,      │
+│  db_service,        │  assets, ui, platform,       │
+│  physics (部分),     │  performance, debug          │
+│  msgpack, http      │                              │
+└────────────────────┴─────────────────────────────┘
+```
+
+**当前问题:** 这条分界线是模糊的。`physics_scene_path` 物理资产路径定义在 `RuntimeConfig` 中（理论上应是 ServerConfig 或独立的 PhysicsConfig），而 `sandbox_level` 在客户端构建中同样需要（限制客户端脚本权限）却放在 RuntimeConfig 里位置正确但语义不明。
+
+**设计原则:**
+- **共享层 (RuntimeConfig):** 两端都需要且在两端语义相同的配置。如果某个字段在两端需要不同的默认值（如 `target_fps`：服务器 30，客户端 60），应分别在 ServerConfig/ClientConfig 中定义，共享层只放无歧义的公共字段
+- **服务器专有:** 客户端构建时不应加载、不应校验、不应占用内存
+- **客户端专有:** 服务器构建时不应加载、不应校验、不应占用内存
+
+### 14.2 客户端特有配置的完整需求矩阵
+
+以下是游戏客户端在生产环境中必须可配置的全部子系统。每个子系统的配置缺失都意味着客户端团队需要在引擎之外自建配置管理。
+
+#### 14.2.1 渲染配置
+
+客户端最核心的子系统，也是最迫切需要配置化的：
+
+| 配置项 | 类型 | 说明 | 热更 |
+|-------|------|------|------|
+| `render.backend` | enum | Vulkan / DirectX12 / Metal / OpenGL | 需重启 |
+| `render.resolution.width/height` | int | 渲染分辨率（可与窗口分辨率不同） | 可热更 |
+| `render.fullscreen` | bool | 全屏 / 窗口 / 无边框窗口 | 可热更 |
+| `render.vsync` | bool | 垂直同步 | 可热更 |
+| `render.msaa_samples` | int | 多重采样（1/2/4/8） | 需重启 |
+| `render.hdr` | bool | HDR 渲染 | 需重启 |
+| `render.max_fps` | int | 帧率上限（独立于引擎帧率，纯渲染限制） | 可热更 |
+| `render.dynamic_resolution.enabled` | bool | 动态分辨率缩放 | 可热更 |
+| `render.dynamic_resolution.target_fps` | int | 目标帧率阈值 | 可热更 |
+| `render.dynamic_resolution.min_scale` | float | 最小缩放比例（0.5=50%） | 可热更 |
+
+**当前状态:** 全部缺失。客户端集成时这些值要么硬编码要么由宿主应用通过 C++ API 设置——没有统一的配置入口。
+
+#### 14.2.2 窗口与平台配置
+
+| 配置项 | 类型 | 说明 |
+|-------|------|------|
+| `window.title` | string | 窗口标题 |
+| `window.width/height` | int | 初始窗口尺寸 |
+| `window.resizable` | bool | 是否可调整大小 |
+| `window.borderless` | bool | 无边框窗口 |
+| `window.monitor` | int | 目标显示器索引（0=主显示器） |
+| `platform.save_data_path` | string | 存档/用户数据路径（平台相关默认值） |
+| `platform.cache_path` | string | 缓存路径 |
+| `platform.locale` | string | 系统 locale 覆盖（"zh-CN", "en-US"） |
+
+**平台差异:** 不同平台的默认路径完全不同：
+- Windows: `%APPDATA%/<game>/`
+- macOS: `~/Library/Application Support/<game>/`
+- Linux: `~/.local/share/<game>/` 或 `$XDG_DATA_HOME/<game>/`
+- iOS: `<Application_Home>/Documents/`
+- Android: `<app-internal-storage>/files/`
+
+当前配置系统完全没有"平台感知的默认值"概念——所有默认值通过 C++ 成员初始化器硬编码，而同一个二进制在不同平台上需要不同的默认路径。
+
+#### 14.2.3 输入配置
+
+输入配置是客户端最复杂的配置子系统之一，涉及键位绑定、设备映射、灵敏度曲线：
+
+| 配置项 | 类型 | 说明 |
+|-------|------|------|
+| `input.keybindings` | map[string]string | 动作名 → 键位（如 `"jump" → "Space"`） |
+| `input.mouse_sensitivity` | float | 鼠标灵敏度 |
+| `input.mouse_invert_y` | bool | Y 轴反转 |
+| `input.gamepad_deadzone` | float | 手柄摇杆死区 |
+| `input.gamepad_sensitivity` | float | 手柄灵敏度 |
+| `input.touch_enabled` | bool | 触控输入（移动平台） |
+| `input.action_sets` | array | 不同上下文使用不同键位（如 UI 模式 vs 游戏模式） |
+
+**特殊性:** 输入配置与渲染/音频配置有本质区别：
+- 需要支持运行时用户自定义（通过设置菜单修改键位）
+- 需要持久化到用户数据目录（非引擎资源目录）
+- 需要支持多套预设（玩家 A 的键位 vs 玩家 B 的键位）
+- 不同输入设备的配置结构差异巨大（键盘 vs 手柄 vs 触控 vs 摇杆）
+
+这些需求对配置系统的"用户层持久化"和"运行时可变性"提出了远超服务器配置的要求。
+
+#### 14.2.4 音频配置
+
+| 配置项 | 类型 | 说明 | 热更 |
+|-------|------|------|------|
+| `audio.backend` | enum | 音频后端（平台默认/OpenAL/WASAPI） | 需重启 |
+| `audio.sample_rate` | int | 采样率（44100/48000） | 需重启 |
+| `audio.channels` | int | 输出声道数（2/5.1/7.1） | 需重启 |
+| `audio.master_volume` | float | 主音量（0.0-1.0） | 可热更 |
+| `audio.music_volume` | float | 音乐音量 | 可热更 |
+| `audio.sfx_volume` | float | 音效音量 | 可热更 |
+| `audio.voice_volume` | float | 语音音量 | 可热更 |
+| `audio.spatial_audio` | bool | 3D 空间音频 | 可热更 |
+| `audio.mute_when_unfocused` | bool | 窗口失焦时静音 | 可热更 |
+
+#### 14.2.5 网络客户端配置
+
+客户端网络配置与服务器网络配置的差异：
+
+| 配置项 | 类型 | 说明 | 对应服务器端 |
+|-------|------|------|------------|
+| `network.server_address` | string | 服务器地址（IP 或域名） | N/A（服务器监听） |
+| `network.server_port` | int | 服务器端口 | `admin_port` 等 |
+| `network.reconnect_max_retries` | int | 断线重连最大次数（0=不重连，-1=无限） | N/A |
+| `network.reconnect_base_delay_ms` | int | 重连基础延迟 | N/A |
+| `network.reconnect_max_delay_ms` | int | 重连最大延迟（指数退避上限） | N/A |
+| `network.reconnect_backoff_multiplier` | float | 退避乘数 | N/A |
+| `network.timeout_ms` | int | 连接/读写超时 | `http.timeout_sec` |
+| `network.client_prediction` | bool | 是否启用客户端预测 | N/A（服务器权威） |
+| `network.interpolation_delay_ms` | int | 插值延迟（平滑其他玩家的移动） | N/A |
+| `network.compression` | bool | 是否启用压缩 | N/A |
+| `network.max_payload_size` | int | 最大消息大小 | `msgpack.max_payload_size` |
+
+**当前状态:** `ConnectorConfig`（`connector.h:16`）提供了 `max_retries`、`retry_interval_ms`、`backoff_multiplier`，但它是独立结构体通过 setter 注入，不归 ConfigManager 管辖（见 §1.4）。且缺少重连退避上限、服务器地址、预测/插值参数。更关键的是，`ConnectorConfig` 是为 evpp TCP 连接器设计的通用重试配置，不是为"游戏客户端连接游戏服务器"场景设计的。
+
+#### 14.2.6 资产加载配置
+
+游戏客户端需要加载大量资产（纹理、模型、音频、动画、场景），而服务器端基本不需要（仅 Lua 脚本和物理场景数据）：
+
+| 配置项 | 类型 | 说明 |
+|-------|------|------|
+| `assets.root_path` | string | 资产根目录 |
+| `assets.streaming_budget_mb` | int | 流式加载内存预算 |
+| `assets.lod_bias` | float | LOD 偏移（全局 LOD 级别调整） |
+| `assets.texture_quality` | enum | 贴图质量预设（low/medium/high/ultra） |
+| `assets.shadow_quality` | enum | 阴影质量预设 |
+| `assets.preload_list` | array[string] | 启动时预加载的资产列表 |
+| `assets.async_load` | bool | 异步加载 |
+
+**与服务器的本质差异:** 服务器不需要资产加载配置（没有渲染、没有音频、没有贴图）。这意味着 `ClientConfig` 的字段数量天然比 `ServerConfig` 多一个数量级，但当前的 `ConfigManager` 架构对两者一视同仁——这对内存敏感的移动端客户端是不可接受的。
+
+#### 14.2.7 UI 配置
+
+| 配置项 | 类型 | 说明 |
+|-------|------|------|
+| `ui.font_path` | string | 默认字体路径 |
+| `ui.font_size` | int | 默认字号 |
+| `ui.scale` | float | 全局 UI 缩放（高 DPI 适配） |
+| `ui.locale` | string | 默认语言（"zh-CN", "en-US"） |
+| `ui.theme` | string | UI 主题名 |
+| `ui.color_blind_mode` | enum | 色盲模式（none/protanopia/deuteranopia/tritanopia） |
+
+#### 14.2.8 性能与画质预设
+
+游戏客户端通常不直接暴露单个渲染参数给用户，而是提供"画质预设"（低/中/高/超高），预设映射到一组底层参数：
+
+```json
+{
+  "graphics_quality": {
+    "preset": "high",
+    "presets": {
+      "low":    { "shadow_quality": "low",    "texture_quality": "low",    "msaa": 1, "hdr": false },
+      "medium": { "shadow_quality": "medium", "texture_quality": "medium", "msaa": 2, "hdr": false },
+      "high":   { "shadow_quality": "high",   "texture_quality": "high",   "msaa": 4, "hdr": true  },
+      "ultra":  { "shadow_quality": "ultra",  "texture_quality": "ultra",  "msaa": 8, "hdr": true  }
+    }
+  }
+}
+```
+
+这种"预设→展开"的二级映射机制在服务器配置中完全没有对应物（服务器配置通常是扁平的键值对），但对客户端至关重要。
+
+### 14.3 客户端配置的持久化与分层
+
+客户端配置存在三个层级，每层有不同的生命周期和管理方式：
+
+```
+Layer 1: 引擎默认值（C++ 成员初始化器）
+  ↓ 被 Layer 2 覆盖
+Layer 2: 出厂配置（resources/config/client/*.json，随安装包分发）
+  ↓ 被 Layer 3 覆盖
+Layer 3: 用户配置（<user_data_path>/settings.json，跨会话持久化）
+```
+
+**服务器端不存在 Layer 3。** 运维人员通过配置管理工具（Ansible/Chef/K8s ConfigMap）统一管理服务器配置，不存在"单个用户修改配置并持久化"的场景。
+
+这一差异对配置系统提出了明确的要求：
+- `ConfigManager` 需要支持**分层加载**：依次加载默认值 → JSON 文件 → 用户覆盖
+- 用户修改的字段需要**标记来源**（来自出厂配置还是用户配置），以支持"恢复默认值"
+- 用户配置文件可能被手动编辑损坏，需要**校验 + 损坏时回退到出厂配置**
+
+当前 `ConfigManager` 的 `Load() → 直接覆盖` 模型完全无法支持这种分层语义。
+
+### 14.4 客户端配置的热更新需求
+
+客户端的热更新需求与服务器有根本差异（对比 §2）：
+
+| 特性 | 服务器 | 客户端 |
+|------|--------|--------|
+| **热更触发方式** | 手动（SIGHUP/HTTP endpoint） | 自动（用户在设置菜单中拖动滑块） |
+| **热更频率** | 极低（部署时） | 高（用户每次调整音量/亮度/画质） |
+| **热更粒度** | 文件级重载 | 字段级变更通知 |
+| **热更需要重启的项** | 少数（物理参数） | 较多（渲染后端、分辨率、MSAA） |
+| **回滚需求** | 整体回滚到上一版本 | 回滚到出厂默认值 |
+| **监听者模式** | 服务器子系统被动感知 | UI 控件主动订阅配置变更 |
+
+服务器端的 `ReloadCallback`（无参数 `void()` 回调）对客户端完全不够用——UI 控件需要知道**哪个字段从什么值变为什么值**才能做出响应（如音量滑块需要实时反映 `audio.master_volume` 的变化）。
+
+### 14.5 客户端配置的硬件适配
+
+客户端运行在多样化的硬件上（集成显卡到 RTX 5090，4GB RAM 到 64GB RAM），而服务器运行在已知的云实例上。这产生了两个服务器端不存在的配置需求：
+
+**14.5.1 首次运行硬件检测**
+
+```
+启动 → 检测 GPU/CPU/RAM → 查询硬件能力数据库
+  → 自动选择最优画质预设 → 写入用户配置 → 启动渲染
+```
+
+这个流程需要：
+- 硬件能力数据库（哪些 GPU 支持哪些特性、性能等级）
+- 自动检测逻辑（需要配置化而非硬编码）
+- "自动检测结果"与"用户选择"的分离存储
+
+**14.5.2 自适应性能调整**
+
+```json
+{
+  "adaptive_performance": {
+    "enabled": true,
+    "target_fps": 60,
+    "adjustment_interval_sec": 5,
+    "max_quality_drop": 2,        // 最多降 2 级画质
+    "recovery_delay_sec": 30      // 性能恢复后等 30 秒再升画质
+  }
+}
+```
+
+这种"运行时反馈驱动的配置调整"是客户端独有的，与服务器端的"静态配置 + 人工重载"模式完全不同。
+
+### 14.6 双端共享配置的管理策略
+
+对于同时在客户端和服务器端使用的配置（`RuntimeConfig`），需要明确的治理规则：
+
+**规则 1 — 共享字段语义必须一致。** `FrameConfig.target_fps` 在服务器端控制 tick rate，在客户端控制渲染帧率上限——但客户端通常需要更高的值（60/120 vs 30）。如果两端对同一字段有不同的语义需求，该字段不应放在共享层。
+
+**规则 2 — 共享字段的默认值差异必须显式管理。** 当前所有默认值通过 C++ 初始化器硬编码，无法区分"客户端构建的默认值"和"服务器构建的默认值"。建议方案：
+
+```cpp
+// 方式 A: 编译期区分（当前唯一可用方式，但不可取）
+#ifdef ENGINE_CLIENT_BUILD
+    int target_fps = 60;
+#else
+    int target_fps = 30;
+#endif
+
+// 方式 B: 配置文件层级覆盖（推荐）
+// runtime.json 定义 base target_fps = 30
+// client.json 覆盖 target_fps = 60（客户端默认）
+```
+
+**规则 3 — 新增共享字段前必须评审。** 添加一个 `RuntimeConfig` 字段时需回答：这个字段在客户端和服务器端都需要吗？语义一致吗？默认值一致吗？如果任一答案为"否"，应放入 ServerConfig 或 ClientConfig。
+
+### 14.7 客户端的配置校验需求
+
+客户端配置校验与服务器端（§3）有显著差异：
+
+| 服务器校验 | 客户端校验 |
+|-----------|-----------|
+| 拒绝非法值，阻止启动 | 非法值时使用安全回退值 + 警告 |
+| 所有配置必须合法 | 用户可以修改配置文件（可能出错），必须容错 |
+| 校验失败 → 退出码 + 日志 | 校验失败 → 回退默认值 + 用户提示 |
+| 不需要硬件兼容性检查 | 需要（如 MSAA 8x 在集成显卡上不可用） |
+| 不需要配置组合合法性 | 需要（如 HDR + MSAA 某些组合不兼容） |
+
+这意味着客户端的校验框架需要比服务器端更复杂——它需要**分级校验**（致命/警告/建议）和**硬件能力数据库**。
+
+### 14.8 客户端配置缺失的影响评估
+
+假设基于本引擎开发一款跨平台（Windows/macOS/iOS/Android）3D 游戏的客户端：
+
+| 缺失的配置能力 | 客户端团队的替代方案 | 技术债务 |
+|-------------|-------------------|---------|
+| 渲染/窗口/输入/音频配置 | 自建配置系统或硬编码 | 与引擎配置系统割裂，两套配置并存 |
+| 用户配置持久化 | 自建 JSON 读写 + 文件管理 | 与引擎的文件 I/O 不一致，多端路径处理重复 |
+| 画质预设系统 | 自建预设映射逻辑 | 与引擎的渲染初始化耦合 |
+| 硬件检测与自适应 | 自建检测逻辑 | 与引擎的性能分析器（Profiler）无联动 |
+| 首次运行体验 | 自建 first-run 检测 | 与引擎的 Init() 流程无集成 |
+| 多平台路径 | 自建平台宏 + 路径工具 | 与引擎的 `resource_dir` 体系不一致 |
+
+**结论:** 客户端团队在当前状态下集成引擎，至少需要在引擎之外自建一个平行配置系统来处理所有客户端特有需求。两个配置系统的并存会产生数据冗余（如 `target_fps` 在两处都要设置）、行为不一致（引擎热更机制不适用于客户端自建系统）、和调试困难（配置问题需要排查两套系统）。
+
+---
+
+## 15. 可测试性
+
+### 15.1 测试污染全局单例
 
 ```cpp
 // test_config.cpp
@@ -1156,15 +1498,15 @@ TEST_CASE("ConfigManager rejects invalid JSON", "[config][error]") {
 
 每个测试用例都直接修改全局 ConfigManager 的状态。测试执行顺序依赖 Catch2 的随机种子——同一测试套件在不同运行中可能因为顺序不同而通过或失败。`ConfigFixture::LoadFromStrings()` 试图通过在 setUp 中重载来"重置"状态，但这只是掩盖而非解决根本问题。
 
-### 14.2 无 mock/fake 接口
+### 15.2 无 mock/fake 接口
 
 ConfigManager 没有抽象接口（IConfigManager），`PhysicsConfigManager` 也没有抽象接口。所有配置消费者直接依赖具体类，无法在单元测试中注入 mock 配置。
 
-### 14.3 fuzz 测试不覆盖文件路径
+### 15.3 fuzz 测试不覆盖文件路径
 
 `config_parse_fuzz.cpp` 只测试 `LoadRuntimeFromString`、`LoadClientFromString`、`LoadServerFromString`。没有覆盖文件加载路径（`LoadRuntimeFromFile`）和 Reload 路径。文件 I/O 相关的缓冲区溢出、路径遍历、BOM 处理错误无法通过模糊测试检测。
 
-### 14.4 基准测试不反映真实场景
+### 15.4 基准测试不反映真实场景
 
 ```cpp
 // bench_config.cpp
@@ -1180,7 +1522,7 @@ static void BM_Config_ParseRuntime(benchmark::State& state) {
 
 ---
 
-## 15. 问题汇总与优先级
+## 16. 问题汇总与优先级
 
 ### P0 — 阻塞上线（不解决则不可在生产环境运行）
 
@@ -1194,6 +1536,7 @@ static void BM_Config_ParseRuntime(benchmark::State& state) {
 | **P0-6** | **健康检查不验证后端依赖** | `admin_http.cc:35-43` | **K8s 无法正确判断 Pod 健康状态** |
 | **P0-7** | **Physics JSON 静默忽略未知键** | `physics_config.cc:77` | **拼写错误的物理参数被无声丢弃，物理行为错误** |
 | **P0-8** | **配置文件无非原子写入保护（partial write）** | `config.cc:53-117` | **半写入文件被 Reload() 读取，加载不完整配置** |
+| **P0-9** | **ClientConfig 是占位符（1 字段）** | `config.h:58-60` | **客户端集成时无渲染/窗口/输入/音频/网络配置，必须自建平行配置系统** |
 
 ### P1 — 严重影响开发与运维效率
 
@@ -1216,6 +1559,8 @@ static void BM_Config_ParseRuntime(benchmark::State& state) {
 | **P1-15** | **Lua 层无游戏业务配置框架** | 全局 | **游戏策划无法配置数值，所有业务配置需从零手写** |
 | **P1-16** | **无配置引用完整性校验** | 全局 | **item/monster/skill ID 悬空引用导致运行时崩溃** |
 | **P1-17** | **无优雅降级（Graceful Degradation）配置** | `engine.cc` Cleanup() | **子系统故障传播策略硬编码，无法按业务需求调整** |
+| **P1-18** | **客户端配置无分层加载机制** | `ConfigManager::Load()` | **无法支持出厂默认值 → JSON → 用户覆盖的三层覆盖；用户设置无法持久化** |
+| **P1-19** | **双端共享配置的边界模糊** | `config.h:48-55` | **`physics_scene_path` 在 RuntimeConfig、无客户端 vs 服务器默认值区分** |
 
 ### P2 — 影响运维质量与安全
 
@@ -1241,6 +1586,9 @@ static void BM_Config_ParseRuntime(benchmark::State& state) {
 | P2-18 | 无配置跨系统引用管理 | 全局 | item→drop_table→monster 引用链断裂时无检测 |
 | P2-19 | 无 Core Dump 配置（路径/大小/启用） | `engine.cc` | 崩溃分析依赖系统默认 ulimit，容器环境无法适配 |
 | P2-20 | 文件描述符上限不可配置和自动管理 | `engine.cc` | 中等并发下可能因 EMFILE 拒绝连接 |
+| P2-21 | 客户端无画质预设系统 | `ClientConfig` | 用户无法选择低/中/高/超高画质；性能/画质平衡需硬编码 |
+| P2-22 | 客户端无硬件检测与自适应性能配置 | `ClientConfig` | 首次运行无法自动检测 GPU 能力选择画质；低端设备体验差 |
+| P2-23 | 客户端网络连接配置严重不足 | `connector.h:16` | 缺少服务器地址/重连退避上限/预测插值参数/压缩开关 |
 
 ### P3 — 可改进项
 
@@ -1266,6 +1614,11 @@ static void BM_Config_ParseRuntime(benchmark::State& state) {
 | P3-18 | 无认证绕过开关（开发期用） | N/A | 本地开发每次需配 JWT token |
 | P3-19 | TCP keepalive 参数不可配置 | `tcp_server.h` | 死连接检测依赖 OS 默认值（idle=2h），NAT/长连接场景不可用 |
 | P3-20 | JSON 缺失字段静默使用默认值（`error_on_missing_keys` 未启用） | `config.cc` / `physics_config.cc` | 运维人员从旧版本模板复制配置时遗漏新字段，系统无告警 |
+| P3-21 | 客户端无平台感知的默认路径 | `config_constants.h` | Windows/macOS/Linux/iOS/Android 路径约定不同，硬编码默认值不可行 |
+| P3-22 | 客户端无首次运行体验配置 | `ClientConfig` | 无法配置开场动画/EULA/教程/硬件检测的启用和顺序 |
+| P3-23 | 客户端无遥测隐私合规配置 | `ClientConfig` | GDPR/CCPA 要求用户可禁用遥测，无配置开关 |
+| P3-24 | 客户端热更回调无变更详情 | `config.h:190` | `ReloadCallback = void()` 无法告知 UI 控件哪个字段变更，客户端设置菜单无法响应 |
+| P3-25 | 双端共享字段默认值无构建目标区分 | `config.h:41-43` | `target_fps` 服务器 30/客户端 60 默认值相同，一端不合理 |
 
 ---
 
