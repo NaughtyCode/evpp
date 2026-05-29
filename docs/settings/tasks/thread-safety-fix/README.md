@@ -1,7 +1,7 @@
 # Task 2: Thread Safety Fix
 
 **Priority:** P0 — data race elimination
-**Status:** pending
+**Status:** done (2026-05-29)
 **Dependencies:** Task 1 (core-validation-fix)
 
 ## Scope

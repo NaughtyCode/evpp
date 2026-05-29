@@ -213,7 +213,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	// ---- Physics system initialization ----
 	{
 		ENGINE_LOG_INFO(logger, "initializing physics...");
-		auto phys_cfg = runtime_cfg.resource_dir + "/physics/configs";
+		auto phys_cfg = runtime_cfg.resource_dir + "/physics/config";
 		auto phys_data = runtime_cfg.resource_dir + runtime_cfg.physics_scene_path;
 		bool ok = PhysicsEngineBridge::Instance().Initialize(
 			phys_cfg, phys_data, runtime_cfg.scripts_dir);
@@ -280,10 +280,12 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 
 	// Start admin HTTP server (/health, /stats, /metrics) if configured.
 	{
-		int admin_port = ConfigManager::Instance().GetServerConfig().admin_port;
-		if (admin_port > 0 && loop_) {
-			if (admin_server_.Start(loop_, admin_port)) {
-				ENGINE_LOG_INFO(logger, "admin HTTP server started on port {}", admin_port);
+		auto server_cfg = ConfigManager::Instance().GetServerConfig();
+		if (server_cfg.admin_port > 0 && loop_) {
+			std::string bind_addr = server_cfg.admin_bind_address.empty()
+										? "127.0.0.1" : server_cfg.admin_bind_address;
+			if (admin_server_.Start(loop_, server_cfg.admin_port, bind_addr)) {
+				ENGINE_LOG_INFO(logger, "admin HTTP server started on {}:{}", bind_addr, server_cfg.admin_port);
 			}
 		}
 	}

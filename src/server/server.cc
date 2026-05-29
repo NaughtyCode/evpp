@@ -54,20 +54,24 @@ int main(int argc, char* argv[]) {
         }
     }
     if (!engine::ConfigManager::Instance().Load(config_dir)) {
-        std::cerr << "Failed to load config from " << config_dir << std::endl;
-        return 1;
+        std::cerr << "{\"event\":\"startup_failed\",\"exit_code\":3,"
+                  << "\"reason\":\"config_load_failed\","
+                  << "\"config_dir\":\"" << config_dir << "\"}" << std::endl;
+        return 3;
     }
     std::fprintf(stderr, "[main] config loaded\n");
 
-    // CLI arguments override config values
+    // CLI arguments override config values (thread-safe via copy-modify-set)
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg.rfind("--log_dir=", 0) == 0) {
-            engine::ConfigManager::Instance()
-                .GetRuntimeConfigMutable().log.dir = arg.substr(10);
+            auto rt = engine::ConfigManager::Instance().GetRuntimeConfig();
+            rt.log.dir = arg.substr(10);
+            engine::ConfigManager::Instance().SetRuntimeOverride(rt);
         } else if (arg.rfind("--scripts_dir=", 0) == 0) {
-            engine::ConfigManager::Instance()
-                .GetServerConfigMutable().scripts_dir = arg.substr(14);
+            auto srv = engine::ConfigManager::Instance().GetServerConfig();
+            srv.scripts_dir = arg.substr(14);
+            engine::ConfigManager::Instance().SetServerOverride(srv);
         }
     }
 

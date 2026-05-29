@@ -74,7 +74,7 @@ bool PhysicsConfigManager::LoadPhysics(const std::string& path) {
 	}
 	std::string buf = ReadFile(path);
 	glz::context ctx{};
-	auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(physics_config_, buf, ctx);
+	auto ec = glz::read<glz::opts{.error_on_unknown_keys = true}>(physics_config_, buf, ctx);
 	if (ec) {
 		ENGINE_LOG_ERROR(engine::GetLogger(),
 						 "PhysicsConfigManager: parse error in [{}]: {}", path,
@@ -91,7 +91,7 @@ bool PhysicsConfigManager::LoadThreading(const std::string& path) {
 	}
 	std::string buf = ReadFile(path);
 	glz::context ctx{};
-	auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(threading_config_, buf, ctx);
+	auto ec = glz::read<glz::opts{.error_on_unknown_keys = true}>(threading_config_, buf, ctx);
 	if (ec) {
 		ENGINE_LOG_ERROR(engine::GetLogger(),
 						 "PhysicsConfigManager: parse error in [{}]: {}", path,
@@ -108,7 +108,7 @@ bool PhysicsConfigManager::LoadLogging(const std::string& path) {
 	}
 	std::string buf = ReadFile(path);
 	glz::context ctx{};
-	auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(log_config_, buf, ctx);
+	auto ec = glz::read<glz::opts{.error_on_unknown_keys = true}>(log_config_, buf, ctx);
 	if (ec) {
 		ENGINE_LOG_ERROR(engine::GetLogger(),
 						 "PhysicsConfigManager: parse error in [{}]: {}", path,
@@ -125,7 +125,7 @@ bool PhysicsConfigManager::LoadThresholds(const std::string& path) {
 	}
 	std::string buf = ReadFile(path);
 	glz::context ctx{};
-	auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(thresholds_config_, buf, ctx);
+	auto ec = glz::read<glz::opts{.error_on_unknown_keys = true}>(thresholds_config_, buf, ctx);
 	if (ec) {
 		ENGINE_LOG_ERROR(engine::GetLogger(),
 						 "PhysicsConfigManager: parse error in [{}]: {}", path,
@@ -240,7 +240,7 @@ bool PhysicsConfigManager::ReloadThresholds(const std::string& config_dir) {
 	}
 
 	glz::context ctx{};
-	auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(new_cfg, buf, ctx);
+	auto ec = glz::read<glz::opts{.error_on_unknown_keys = true}>(new_cfg, buf, ctx);
 	if (ec) {
 		ENGINE_LOG_ERROR(engine::GetLogger(),
 						 "PhysicsConfigManager: thresholds reload parse error: {}",
@@ -269,7 +269,7 @@ bool PhysicsConfigManager::ReloadLogLevel(const std::string& config_dir) {
 
 	PhysicsLogConfig new_cfg;
 	glz::context ctx{};
-	auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(new_cfg, buf, ctx);
+	auto ec = glz::read<glz::opts{.error_on_unknown_keys = true}>(new_cfg, buf, ctx);
 	if (ec) {
 		ENGINE_LOG_ERROR(engine::GetLogger(),
 						 "PhysicsConfigManager: logging reload parse error: {}",

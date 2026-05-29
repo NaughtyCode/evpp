@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "positionEpsilon": 0.001,
+  "rotationEpsilon": 0.00017,
+  "linearVelocityEpsilon": 0.01,
+  "angularVelocityEpsilon": 0.001
+}

@@ -1,7 +1,7 @@
 # Task 1: Core Validation Fix
 
 **Priority:** P0 — blocks all other config work
-**Status:** pending
+**Status:** done (2026-05-29)
 **Dependencies:** None
 
 ## Scope

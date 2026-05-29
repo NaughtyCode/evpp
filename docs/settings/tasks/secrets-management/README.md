@@ -1,7 +1,7 @@
 # Task 5: Secrets Management
 
 **Priority:** P0 — security compliance
-**Status:** pending
+**Status:** done (2026-05-29)
 **Dependencies:** Task 1 (core-validation-fix)
 
 ## Scope

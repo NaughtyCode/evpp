@@ -1,7 +1,7 @@
 # Task 7: Physics Config Fix
 
 **Priority:** P0 — silent data loss
-**Status:** pending
+**Status:** done (2026-05-29)
 **Dependencies:** None (PhysicsConfigManager is independent)
 
 ## Scope

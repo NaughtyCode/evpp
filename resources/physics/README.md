@@ -133,4 +133,4 @@ class MyLayerFilter : public ObjectLayerPairFilter {
 
 ## engine.json (项目级)
 
-项目已有的引擎级配置在 `resources/config/engine.json` 中，可通过 `ConfigManager` 加载。此处 `resources/physics/configs/` 专门存放纯物理层面的补充配置和预设。
+项目已有的引擎级配置在 `resources/config/engine.json` 中，可通过 `ConfigManager` 加载。此处 `resources/physics/config/` 专门存放纯物理层面的补充配置和预设。

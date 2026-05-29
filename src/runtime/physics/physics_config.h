@@ -30,6 +30,7 @@ struct LayerConfig {
 
 struct PhysicsConfig {
 	// Design doc §5.1 required fields
+	int version = 1;
 	float gravity_x = 0.0f;
 	float gravity_y = -9.81f;
 	float gravity_z = 0.0f;
@@ -68,6 +69,7 @@ struct PhysicsConfig {
 
 struct ThreadingConfig {
 	// Design doc §5.2 fields
+	int version = 1;
 	std::string thread_priority = "high";
 	uint64_t affinity_mask = 0;
 	int command_queue_size = 256;
@@ -84,6 +86,7 @@ struct ThreadingConfig {
 
 struct PhysicsLogConfig {
 	// Design doc §5.3 fields
+	int version = 1;
 	std::string log_dir = "./logs/physics";
 	std::string file_name = "physics_engine";
 	std::string date_format = "YYYY-MM-DD";
@@ -103,6 +106,7 @@ struct PhysicsLogConfig {
 // ThresholdsConfig — change detection thresholds (thresholds.json)
 
 struct ThresholdsConfig {
+	int version = 1;
 	float position_epsilon = 0.001f;  // 1mm
 	float rotation_epsilon = 0.00017f;	// ~0.01°
 	float linear_velocity_epsilon = 0.01f;	// 0.01 m/s
@@ -136,7 +140,9 @@ struct glz::meta<engine::LayerConfig> {
 template <>
 struct glz::meta<engine::PhysicsConfig> {
 	using T = engine::PhysicsConfig;
-	static constexpr auto value = glz::object("gravityX",
+	static constexpr auto value = glz::object("version",
+											  &T::version,
+											  "gravityX",
 											  &T::gravity_x,
 											  "gravityY",
 											  &T::gravity_y,
@@ -197,7 +203,9 @@ struct glz::meta<engine::PhysicsConfig> {
 template <>
 struct glz::meta<engine::ThreadingConfig> {
 	using T = engine::ThreadingConfig;
-	static constexpr auto value = glz::object("threadPriority",
+	static constexpr auto value = glz::object("version",
+											  &T::version,
+											  "threadPriority",
 											  &T::thread_priority,
 											  "affinityMask",
 											  &T::affinity_mask,
@@ -218,7 +226,9 @@ struct glz::meta<engine::ThreadingConfig> {
 template <>
 struct glz::meta<engine::PhysicsLogConfig> {
 	using T = engine::PhysicsLogConfig;
-	static constexpr auto value = glz::object("logDir",
+	static constexpr auto value = glz::object("version",
+											  &T::version,
+											  "logDir",
 											  &T::log_dir,
 											  "fileName",
 											  &T::file_name,
@@ -243,7 +253,9 @@ struct glz::meta<engine::PhysicsLogConfig> {
 template <>
 struct glz::meta<engine::ThresholdsConfig> {
 	using T = engine::ThresholdsConfig;
-	static constexpr auto value = glz::object("positionEpsilon",
+	static constexpr auto value = glz::object("version",
+											  &T::version,
+											  "positionEpsilon",
 											  &T::position_epsilon,
 											  "rotationEpsilon",
 											  &T::rotation_epsilon,

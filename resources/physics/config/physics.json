@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "gravityX": 0.0,
+  "gravityY": -9.81,
+  "gravityZ": 0.0,
+  "fixedDeltaTime": 0.01667,
+  "solverIterations": 10,
+  "subStepCount": 2,
+  "maxBodies": 4096,
+  "maxContactPoints": 10240,
+  "maxBodyPairs": 16384,
+  "numBodyMutexes": 32,
+  "positionIterations": 2,
+  "speculativeContactDistance": 0.02,
+  "penetrationSlop": 0.02,
+  "baumgarte": 0.2,
+  "timeBeforeSleep": 0.5,
+  "pointVelocitySleepThreshold": 0.03,
+  "deterministicSimulation": true,
+  "constraintWarmStart": true,
+  "allowSleeping": true,
+  "useLargeIslandSplitter": true,
+  "linearCastThreshold": 0.75,
+  "linearCastMaxPenetration": 0.25,
+  "maxPenetrationDistance": 0.2,
+  "minVelocityForRestitution": 1.0,
+  "useBodyPairContactCache": true,
+  "useManifoldReduction": true,
+  "checkActiveEdges": true,
+  "layerConfig": {
+    "objectLayers": {
+      "static": 0,
+      "dynamic": 1,
+      "trigger": 2
+    },
+    "broadPhaseLayers": {
+      "static": 0,
+      "dynamic": 1
+    },
+    "layerMapping": {
+      "static": "static",
+      "dynamic": "dynamic",
+      "trigger": "dynamic"
+    },
+    "collisionMatrix": [
+      {"layerA": "static",  "layerB": "static",  "collide": false},
+      {"layerA": "static",  "layerB": "dynamic", "collide": true},
+      {"layerA": "static",  "layerB": "trigger", "collide": true},
+      {"layerA": "dynamic", "layerB": "dynamic", "collide": true},
+      {"layerA": "dynamic", "layerB": "trigger", "collide": true},
+      {"layerA": "trigger", "layerB": "trigger", "collide": false}
+    ]
+  }
+}

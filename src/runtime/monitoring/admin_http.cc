@@ -73,17 +73,19 @@ AdminHttpServer::~AdminHttpServer() {
 	Stop();
 }
 
-bool AdminHttpServer::Start(evpp::EventLoop* loop, int port) {
+bool AdminHttpServer::Start(evpp::EventLoop* loop, int port,
+							const std::string& bind_address) {
 	if (running_) return true;
 	if (!loop) return false;
 
 	loop_ = loop;
 	port_ = port;
+	bind_address_ = bind_address;
 
 	service_ = std::make_unique<evpp::http::Service>(loop);
 	if (!service_->Listen(port)) {
 		auto* logger = engine::GetLogger();
-		ENGINE_LOG_ERROR(logger, "AdminHttpServer: failed to listen on port {}", port);
+		ENGINE_LOG_ERROR(logger, "AdminHttpServer: failed to listen on {}:{}", bind_address_, port);
 		service_.reset();
 		return false;
 	}
@@ -92,7 +94,8 @@ bool AdminHttpServer::Start(evpp::EventLoop* loop, int port) {
 	running_ = true;
 
 	auto* logger = engine::GetLogger();
-	ENGINE_LOG_INFO(logger, "AdminHttpServer: listening on port {} (/health /stats /metrics)", port);
+	ENGINE_LOG_INFO(logger, "AdminHttpServer: listening on {}:{} (/health /stats /metrics)",
+					bind_address_, port);
 	return true;
 }
 

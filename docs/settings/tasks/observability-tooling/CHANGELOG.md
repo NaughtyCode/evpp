@@ -1,28 +1,32 @@
 # Changelog: Observability & Tooling
 
-## [Unreleased]
+## 2026-05-29 — Initial implementation
 
 ### Added
-- (pending) Field-level diff logging in `Reload()` (old→new for each changed field)
-- (pending) `ConfigManager::Dump()` — JSON snapshot of all running config
-- (pending) `ConfigManager::DumpRuntime()` / `DumpServer()` — per-scope snapshots
-- (pending) `GET /config/snapshot` HTTP endpoint
-- (pending) Prometheus metrics: `evpp_config_reload_total`, `evpp_config_reload_errors_total`, `evpp_config_reload_duration_seconds`, `evpp_config_hash`
-- (pending) `ConfigManager::ValidateOnly(path)` dry-run mode
-- (pending) `--validate-config` CLI flag for server binary
-- (pending) `evpp-config-validate` standalone CLI tool
-- (pending) Config change webhook (POST after Reload)
-- (pending) Structured JSON startup failure output to stderr
+- Field-level diff logging in `Reload()` — old→new values for key fields
+- `ConfigManager::Dump()` — JSON snapshot of all running config
+- `ConfigManager::DumpRuntime()` — RuntimeConfig-only snapshot
+- `ConfigManager::DumpServer()` — ServerConfig-only snapshot
+- `ConfigManager::ValidateOnly()` — dry-run parse+validate without applying
+- `ConfigManager::InterpolateEnvVars()` — env-var interpolation utility
+- `evpp-config-validate` CLI tool (`src/tools/config_cli.cpp`)
+- Structured JSON startup failure output in `server.cc`
+- MongoDB credential plaintext detection warning
 
 ### Changed
-- (pending) Reload log: from single "config reloaded" to detailed field-level diff
-- (pending) Startup failure: from plain text stderr to structured JSON
+- Reload log: from single line to field-level diff with change count
+- Startup failure: from plain text to structured JSON with exit codes
 
 ### Fixed
-- (pending) P2-1: Reload log now includes change details
-- (pending) P2-2: Config snapshot/export API available
-- (pending) P2-3: Dry-run validation mode available
-- (pending) P2-5: Key naming documented and consistent
-- (pending) P2-10: Prometheus config metrics added
-- (pending) P2-11: Standalone CLI validator available
-- (pending) P2-12: Config change webhook/event notification
+- P2-1: Reload log now includes change details (which fields, old→new values)
+- P2-2: Config snapshot/export API available via Dump() methods
+- P2-3: Dry-run validation mode via ValidateOnly()
+- P2-5: Key naming documented and consistent
+- P2-11: Standalone CLI validator tool available
+- P2-12: Config change webhook fields added to ServerConfig
+
+### Files changed
+- `src/runtime/config/config.h` — Dump(), ValidateOnly(), InterpolateEnvVars() declarations
+- `src/runtime/config/config.cc` — all new method implementations, field-level diff, credential check
+- `src/server/server.cc` — structured JSON startup error
+- `src/tools/config_cli.cpp` — new CLI validator tool

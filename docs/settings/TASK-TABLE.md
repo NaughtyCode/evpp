@@ -9,11 +9,11 @@
 
 | # | Task | Priority | Depends On | Status | Date Done |
 |---|------|----------|------------|--------|-----------|
-| 1 | `core-validation-fix` | P0 | — | pending | — |
-| 2 | `physics-config-fix` | P0 | — | pending | — |
-| 3 | `thread-safety-fix` | P0 | #1 | pending | — |
-| 4 | `secrets-management` | P0 | #1 | pending | — |
-| 5 | `observability-tooling` | P2 | #1 | pending | — |
+| 1 | `core-validation-fix` | P0 | — | **done** | 2026-05-29 |
+| 2 | `physics-config-fix` | P0 | — | **done** | 2026-05-29 |
+| 3 | `thread-safety-fix` | P0 | #1 | **done** | 2026-05-29 |
+| 4 | `secrets-management` | P0 | #1 | **done** | 2026-05-29 |
+| 5 | `observability-tooling` | P2 | #1 | **done** | 2026-05-29 |
 | 6 | `hotreload-consumer-fix` | P0 | #1, #3 | pending | — |
 | 7 | `runtime-environment-selection` | P0 | #1, #6 | pending | — |
 | 8 | `server-operations` | P1 | #1, #3, #6 | pending | — |
@@ -24,16 +24,14 @@
 
 ## Parallel Execution Batches
 
-Tasks in the same batch have no inter-dependencies and can run concurrently.
-
-| Batch | Tasks | Unblocked By |
-|-------|-------|--------------|
-| A | #1 `core-validation-fix`, #2 `physics-config-fix` | (start) |
-| B | #3 `thread-safety-fix`, #4 `secrets-management`, #5 `observability-tooling` | A |
-| C | #6 `hotreload-consumer-fix` | #1 + #3 done |
-| D | #7 `runtime-environment-selection`, #8 `server-operations`, #9 `game-business-config` | #6 done |
-| E | #10 `health-check-probes`, #11 `config-manager-unification` | #7 done for #10; #2 + #3 done for #11 |
-| F | #12 `client-config-framework` | #7 + #11 done |
+| Batch | Tasks | Status |
+|-------|-------|--------|
+| A | #1 `core-validation-fix`, #2 `physics-config-fix` | **done** |
+| B | #3 `thread-safety-fix`, #4 `secrets-management`, #5 `observability-tooling` | **done** |
+| C | #6 `hotreload-consumer-fix` | ready |
+| D | #7 `runtime-environment-selection`, #8 `server-operations`, #9 `game-business-config` | blocked (#6) |
+| E | #10 `health-check-probes`, #11 `config-manager-unification` | blocked (#7, #2+#3) |
+| F | #12 `client-config-framework` | blocked (#7, #11) |
 
 ## Status Legend
 
@@ -43,3 +41,10 @@ Tasks in the same batch have no inter-dependencies and can run concurrently.
 | `in_progress` | Currently being worked on |
 | `done` | Completed and verified |
 | `blocked` | Waiting on dependency |
+
+## Completion Log
+
+| Date | Batch | Tasks Completed |
+|------|-------|----------------|
+| 2026-05-29 | A | #1 `core-validation-fix`, #2 `physics-config-fix` |
+| 2026-05-29 | B | #3 `thread-safety-fix`, #4 `secrets-management`, #5 `observability-tooling` |

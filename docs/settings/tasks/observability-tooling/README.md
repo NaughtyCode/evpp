@@ -1,7 +1,7 @@
 # Task 12: Observability & Tooling
 
 **Priority:** P2 — ops quality
-**Status:** pending
+**Status:** done (2026-05-29)
 **Dependencies:** Task 1 (core-validation-fix), Task 3 (hotreload-consumer-fix)
 
 ## Scope

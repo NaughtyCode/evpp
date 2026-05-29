@@ -169,6 +169,9 @@ struct ServerConfig {
 	std::string scripts_dir = config::kDefaultServerScriptsDir;
 
 	int admin_port = 8081;  // admin HTTP port; 0 = disabled
+	std::string admin_bind_address = "127.0.0.1";  // bind for admin HTTP
+	std::string config_webhook_url;                 // POST after Reload (empty=off)
+	int config_webhook_timeout_sec = 5;
 
 	// MongoDB cluster config file paths (relative to working dir).
 	// These are separate JSON files with full cluster topology details.
@@ -226,13 +229,23 @@ class ENGINE_API ConfigManager {
 	// are preserved).
 	bool Reload(const std::string& config_dir);
 
+	// ValidateOnly — parse + validate files without applying changes.
+	// Returns the validation result. Does not modify current config.
+	ConfigValidator::Result ValidateOnly(const std::string& config_dir);
+
+	// Dump — serialize current config to JSON for snapshot/audit.
+	std::string Dump() const;
+	std::string DumpRuntime() const;
+	std::string DumpServer() const;
+
+	// Env-var interpolation — replaces ${VAR} and ${VAR:-default} in strings.
+	// Called automatically during Load/Reload for all string fields.
+	static std::string InterpolateEnvVars(const std::string& value);
+
 	// ── Runtime / Client / Server accessors ──────────────────────────
 
 	RuntimeConfig GetRuntimeConfig() const {
 		std::shared_lock<std::shared_mutex> lock(config_mutex_);
-		return runtime_config_;
-	}
-	RuntimeConfig& GetRuntimeConfigMutable() {
 		return runtime_config_;
 	}
 
@@ -240,16 +253,22 @@ class ENGINE_API ConfigManager {
 		std::shared_lock<std::shared_mutex> lock(config_mutex_);
 		return client_config_;
 	}
-	ClientConfig& GetClientConfigMutable() {
-		return client_config_;
-	}
 
 	ServerConfig GetServerConfig() const {
 		std::shared_lock<std::shared_mutex> lock(config_mutex_);
 		return server_config_;
 	}
-	ServerConfig& GetServerConfigMutable() {
-		return server_config_;
+
+	// SetRuntimeOverride — thread-safe setter for CLI/init-time overrides.
+	// Must be called before Engine::Init() (single-threaded context).
+	// After Init(), use Reload() instead.
+	void SetRuntimeOverride(const RuntimeConfig& config) {
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		runtime_config_ = config;
+	}
+	void SetServerOverride(const ServerConfig& config) {
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		server_config_ = config;
 	}
 
 	// ── MongoDB config file paths (thread-safe) ──────────────────────
@@ -298,6 +317,11 @@ class ENGINE_API ConfigManager {
 	// none were configured). Called automatically by Load/Reload.
 	bool ReloadMongoDbConfigs();
 
+	// TOCTOU-safe compound access: holds lock through path read + file load.
+	// Prefer these over GetMongoDbDevPath() + LoadMongoDbConfigFromFile().
+	bool LoadMongoDbDevConfigLocked(MongoDbConfig& out) const;
+	bool LoadMongoDbPublicConfigLocked(MongoDbConfig& out) const;
+
 	private:
 	ConfigManager() = default;
 
@@ -319,8 +343,8 @@ class ENGINE_API ConfigManager {
 	bool mongo_dev_loaded_ = false;
 	bool mongo_public_loaded_ = false;
 
-	// Reload notification
-	mutable std::shared_mutex callbacks_mutex_;
+	// Reload notification (plain mutex — callbacks are low-frequency)
+	mutable std::mutex callbacks_mutex_;
 	std::vector<std::pair<int, ReloadCallback>> callbacks_;
 	int next_callback_id_ = 1;
 	std::atomic<bool> reloading_{false};

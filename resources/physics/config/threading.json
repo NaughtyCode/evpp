@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "threadPriority": "high",
+  "affinityMask": 0,
+  "commandQueueSize": 256,
+  "resultQueueSize": 64,
+  "maxPendingFrames": 3,
+  "jobSystemMaxJobs": 2048,
+  "jobSystemMaxBarriers": 8,
+  "jobSystemThreadCount": -1
+}
