@@ -2,6 +2,7 @@
 
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -37,6 +38,11 @@ class ENGINE_API ScriptImporter {
 	void ClearCache(lua_State* L);
 
 	private:
+	struct ModuleGlobals {
+		std::string module_name;
+		std::vector<std::string> global_keys;
+	};
+
 	static std::string ModuleToPath(std::string_view name);
 	std::string FindModule(std::string_view name) const;
 	std::string FindDir(std::string_view dir_name) const;
@@ -46,8 +52,16 @@ class ENGINE_API ScriptImporter {
 
 	std::string FormatImportStack() const;
 
+	// Snapshot all keys in the global table _G.
+	static std::vector<std::string> SnapshotGlobalKeys(lua_State* L);
+
+	// Track new globals set by a module and warn about global pollution.
+	void TrackNewGlobals(lua_State* L, const std::string& module_name,
+						 const std::vector<std::string>& before);
+
 	std::vector<std::string> search_paths_;
 	std::unordered_set<std::string> importing_;
+	std::unordered_map<std::string, ModuleGlobals> module_globals_;
 };
 
 }  // namespace engine
