@@ -12,6 +12,7 @@
 
 #include <csignal>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <memory>
 #include <stdexcept>
@@ -131,11 +132,14 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 
 	ENGINE_PROFILE_SCOPE("engine", "Init");
 
-	ENGINE_LOG_INFO(logger,
-					"engine initializing, environment=[{}], resource_dir=[{}], "
+	{
+		auto sc = ConfigManager::Instance().GetServerConfig();
+		ENGINE_LOG_INFO(logger,
+					"engine initializing, instance=[{}], environment=[{}], resource_dir=[{}], "
 					"log_dir=[{}], log_level=[{}], "
 					"runtime_scripts_dir=[{}], entry_scripts_dir=[{}], "
 					"frame_interval=[{}ms], library_mode=[{}]",
+					sc.instance.id.empty() ? "(unset)" : sc.instance.id,
 					runtime_cfg.environment,
 					runtime_cfg.resource_dir,
 					runtime_cfg.log.dir,
@@ -144,6 +148,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 					entry_scripts_dir,
 					runtime_cfg.frame.interval_ms,
 					(external_loop != nullptr));
+		}
 
 	ENGINE_LOG_INFO(logger, "creating TimerManager...");
 	timer_mgr_ = std::make_unique<TimerManager>();
@@ -511,26 +516,65 @@ void Engine::Cleanup() {
 
 	if (cleaned_up_.exchange(true)) return;
 
+	auto cleanup_start = std::chrono::steady_clock::now();
+	auto server_cfg = ConfigManager::Instance().GetServerConfig();
+	int shutdown_timeout = server_cfg.shutdown_timeout_sec;
+	int drain_timeout = server_cfg.connection_drain_timeout_sec;
+
+	auto* logger = GetLogger();
+	ENGINE_LOG_INFO(logger,
+	                "Cleanup: starting, shutdown_timeout={}s, drain_timeout={}s",
+	                shutdown_timeout, drain_timeout);
+
+	auto check_timeout = [&](const char* phase_name) -> bool {
+		auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+			std::chrono::steady_clock::now() - cleanup_start).count();
+		if (shutdown_timeout > 0 && elapsed > shutdown_timeout) {
+			auto* log = GetLogger();
+			ENGINE_LOG_CRITICAL(log,
+			                    "Cleanup: timeout after {}s at phase {}, force-exiting",
+			                    elapsed, phase_name);
+			std::quick_exit(EXIT_FAILURE);
+		}
+		return true;
+	};
+
 	cleanup_phase_ = CleanupPhase::PhysicsShutdown;
 	PhysicsEngineBridge::Instance().Shutdown();
 	// Stop hot-reload before any VM teardown to prevent watcher thread from accessing Lua state.
 	if (script_reloader_) {
 		script_reloader_->Stop();
 	}
+	check_timeout("PhysicsShutdown");
 
 	cleanup_phase_ = CleanupPhase::DatabaseShutdown;
 #if defined(ENGINE_MONGODB_ENABLED)
 	DatabaseService::Instance().Shutdown();
 	mongo::MongoSystem::Instance().Shutdown();
 #endif
+	check_timeout("DatabaseShutdown");
 
 	if (frame_timer_) {
 		frame_timer_->Cancel();
 		frame_timer_.reset();
 	}
 
-
 	admin_server_.Stop();
+
+	// ── Connection draining ──────────────────────────────────────────
+	// The event loop has already stopped, so no new connections are being
+	// accepted.  Give in-flight work a grace window to complete before we
+	// tear down the network layer.
+	{
+		auto drain_deadline = std::chrono::steady_clock::now()
+			+ std::chrono::seconds(drain_timeout > 0 ? drain_timeout : 5);
+		ENGINE_LOG_INFO(logger, "Cleanup: draining connections ({}s timeout)...", drain_timeout);
+
+		while (std::chrono::steady_clock::now() < drain_deadline) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		}
+		ENGINE_LOG_INFO(logger, "Cleanup: drain phase complete, proceeding to network shutdown");
+	}
 
 	cleanup_phase_ = CleanupPhase::NetworkShutdown;
 	assert(script_vm_ != nullptr);
@@ -538,6 +582,7 @@ void Engine::Cleanup() {
 		script::ShutdownRpcBindings(*script_vm_);
 		script::ShutdownNetBindings();
 	}
+	check_timeout("NetworkShutdown");
 
 	cleanup_phase_ = CleanupPhase::TimerShutdown;
 	assert(script_vm_ != nullptr);
@@ -547,23 +592,22 @@ void Engine::Cleanup() {
 	if (script_vm_) {
 		script::ShutdownTimerBindings(*script_vm_);
 	}
+	check_timeout("TimerShutdown");
 
 	cleanup_phase_ = CleanupPhase::ScriptDestroyed;
 	if (script_vm_) {
 		script_vm_->DestroyScript();
 		int mem_kb = lua_gc(script_vm_->GetState(), LUA_GCCOUNT, 0);
-		auto* logger = GetLogger();
 		ENGINE_LOG_INFO(logger, "ScriptVM: final memory [{} KB], exiting", mem_kb);
 	}
 	script_vm_.reset();
-	
+
 	if (timer_mgr_) {
 		timer_mgr_->shutdown();
 		timer_mgr_.reset();
 	}
 
 	cleanup_phase_ = CleanupPhase::FinalLogs;
-	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "timer manager shut down");
 
 	sigint_watcher_.reset();
@@ -579,6 +623,10 @@ void Engine::Cleanup() {
 		ProfilerManager::Get().SaveTrace();
 		ProfilerManager::Get().Shutdown();
 	}
+
+	auto total_elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+		std::chrono::steady_clock::now() - cleanup_start).count();
+	ENGINE_LOG_INFO(logger, "Cleanup: complete, total_time={}s", total_elapsed);
 
 	cleanup_phase_ = CleanupPhase::Complete;
 	ShutdownLogger();

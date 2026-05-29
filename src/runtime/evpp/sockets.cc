@@ -319,6 +319,70 @@ void SetTimeout(evpp_socket_t fd, const Duration& timeout) {
 	SetTimeout(fd, (uint32_t) (timeout.Milliseconds()));
 }
 
+void SetKeepAlive(evpp_socket_t fd, bool on, int idle_sec, int interval_sec, int count) {
+    SetKeepAlive(fd, on);
+
+    if (!on) return;
+    if (idle_sec <= 0 && interval_sec <= 0 && count <= 0) return;
+
+#ifdef H_OS_WINDOWS
+    // Windows: SIO_KEEPALIVE_VALS with WSAIoctl
+    struct tcp_keepalive {
+        u_long onoff;
+        u_long keepalivetime;
+        u_long keepaliveinterval;
+    };
+    tcp_keepalive kalive;
+    kalive.onoff = 1;
+    kalive.keepalivetime = idle_sec > 0 ? static_cast<u_long>(idle_sec) * 1000 : 7200000;
+    kalive.keepaliveinterval = interval_sec > 0 ? static_cast<u_long>(interval_sec) * 1000 : 1000;
+    DWORD bytes = 0;
+    if (WSAIoctl(fd, SIO_KEEPALIVE_VALS, &kalive, sizeof(kalive),
+                 nullptr, 0, &bytes, nullptr, nullptr) != 0) {
+        int serrno = EVPP_ERRNO;
+        ENGINE_LOG_ERROR(engine::GetLogger(),
+                         "WSAIoctl(SIO_KEEPALIVE_VALS) failed, errno={} {}",
+                         serrno, strerror(serrno));
+    }
+#else
+#ifdef H_OS_MACOSX
+    if (idle_sec > 0) {
+        if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &idle_sec, sizeof(idle_sec)) != 0) {
+            int serrno = EVPP_ERRNO;
+            ENGINE_LOG_ERROR(engine::GetLogger(),
+                             "setsockopt(TCP_KEEPALIVE) failed, errno={} {}",
+                             serrno, strerror(serrno));
+        }
+    }
+#else
+    if (idle_sec > 0) {
+        if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle_sec, sizeof(idle_sec)) != 0) {
+            int serrno = EVPP_ERRNO;
+            ENGINE_LOG_ERROR(engine::GetLogger(),
+                             "setsockopt(TCP_KEEPIDLE) failed, errno={} {}",
+                             serrno, strerror(serrno));
+        }
+    }
+#endif
+    if (interval_sec > 0) {
+        if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &interval_sec, sizeof(interval_sec)) != 0) {
+            int serrno = EVPP_ERRNO;
+            ENGINE_LOG_ERROR(engine::GetLogger(),
+                             "setsockopt(TCP_KEEPINTVL) failed, errno={} {}",
+                             serrno, strerror(serrno));
+        }
+    }
+    if (count > 0) {
+        if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &count, sizeof(count)) != 0) {
+            int serrno = EVPP_ERRNO;
+            ENGINE_LOG_ERROR(engine::GetLogger(),
+                             "setsockopt(TCP_KEEPCNT) failed, errno={} {}",
+                             serrno, strerror(serrno));
+        }
+    }
+#endif
+}
+
 void SetKeepAlive(evpp_socket_t fd, bool on) {
 	int optval = on ? 1 : 0;
 	int rc = ::setsockopt(fd,

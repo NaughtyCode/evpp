@@ -18,6 +18,7 @@
 
 extern "C" {
 #include "lauxlib.h"
+#include "runtime/config/config.h"
 #include "runtime/config/limits.h"
 }
 
@@ -160,9 +161,11 @@ int l_kcp_client_send(lua_State* L) {
 	size_t len = 0;
 
 	const char* data = luaL_checklstring(L, 2, &len);
-		if (len > engine::ResourceLimits::kDefaultMaxMessageSize) {
-			return luaL_error(L, "message size %zu exceeds limit %u",
-					 len, engine::ResourceLimits::kDefaultMaxMessageSize);
+		{
+			uint32_t limit = ConfigManager::Instance().GetServerConfig().resource_limits.max_message_size;
+			if (len > limit) {
+				return luaL_error(L, "message size %zu exceeds limit %u", len, limit);
+			}
 		}
 
 	bool ok = ctx->client->Send(data, len);

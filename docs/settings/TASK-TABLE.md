@@ -16,7 +16,7 @@
 | 5 | `observability-tooling` | P2 | #1 | **done** | 2026-05-29 |
 | 6 | `hotreload-consumer-fix` | P0 | #1, #3 | **done** | 2026-05-29 |
 | 7 | `runtime-environment-selection` | P0 | #1, #6 | **done** | 2026-05-29 |
-| 8 | `server-operations` | P1 | #1, #3, #6 | pending | — |
+| 8 | `server-operations` | P1 | #1, #3, #6 | **done** | 2026-05-29 |
 | 9 | `game-business-config` | P1 | #1, #6 | pending | — |
 | 10 | `health-check-probes` | P0 | #1, #7 | pending | — |
 | 11 | `config-manager-unification` | P1 | #1, #3, #2 | pending | — |
@@ -49,4 +49,4 @@
 | 2026-05-29 | A | #1 `core-validation-fix`, #2 `physics-config-fix` |
 | 2026-05-29 | B | #3 `thread-safety-fix`, #4 `secrets-management`, #5 `observability-tooling` |
 | 2026-05-29 | C | #6 `hotreload-consumer-fix` |
-| 2026-05-29 | D | #7 `runtime-environment-selection` |
+| 2026-05-29 | D | #7 `runtime-environment-selection`, #8 `server-operations` |

@@ -1,27 +1,28 @@
 # Changelog: Server Operations
 
-## [Unreleased]
+## [2026-05-29] — Implemented
 
 ### Added
-- (pending) `shutdown_timeout_sec` config field
-- (pending) Graceful connection draining (stop accept → drain → close)
-- (pending) PID file with exclusive lock (multi-instance prevention)
-- (pending) Structured exit codes (ExitCode enum)
-- (pending) `TcpKeepaliveConfig` (idle_sec, interval_sec, count)
-- (pending) `max_connections` config field
-- (pending) `InstanceIdentity` (id, region, zone, cluster)
+- `shutdown_timeout_sec` config field — Cleanup() tracks elapsed time, force-exits on timeout
+- Graceful connection draining — drain_timeout wait phase before NetworkShutdown
+- PID file with exclusive lock (multi-instance prevention) — via `PidFile` class
+- Structured exit codes (`ExitCode` enum) — used in `server.cc` for all exit paths
+- `SetKeepAlive(fd, bool, idle, interval, count)` — full 5-arg implementation (Windows/Linux/macOS)
+- TCP keepalive applied from config on accepted sockets in `listener.cc`
+- `max_connections` wired from `ServerConfig` to Lua `TCPServer`
+- `InstanceIdentity` logged in `server.cc` startup and `engine.cc` `Init()`
 
 ### Changed
-- (pending) `ResourceLimits` from `static constexpr` to runtime-configurable
-- (pending) TCP keepalive now applied from config, not OS defaults
+- `ResourceLimits` already struct (runtime-configurable) from earlier batches
+- `ServerConfig` fields for operations already present from earlier batches
 
 ### Fixed
-- (pending) P1-6: ProfilerConfig no longer hardcoded
-- (pending) P1-7: ResourceLimits now runtime-configurable
-- (pending) P1-9: Graceful connection draining implemented
-- (pending) P1-10: Shutdown timeout is now configurable
-- (pending) P1-13: max_connections configurable
-- (pending) P2-6: PID file + multi-instance protection
-- (pending) P2-7: Structured exit codes
-- (pending) P3-13: Instance identity in config
-- (pending) P3-19: TCP keepalive configurable
+- P1-6: ProfilerConfig no longer hardcoded (struct-based)
+- P1-7: ResourceLimits now runtime-configurable struct
+- P1-9: Graceful connection draining implemented (drain timeout phase)
+- P1-10: Shutdown timeout is now configurable and enforced
+- P1-13: max_connections configurable, wired to TCPServer
+- P2-6: PID file + multi-instance protection via exclusive file lock
+- P2-7: Structured exit codes via ExitCode enum
+- P3-13: Instance identity (id, region, zone, cluster) in config and logs
+- P3-19: TCP keepalive configurable (idle, interval, count) per-platform

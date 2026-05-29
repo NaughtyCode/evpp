@@ -10,6 +10,7 @@
 #include <cstdlib>
 
 #include "runtime/config/config_constants.h"
+#include "runtime/config/limits.h"
 #include "runtime/core/engine_api.h"
 
 namespace engine {
@@ -37,6 +38,23 @@ inline Environment EnvironmentFromEnvVar() {
     if (val && val[0] != '\0') return ParseEnvironment(val);
     return Environment::development;
 }
+
+// ── TCP keepalive config ──
+
+struct TcpKeepaliveConfig {
+    int idle_sec     = config::kDefaultTcpKeepaliveIdleSec;
+    int interval_sec = config::kDefaultTcpKeepaliveIntervalSec;
+    int count        = config::kDefaultTcpKeepaliveCount;
+};
+
+// ── Instance identity (multi-instance / cluster awareness) ──
+
+struct InstanceIdentity {
+    std::string id;       // e.g. "game-server-01"
+    std::string region;   // e.g. "us-east-1"
+    std::string zone;     // e.g. "us-east-1a"
+    std::string cluster;  // e.g. "primary"
+};
 
 // Forward declarations
 struct DbServiceConfig;
@@ -223,6 +241,31 @@ struct ServerConfig {
 	// which MongoDB cluster to use ("dev" or "public"), overriding the
 	// environment-based default. Empty (default) = use environment.
 	std::string active_mongodb;  // "dev", "public", or "" (auto)
+
+	// ── Server operations (Task 8) ──────────────────────────────────
+
+	// Graceful shutdown timeout in seconds. Cleanup phases that exceed
+	// this limit are force-terminated.
+	int shutdown_timeout_sec = config::kDefaultShutdownTimeoutSec;
+
+	// Connection drain timeout in seconds. After stop-accepting,
+	// existing connections get this window to finish in-flight work.
+	int connection_drain_timeout_sec = config::kDefaultConnectionDrainTimeoutSec;
+
+	// Maximum concurrent TCP connections (0 = unlimited).
+	int max_connections = config::kDefaultMaxConnections;
+
+	// PID file path (relative to working dir). Empty = no PID file.
+	std::string pid_file = config::kDefaultPidFile;
+
+	// TCP keepalive parameters. Zero values mean "use OS default".
+	TcpKeepaliveConfig tcp_keepalive;
+
+	// Resource limits — runtime-configurable, overriding compile-time defaults.
+	ResourceLimits resource_limits;
+
+	// Instance identity for multi-instance / cluster deployments.
+	InstanceIdentity instance;
 };
 
 // ConfigManager — loads configs from JSON files at startup

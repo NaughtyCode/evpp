@@ -1,7 +1,7 @@
 # Task 8: Server Operations
 
 **Priority:** P1 — production readiness
-**Status:** pending
+**Status:** done
 **Dependencies:** Task 1 (core-validation-fix), Task 2 (thread-safety-fix), Task 3 (hotreload-consumer-fix)
 
 ## Scope

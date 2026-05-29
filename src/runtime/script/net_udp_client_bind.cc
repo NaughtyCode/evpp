@@ -18,6 +18,7 @@
 #include "runtime/script/bind_util.h"
 
 extern "C" {
+#include "runtime/config/config.h"
 #include "runtime/config/limits.h"
 #include "lauxlib.h"
 }
@@ -86,9 +87,11 @@ int l_udp_client_send(lua_State* L) {
 	size_t len = 0;
 	const char* data = luaL_checklstring(L, 2, &len);
 
-		if (len > engine::ResourceLimits::kDefaultMaxMessageSize) {
-			return luaL_error(L, "message size %zu exceeds limit %u",
-					 len, engine::ResourceLimits::kDefaultMaxMessageSize);
+		{
+			uint32_t limit = ConfigManager::Instance().GetServerConfig().resource_limits.max_message_size;
+			if (len > limit) {
+				return luaL_error(L, "message size %zu exceeds limit %u", len, limit);
+			}
 		}
 
 	bool ok = ctx->client->Send(data, len);
@@ -208,9 +211,11 @@ int l_udp_client_send_to(lua_State* L) {
 	size_t len = 0;
 	const char* data = luaL_checklstring(L, 3, &len);
 
-		if (len > engine::ResourceLimits::kDefaultMaxMessageSize) {
-			return luaL_error(L, "message size %zu exceeds limit %u",
-					 len, engine::ResourceLimits::kDefaultMaxMessageSize);
+		{
+			uint32_t limit = ConfigManager::Instance().GetServerConfig().resource_limits.max_message_size;
+			if (len > limit) {
+				return luaL_error(L, "message size %zu exceeds limit %u", len, limit);
+			}
 		}
 
 	evpp::udp::sync::Client tmp;

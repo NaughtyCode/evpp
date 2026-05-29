@@ -2,26 +2,27 @@
 
 #include <cstdint>
 
+#include "runtime/config/config_constants.h"
+
 namespace engine {
 
-/* Resource limits for DoS prevention — configurable per subsystem.
+/* Resource limits for DoS prevention — runtime-configurable.
  *
  * These defaults are conservative for a production game server.
- * Raise them via config if your workload requires larger payloads. */
+ * Override via server.json → resource_limits section. */
 struct ResourceLimits {
-    /* Maximum size of a single network message on send (bytes).
-     * Matches LengthPrefixedCodec default for TCP; also applies to UDP/KCP. */
-    static constexpr uint32_t kDefaultMaxMessageSize = 64 * 1024;       /* 64 KiB */
+    /* Maximum size of a single network message on send (bytes). */
+    uint32_t max_message_size     = config::kDefaultMaxMessageSize;
 
     /* Maximum total Buffer capacity per connection (bytes).
      * When reached, the connection stops reading new data. */
-    static constexpr uint32_t kDefaultMaxBufferCapacity = 256 * 1024;   /* 256 KiB */
+    uint32_t max_buffer_capacity  = config::kDefaultMaxBufferCapacity;
 
     /* Maximum HTTP POST body size (bytes). */
-    static constexpr uint32_t kDefaultMaxHttpBodySize = 10 * 1024 * 1024; /* 10 MiB */
+    uint32_t max_http_body_size   = config::kDefaultMaxHttpBodySize;
 
     /* Maximum msgpack nesting depth for encode operations. */
-    static constexpr uint32_t kDefaultMaxMsgpackDepth = 64;
+    uint32_t max_msgpack_depth    = config::kDefaultMaxMsgpackDepth;
 };
 
 }  // namespace engine

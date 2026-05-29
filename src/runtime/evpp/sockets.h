@@ -16,6 +16,7 @@ namespace sock {
 EVPP_EXPORT evpp_socket_t CreateNonblockingSocket();
 EVPP_EXPORT evpp_socket_t CreateUDPServer(int port);
 EVPP_EXPORT void SetKeepAlive(evpp_socket_t fd, bool on);
+EVPP_EXPORT void SetKeepAlive(evpp_socket_t fd, bool on, int idle_sec, int interval_sec, int count);
 EVPP_EXPORT void SetReuseAddr(evpp_socket_t fd);
 EVPP_EXPORT void SetReusePort(evpp_socket_t fd);
 EVPP_EXPORT void SetTCPNoDelay(evpp_socket_t fd, bool on);

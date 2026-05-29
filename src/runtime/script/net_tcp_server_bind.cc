@@ -338,6 +338,14 @@ int l_net_server_listen(lua_State* L) {
 		std::string("lua_server_") + std::to_string(reinterpret_cast<uintptr_t>(ctx)),
 		0);
 
+	// Apply connection limit from server config.
+	{
+		int max_conn = ConfigManager::Instance().GetServerConfig().max_connections;
+		if (max_conn > 0) {
+			ctx->server->SetMaxConnections(static_cast<uint32_t>(max_conn));
+		}
+	}
+
 	auto* L_ptr = L;
 	int server_inst_ref = ctx->instance_ref;
 	ServerCtx* ctx_ptr = ctx;

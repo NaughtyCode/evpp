@@ -3,6 +3,7 @@
 #include <chrono>
 #include <thread>
 
+#include "runtime/config/config.h"
 #include "runtime/evpp/event_loop.h"
 #include "runtime/evpp/fd_channel.h"
 #include "runtime/evpp/inner_pre.h"
@@ -93,7 +94,13 @@ void Listener::HandleAccept() {
 		return;
 	}
 
-	sock::SetKeepAlive(nfd, true);
+	{
+		auto sc = engine::ConfigManager::Instance().GetServerConfig();
+		sock::SetKeepAlive(nfd, true,
+		                   sc.tcp_keepalive.idle_sec,
+		                   sc.tcp_keepalive.interval_sec,
+		                   sc.tcp_keepalive.count);
+	}
 
 	std::string raddr = sock::ToIPPort(&ss);
 	if (raddr.empty()) {
