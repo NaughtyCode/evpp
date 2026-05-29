@@ -18,7 +18,7 @@ namespace auth {
 class AuthBackend;
 
 // Manages authenticated sessions — create, validate, revoke.
-class ENGINE_API SessionManager {
+class CLOUD_ENGINE_API SessionManager {
 public:
 	static SessionManager& Instance();
 

@@ -23,7 +23,7 @@ const char* kMetaName = "mongoc.database";
 int l_db_gc(lua_State* L) {
 	auto* db = GetUserdata<mongo::MongoDatabase>(L, 1, kMetaName);
 	if (db) db->Destroy();
-	MEM_DELETE(db);
+	CLOUDENGINE_MEM_DELETE(db);
 	*CheckUserdata<mongo::MongoDatabase>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
@@ -112,7 +112,7 @@ int l_db_command_simple(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
+		auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -250,7 +250,7 @@ int l_db_command_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
+		auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -349,7 +349,7 @@ int l_db_read_command_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
+		auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -381,7 +381,7 @@ int l_db_write_command_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
+		auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -460,7 +460,7 @@ int l_db_read_write_command_with_opts(lua_State* L) {
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
+		auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);

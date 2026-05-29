@@ -31,7 +31,7 @@ enum class MessagePriority {
 	kLow = 3,
 };
 
-class EVPP_EXPORT TCPConn : public std::enable_shared_from_this<TCPConn> {
+class CLOUD_ENGINE_API TCPConn : public std::enable_shared_from_this<TCPConn> {
 	public:
 	enum Type {
 		kIncoming = 0,	// The type of a TCPConn held by a TCPServer

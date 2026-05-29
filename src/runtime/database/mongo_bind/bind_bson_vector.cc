@@ -17,13 +17,13 @@ const char* kVi8cMeta = "bson.vector_int8_const";
 
 int l_vi8c_gc(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorInt8ConstView>(L, 1, kVi8cMeta);
-	MEM_DELETE(v);
+	CLOUDENGINE_MEM_DELETE(v);
 	*CheckUserdata<mongo::BsonVectorInt8ConstView>(L, 1, kVi8cMeta) = nullptr;
 	return 0;
 }
 
 int l_vi8c_new(lua_State* L) {
-	auto* v = MEM_NEW_NOTHROW(mongo::BsonVectorInt8ConstView);
+	auto* v = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonVectorInt8ConstView);
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -99,13 +99,13 @@ const char* kVi8Meta = "bson.vector_int8";
 
 int l_vi8_gc(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorInt8View>(L, 1, kVi8Meta);
-	MEM_DELETE(v);
+	CLOUDENGINE_MEM_DELETE(v);
 	*CheckUserdata<mongo::BsonVectorInt8View>(L, 1, kVi8Meta) = nullptr;
 	return 0;
 }
 
 int l_vi8_new(lua_State* L) {
-	auto* v = MEM_NEW_NOTHROW(mongo::BsonVectorInt8View);
+	auto* v = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonVectorInt8View);
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -170,7 +170,7 @@ int l_vi8_as_const(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* cv = MEM_NEW_NOTHROW(mongo::BsonVectorInt8ConstView, v->AsConst());
+	auto* cv = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonVectorInt8ConstView, v->AsConst());
 	if (!cv) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -210,13 +210,13 @@ const char* kVf32cMeta = "bson.vector_float32_const";
 
 int l_vf32c_gc(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorFloat32ConstView>(L, 1, kVf32cMeta);
-	MEM_DELETE(v);
+	CLOUDENGINE_MEM_DELETE(v);
 	*CheckUserdata<mongo::BsonVectorFloat32ConstView>(L, 1, kVf32cMeta) = nullptr;
 	return 0;
 }
 
 int l_vf32c_new(lua_State* L) {
-	auto* v = MEM_NEW_NOTHROW(mongo::BsonVectorFloat32ConstView);
+	auto* v = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonVectorFloat32ConstView);
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -296,13 +296,13 @@ const char* kVf32Meta = "bson.vector_float32";
 
 int l_vf32_gc(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorFloat32View>(L, 1, kVf32Meta);
-	MEM_DELETE(v);
+	CLOUDENGINE_MEM_DELETE(v);
 	*CheckUserdata<mongo::BsonVectorFloat32View>(L, 1, kVf32Meta) = nullptr;
 	return 0;
 }
 
 int l_vf32_new(lua_State* L) {
-	auto* v = MEM_NEW_NOTHROW(mongo::BsonVectorFloat32View);
+	auto* v = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonVectorFloat32View);
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -380,7 +380,7 @@ int l_vf32_as_const(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* cv = MEM_NEW_NOTHROW(mongo::BsonVectorFloat32ConstView, v->AsConst());
+	auto* cv = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonVectorFloat32ConstView, v->AsConst());
 	if (!cv) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -420,13 +420,13 @@ const char* kVpbMeta = "bson.vector_packedbit_const";
 
 int l_vpb_gc(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorPackedBitConstView>(L, 1, kVpbMeta);
-	MEM_DELETE(v);
+	CLOUDENGINE_MEM_DELETE(v);
 	*CheckUserdata<mongo::BsonVectorPackedBitConstView>(L, 1, kVpbMeta) = nullptr;
 	return 0;
 }
 
 int l_vpb_new(lua_State* L) {
-	auto* v = MEM_NEW_NOTHROW(mongo::BsonVectorPackedBitConstView);
+	auto* v = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonVectorPackedBitConstView);
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -496,7 +496,7 @@ int l_vpb_unpack_bool(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* buf = MEM_NEW_ARR_NOTHROW(bool, count);
+	auto* buf = CLOUDENGINE_MEM_NEW_ARR_NOTHROW(bool, count);
 	if (!buf) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -512,7 +512,7 @@ int l_vpb_unpack_bool(lua_State* L) {
 	} else {
 		lua_pushnil(L);
 	}
-	MEM_DELETE_ARR(buf);
+	CLOUDENGINE_MEM_DELETE_ARR(buf);
 	return 1;
 }
 
@@ -545,13 +545,13 @@ const char* kVpbwMeta = "bson.vector_packedbit";
 
 int l_vpbw_gc(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorPackedBitView>(L, 1, kVpbwMeta);
-	MEM_DELETE(v);
+	CLOUDENGINE_MEM_DELETE(v);
 	*CheckUserdata<mongo::BsonVectorPackedBitView>(L, 1, kVpbwMeta) = nullptr;
 	return 0;
 }
 
 int l_vpbw_new(lua_State* L) {
-	auto* v = MEM_NEW_NOTHROW(mongo::BsonVectorPackedBitView);
+	auto* v = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonVectorPackedBitView);
 	if (!v) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -621,7 +621,7 @@ int l_vpbw_unpack_bool(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* buf = MEM_NEW_ARR_NOTHROW(bool, count);
+	auto* buf = CLOUDENGINE_MEM_NEW_ARR_NOTHROW(bool, count);
 	if (!buf) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -637,7 +637,7 @@ int l_vpbw_unpack_bool(lua_State* L) {
 	} else {
 		lua_pushnil(L);
 	}
-	MEM_DELETE_ARR(buf);
+	CLOUDENGINE_MEM_DELETE_ARR(buf);
 	return 1;
 }
 
@@ -658,7 +658,7 @@ int l_vpbw_pack_bool(lua_State* L) {
 	}
 	auto count = static_cast<size_t>(luaL_len(L, 2));
 	auto offset = static_cast<size_t>(luaL_optinteger(L, 3, 0));
-	auto* buf = MEM_NEW_ARR_NOTHROW(bool, count);
+	auto* buf = CLOUDENGINE_MEM_NEW_ARR_NOTHROW(bool, count);
 	if (!buf) {
 		lua_pushboolean(L, false);
 		return 1;
@@ -669,7 +669,7 @@ int l_vpbw_pack_bool(lua_State* L) {
 		lua_pop(L, 1);
 	}
 	lua_pushboolean(L, v->PackBool(buf, count, offset));
-	MEM_DELETE_ARR(buf);
+	CLOUDENGINE_MEM_DELETE_ARR(buf);
 	return 1;
 }
 
@@ -679,7 +679,7 @@ int l_vpbw_as_const(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* cv = MEM_NEW_NOTHROW(mongo::BsonVectorPackedBitConstView, v->AsConst());
+	auto* cv = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonVectorPackedBitConstView, v->AsConst());
 	if (!cv) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

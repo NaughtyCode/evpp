@@ -487,20 +487,20 @@ struct MongoBulkWrite::Impl {
 };
 
 MongoBulkWrite* MongoBulkWrite::New(void* raw_client) {
-	auto* b = MEM_NEW(MongoBulkWrite);
+	auto* b = CLOUDENGINE_MEM_NEW(MongoBulkWrite);
 	b->impl_->bw = mongoc_client_bulkwrite_new(static_cast<mongoc_client_t*>(raw_client));
 	if (!b->impl_->bw) {
-		MEM_DELETE(b);
+		CLOUDENGINE_MEM_DELETE(b);
 		return nullptr;
 	}
 	return b;
 }
 
 MongoBulkWrite* MongoBulkWrite::New() {
-	auto* b = MEM_NEW(MongoBulkWrite);
+	auto* b = CLOUDENGINE_MEM_NEW(MongoBulkWrite);
 	b->impl_->bw = mongoc_bulkwrite_new();
 	if (!b->impl_->bw) {
-		MEM_DELETE(b);
+		CLOUDENGINE_MEM_DELETE(b);
 		return nullptr;
 	}
 	return b;
@@ -518,7 +518,7 @@ void MongoBulkWrite::Destroy() {
 		mongoc_bulkwrite_destroy(impl_->bw);
 		impl_->bw = nullptr;
 	}
-	MEM_DELETE(this);
+	CLOUDENGINE_MEM_DELETE(this);
 }
 
 bool MongoBulkWrite::AppendInsertOne(const char* ns,
@@ -613,7 +613,7 @@ MongoBulkWriteReturn MongoBulkWrite::Execute(const MongoBulkWriteOpts* opts) {
 		impl_->bw, opts ? static_cast<const mongoc_bulkwriteopts_t*>(opts->Raw()) : nullptr);
 
 	if (raw_ret.res) {
-		auto* result = MEM_NEW_NOTHROW(MongoBulkWriteResult);
+		auto* result = CLOUDENGINE_MEM_NEW_NOTHROW(MongoBulkWriteResult);
 		if (result) {
 			result->SetRaw(raw_ret.res);
 			ret.result = result;
@@ -622,7 +622,7 @@ MongoBulkWriteReturn MongoBulkWrite::Execute(const MongoBulkWriteOpts* opts) {
 		}
 	}
 	if (raw_ret.exc) {
-		auto* exc = MEM_NEW_NOTHROW(MongoBulkWriteException);
+		auto* exc = CLOUDENGINE_MEM_NEW_NOTHROW(MongoBulkWriteException);
 		if (exc) {
 			exc->SetRaw(raw_ret.exc);
 			ret.exception = exc;

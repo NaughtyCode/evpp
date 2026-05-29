@@ -14,7 +14,7 @@ namespace mongo {
 
 // Wraps mongoc-host-list.h — a singly-linked list of host:port entries.
 // Used by server descriptions and topology introspection.
-class ENGINE_API MongoHostList {
+class CLOUD_ENGINE_API MongoHostList {
 	public:
 	MongoHostList();
 	~MongoHostList();

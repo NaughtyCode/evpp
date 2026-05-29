@@ -38,7 +38,7 @@ namespace script {
  *
  * Messages longer than 511 bytes are truncated.
  */
-ENGINE_API int LuaError(lua_State* L, const char* fmt, ...);
+CLOUD_ENGINE_API int LuaError(lua_State* L, const char* fmt, ...);
 
 // Template helpers — eliminate duplicated boilerplate across network bindings
 //

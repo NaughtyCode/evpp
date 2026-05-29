@@ -1,4 +1,4 @@
-﻿#include "runtime/script/entity_bind.h"
+#include "runtime/script/entity_bind.h"
 
 #include <cstdint>
 #include <string>
@@ -55,7 +55,7 @@ int l_entity_create(lua_State* L) {
 						  static_cast<uint64_t>(id));
 	}
 
-	auto* ctx = MEM_NEW(EntityCtx);
+	auto* ctx = CLOUDENGINE_MEM_NEW(EntityCtx);
 	ctx->id = entity->GetId();
 
 	// Build Lua instance table
@@ -102,7 +102,7 @@ int l_entity_destroy(lua_State* L) {
 
 	// Defer delete so pending Lua calls on this entity don't crash
 	// (entity methods re-check ctx->disposed).
-	MEM_DELETE(ctx);
+	CLOUDENGINE_MEM_DELETE(ctx);
 
 	lua_pushboolean(L, 1);
 	return 1;
@@ -462,7 +462,7 @@ int l_entity_gc(lua_State* L) {
 	lua_pushnil(L);
 	lua_setfield(L, 1, "_ctx");
 
-	MEM_DELETE(ctx);
+	CLOUDENGINE_MEM_DELETE(ctx);
 	return 0;
 }
 

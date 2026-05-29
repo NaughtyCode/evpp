@@ -18,13 +18,13 @@ const char* kOptsMeta = "mongoc.structured_log_opts";
 
 int l_log_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoStructuredLogOpts>(L, 1, kOptsMeta);
-	MEM_DELETE(opts);
+	CLOUDENGINE_MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoStructuredLogOpts>(L, 1, kOptsMeta) = nullptr;
 	return 0;
 }
 
 int l_log_opts_new(lua_State* L) {
-	auto* opts = MEM_NEW_NOTHROW(mongo::MongoStructuredLogOpts);
+	auto* opts = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoStructuredLogOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -169,7 +169,7 @@ const char* kEntryMeta = "mongoc.structured_log_entry";
 
 int l_log_entry_gc(lua_State* L) {
 	auto* e = GetUserdata<mongo::MongoStructuredLogEntry>(L, 1, kEntryMeta);
-	MEM_DELETE(e);
+	CLOUDENGINE_MEM_DELETE(e);
 	*CheckUserdata<mongo::MongoStructuredLogEntry>(L, 1, kEntryMeta) = nullptr;
 	return 0;
 }
@@ -182,7 +182,7 @@ int l_log_entry_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* e = MEM_NEW_NOTHROW(mongo::MongoStructuredLogEntry, raw);
+	auto* e = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoStructuredLogEntry, raw);
 	if (!e) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -205,7 +205,7 @@ int l_log_entry_message_as_bson(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

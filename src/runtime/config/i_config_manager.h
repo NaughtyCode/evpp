@@ -16,7 +16,7 @@ struct ValidationResult {
 // Abstract interface for config managers — allows ConfigManager and
 // PhysicsConfigManager to be used polymorphically for loading, reloading,
 // validation, and snapshot/dump.
-class ENGINE_API IConfigManager {
+class CLOUD_ENGINE_API IConfigManager {
 public:
 	virtual ~IConfigManager() = default;
 	virtual bool Load(const std::string& config_dir) = 0;

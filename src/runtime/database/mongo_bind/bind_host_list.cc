@@ -1,4 +1,4 @@
-﻿#if defined(ENGINE_MONGODB_ENABLED)
+#if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo_bind/bind_host_list.h"
 
@@ -15,13 +15,13 @@ const char* kMetaName = "mongoc.host_list";
 
 int l_host_list_gc(lua_State* L) {
 	auto* hl = GetUserdata<mongo::MongoHostList>(L, 1, kMetaName);
-	MEM_DELETE(hl);
+	CLOUDENGINE_MEM_DELETE(hl);
 	*CheckUserdata<mongo::MongoHostList>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
 
 int l_host_list_new(lua_State* L) {
-	auto* hl = MEM_NEW_NOTHROW(mongo::MongoHostList);
+	auto* hl = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoHostList);
 	if (!hl) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

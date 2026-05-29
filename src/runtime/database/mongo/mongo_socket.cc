@@ -18,10 +18,10 @@ struct MongoSocket::Impl {
 };
 
 MongoSocket* MongoSocket::New(int domain, int type, int protocol) {
-	auto* s = MEM_NEW(MongoSocket);
+	auto* s = CLOUDENGINE_MEM_NEW(MongoSocket);
 	s->impl_->sock = mongoc_socket_new(domain, type, protocol);
 	if (!s->impl_->sock) {
-		MEM_DELETE(s);
+		CLOUDENGINE_MEM_DELETE(s);
 		return nullptr;
 	}
 	return s;
@@ -37,14 +37,14 @@ MongoSocket::~MongoSocket() {
 }
 
 void MongoSocket::Destroy() {
-	MEM_DELETE(this);
+	CLOUDENGINE_MEM_DELETE(this);
 }
 
 MongoSocket* MongoSocket::Accept(int64_t expire_at) {
 	if (!impl_ || !impl_->sock) return nullptr;
 	auto* raw = mongoc_socket_accept(impl_->sock, expire_at);
 	if (!raw) return nullptr;
-	auto* result = MEM_NEW_NOTHROW(MongoSocket);
+	auto* result = CLOUDENGINE_MEM_NEW_NOTHROW(MongoSocket);
 	if (!result) {
 		mongoc_socket_destroy(raw);
 		return nullptr;

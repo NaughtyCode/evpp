@@ -15,7 +15,7 @@ class EventLoop;
 
 namespace kcp {
 
-class EVPP_EXPORT Server : public ThreadDispatchPolicy {
+class CLOUD_ENGINE_API Server : public ThreadDispatchPolicy {
 	public:
 	typedef std::function<void(EventLoop*, MessagePtr& msg)> MessageHandler;
 

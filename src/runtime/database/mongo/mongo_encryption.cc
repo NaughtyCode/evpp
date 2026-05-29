@@ -638,12 +638,12 @@ struct MongoClientEncryption::Impl {
 
 MongoClientEncryption* MongoClientEncryption::New(MongoClientEncryptionOpts* opts,
 												  MongoError* error) {
-	auto* e = MEM_NEW(MongoClientEncryption);
+	auto* e = CLOUDENGINE_MEM_NEW(MongoClientEncryption);
 	e->impl_->enc = mongoc_client_encryption_new(
 		opts ? static_cast<mongoc_client_encryption_opts_t*>(opts->Raw()) : nullptr,
 		error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 	if (!e->impl_->enc) {
-		MEM_DELETE(e);
+		CLOUDENGINE_MEM_DELETE(e);
 		return nullptr;
 	}
 	return e;
@@ -660,7 +660,7 @@ void MongoClientEncryption::Destroy() {
 		mongoc_client_encryption_destroy(impl_->enc);
 		impl_->enc = nullptr;
 	}
-	MEM_DELETE(this);
+	CLOUDENGINE_MEM_DELETE(this);
 }
 
 bool MongoClientEncryption::CreateDatakey(const char* kms_provider,
@@ -717,7 +717,7 @@ MongoCursor* MongoClientEncryption::GetKeys(MongoError* error) {
 	mongoc_cursor_t* cursor = mongoc_client_encryption_get_keys(
 		impl_->enc, error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 	if (!cursor) return nullptr;
-	auto* result = MEM_NEW(MongoCursor);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoCursor);
 	result->SetCursor(cursor);
 	return result;
 }

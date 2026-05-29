@@ -33,7 +33,7 @@ namespace evpp {
 // This class is a wrapper of event_base but not only a wrapper.
 // It provides a simple way to run a IO Event driving loop.
 // One thread one loop.
-class EVPP_EXPORT EventLoop : public ServerStatus {
+class CLOUD_ENGINE_API EventLoop : public ServerStatus {
 	public:
 	typedef std::function<void()> Functor;
 

@@ -267,7 +267,7 @@ void Service::HandleRequest(struct evhttp_request* req) {
 					 (void*) req,
 					 req->uri);
 
-	ContextPtr ctx(MEM_NEW(Context, req));
+	ContextPtr ctx(CLOUDENGINE_MEM_NEW(Context, req));
 	ctx->Init();
 
 	if (callbacks_.empty()) {
@@ -325,7 +325,7 @@ void Service::SendReply(const ContextPtr& ctx, const std::string& response_data)
 	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} send reply in working thread", (void*) this);
 
 	// Build the response package in the worker thread
-	std::shared_ptr<Response> response(MEM_NEW(Response, ctx, response_data));
+	std::shared_ptr<Response> response(CLOUDENGINE_MEM_NEW(Response, ctx, response_data));
 
 	auto f = [this, response]() {
 		// In the main HTTP listening thread

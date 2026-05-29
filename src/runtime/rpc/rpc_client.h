@@ -27,7 +27,7 @@ namespace rpc {
 //     3. Call ProcessTimeouts() periodically (done by UpdateRpcBindings).
 //
 //   Without a SendCallback, Call/CallAsync return an error immediately.
-class ENGINE_API RpcClient {
+class CLOUD_ENGINE_API RpcClient {
 public:
 	// Called by the transport layer to serialise and transmit a request.
 	// Receives the full RpcRequest — the transport decides how to encode

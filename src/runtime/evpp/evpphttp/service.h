@@ -13,7 +13,7 @@ typedef std::function<void(const int response_code,
 typedef std::function<void(
 	EventLoop* loop, HttpRequest& ctx, const HTTPSendResponseCallback& respcb)>
 	HTTPRequestCallback;
-class EVPP_EXPORT Service {
+class CLOUD_ENGINE_API Service {
 	private:
 	typedef std::map<std::string /*The uri*/, HTTPRequestCallback> HTTPRequestCallbackMap;
 

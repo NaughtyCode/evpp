@@ -1,4 +1,4 @@
-﻿#include "runtime/script/net_udp_client_bind.h"
+#include "runtime/script/net_udp_client_bind.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -50,7 +50,7 @@ int l_udp_client_connect(lua_State* L) {
 	}
 	int port = static_cast<int>(port64);
 
-	auto* ctx = MEM_NEW(UdpClientCtx);
+	auto* ctx = CLOUDENGINE_MEM_NEW(UdpClientCtx);
 
 	PushInstanceTable(L, ctx, kUdpClientMetaName);
 
@@ -63,7 +63,7 @@ int l_udp_client_connect(lua_State* L) {
 		// Null _ctx before delete so __gc won't read a dangling pointer
 		lua_pushnil(L);
 		lua_setfield(L, -2, "_ctx");
-		MEM_DELETE(ctx);
+		CLOUDENGINE_MEM_DELETE(ctx);
 		lua_pop(L, 1);
 		lua_pushnil(L);
 		lua_pushfstring(L, "udp connect failed: %s:%d", host, port);
@@ -135,7 +135,7 @@ int l_udp_client_close(lua_State* L) {
 	lua_setfield(L, 1, "_ctx");
 
 	ctx->client->Close();
-	MEM_DELETE(ctx);
+	CLOUDENGINE_MEM_DELETE(ctx);
 
 	lua_pushboolean(L, 1);
 	return 1;
@@ -163,7 +163,7 @@ int l_udp_client_gc(lua_State* L) {
 	lua_setfield(L, 1, "_ctx");
 
 	ctx->client->Close();
-	MEM_DELETE(ctx);
+	CLOUDENGINE_MEM_DELETE(ctx);
 
 	return 0;
 }

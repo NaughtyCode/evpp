@@ -19,7 +19,7 @@ namespace mongo {
 // (call Destroy() to release). Operations that only apply to specific stream
 // types (GetFileFd, GetSocket, TlsHandshake, etc.) are safe to call on any
 // stream — the underlying C driver validates the type.
-class ENGINE_API MongoStream {
+class CLOUD_ENGINE_API MongoStream {
 	public:
 	// ── Factory methods ──────────────────────────────────────────────
 

@@ -12,7 +12,7 @@ namespace engine {
 namespace mongo {
 
 // 12-byte MongoDB ObjectId. Binary-compatible with bson_oid_t.
-class ENGINE_API MongoOid {
+class CLOUD_ENGINE_API MongoOid {
 	public:
 	MongoOid();
 	~MongoOid() = default;

@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2024 GameTimerLib
 //
 // TimerManager — the main public API for the GameTimer library.
@@ -50,7 +50,7 @@ inline constexpr TimerId kInvalidTimerId = 0;
 
 // TimerManager — central timer management system
 
-class ENGINE_API TimerManager {
+class CLOUD_ENGINE_API TimerManager {
 	public:
 	// Construction
 
@@ -260,13 +260,13 @@ class ENGINE_API TimerManager {
 		~TimerEntry() {
 			switch (kind) {
 			case Kind::kHrTimer:
-				MEM_DELETE(hrtimer);
+				CLOUDENGINE_MEM_DELETE(hrtimer);
 				break;
 			case Kind::kWheelTimer:
-				MEM_DELETE(wheel_timer);
+				CLOUDENGINE_MEM_DELETE(wheel_timer);
 				break;
 			case Kind::kAlarm:
-				MEM_DELETE(alarm);
+				CLOUDENGINE_MEM_DELETE(alarm);
 				break;
 			}
 		}

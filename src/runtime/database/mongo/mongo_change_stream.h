@@ -12,7 +12,7 @@
 namespace engine {
 namespace mongo {
 
-class ENGINE_API MongoChangeStream {
+class CLOUD_ENGINE_API MongoChangeStream {
 	public:
 	MongoChangeStream();
 	~MongoChangeStream();

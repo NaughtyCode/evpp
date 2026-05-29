@@ -206,17 +206,17 @@ int l_bulkwrite_execute(lua_State* L) {
 		ret.exception->Error(&error);
 		lua_pushnil(L);
 		lua_pushstring(L, error.Message());
-		MEM_DELETE(ret.exception);
-		MEM_DELETE(ret.result);
+		CLOUDENGINE_MEM_DELETE(ret.exception);
+		CLOUDENGINE_MEM_DELETE(ret.result);
 		lua_pushnil(L);
 		return 3;
 	}
 
-	auto* result_doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
+	auto* result_doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!result_doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
-		MEM_DELETE(ret.result);
+		CLOUDENGINE_MEM_DELETE(ret.result);
 		lua_pushnil(L);
 		return 3;
 	}
@@ -227,7 +227,7 @@ int l_bulkwrite_execute(lua_State* L) {
 	lua_pushinteger(L, ret.result ? ret.result->MatchedCount() : 0);
 	lua_pushinteger(L, ret.result ? ret.result->ModifiedCount() : 0);
 	lua_pushinteger(L, ret.result ? ret.result->UpsertedCount() : 0);
-	MEM_DELETE(ret.result);
+	CLOUDENGINE_MEM_DELETE(ret.result);
 	return 6;
 }
 

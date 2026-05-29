@@ -25,7 +25,7 @@ using AOIEventCallback = std::function<void(entity::EntityId observer,
 // AOIManager wraps SpatialGrid with AOI radius tracking and enter/leave events.
 // Each entity has an AOI radius. When entities move, the manager compares
 // visibility sets and fires callbacks for entities that entered or left.
-class ENGINE_API AOIManager {
+class CLOUD_ENGINE_API AOIManager {
 public:
 	explicit AOIManager(std::unique_ptr<SpatialGrid> grid);
 

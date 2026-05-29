@@ -13,7 +13,7 @@ namespace engine {
 namespace mongo {
 
 // Options for creating a GridFS file.
-class ENGINE_API MongoGridFsFileOpts {
+class CLOUD_ENGINE_API MongoGridFsFileOpts {
 	public:
 	MongoGridFsFileOpts();
 	~MongoGridFsFileOpts();
@@ -40,7 +40,7 @@ class ENGINE_API MongoGridFsFileOpts {
 };
 
 // Legacy GridFS file object.
-class ENGINE_API MongoGridFsFile {
+class CLOUD_ENGINE_API MongoGridFsFile {
 	public:
 	void Destroy();
 
@@ -90,7 +90,7 @@ class ENGINE_API MongoGridFsFile {
 };
 
 // List of GridFS files (cursor-like).
-class ENGINE_API MongoGridFsFileList {
+class CLOUD_ENGINE_API MongoGridFsFileList {
 	public:
 	void Destroy();
 
@@ -112,7 +112,7 @@ class ENGINE_API MongoGridFsFileList {
 };
 
 // Legacy GridFS interface (wraps mongoc_gridfs_t).
-class ENGINE_API MongoGridFs {
+class CLOUD_ENGINE_API MongoGridFs {
 	public:
 	void Destroy();
 
@@ -145,7 +145,7 @@ class ENGINE_API MongoGridFs {
 };
 
 // Modern GridFS Bucket API (wraps mongoc_gridfs_bucket_t).
-class ENGINE_API MongoGridFsBucket {
+class CLOUD_ENGINE_API MongoGridFsBucket {
 	public:
 	// Create a new GridFS bucket from a database.
 	static MongoGridFsBucket* New(void* raw_database,

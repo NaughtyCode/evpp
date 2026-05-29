@@ -32,7 +32,7 @@ struct PhysicsFrameResult;
 // and diff packets produced by the physics thread.
 using PhysicsResultHandler = std::function<void(const PhysicsFrameResult&)>;
 
-class ENGINE_API Engine {
+class CLOUD_ENGINE_API Engine {
 	public:
 	static Engine& Instance();
 

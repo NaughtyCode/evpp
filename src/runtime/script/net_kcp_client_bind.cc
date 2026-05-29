@@ -1,4 +1,4 @@
-﻿#include "runtime/script/net_kcp_client_bind.h"
+#include "runtime/script/net_kcp_client_bind.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -51,7 +51,7 @@ int l_kcp_client_new(lua_State* L) {
 		conv = static_cast<uint32_t>(c);
 	}
 
-	auto* ctx = MEM_NEW(KcpClientCtx);
+	auto* ctx = CLOUDENGINE_MEM_NEW(KcpClientCtx);
 	ctx->conv = conv;
 	ctx->client = std::make_unique<evpp::kcp::sync::Client>();
 	ctx->client->SetKcpConv(conv);
@@ -82,7 +82,7 @@ int l_kcp_client_connect_static(lua_State* L) {
 		conv = static_cast<uint32_t>(c);
 	}
 
-	auto* ctx = MEM_NEW(KcpClientCtx);
+	auto* ctx = CLOUDENGINE_MEM_NEW(KcpClientCtx);
 	ctx->conv = conv;
 
 	PushInstanceTable(L, ctx, kKcpClientMetaName);
@@ -95,7 +95,7 @@ int l_kcp_client_connect_static(lua_State* L) {
 		ctx->disposed = true;
 		lua_pushnil(L);
 		lua_setfield(L, -2, "_ctx");
-		MEM_DELETE(ctx);
+		CLOUDENGINE_MEM_DELETE(ctx);
 		lua_pop(L, 1);
 		lua_pushnil(L);
 		lua_pushfstring(L, "kcp connect failed: %s:%d", host, port);
@@ -209,7 +209,7 @@ int l_kcp_client_close(lua_State* L) {
 	lua_setfield(L, 1, "_ctx");
 
 	ctx->client->Close();
-	MEM_DELETE(ctx);
+	CLOUDENGINE_MEM_DELETE(ctx);
 
 	lua_pushboolean(L, 1);
 	return 1;
@@ -286,7 +286,7 @@ int l_kcp_client_gc(lua_State* L) {
 	lua_setfield(L, 1, "_ctx");
 
 	ctx->client->Close();
-	MEM_DELETE(ctx);
+	CLOUDENGINE_MEM_DELETE(ctx);
 
 	return 0;
 }

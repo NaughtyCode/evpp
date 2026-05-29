@@ -12,17 +12,17 @@ Service::Service(const std::string& listen_addr, const std::string& name, uint32
 		};
 }
 bool Service::Init(const ConnectionCallback& cb) {
-	listen_loop_ = MEM_NEW(EventLoop);
+	listen_loop_ = CLOUDENGINE_MEM_NEW(EventLoop);
 	assert(listen_loop_ != nullptr);
-	tcp_srv_ = MEM_NEW(TCPServer, listen_loop_, listen_addr_ /*ip:port*/, name_, thread_num_);
+	tcp_srv_ = CLOUDENGINE_MEM_NEW(TCPServer, listen_loop_, listen_addr_ /*ip:port*/, name_, thread_num_);
 	assert(tcp_srv_ != nullptr);
 	tcp_srv_->SetConnectionCallback(cb);
 	tcp_srv_->SetMessageCallback(
 		std::bind(&Service::OnMessage, this, std::placeholders::_1, std::placeholders::_2));
 	if (!tcp_srv_->Init()) {
-		MEM_DELETE(listen_loop_);
+		CLOUDENGINE_MEM_DELETE(listen_loop_);
 		listen_loop_ = nullptr;
-		MEM_DELETE(tcp_srv_);
+		CLOUDENGINE_MEM_DELETE(tcp_srv_);
 		tcp_srv_ = nullptr;
 		is_stopped_ = true;
 		ENGINE_LOG_WARN(engine::GetLogger(), "tcpserver on {} init failed", listen_addr_);
@@ -37,7 +37,7 @@ bool Service::Start() {
 		ENGINE_LOG_WARN(engine::GetLogger(), "init failed, so not to start");
 		return false;
 	}
-	listen_thr_ = MEM_NEW(std::thread, [listen_loop = listen_loop_]() { listen_loop->Run(); });
+	listen_thr_ = CLOUDENGINE_MEM_NEW(std::thread, [listen_loop = listen_loop_]() { listen_loop->Run(); });
 	assert(listen_thr_ != nullptr);
 	if (!tcp_srv_->Start()) {
 		ENGINE_LOG_WARN(engine::GetLogger(), "tcpserver on {} start failed", listen_addr_);
@@ -51,9 +51,9 @@ Service::~Service() {
 	if (!is_stopped_) {
 		Stop();
 	}
-	MEM_DELETE(listen_thr_);
-	MEM_DELETE(listen_loop_);
-	MEM_DELETE(tcp_srv_);
+	CLOUDENGINE_MEM_DELETE(listen_thr_);
+	CLOUDENGINE_MEM_DELETE(listen_loop_);
+	CLOUDENGINE_MEM_DELETE(tcp_srv_);
 }
 
 void Service::AfterFork() {

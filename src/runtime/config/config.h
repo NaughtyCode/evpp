@@ -393,7 +393,7 @@ struct ServerConfig {
 
 // ConfigManager — loads configs from JSON files at startup
 
-class ENGINE_API ConfigManager : public IConfigManager {
+class CLOUD_ENGINE_API ConfigManager : public IConfigManager {
 	public:
 	static ConfigManager& Instance();
 
@@ -408,7 +408,7 @@ class ENGINE_API ConfigManager : public IConfigManager {
 	ConfigManager& operator=(const ConfigManager&) = delete;
 
 	// Destructor defined in config.cc where FileWatcher is complete.
-	// Required because ENGINE_API forces destructor generation in every TU
+	// Required because CLOUD_ENGINE_API forces destructor generation in every TU
 	// that includes this header, and unique_ptr<FileWatcher> needs the
 	// complete type.
 	~ConfigManager();

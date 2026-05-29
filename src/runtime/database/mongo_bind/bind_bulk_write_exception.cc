@@ -19,13 +19,13 @@ const char* kMetaName = "mongoc.bulk_write_exception";
 
 int l_bulk_write_exc_gc(lua_State* L) {
 	auto* exc = GetUserdata<mongo::MongoBulkWriteException>(L, 1, kMetaName);
-	MEM_DELETE(exc);
+	CLOUDENGINE_MEM_DELETE(exc);
 	*CheckUserdata<mongo::MongoBulkWriteException>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
 
 int l_bulk_write_exc_new(lua_State* L) {
-	auto* exc = MEM_NEW_NOTHROW(mongo::MongoBulkWriteException);
+	auto* exc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoBulkWriteException);
 	if (!exc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -72,7 +72,7 @@ int l_bwe_write_errors(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, bson_get_data(raw), raw->len);
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, bson_get_data(raw), raw->len);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -95,7 +95,7 @@ int l_bwe_write_concern_errors(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, bson_get_data(raw), raw->len);
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, bson_get_data(raw), raw->len);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -118,7 +118,7 @@ int l_bwe_error_reply(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, bson_get_data(raw), raw->len);
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, bson_get_data(raw), raw->len);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

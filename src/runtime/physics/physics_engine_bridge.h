@@ -11,7 +11,7 @@
 // When disabled, the class consists entirely of inline stubs that must be
 // compiled directly into each translation unit.
 #ifdef ENGINE_PHYSICS_ENABLED
-#define PHYSICS_API ENGINE_API
+#define PHYSICS_API CLOUD_ENGINE_API
 #else
 #define PHYSICS_API
 #endif

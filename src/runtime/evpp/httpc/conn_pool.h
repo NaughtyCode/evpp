@@ -12,7 +12,7 @@ namespace evpp {
 namespace httpc {
 class Conn;
 typedef std::shared_ptr<Conn> ConnPtr;
-class EVPP_EXPORT ConnPool {
+class CLOUD_ENGINE_API ConnPool {
 	public:
 	ConnPool(const std::string& host,
 			 int port,

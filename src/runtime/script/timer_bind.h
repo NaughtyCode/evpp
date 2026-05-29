@@ -17,11 +17,11 @@ namespace script {
 //
 // Callbacks are Lua functions that receive no arguments.
 // Timer state is per-VM — each ScriptVM has an independent timer table.
-ENGINE_API void ExportTimer(ScriptVM& vm, TimerManager& tm);
+CLOUD_ENGINE_API void ExportTimer(ScriptVM& vm, TimerManager& tm);
 
 // Cancel all Lua-owned timers for a specific VM and release its Lua
 // function references.  Must be called before the ScriptVM is destroyed.
-ENGINE_API void ShutdownTimerBindings(ScriptVM& vm);
+CLOUD_ENGINE_API void ShutdownTimerBindings(ScriptVM& vm);
 
 }  // namespace script
 }  // namespace engine

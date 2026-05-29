@@ -578,7 +578,7 @@ void ExportRpc(ScriptVM& vm) {
 	if (!L) return;
 
 	// Per-VM state
-	auto* state = MEM_NEW(RpcBindState);
+	auto* state = CLOUDENGINE_MEM_NEW(RpcBindState);
 	lua_pushlightuserdata(L, state);
 	lua_setfield(L, LUA_REGISTRYINDEX, "__RpcBindState");
 
@@ -773,7 +773,7 @@ void ShutdownRpcBindings(ScriptVM& vm) {
 		ENGINE_LOG_DEBUG(logger, "RpcBind: no active instances to shut down");
 	}
 
-	MEM_DELETE(state);
+	CLOUDENGINE_MEM_DELETE(state);
 	lua_pushnil(L);
 	lua_setfield(L, LUA_REGISTRYINDEX, "__RpcBindState");
 }

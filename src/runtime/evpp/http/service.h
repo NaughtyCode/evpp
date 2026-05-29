@@ -16,7 +16,7 @@ namespace http {
 
 // A service can not run itself, it must be attached into one EventLoop
 // So we can embed this Service to the existing EventLoop
-class EVPP_EXPORT Service {
+class CLOUD_ENGINE_API Service {
 	public:
 #if defined(EVPP_HTTP_SERVER_SUPPORTS_SSL)
 	Service(EventLoop* l,

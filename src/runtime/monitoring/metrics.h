@@ -13,7 +13,7 @@ namespace engine {
 namespace monitoring {
 
 // Counter — monotonically increasing metric (e.g., total_connections).
-class ENGINE_API Counter {
+class CLOUD_ENGINE_API Counter {
 public:
 	void Inc(int64_t delta = 1) { value_.fetch_add(delta, std::memory_order_relaxed); }
 	int64_t Value() const { return value_.load(std::memory_order_relaxed); }
@@ -23,7 +23,7 @@ private:
 };
 
 // Gauge — point-in-time value (e.g., active_connections, memory_usage).
-class ENGINE_API Gauge {
+class CLOUD_ENGINE_API Gauge {
 public:
 	void Set(int64_t value) { value_.store(value, std::memory_order_relaxed); }
 	int64_t Value() const { return value_.load(std::memory_order_relaxed); }
@@ -36,7 +36,7 @@ private:
 
 // Histogram — distribution of values (e.g., latency, message sizes).
 // Uses logarithmic buckets for efficient storage.
-class ENGINE_API Histogram {
+class CLOUD_ENGINE_API Histogram {
 public:
 	Histogram() = default;
 	explicit Histogram(const std::vector<double>& buckets);
@@ -59,7 +59,7 @@ private:
 
 // MetricsRegistry — central collection of all metrics.
 // Thread-safe registration and access.
-class ENGINE_API MetricsRegistry {
+class CLOUD_ENGINE_API MetricsRegistry {
 public:
 	static MetricsRegistry& Instance();
 

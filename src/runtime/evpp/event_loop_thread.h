@@ -13,7 +13,7 @@ namespace evpp {
 
 class EventLoop;
 
-class EVPP_EXPORT EventLoopThread : public ServerStatus {
+class CLOUD_ENGINE_API EventLoopThread : public ServerStatus {
 	public:
 	enum {
 		kOK = 0

@@ -13,7 +13,7 @@ namespace aoi {
 // Grid-based spatial index for AOI queries.
 // Divides the world into fixed-size cells for O(1) insert/update/remove
 // and O(cell_contents) range queries.
-class ENGINE_API SpatialGrid {
+class CLOUD_ENGINE_API SpatialGrid {
 public:
 	SpatialGrid(float world_width, float world_height, float cell_size);
 

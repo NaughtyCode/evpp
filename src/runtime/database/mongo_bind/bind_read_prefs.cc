@@ -18,14 +18,14 @@ const char* kMetaName = "mongoc.read_prefs";
 
 int l_read_prefs_gc(lua_State* L) {
 	auto* prefs = GetUserdata<mongo::MongoReadPrefs>(L, 1, kMetaName);
-	MEM_DELETE(prefs);
+	CLOUDENGINE_MEM_DELETE(prefs);
 	*CheckUserdata<mongo::MongoReadPrefs>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
 
 int l_read_prefs_new(lua_State* L) {
 	auto mode = static_cast<mongo::MongoReadPrefs::Mode>(luaL_optinteger(L, 1, 0));
-	auto* prefs = MEM_NEW_NOTHROW(mongo::MongoReadPrefs, mode);
+	auto* prefs = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoReadPrefs, mode);
 	if (!prefs) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -74,7 +74,7 @@ int l_read_prefs_copy(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* copy = MEM_NEW_NOTHROW(mongo::MongoReadPrefs, prefs->Copy());
+	auto* copy = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoReadPrefs, prefs->Copy());
 	if (!copy) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -124,7 +124,7 @@ int l_read_prefs_get_tags(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, bson_get_data(raw), raw->len);
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, bson_get_data(raw), raw->len);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -147,7 +147,7 @@ int l_read_prefs_get_hedge(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, bson_get_data(raw), raw->len);
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, bson_get_data(raw), raw->len);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

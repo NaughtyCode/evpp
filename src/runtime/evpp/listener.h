@@ -7,7 +7,7 @@ namespace evpp {
 class EventLoop;
 class FdChannel;
 
-class EVPP_EXPORT Listener {
+class CLOUD_ENGINE_API Listener {
 	public:
 	typedef std::function<void(evpp_socket_t sockfd,
 							   const std::string& /*remote address with format "ip:port"*/,

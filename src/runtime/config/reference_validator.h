@@ -24,7 +24,7 @@ namespace engine {
 //   auto result = validator.Validate();
 //   if (!result.valid) { ... log result.errors ... }
 
-class ENGINE_API ReferenceValidator {
+class CLOUD_ENGINE_API ReferenceValidator {
 public:
     struct RefError {
         std::string from_table;

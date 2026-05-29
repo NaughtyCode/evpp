@@ -16,13 +16,13 @@ const char* kMetaName = "mongoc.error";
 
 int l_error_gc(lua_State* L) {
 	auto* err = GetUserdata<mongo::MongoError>(L, 1, kMetaName);
-	MEM_DELETE(err);
+	CLOUDENGINE_MEM_DELETE(err);
 	*CheckUserdata<mongo::MongoError>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
 
 int l_error_new(lua_State* L) {
-	auto* err = MEM_NEW_NOTHROW(mongo::MongoError);
+	auto* err = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoError);
 	if (!err) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

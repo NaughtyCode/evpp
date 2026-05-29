@@ -21,7 +21,7 @@ struct event_base;
 namespace evpp {
 int EventAdd(struct event* ev, const struct timeval* timeout);
 int EventDel(struct event*);
-EVPP_EXPORT int GetActiveEventCount();
+CLOUD_ENGINE_API int GetActiveEventCount();
 void SetTlsEventBase(struct event_base* base);
 void ClearTlsEventBase();
 struct event_base* GetTlsEventBase();

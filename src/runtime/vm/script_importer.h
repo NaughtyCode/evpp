@@ -18,7 +18,7 @@ namespace engine {
 //   import("utils.helpers")  →  <search_dir>/utils/helpers.lua
 //   import("utils.*")        →  loads all .lua files in <search_dir>/utils/
 
-class ENGINE_API ScriptImporter {
+class CLOUD_ENGINE_API ScriptImporter {
 	public:
 	ScriptImporter() = default;
 

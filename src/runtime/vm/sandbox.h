@@ -32,6 +32,6 @@ enum class LuaSandboxLevel {
  *
  * @param L      The Lua state to initialize.
  * @param level  The sandbox security level. */
-ENGINE_API void luaL_openlibs_sandboxed(lua_State* L, LuaSandboxLevel level);
+CLOUD_ENGINE_API void luaL_openlibs_sandboxed(lua_State* L, LuaSandboxLevel level);
 
 }  // namespace engine

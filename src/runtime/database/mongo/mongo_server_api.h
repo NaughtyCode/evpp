@@ -12,7 +12,7 @@
 namespace engine {
 namespace mongo {
 
-class ENGINE_API MongoServerApi {
+class CLOUD_ENGINE_API MongoServerApi {
 	public:
 	enum Version {
 		kV1 = 0

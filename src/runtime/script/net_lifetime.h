@@ -32,7 +32,7 @@ namespace script {
 // (typically the main event loop). Shutdown/WaitDrain must be called
 // from the shutdown thread (not inside a TryAcquire/Release scope).
 // ═══════════════════════════════════════════════════════════════════════════
-class ENGINE_API NetAliveGuard {
+class CLOUD_ENGINE_API NetAliveGuard {
 public:
     NetAliveGuard() = default;
     ~NetAliveGuard() = default;
@@ -95,7 +95,7 @@ private:
 //   3. During shutdown, after WaitDrain:
 //        g_xxx_pending.UnrefAll(L);
 // ═══════════════════════════════════════════════════════════════════════════
-class ENGINE_API PendingRefTracker {
+class CLOUD_ENGINE_API PendingRefTracker {
 public:
     PendingRefTracker() = default;
     ~PendingRefTracker() = default;

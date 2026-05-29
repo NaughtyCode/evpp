@@ -12,7 +12,7 @@
 namespace engine {
 namespace mongo {
 
-class ENGINE_API MongoClientPool {
+class CLOUD_ENGINE_API MongoClientPool {
 	public:
 	// Create a pool from a connection URI.
 	static MongoClientPool* New(const MongoUri& uri);

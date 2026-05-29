@@ -18,7 +18,7 @@ namespace mongo {
 //   MongoSystem::Instance().Initialize();
 //   // ... use mongo wrappers ...
 //   MongoSystem::Instance().Shutdown();
-class ENGINE_API MongoSystem {
+class CLOUD_ENGINE_API MongoSystem {
 	public:
 	static MongoSystem& Instance();
 

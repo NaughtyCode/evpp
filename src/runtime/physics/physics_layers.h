@@ -17,7 +17,7 @@ namespace engine {
 
 // BPLayerInterfaceImpl — maps ObjectLayer → BroadPhaseLayer [J7]
 
-class ENGINE_API BPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface {
+class CLOUD_ENGINE_API BPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface {
 	public:
 	explicit BPLayerInterfaceImpl(const LayerConfig& config);
 
@@ -40,7 +40,7 @@ class ENGINE_API BPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterfa
 
 // ObjectLayerPairFilterImpl — checks if two ObjectLayers should collide [J7]
 
-class ENGINE_API ObjectLayerPairFilterImpl final : public JPH::ObjectLayerPairFilter {
+class CLOUD_ENGINE_API ObjectLayerPairFilterImpl final : public JPH::ObjectLayerPairFilter {
 	public:
 	explicit ObjectLayerPairFilterImpl(const LayerConfig& config);
 
@@ -54,7 +54,7 @@ class ENGINE_API ObjectLayerPairFilterImpl final : public JPH::ObjectLayerPairFi
 
 // ObjectVSBLayerFilterImpl — checks if ObjectLayer collides with BroadPhaseLayer
 
-class ENGINE_API ObjectVSBLayerFilterImpl final : public JPH::ObjectVsBroadPhaseLayerFilter {
+class CLOUD_ENGINE_API ObjectVSBLayerFilterImpl final : public JPH::ObjectVsBroadPhaseLayerFilter {
 	public:
 	explicit ObjectVSBLayerFilterImpl(const LayerConfig& config,
 									  const BPLayerInterfaceImpl& bp_iface);

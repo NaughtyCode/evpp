@@ -24,7 +24,7 @@ namespace engine {
 //
 // Thread safety: All methods are called from the main thread only.
 
-class ENGINE_API CoroutineScheduler {
+class CLOUD_ENGINE_API CoroutineScheduler {
 	public:
 	static CoroutineScheduler& Instance();
 

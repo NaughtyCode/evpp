@@ -1,4 +1,4 @@
-﻿#include "runtime/script/net_kcp_server_bind.h"
+#include "runtime/script/net_kcp_server_bind.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -119,7 +119,7 @@ void ReleaseKcpServer(lua_State* L, KcpServerCtx* ctx) {
 			if (old_inst_ref != LUA_NOREF) {
 				luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
 			}
-			MEM_DELETE(ctx);
+			CLOUDENGINE_MEM_DELETE(ctx);
 			g_kcp_alive.Release();
 		});
 	} else {
@@ -129,7 +129,7 @@ void ReleaseKcpServer(lua_State* L, KcpServerCtx* ctx) {
 		if (old_inst_ref != LUA_NOREF) {
 			luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
 		}
-		MEM_DELETE(ctx);
+		CLOUDENGINE_MEM_DELETE(ctx);
 	}
 }
 
@@ -140,7 +140,7 @@ int l_kcp_server_listen(lua_State* L) {
 		return luaL_error(L, "expected number or string for port");
 	}
 
-	auto* ctx = MEM_NEW(KcpServerCtx);
+	auto* ctx = CLOUDENGINE_MEM_NEW(KcpServerCtx);
 	ctx->L = L;
 
 	if (lua_gettop(L) >= 2 && lua_isfunction(L, 2)) {
@@ -157,7 +157,7 @@ int l_kcp_server_listen(lua_State* L) {
 			if (ctx->on_message_ref != LUA_NOREF) {
 				luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
 			}
-			MEM_DELETE(ctx);
+			CLOUDENGINE_MEM_DELETE(ctx);
 			return luaL_error(L, "port out of range");
 		}
 		int port = static_cast<int>(port64);
@@ -171,7 +171,7 @@ int l_kcp_server_listen(lua_State* L) {
 		if (ctx->on_message_ref != LUA_NOREF) {
 			luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
 		}
-		MEM_DELETE(ctx);
+		CLOUDENGINE_MEM_DELETE(ctx);
 		lua_pushnil(L);
 		lua_pushstring(L, "kcp_server init failed");
 		return 2;
@@ -192,7 +192,7 @@ int l_kcp_server_listen(lua_State* L) {
 		ctx->instance_ref = LUA_NOREF;
 		lua_pushnil(L);
 		lua_setfield(L, -2, "_ctx");
-		MEM_DELETE(ctx);
+		CLOUDENGINE_MEM_DELETE(ctx);
 		lua_pop(L, 1);
 		lua_pushnil(L);
 		lua_pushstring(L, "kcp_server start failed");
@@ -414,7 +414,7 @@ void ShutdownKcpServerBindings() {
 		if (old_inst_ref != LUA_NOREF && L_ptr) {
 			luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_inst_ref);
 		}
-		MEM_DELETE(ctx);
+		CLOUDENGINE_MEM_DELETE(ctx);
 	}
 
 	if (!ctxs.empty()) {

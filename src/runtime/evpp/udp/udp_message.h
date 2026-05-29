@@ -6,7 +6,7 @@
 
 namespace evpp {
 namespace udp {
-class EVPP_EXPORT Message : public Buffer {
+class CLOUD_ENGINE_API Message : public Buffer {
 	public:
 	Message(evpp_socket_t fd, size_t buffer_size = 1472) : Buffer(buffer_size), sockfd_(fd) {
 		memset(&remote_addr_, 0, sizeof(remote_addr_));

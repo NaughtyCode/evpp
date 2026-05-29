@@ -50,7 +50,7 @@ class Listener;
 //     loop.Run();
 // </code>
 //
-class EVPP_EXPORT TCPServer : public ThreadDispatchPolicy, public ServerStatus {
+class CLOUD_ENGINE_API TCPServer : public ThreadDispatchPolicy, public ServerStatus {
 	public:
 	typedef std::function<void()> DoneCallback;
 

@@ -15,13 +15,13 @@ const char* kMetaName = "mongoc.session_opts";
 
 int l_sess_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoSessionOpts>(L, 1, kMetaName);
-	MEM_DELETE(opts);
+	CLOUDENGINE_MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoSessionOpts>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
 
 int l_sess_opts_new(lua_State* L) {
-	auto* opts = MEM_NEW_NOTHROW(mongo::MongoSessionOpts);
+	auto* opts = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoSessionOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -44,7 +44,7 @@ int l_sess_opts_clone(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* copy = MEM_NEW_NOTHROW(mongo::MongoSessionOpts, opts->Clone());
+	auto* copy = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoSessionOpts, opts->Clone());
 	if (!copy) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

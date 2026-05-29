@@ -15,7 +15,7 @@ namespace mongo {
 
 // 16-byte IEEE 754 decimal128 floating-point value.
 // Binary-compatible with bson_decimal128_t (low at offset 0, high at offset 8 on LE).
-class ENGINE_API MongoDecimal128 {
+class CLOUD_ENGINE_API MongoDecimal128 {
 	public:
 	MongoDecimal128() : low_(0), high_(0) {
 	}
@@ -47,7 +47,7 @@ static_assert(sizeof(MongoDecimal128) == 16, "MongoDecimal128 must be 16 bytes")
 //   doc.AppendInt32("key", 42);
 //   doc.AppendUtf8("name", "value");
 //   char* json = doc.AsJson();
-class ENGINE_API BsonDocument {
+class CLOUD_ENGINE_API BsonDocument {
 	public:
 	BsonDocument();
 	explicit BsonDocument(const uint8_t* data, size_t length);
@@ -174,7 +174,7 @@ class ENGINE_API BsonDocument {
 };
 
 // Iterator for traversing a BSON document's fields.
-class ENGINE_API BsonIter {
+class CLOUD_ENGINE_API BsonIter {
 	public:
 	BsonIter();
 	explicit BsonIter(const BsonDocument& doc);
@@ -266,7 +266,7 @@ class ENGINE_API BsonIter {
 };
 
 // Builder for BSON arrays (newer API style).
-class ENGINE_API BsonArrayBuilder {
+class CLOUD_ENGINE_API BsonArrayBuilder {
 	public:
 	BsonArrayBuilder();
 	~BsonArrayBuilder();

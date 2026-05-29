@@ -12,7 +12,7 @@ namespace engine {
 namespace auth {
 
 // Abstract auth backend interface.
-class ENGINE_API AuthBackend {
+class CLOUD_ENGINE_API AuthBackend {
 public:
 	virtual ~AuthBackend() = default;
 
@@ -44,7 +44,7 @@ protected:
 
 // Static token-based auth (dev/testing).
 
-class ENGINE_API TokenAuthBackend : public AuthBackend {
+class CLOUD_ENGINE_API TokenAuthBackend : public AuthBackend {
 public:
 	void AddToken(const std::string& token, const std::string& entity_id);
 
@@ -64,7 +64,7 @@ private:
 // pre-shared secret. On authentication, it verifies the JWT signature,
 // checks expiry, and extracts the entity_id from the "sub" claim.
 
-class ENGINE_API JwtAuthBackend : public AuthBackend {
+class CLOUD_ENGINE_API JwtAuthBackend : public AuthBackend {
 public:
 	// Set the shared secret for HMAC-SHA256 verification.
 	void SetSecret(const std::string& secret);

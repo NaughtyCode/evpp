@@ -1,4 +1,4 @@
-﻿#include "runtime/evpp/http/http_server.h"
+#include "runtime/evpp/http/http_server.h"
 
 #include <future>
 
@@ -14,7 +14,7 @@ namespace http {
 
 Server::Server(uint32_t thread_num) {
 	ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*) this);
-	tpool_.reset(MEM_NEW(EventLoopThreadPool, nullptr, thread_num));
+	tpool_.reset(CLOUDENGINE_MEM_NEW(EventLoopThreadPool, nullptr, thread_num));
 #if defined(EVPP_HTTP_SERVER_SUPPORTS_SSL)
 	setPortSSLDefaultOption(false);
 #endif

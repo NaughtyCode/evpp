@@ -53,25 +53,20 @@
 // DLL export / import
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ENGINE_API — used by engine-layer classes (physics, vm, script, profiler, etc.)
-// EVPP_EXPORT — used by evpp network classes (EventLoop, Buffer, TCPClient, etc.)
+// CLOUD_ENGINE_API — used by engine-layer classes (physics, vm, script, profiler, etc.)
 // Both are compiled into CloudEngine.dll. ENGINE_BUILD is defined by
 // runtime/CMakeLists.txt when building the library.
 
 #if defined(_WIN32) || defined(__CYGWIN__)
 #ifdef ENGINE_BUILD
-#define ENGINE_API __declspec(dllexport)
-#define EVPP_EXPORT __declspec(dllexport)
+#define CLOUD_ENGINE_API __declspec(dllexport)
 #else
-#define ENGINE_API __declspec(dllimport)
-#define EVPP_EXPORT __declspec(dllimport)
+#define CLOUD_ENGINE_API __declspec(dllimport)
 #endif
 #else
 #if __GNUC__ >= 4
-#define ENGINE_API __attribute__((visibility("default")))
-#define EVPP_EXPORT __attribute__((visibility("default")))
+#define CLOUD_ENGINE_API __attribute__((visibility("default")))
 #else
-#define ENGINE_API
-#define EVPP_EXPORT
+#define CLOUD_ENGINE_API
 #endif
 #endif

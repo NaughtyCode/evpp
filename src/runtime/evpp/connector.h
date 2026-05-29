@@ -20,7 +20,7 @@ struct ConnectorConfig {
 	double backoff_multiplier = 2.0;
 };
 
-class EVPP_EXPORT Connector : public std::enable_shared_from_this<Connector> {
+class CLOUD_ENGINE_API Connector : public std::enable_shared_from_this<Connector> {
 	public:
 	typedef std::function<void(evpp_socket_t sockfd, const std::string& /*local addr*/)>
 		NewConnectionCallback;

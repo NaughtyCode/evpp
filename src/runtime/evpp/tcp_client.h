@@ -25,7 +25,7 @@ class Connector;
 //      5. Handle the connection and messages in callbacks
 //      6. Call TCPClient::Disonnect() to disconnect from remote server
 //
-class EVPP_EXPORT TCPClient {
+class CLOUD_ENGINE_API TCPClient {
 	public:
 	// @brief The constructor of the class
 	// @param[in] loop - The EventLoop runs this object

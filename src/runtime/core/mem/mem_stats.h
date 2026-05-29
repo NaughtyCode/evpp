@@ -74,7 +74,7 @@ struct CallSiteEntry {
 
 // ── Coherent snapshot (all values read under mutex) ──────────────────────
 
-struct ENGINE_API StatsSnapshot {
+struct CLOUD_ENGINE_API StatsSnapshot {
 	// Totals
 	uint64_t total_alloc_count = 0;
 	uint64_t total_free_count = 0;
@@ -110,7 +110,7 @@ struct ENGINE_API StatsSnapshot {
 // MemStats — thread-safe singleton accumulator
 // ═══════════════════════════════════════════════════════════════════════════
 
-class ENGINE_API MemStats {
+class CLOUD_ENGINE_API MemStats {
 	public:
 	static MemStats& Instance();
 

@@ -20,7 +20,7 @@ enum MongoFindAndModifyFlags : uint32_t {
 	kFindAndModifyReturnNew = 1 << 2,
 };
 
-class ENGINE_API MongoFindAndModifyOpts {
+class CLOUD_ENGINE_API MongoFindAndModifyOpts {
 	public:
 	MongoFindAndModifyOpts();
 	~MongoFindAndModifyOpts();

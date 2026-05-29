@@ -13,7 +13,7 @@ namespace engine {
 namespace mongo {
 
 // Per-operation options for bulk write InsertOne.
-class ENGINE_API MongoBulkWriteInsertOneOpts {
+class CLOUD_ENGINE_API MongoBulkWriteInsertOneOpts {
 	public:
 	MongoBulkWriteInsertOneOpts();
 	~MongoBulkWriteInsertOneOpts();
@@ -31,7 +31,7 @@ class ENGINE_API MongoBulkWriteInsertOneOpts {
 };
 
 // Per-operation options for bulk write UpdateOne.
-class ENGINE_API MongoBulkWriteUpdateOneOpts {
+class CLOUD_ENGINE_API MongoBulkWriteUpdateOneOpts {
 	public:
 	MongoBulkWriteUpdateOneOpts();
 	~MongoBulkWriteUpdateOneOpts();
@@ -56,7 +56,7 @@ class ENGINE_API MongoBulkWriteUpdateOneOpts {
 };
 
 // Per-operation options for bulk write UpdateMany.
-class ENGINE_API MongoBulkWriteUpdateManyOpts {
+class CLOUD_ENGINE_API MongoBulkWriteUpdateManyOpts {
 	public:
 	MongoBulkWriteUpdateManyOpts();
 	~MongoBulkWriteUpdateManyOpts();
@@ -79,7 +79,7 @@ class ENGINE_API MongoBulkWriteUpdateManyOpts {
 };
 
 // Per-operation options for bulk write ReplaceOne.
-class ENGINE_API MongoBulkWriteReplaceOneOpts {
+class CLOUD_ENGINE_API MongoBulkWriteReplaceOneOpts {
 	public:
 	MongoBulkWriteReplaceOneOpts();
 	~MongoBulkWriteReplaceOneOpts();
@@ -102,7 +102,7 @@ class ENGINE_API MongoBulkWriteReplaceOneOpts {
 };
 
 // Per-operation options for bulk write DeleteOne.
-class ENGINE_API MongoBulkWriteDeleteOneOpts {
+class CLOUD_ENGINE_API MongoBulkWriteDeleteOneOpts {
 	public:
 	MongoBulkWriteDeleteOneOpts();
 	~MongoBulkWriteDeleteOneOpts();
@@ -123,7 +123,7 @@ class ENGINE_API MongoBulkWriteDeleteOneOpts {
 };
 
 // Per-operation options for bulk write DeleteMany.
-class ENGINE_API MongoBulkWriteDeleteManyOpts {
+class CLOUD_ENGINE_API MongoBulkWriteDeleteManyOpts {
 	public:
 	MongoBulkWriteDeleteManyOpts();
 	~MongoBulkWriteDeleteManyOpts();
@@ -144,7 +144,7 @@ class ENGINE_API MongoBulkWriteDeleteManyOpts {
 };
 
 // Options for bulk write execution.
-class ENGINE_API MongoBulkWriteOpts {
+class CLOUD_ENGINE_API MongoBulkWriteOpts {
 	public:
 	MongoBulkWriteOpts();
 	~MongoBulkWriteOpts();
@@ -172,7 +172,7 @@ class ENGINE_API MongoBulkWriteOpts {
 };
 
 // Result of a successful bulk write.
-class ENGINE_API MongoBulkWriteResult {
+class CLOUD_ENGINE_API MongoBulkWriteResult {
 	public:
 	MongoBulkWriteResult();
 	~MongoBulkWriteResult();
@@ -200,7 +200,7 @@ class ENGINE_API MongoBulkWriteResult {
 };
 
 // Exception / error from a bulk write.
-class ENGINE_API MongoBulkWriteException {
+class CLOUD_ENGINE_API MongoBulkWriteException {
 	public:
 	MongoBulkWriteException();
 	~MongoBulkWriteException();
@@ -223,19 +223,19 @@ class ENGINE_API MongoBulkWriteException {
 };
 
 // Return value from mongoc_bulkwrite_execute: a result and/or exception.
-struct ENGINE_API MongoBulkWriteReturn {
+struct CLOUD_ENGINE_API MongoBulkWriteReturn {
 	MongoBulkWriteResult* result = nullptr;	 // may be null
 	MongoBulkWriteException* exception = nullptr;  // may be null (no error)
 };
 
 // Check result for acknowledged writes.
-struct ENGINE_API MongoBulkWriteCheckAcknowledged {
+struct CLOUD_ENGINE_API MongoBulkWriteCheckAcknowledged {
 	bool is_ok = false;
 	bool is_acknowledged = false;
 };
 
 // Server ID after execution.
-struct ENGINE_API MongoBulkWriteServerId {
+struct CLOUD_ENGINE_API MongoBulkWriteServerId {
 	bool is_ok = false;
 	uint32_t server_id = 0;
 };
@@ -250,7 +250,7 @@ struct ENGINE_API MongoBulkWriteServerId {
 //   auto ret = bw->Execute(&opts);
 //   if (ret.exception) { ... }
 //   delete bw;
-class ENGINE_API MongoBulkWrite {
+class CLOUD_ENGINE_API MongoBulkWrite {
 	public:
 	static MongoBulkWrite* New(void* raw_client);  // raw_client is mongoc_client_t*
 	static MongoBulkWrite* New();  // standalone, use SetClient before execute

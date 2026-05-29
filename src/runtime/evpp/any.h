@@ -38,11 +38,11 @@ class Any {
 	Any() : content_(nullptr) {
 	}
 	~Any() {
-		MEM_DELETE(content_);
+		CLOUDENGINE_MEM_DELETE(content_);
 	}
 
 	template <typename ValueType>
-	explicit Any(const ValueType& value) : content_(MEM_NEW(Holder<ValueType>, value)) {
+	explicit Any(const ValueType& value) : content_(CLOUDENGINE_MEM_NEW(Holder<ValueType>, value)) {
 	}
 
 	Any(const Any& other) : content_(other.content_ ? other.content_->clone() : nullptr) {
@@ -109,7 +109,7 @@ class Any {
 		}
 
 		virtual PlaceHolder* clone() const {
-			return MEM_NEW(Holder, held_);
+			return CLOUDENGINE_MEM_NEW(Holder, held_);
 		}
 
 		ValueType held_;

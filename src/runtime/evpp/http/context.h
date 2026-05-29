@@ -17,7 +17,7 @@ namespace http {
 
 class Service;
 
-struct EVPP_EXPORT Context {
+struct CLOUD_ENGINE_API Context {
 	public:
 	Context(struct evhttp_request* r);
 	~Context();

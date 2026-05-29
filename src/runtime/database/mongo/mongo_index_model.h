@@ -12,7 +12,7 @@ namespace engine {
 namespace mongo {
 
 // Wraps mongoc_index_model_t for use with MongoCollection::CreateIndexesWithOpts.
-class ENGINE_API MongoIndexModel {
+class CLOUD_ENGINE_API MongoIndexModel {
 	public:
 	MongoIndexModel(const BsonDocument& keys, const BsonDocument* opts = nullptr);
 	~MongoIndexModel();

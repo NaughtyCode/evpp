@@ -15,7 +15,7 @@ FdChannel::FdChannel(EventLoop* l, evpp_socket_t f, bool r, bool w)
 	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} fd={}", (void*) this, fd_);
 	assert(fd_ >= 0);
 	events_ = (r ? kReadable : 0) | (w ? kWritable : 0);
-	event_ = MEM_NEW(event);
+	event_ = CLOUDENGINE_MEM_NEW(event);
 	memset(event_, 0, sizeof(struct event));
 }
 
@@ -36,7 +36,7 @@ void FdChannel::Close() {
 		attached_ = false;
 	}
 
-	MEM_DELETE(event_);
+	CLOUDENGINE_MEM_DELETE(event_);
 	event_ = nullptr;
 	read_fn_ = ReadEventCallback();
 	write_fn_ = EventCallback();

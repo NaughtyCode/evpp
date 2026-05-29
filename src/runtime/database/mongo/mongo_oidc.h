@@ -23,7 +23,7 @@ using MongoOidcCallbackFn =
 	std::function<MongoOidcCredential*(const MongoOidcCallbackParams& params)>;
 
 // Read-only wrapper around mongoc_oidc_callback_params_t.
-class ENGINE_API MongoOidcCallbackParams {
+class CLOUD_ENGINE_API MongoOidcCallbackParams {
 	public:
 	explicit MongoOidcCallbackParams(void* raw_params);	 // takes mongoc_oidc_callback_params_t*
 	~MongoOidcCallbackParams() = default;
@@ -39,7 +39,7 @@ class ENGINE_API MongoOidcCallbackParams {
 };
 
 // Wraps mongoc_oidc_credential_t — OIDC access token credential.
-class ENGINE_API MongoOidcCredential {
+class CLOUD_ENGINE_API MongoOidcCredential {
 	public:
 	static MongoOidcCredential* New(const char* access_token);
 	static MongoOidcCredential* NewWithExpiresIn(const char* access_token, int64_t expires_in);
@@ -65,7 +65,7 @@ class ENGINE_API MongoOidcCredential {
 };
 
 // Wraps mongoc_oidc_callback_t — bundles the callback function + user data.
-class ENGINE_API MongoOidcCallback {
+class CLOUD_ENGINE_API MongoOidcCallback {
 	public:
 	static MongoOidcCallback* New(MongoOidcCallbackFn fn);
 	static MongoOidcCallback* NewWithUserData(MongoOidcCallbackFn fn, void* user_data);

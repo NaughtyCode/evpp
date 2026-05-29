@@ -47,13 +47,13 @@
 #ifdef H_LIBEVENT_VERSION_14
 extern "C" {
 struct evdns_base;
-EVPP_EXPORT struct event* event_new(struct event_base* base,
+CLOUD_ENGINE_API struct event* event_new(struct event_base* base,
 									evpp_socket_t fd,
 									short events,
 									void (*cb)(int, short, void*),
 									void* arg);
-EVPP_EXPORT void event_free(struct event* ev);
-EVPP_EXPORT evhttp_connection* evhttp_connection_base_new(struct event_base* base,
+CLOUD_ENGINE_API void event_free(struct event* ev);
+CLOUD_ENGINE_API evhttp_connection* evhttp_connection_base_new(struct event_base* base,
 														  struct evdns_base* dnsbase,
 														  const char* address,
 														  unsigned short port);

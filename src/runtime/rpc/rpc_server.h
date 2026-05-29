@@ -26,7 +26,7 @@ using RpcMethodHandler = std::function<std::string(const std::string& args_json)
 // Thread safety: all public methods are protected by a shared_mutex.
 // Register*/Unregister* take exclusive locks; HandleRequest/HasService
 // take shared locks, allowing concurrent request processing.
-class ENGINE_API RpcServer {
+class CLOUD_ENGINE_API RpcServer {
 public:
 	RpcServer() = default;
 	~RpcServer() = default;

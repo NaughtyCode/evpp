@@ -20,7 +20,7 @@ using MongoKmsCredentialsProviderCb = std::function<bool(
 
 // Auto-Encryption Options
 
-class ENGINE_API MongoAutoEncryptionOpts {
+class CLOUD_ENGINE_API MongoAutoEncryptionOpts {
 	public:
 	MongoAutoEncryptionOpts();
 	~MongoAutoEncryptionOpts();
@@ -52,7 +52,7 @@ class ENGINE_API MongoAutoEncryptionOpts {
 
 // Client Encryption Options (for explicit encryption)
 
-class ENGINE_API MongoClientEncryptionOpts {
+class CLOUD_ENGINE_API MongoClientEncryptionOpts {
 	public:
 	MongoClientEncryptionOpts();
 	~MongoClientEncryptionOpts();
@@ -78,7 +78,7 @@ class ENGINE_API MongoClientEncryptionOpts {
 
 // Encrypt Options
 
-class ENGINE_API MongoClientEncryptionEncryptOpts {
+class CLOUD_ENGINE_API MongoClientEncryptionEncryptOpts {
 	public:
 	MongoClientEncryptionEncryptOpts();
 	~MongoClientEncryptionEncryptOpts();
@@ -107,7 +107,7 @@ class ENGINE_API MongoClientEncryptionEncryptOpts {
 
 // FLE2 Range Encryption Options
 
-class ENGINE_API MongoClientEncryptionEncryptRangeOpts {
+class CLOUD_ENGINE_API MongoClientEncryptionEncryptRangeOpts {
 	public:
 	MongoClientEncryptionEncryptRangeOpts();
 	~MongoClientEncryptionEncryptRangeOpts();
@@ -134,7 +134,7 @@ class ENGINE_API MongoClientEncryptionEncryptRangeOpts {
 
 // FLE2 Text Encryption Options — Prefix
 
-class ENGINE_API MongoClientEncryptionEncryptTextPrefixOpts {
+class CLOUD_ENGINE_API MongoClientEncryptionEncryptTextPrefixOpts {
 	public:
 	MongoClientEncryptionEncryptTextPrefixOpts();
 	~MongoClientEncryptionEncryptTextPrefixOpts();
@@ -160,7 +160,7 @@ class ENGINE_API MongoClientEncryptionEncryptTextPrefixOpts {
 
 // FLE2 Text Encryption Options — Suffix
 
-class ENGINE_API MongoClientEncryptionEncryptTextSuffixOpts {
+class CLOUD_ENGINE_API MongoClientEncryptionEncryptTextSuffixOpts {
 	public:
 	MongoClientEncryptionEncryptTextSuffixOpts();
 	~MongoClientEncryptionEncryptTextSuffixOpts();
@@ -186,7 +186,7 @@ class ENGINE_API MongoClientEncryptionEncryptTextSuffixOpts {
 
 // FLE2 Text Encryption Options — Substring
 
-class ENGINE_API MongoClientEncryptionEncryptTextSubstringOpts {
+class CLOUD_ENGINE_API MongoClientEncryptionEncryptTextSubstringOpts {
 	public:
 	MongoClientEncryptionEncryptTextSubstringOpts();
 	~MongoClientEncryptionEncryptTextSubstringOpts();
@@ -213,7 +213,7 @@ class ENGINE_API MongoClientEncryptionEncryptTextSubstringOpts {
 
 // FLE2 Text Encryption Options (aggregates prefix/suffix/substring)
 
-class ENGINE_API MongoClientEncryptionEncryptTextOpts {
+class CLOUD_ENGINE_API MongoClientEncryptionEncryptTextOpts {
 	public:
 	MongoClientEncryptionEncryptTextOpts();
 	~MongoClientEncryptionEncryptTextOpts();
@@ -240,7 +240,7 @@ class ENGINE_API MongoClientEncryptionEncryptTextOpts {
 
 // Data Key Options
 
-class ENGINE_API MongoClientEncryptionDatakeyOpts {
+class CLOUD_ENGINE_API MongoClientEncryptionDatakeyOpts {
 	public:
 	MongoClientEncryptionDatakeyOpts();
 	~MongoClientEncryptionDatakeyOpts();
@@ -264,7 +264,7 @@ class ENGINE_API MongoClientEncryptionDatakeyOpts {
 
 // Rewrap Many Data Key Result
 
-class ENGINE_API MongoClientEncryptionRewrapManyDatakeyResult {
+class CLOUD_ENGINE_API MongoClientEncryptionRewrapManyDatakeyResult {
 	public:
 	MongoClientEncryptionRewrapManyDatakeyResult();
 	~MongoClientEncryptionRewrapManyDatakeyResult();
@@ -288,7 +288,7 @@ class ENGINE_API MongoClientEncryptionRewrapManyDatakeyResult {
 
 // Client Encryption (explicit encryption)
 
-class ENGINE_API MongoClientEncryption {
+class CLOUD_ENGINE_API MongoClientEncryption {
 	public:
 	static MongoClientEncryption* New(MongoClientEncryptionOpts* opts, MongoError* error);
 

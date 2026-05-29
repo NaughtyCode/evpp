@@ -9,6 +9,6 @@ class ScriptVM;
 // Register the "import" Lua function (with sub-functions setpath/addpath/
 // loaded/clearcache) into the VM. Uses the per-VM ScriptImporter created
 // by ScriptVM::GetImporter().
-ENGINE_API void ExportImport(ScriptVM& vm);
+CLOUD_ENGINE_API void ExportImport(ScriptVM& vm);
 
 }  // namespace engine

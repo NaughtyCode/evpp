@@ -27,7 +27,7 @@ namespace engine {
 // implementation is responsible for thread-safe dispatch (e.g., RunInLoop
 // for Lua state access).
 
-class ENGINE_API FileWatcher {
+class CLOUD_ENGINE_API FileWatcher {
 	public:
 	using ChangeCallback =
 		std::function<void(const std::vector<std::string>& changed_files)>;

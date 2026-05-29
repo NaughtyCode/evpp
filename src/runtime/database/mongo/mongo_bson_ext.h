@@ -47,7 +47,7 @@ enum class BsonType : uint8_t {
 };
 
 // Thin wrapper around bson_context_t.
-class ENGINE_API BsonContext {
+class CLOUD_ENGINE_API BsonContext {
 	public:
 	// Creates a new context (not the default shared one).
 	static BsonContext New();
@@ -69,7 +69,7 @@ class ENGINE_API BsonContext {
 };
 
 // String builder backed by std::string (bson_string_t was removed in libbson 2.x).
-class ENGINE_API BsonString {
+class CLOUD_ENGINE_API BsonString {
 	public:
 	BsonString();
 	explicit BsonString(const char* str);
@@ -102,7 +102,7 @@ class ENGINE_API BsonString {
 //   BsonDocument doc;
 //   bool ok = reader.Read(&doc);
 //   reader.Destroy();
-class ENGINE_API BsonJsonReader {
+class CLOUD_ENGINE_API BsonJsonReader {
 	public:
 	// Create from a file descriptor, file, or memory buffer.
 	static BsonJsonReader NewFromFd(int fd, bool close_on_destroy);
@@ -133,7 +133,7 @@ class ENGINE_API BsonJsonReader {
 };
 
 // Incremental JSON data reader — feeds raw JSON bytes and produces BSON.
-class ENGINE_API BsonJsonDataReader {
+class CLOUD_ENGINE_API BsonJsonDataReader {
 	public:
 	BsonJsonDataReader();
 	~BsonJsonDataReader();
@@ -154,7 +154,7 @@ class ENGINE_API BsonJsonDataReader {
 };
 
 // Incremental BSON binary reader (reads bson_t from a memory buffer).
-class ENGINE_API BsonReader {
+class CLOUD_ENGINE_API BsonReader {
 	public:
 	static BsonReader NewFromData(const uint8_t* data, size_t length);
 	static BsonReader NewFromFile(const char* path, MongoError* error);
@@ -187,7 +187,7 @@ class ENGINE_API BsonReader {
 };
 
 // Incremental BSON binary writer.
-class ENGINE_API BsonWriter {
+class CLOUD_ENGINE_API BsonWriter {
 	public:
 	BsonWriter();
 	~BsonWriter();
@@ -221,7 +221,7 @@ class ENGINE_API BsonWriter {
 };
 
 // Clock utilities (wraps bson-clock.h).
-class ENGINE_API BsonClock {
+class CLOUD_ENGINE_API BsonClock {
 	public:
 	static int64_t GetTimeNs();
 	static int64_t GetDateTime();
@@ -229,7 +229,7 @@ class ENGINE_API BsonClock {
 };
 
 // UTF-8 validation utilities (wraps bson-utf8.h).
-class ENGINE_API BsonUtf8 {
+class CLOUD_ENGINE_API BsonUtf8 {
 	public:
 	static bool Validate(const char* str, size_t length, bool allow_null = false);
 	static char* EscapeForJson(const char* str, size_t length);
@@ -239,7 +239,7 @@ class ENGINE_API BsonUtf8 {
 };
 
 // JSON serialization options (wraps bson_json_opts_t).
-class ENGINE_API BsonJsonOpts {
+class CLOUD_ENGINE_API BsonJsonOpts {
 	public:
 	BsonJsonOpts(BsonJsonMode mode = BsonJsonMode::kLegacy, int32_t max_len = -1);
 	~BsonJsonOpts();
@@ -259,7 +259,7 @@ class ENGINE_API BsonJsonOpts {
 };
 
 // RAII wrapper around bson_value_t for value copy/destroy lifecycle.
-class ENGINE_API BsonValue {
+class CLOUD_ENGINE_API BsonValue {
 	public:
 	BsonValue();
 	~BsonValue();
@@ -281,7 +281,7 @@ class ENGINE_API BsonValue {
 };
 
 // String utility functions (wraps bson-string.h free functions).
-class ENGINE_API BsonStrUtil {
+class CLOUD_ENGINE_API BsonStrUtil {
 	public:
 	static char* Strdup(const char* str);
 	static char* Strndup(const char* str, size_t n_bytes);

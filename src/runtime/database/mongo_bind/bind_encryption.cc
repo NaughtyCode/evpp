@@ -22,13 +22,13 @@ const char* kAeoMeta = "mongoc.auto_encryption_opts";
 
 int l_auto_encrypt_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoAutoEncryptionOpts>(L, 1, kAeoMeta);
-	MEM_DELETE(opts);
+	CLOUDENGINE_MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoAutoEncryptionOpts>(L, 1, kAeoMeta) = nullptr;
 	return 0;
 }
 
 int l_auto_encrypt_opts_new(lua_State* L) {
-	auto* opts = MEM_NEW_NOTHROW(mongo::MongoAutoEncryptionOpts);
+	auto* opts = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoAutoEncryptionOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -160,13 +160,13 @@ const char* kCeoMeta = "mongoc.client_encryption_opts";
 
 int l_client_encrypt_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionOpts>(L, 1, kCeoMeta);
-	MEM_DELETE(opts);
+	CLOUDENGINE_MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoClientEncryptionOpts>(L, 1, kCeoMeta) = nullptr;
 	return 0;
 }
 
 int l_client_encrypt_opts_new(lua_State* L) {
-	auto* opts = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionOpts);
+	auto* opts = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoClientEncryptionOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -249,13 +249,13 @@ const char* kEncMeta = "mongoc.encrypt_opts";
 
 int l_encrypt_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptOpts>(L, 1, kEncMeta);
-	MEM_DELETE(opts);
+	CLOUDENGINE_MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoClientEncryptionEncryptOpts>(L, 1, kEncMeta) = nullptr;
 	return 0;
 }
 
 int l_encrypt_opts_new(lua_State* L) {
-	auto* opts = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptOpts);
+	auto* opts = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -355,13 +355,13 @@ const char* kErMeta = "mongoc.encrypt_range_opts";
 
 int l_encrypt_range_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptRangeOpts>(L, 1, kErMeta);
-	MEM_DELETE(opts);
+	CLOUDENGINE_MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoClientEncryptionEncryptRangeOpts>(L, 1, kErMeta) = nullptr;
 	return 0;
 }
 
 int l_encrypt_range_opts_new(lua_State* L) {
-	auto* opts = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptRangeOpts);
+	auto* opts = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptRangeOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -443,13 +443,13 @@ const char* kTpMeta = "mongoc.encrypt_text_prefix_opts";
 
 int l_encrypt_text_prefix_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptTextPrefixOpts>(L, 1, kTpMeta);
-	MEM_DELETE(opts);
+	CLOUDENGINE_MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoClientEncryptionEncryptTextPrefixOpts>(L, 1, kTpMeta) = nullptr;
 	return 0;
 }
 
 int l_encrypt_text_prefix_opts_new(lua_State* L) {
-	auto* opts = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptTextPrefixOpts);
+	auto* opts = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptTextPrefixOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -509,13 +509,13 @@ const char* kTsMeta = "mongoc.encrypt_text_suffix_opts";
 
 int l_encrypt_text_suffix_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptTextSuffixOpts>(L, 1, kTsMeta);
-	MEM_DELETE(opts);
+	CLOUDENGINE_MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoClientEncryptionEncryptTextSuffixOpts>(L, 1, kTsMeta) = nullptr;
 	return 0;
 }
 
 int l_encrypt_text_suffix_opts_new(lua_State* L) {
-	auto* opts = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptTextSuffixOpts);
+	auto* opts = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptTextSuffixOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -575,13 +575,13 @@ const char* kTssMeta = "mongoc.encrypt_text_substring_opts";
 
 int l_encrypt_text_substring_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptTextSubstringOpts>(L, 1, kTssMeta);
-	MEM_DELETE(opts);
+	CLOUDENGINE_MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoClientEncryptionEncryptTextSubstringOpts>(L, 1, kTssMeta) = nullptr;
 	return 0;
 }
 
 int l_encrypt_text_substring_opts_new(lua_State* L) {
-	auto* opts = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptTextSubstringOpts);
+	auto* opts = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptTextSubstringOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -649,13 +649,13 @@ const char* kTxtMeta = "mongoc.encrypt_text_opts";
 
 int l_encrypt_text_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptTextOpts>(L, 1, kTxtMeta);
-	MEM_DELETE(opts);
+	CLOUDENGINE_MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoClientEncryptionEncryptTextOpts>(L, 1, kTxtMeta) = nullptr;
 	return 0;
 }
 
 int l_encrypt_text_opts_new(lua_State* L) {
-	auto* opts = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptTextOpts);
+	auto* opts = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoClientEncryptionEncryptTextOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -746,13 +746,13 @@ const char* kDkMeta = "mongoc.datakey_opts";
 
 int l_datakey_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionDatakeyOpts>(L, 1, kDkMeta);
-	MEM_DELETE(opts);
+	CLOUDENGINE_MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoClientEncryptionDatakeyOpts>(L, 1, kDkMeta) = nullptr;
 	return 0;
 }
 
 int l_datakey_opts_new(lua_State* L) {
-	auto* opts = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionDatakeyOpts);
+	auto* opts = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoClientEncryptionDatakeyOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -827,13 +827,13 @@ const char* kRwrMeta = "mongoc.rewrap_result";
 
 int l_rewrap_result_gc(lua_State* L) {
 	auto* result = GetUserdata<mongo::MongoClientEncryptionRewrapManyDatakeyResult>(L, 1, kRwrMeta);
-	MEM_DELETE(result);
+	CLOUDENGINE_MEM_DELETE(result);
 	*CheckUserdata<mongo::MongoClientEncryptionRewrapManyDatakeyResult>(L, 1, kRwrMeta) = nullptr;
 	return 0;
 }
 
 int l_rewrap_result_new(lua_State* L) {
-	auto* result = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionRewrapManyDatakeyResult);
+	auto* result = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoClientEncryptionRewrapManyDatakeyResult);
 	if (!result) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -861,7 +861,7 @@ int l_rewrap_result_get_bulk_write_result(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -970,7 +970,7 @@ int l_client_encryption_rewrap_many_datakey(lua_State* L) {
 		lua_pushnil(L);
 	} else {
 		lua_pushnil(L);
-		auto* copy = MEM_NEW_NOTHROW(mongo::MongoClientEncryptionRewrapManyDatakeyResult, std::move(result));
+		auto* copy = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoClientEncryptionRewrapManyDatakeyResult, std::move(result));
 		if (!copy) {
 			lua_pushnil(L);
 			lua_pushnil(L);
@@ -993,7 +993,7 @@ bool push_key_management_reply(lua_State* L,
 		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 	} else {
-		auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
+		auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, std::move(reply));
 		if (!doc) {
 			lua_pushnil(L);
 			lua_pushnil(L);

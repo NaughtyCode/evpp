@@ -18,7 +18,7 @@ int l_index_model_gc(lua_State* L) {
 	auto* m = GetUserdata<mongo::MongoIndexModel>(L, 1, kMetaName);
 	if (m) {
 		m->Destroy();
-		MEM_DELETE(m);
+		CLOUDENGINE_MEM_DELETE(m);
 	}
 	*CheckUserdata<mongo::MongoIndexModel>(L, 1, kMetaName) = nullptr;
 	return 0;
@@ -34,7 +34,7 @@ int l_index_model_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* m = MEM_NEW_NOTHROW(mongo::MongoIndexModel, *keys, opts);
+	auto* m = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoIndexModel, *keys, opts);
 	if (!m) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

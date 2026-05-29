@@ -15,7 +15,7 @@ namespace engine {
 // JSON format: array of objects (one object per row).
 // CSV format: header row + data rows.
 
-class ENGINE_API ConfigTable {
+class CLOUD_ENGINE_API ConfigTable {
 public:
     enum class ColumnType { Int, Float, Bool, String };
 

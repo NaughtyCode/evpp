@@ -11,7 +11,7 @@ namespace engine {
 namespace mongo {
 
 // Wraps mongoc-version-functions.h and bson-version-functions.h.
-class ENGINE_API MongoVersion {
+class CLOUD_ENGINE_API MongoVersion {
 	public:
 	// mongoc version
 	static int GetMajorVersion();

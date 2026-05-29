@@ -1,4 +1,4 @@
-﻿#include "runtime/evpp/kcp/kcp_server.h"
+#include "runtime/evpp/kcp/kcp_server.h"
 
 #include "runtime/evpp/event_loop.h"
 #include "runtime/evpp/event_loop_thread_pool.h"
@@ -198,7 +198,7 @@ class Server::RecvThread {
 	}
 
 	bool Run() {
-		thread_.reset(MEM_NEW(std::thread, std::bind(&Server::RecvingLoop, server_, this)));
+		thread_.reset(CLOUDENGINE_MEM_NEW(std::thread, std::bind(&Server::RecvingLoop, server_, this)));
 		return true;
 	}
 
@@ -257,7 +257,7 @@ Server::~Server() {
 }
 
 bool Server::Init(int port) {
-	RecvThreadPtr t(MEM_NEW(RecvThread, this));
+	RecvThreadPtr t(CLOUDENGINE_MEM_NEW(RecvThread, this));
 	if (!t->Listen(port)) {
 		return false;
 	}
@@ -455,7 +455,7 @@ void Server::RecvingLoop(RecvThread* th) {
 				int n = session->Recv(kcp_buf, sizeof(kcp_buf));
 				if (n < 0) break;  // no more complete messages
 
-				MessagePtr msg(MEM_NEW(Message, session->conv(), n));
+				MessagePtr msg(CLOUDENGINE_MEM_NEW(Message, session->conv(), n));
 				msg->Write(kcp_buf, n);
 				msg->set_remote_addr(*sock::sockaddr_cast(&from_addr));
 

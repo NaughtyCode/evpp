@@ -8,7 +8,7 @@ struct event_base;
 
 namespace evpp {
 class EventLoop;
-class EVPP_EXPORT EventWatcher {
+class CLOUD_ENGINE_API EventWatcher {
 	public:
 	typedef std::function<void()> Handler;
 
@@ -52,7 +52,7 @@ class EVPP_EXPORT EventWatcher {
 	Handler cancel_callback_;
 };
 
-class EVPP_EXPORT PipeEventWatcher : public EventWatcher {
+class CLOUD_ENGINE_API PipeEventWatcher : public EventWatcher {
 	public:
 	PipeEventWatcher(EventLoop* loop, const Handler& handler);
 	PipeEventWatcher(EventLoop* loop, Handler&& handler);
@@ -72,7 +72,7 @@ class EVPP_EXPORT PipeEventWatcher : public EventWatcher {
 	evpp_socket_t pipe_[2];	 // Write to pipe_[0] , Read from pipe_[1]
 };
 
-class EVPP_EXPORT TimerEventWatcher : public EventWatcher {
+class CLOUD_ENGINE_API TimerEventWatcher : public EventWatcher {
 	public:
 	TimerEventWatcher(EventLoop* loop, const Handler& handler, Duration timeout);
 	TimerEventWatcher(EventLoop* loop, Handler&& handler, Duration timeout);
@@ -89,7 +89,7 @@ class EVPP_EXPORT TimerEventWatcher : public EventWatcher {
 	Duration timeout_;
 };
 
-class EVPP_EXPORT SignalEventWatcher : public EventWatcher {
+class CLOUD_ENGINE_API SignalEventWatcher : public EventWatcher {
 	public:
 	SignalEventWatcher(signal_number_t signo, EventLoop* loop, const Handler& handler);
 	SignalEventWatcher(signal_number_t signo, EventLoop* loop, Handler&& handler);

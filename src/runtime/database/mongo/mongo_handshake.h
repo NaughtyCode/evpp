@@ -9,7 +9,7 @@ namespace engine {
 namespace mongo {
 
 // Wraps mongoc-handshake.h — customize driver handshake metadata.
-class ENGINE_API MongoHandshake {
+class CLOUD_ENGINE_API MongoHandshake {
 	public:
 	static constexpr int kAppnameMax = 128;
 

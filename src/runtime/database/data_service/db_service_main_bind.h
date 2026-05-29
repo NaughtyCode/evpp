@@ -114,7 +114,7 @@ namespace script {
 //   support is disabled.
 //
 
-ENGINE_API void ExportDbService(ScriptVM& vm);
+CLOUD_ENGINE_API void ExportDbService(ScriptVM& vm);
 
 }  // namespace script
 }  // namespace engine

@@ -25,7 +25,7 @@ namespace engine {
 // the Lua C API for stack operations, table manipulation, coroutine control,
 // debug hooks, etc.
 
-class ENGINE_API ScriptVM {
+class CLOUD_ENGINE_API ScriptVM {
 	public:
 	// Construction / destruction
 

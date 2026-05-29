@@ -1,4 +1,4 @@
-﻿#ifdef ENGINE_PHYSICS_ENABLED
+#ifdef ENGINE_PHYSICS_ENABLED
 
 #include "runtime/physics/physics_materials.h"
 
@@ -34,7 +34,7 @@ bool MaterialTable::LoadFromJson(const std::string& json) {
 void MaterialTable::Register(const std::vector<MaterialEntry>& entries) {
 	for (const auto& entry : entries) {
 		auto mat = JPH::Ref<PhysicsMaterialSimple>(
-			MEM_NEW(PhysicsMaterialSimple, entry.name, entry.friction, entry.restitution));
+			CLOUDENGINE_MEM_NEW(PhysicsMaterialSimple, entry.name, entry.friction, entry.restitution));
 		materials_[entry.name] = mat;  // Ref<Derived> → RefConst<Derived>
 		owned_[entry.name] = std::move(mat);  // hold ownership
 	}

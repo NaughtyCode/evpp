@@ -13,7 +13,7 @@
 namespace engine {
 namespace mongo {
 
-class ENGINE_API MongoClient {
+class CLOUD_ENGINE_API MongoClient {
 	public:
 	// Create a client from a connection URI string (e.g. "mongodb://localhost:27017").
 	static MongoClient* New(const char* uri_string);
@@ -147,7 +147,7 @@ class ENGINE_API MongoClient {
 	MongoClient& operator=(MongoClient&&) = delete;
 };
 
-class ENGINE_API MongoDatabase {
+class CLOUD_ENGINE_API MongoDatabase {
 	public:
 	void Destroy();
 
@@ -234,7 +234,7 @@ class ENGINE_API MongoDatabase {
 	MongoDatabase& operator=(MongoDatabase&&) = delete;
 };
 
-class ENGINE_API MongoCollection {
+class CLOUD_ENGINE_API MongoCollection {
 	public:
 	void Destroy();
 

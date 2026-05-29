@@ -9,30 +9,30 @@ namespace evpp {
 
 class Duration;
 
-EVPP_EXPORT std::string strerror(int e);
+CLOUD_ENGINE_API std::string strerror(int e);
 
 namespace sock {
 
-EVPP_EXPORT evpp_socket_t CreateNonblockingSocket();
-EVPP_EXPORT evpp_socket_t CreateUDPServer(int port);
-EVPP_EXPORT void SetKeepAlive(evpp_socket_t fd, bool on);
-EVPP_EXPORT void SetKeepAlive(evpp_socket_t fd, bool on, int idle_sec, int interval_sec, int count);
-EVPP_EXPORT void SetReuseAddr(evpp_socket_t fd);
-EVPP_EXPORT void SetReusePort(evpp_socket_t fd);
-EVPP_EXPORT void SetTCPNoDelay(evpp_socket_t fd, bool on);
-EVPP_EXPORT void SetLinger(evpp_socket_t fd, bool on, int seconds = 0);
-EVPP_EXPORT void SetTimeout(evpp_socket_t fd, uint32_t timeout_ms);
-EVPP_EXPORT void SetTimeout(evpp_socket_t fd, const Duration& timeout);
-EVPP_EXPORT std::string ToIPPort(const struct sockaddr_storage* ss);
-EVPP_EXPORT std::string ToIPPort(const struct sockaddr* ss);
-EVPP_EXPORT std::string ToIPPort(const struct sockaddr_in* ss);
-EVPP_EXPORT std::string ToIP(const struct sockaddr* ss);
+CLOUD_ENGINE_API evpp_socket_t CreateNonblockingSocket();
+CLOUD_ENGINE_API evpp_socket_t CreateUDPServer(int port);
+CLOUD_ENGINE_API void SetKeepAlive(evpp_socket_t fd, bool on);
+CLOUD_ENGINE_API void SetKeepAlive(evpp_socket_t fd, bool on, int idle_sec, int interval_sec, int count);
+CLOUD_ENGINE_API void SetReuseAddr(evpp_socket_t fd);
+CLOUD_ENGINE_API void SetReusePort(evpp_socket_t fd);
+CLOUD_ENGINE_API void SetTCPNoDelay(evpp_socket_t fd, bool on);
+CLOUD_ENGINE_API void SetLinger(evpp_socket_t fd, bool on, int seconds = 0);
+CLOUD_ENGINE_API void SetTimeout(evpp_socket_t fd, uint32_t timeout_ms);
+CLOUD_ENGINE_API void SetTimeout(evpp_socket_t fd, const Duration& timeout);
+CLOUD_ENGINE_API std::string ToIPPort(const struct sockaddr_storage* ss);
+CLOUD_ENGINE_API std::string ToIPPort(const struct sockaddr* ss);
+CLOUD_ENGINE_API std::string ToIPPort(const struct sockaddr_in* ss);
+CLOUD_ENGINE_API std::string ToIP(const struct sockaddr* ss);
 
 
 // @brief Parse a literal network address and return an internet protocol family address
 // @param[in] address - A network address of the form "host:port" or "[host]:port"
 // @return bool - false if parse failed.
-EVPP_EXPORT bool ParseFromIPPort(const char* address, struct sockaddr_storage& ss);
+CLOUD_ENGINE_API bool ParseFromIPPort(const char* address, struct sockaddr_storage& ss);
 
 inline struct sockaddr_storage ParseFromIPPort(const char* address) {
 	struct sockaddr_storage ss;
@@ -52,9 +52,9 @@ inline struct sockaddr_storage ParseFromIPPort(const char* address) {
 // @param[out] host -
 // @param[out] port - the port in local machine byte order
 // @return bool - false if the network address is invalid format
-EVPP_EXPORT bool SplitHostPort(const char* address, std::string& host, int& port);
+CLOUD_ENGINE_API bool SplitHostPort(const char* address, std::string& host, int& port);
 
-EVPP_EXPORT struct sockaddr_storage GetLocalAddr(evpp_socket_t sockfd);
+CLOUD_ENGINE_API struct sockaddr_storage GetLocalAddr(evpp_socket_t sockfd);
 
 inline bool IsZeroAddress(const struct sockaddr_storage* ss) {
 	const char* p = reinterpret_cast<const char*>(ss);
@@ -131,5 +131,5 @@ inline const struct sockaddr_storage* sockaddr_storage_cast(const struct sockadd
 }
 
 #ifdef H_OS_WINDOWS
-EVPP_EXPORT int readv(evpp_socket_t sockfd, struct iovec* iov, int iovcnt);
+CLOUD_ENGINE_API int readv(evpp_socket_t sockfd, struct iovec* iov, int iovcnt);
 #endif

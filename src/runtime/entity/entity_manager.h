@@ -17,7 +17,7 @@ class TimerManager;
 
 namespace entity {
 
-class ENGINE_API EntityManager {
+class CLOUD_ENGINE_API EntityManager {
 public:
 	static EntityManager& Instance();
 

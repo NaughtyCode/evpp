@@ -17,10 +17,10 @@ struct MongoBulkOperation::Impl {
 };
 
 MongoBulkOperation* MongoBulkOperation::New(bool ordered) {
-	auto* op = MEM_NEW(MongoBulkOperation);
+	auto* op = CLOUDENGINE_MEM_NEW(MongoBulkOperation);
 	op->impl_->bulk = mongoc_bulk_operation_new(ordered);
 	if (!op->impl_->bulk) {
-		MEM_DELETE(op);
+		CLOUDENGINE_MEM_DELETE(op);
 		return nullptr;
 	}
 	return op;
@@ -37,7 +37,7 @@ void MongoBulkOperation::Destroy() {
 		mongoc_bulk_operation_destroy(impl_->bulk);
 		impl_->bulk = nullptr;
 	}
-	MEM_DELETE(this);
+	CLOUDENGINE_MEM_DELETE(this);
 }
 
 void MongoBulkOperation::Insert(const BsonDocument& document) {

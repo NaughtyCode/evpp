@@ -46,7 +46,7 @@ enum class MongoStructuredLogComponent : int {
 };
 
 // Simple log API (wraps mongoc-log.h).
-class ENGINE_API MongoLog {
+class CLOUD_ENGINE_API MongoLog {
 	public:
 	// Set a custom log handler. Pass nullptr to restore default.
 	using LogFunc =
@@ -65,7 +65,7 @@ class ENGINE_API MongoLog {
 };
 
 // Structured log entry accessor (read-only wrapper around mongoc_structured_log_entry_t).
-class ENGINE_API MongoStructuredLogEntry {
+class CLOUD_ENGINE_API MongoStructuredLogEntry {
 	public:
 	explicit MongoStructuredLogEntry(const void* raw_entry);
 
@@ -81,7 +81,7 @@ class ENGINE_API MongoStructuredLogEntry {
 };
 
 // Structured log options (wraps mongoc_structured_log_opts_t).
-class ENGINE_API MongoStructuredLogOpts {
+class CLOUD_ENGINE_API MongoStructuredLogOpts {
 	public:
 	MongoStructuredLogOpts();
 	~MongoStructuredLogOpts();

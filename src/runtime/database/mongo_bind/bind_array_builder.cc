@@ -20,13 +20,13 @@ const char* kMetaName = "bson.array_builder";
 
 int l_array_builder_gc(lua_State* L) {
 	auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
-	MEM_DELETE(builder);
+	CLOUDENGINE_MEM_DELETE(builder);
 	*CheckUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
 
 int l_array_builder_new(lua_State* L) {
-	auto* builder = MEM_NEW_NOTHROW(mongo::BsonArrayBuilder);
+	auto* builder = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonArrayBuilder);
 	if (!builder) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -49,7 +49,7 @@ int l_array_builder_build(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -57,7 +57,7 @@ int l_array_builder_build(lua_State* L) {
 		return 3;
 	}
 	if (!builder->Build(doc)) {
-		MEM_DELETE(doc);
+		CLOUDENGINE_MEM_DELETE(doc);
 		lua_pushnil(L);
 		return 1;
 	}

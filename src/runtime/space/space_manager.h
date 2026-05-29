@@ -14,7 +14,7 @@ namespace space {
 
 // SpaceManager — manages all active Spaces
 
-class ENGINE_API SpaceManager {
+class CLOUD_ENGINE_API SpaceManager {
 public:
 	static SpaceManager& Instance();
 

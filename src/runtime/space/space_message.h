@@ -25,7 +25,7 @@ struct SpaceMessage {
 
 // SpaceMessageRouter — delivers cross-space messages via SPSC queue
 
-class ENGINE_API SpaceMessageRouter {
+class CLOUD_ENGINE_API SpaceMessageRouter {
 public:
 	static SpaceMessageRouter& Instance();
 

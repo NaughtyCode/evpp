@@ -9,7 +9,7 @@ namespace engine {
 namespace mongo {
 
 // Wraps mongoc-optional.h — a simple optional bool container.
-class ENGINE_API MongoOptional {
+class CLOUD_ENGINE_API MongoOptional {
 	public:
 	MongoOptional();
 	~MongoOptional() = default;

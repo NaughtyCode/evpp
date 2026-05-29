@@ -1,4 +1,4 @@
-﻿#include "runtime/script/timer_bind.h"
+#include "runtime/script/timer_bind.h"
 
 #include <cstdint>
 #include <memory>
@@ -250,7 +250,7 @@ void ExportTimer(ScriptVM& vm, TimerManager& tm) {
 	if (!L) return;
 
 	// Create per-VM timer state and store in the Lua registry.
-	auto* state = MEM_NEW(TimerBindState);
+	auto* state = CLOUDENGINE_MEM_NEW(TimerBindState);
 	state->timer_mgr = &tm;
 	lua_pushlightuserdata(L, state);
 	lua_setfield(L, LUA_REGISTRYINDEX, "__TimerBindState");
@@ -274,7 +274,7 @@ void ShutdownTimerBindings(ScriptVM& vm) {
 
 	if (state->ctxs.empty()) {
 		ENGINE_LOG_DEBUG(logger, "ScriptBind: no active timer bindings to shut down");
-		MEM_DELETE(state);
+		CLOUDENGINE_MEM_DELETE(state);
 		lua_pushnil(L);
 		lua_setfield(L, LUA_REGISTRYINDEX, "__TimerBindState");
 		return;
@@ -312,7 +312,7 @@ void ShutdownTimerBindings(ScriptVM& vm) {
 	ENGINE_LOG_INFO(logger, "ScriptBind: shut down [{}] timer binding(s)", count);
 
 	// Release the per-VM state.
-	MEM_DELETE(state);
+	CLOUDENGINE_MEM_DELETE(state);
 	lua_pushnil(L);
 	lua_setfield(L, LUA_REGISTRYINDEX, "__TimerBindState");
 }

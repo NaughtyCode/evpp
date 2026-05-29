@@ -49,7 +49,7 @@ void TCPClient::Connect() {
 	ENGINE_LOG_INFO(engine::GetLogger(), "remote_addr={}", remote_addr());
 	auto f = [this]() {
 		assert(loop_->IsInLoopThread());
-		connector_.reset(MEM_NEW(Connector, loop_, this));
+		connector_.reset(CLOUDENGINE_MEM_NEW(Connector, loop_, this));
 		connector_->SetNewConnectionCallback(std::bind(
 			&TCPClient::OnConnection, this, std::placeholders::_1, std::placeholders::_2));
 		connector_->Start();
@@ -123,14 +123,14 @@ void TCPClient::OnConnection(evpp_socket_t sockfd, const std::string& laddr) {
 		// Note: When we could not connect to a server,
 		//       the user layer will receive this notification constantly
 		//       because the connector_ will retry to do reconnection all the time.
-		conn_fn_(TCPConnPtr(MEM_NEW(TCPConn, loop_, "", sockfd, laddr, remote_addr_, 0)));
+		conn_fn_(TCPConnPtr(CLOUDENGINE_MEM_NEW(TCPConn, loop_, "", sockfd, laddr, remote_addr_, 0)));
 		return;
 	}
 
 	ENGINE_LOG_TRACE(
 		engine::GetLogger(), "this={} Successfully connected to {}", (void*) this, remote_addr_);
 	assert(loop_->IsInLoopThread());
-	TCPConnPtr c = TCPConnPtr(MEM_NEW(TCPConn, loop_, name_, sockfd, laddr, remote_addr_, id++));
+	TCPConnPtr c = TCPConnPtr(CLOUDENGINE_MEM_NEW(TCPConn, loop_, name_, sockfd, laddr, remote_addr_, id++));
 	c->set_type(TCPConn::kOutgoing);
 	c->SetMessageCallback(msg_fn_);
 	c->SetConnectionCallback(conn_fn_);

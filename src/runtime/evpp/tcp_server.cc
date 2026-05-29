@@ -22,7 +22,7 @@ TCPServer::TCPServer(EventLoop* loop,
 					 name,
 					 laddr,
 					 thread_num);
-	tpool_.reset(MEM_NEW(EventLoopThreadPool, loop_, thread_num));
+	tpool_.reset(CLOUDENGINE_MEM_NEW(EventLoopThreadPool, loop_, thread_num));
 }
 
 TCPServer::~TCPServer() {
@@ -38,7 +38,7 @@ TCPServer::~TCPServer() {
 bool TCPServer::Init() {
 	ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*) this);
 	assert(status_ == kNull);
-	listener_.reset(MEM_NEW(Listener, loop_, listen_addr_));
+	listener_.reset(CLOUDENGINE_MEM_NEW(Listener, loop_, listen_addr_));
 	if (!listener_->Listen()) {
 		listener_.reset();
 		return false;
@@ -184,7 +184,7 @@ void TCPServer::HandleNewConn(evpp_socket_t sockfd,
 #else
 	std::string n = remote_addr;
 #endif
-	TCPConnPtr conn(MEM_NEW(TCPConn, io_loop, n, sockfd, listen_addr_, remote_addr, next_conn_id_));
+	TCPConnPtr conn(CLOUDENGINE_MEM_NEW(TCPConn, io_loop, n, sockfd, listen_addr_, remote_addr, next_conn_id_));
 	assert(conn->type() == TCPConn::kIncoming);
 	conn->SetMessageCallback(msg_fn_);
 	conn->SetConnectionCallback(conn_fn_);

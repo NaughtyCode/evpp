@@ -14,7 +14,7 @@ namespace mongo {
 
 // Value type wrapping bson_error_t (504 bytes).
 // Pass by pointer to methods that can fail; nullptr means "ignore error".
-class ENGINE_API MongoError {
+class CLOUD_ENGINE_API MongoError {
 	public:
 	MongoError();
 	~MongoError();

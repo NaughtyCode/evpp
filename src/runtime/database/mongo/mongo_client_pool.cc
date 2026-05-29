@@ -20,22 +20,22 @@ struct MongoClientPool::Impl {
 };
 
 MongoClientPool* MongoClientPool::New(const MongoUri& uri) {
-	auto* pool = MEM_NEW(MongoClientPool);
+	auto* pool = CLOUDENGINE_MEM_NEW(MongoClientPool);
 	pool->impl_->pool = mongoc_client_pool_new(static_cast<const mongoc_uri_t*>(uri.RawUri()));
 	if (!pool->impl_->pool) {
-		MEM_DELETE(pool);
+		CLOUDENGINE_MEM_DELETE(pool);
 		return nullptr;
 	}
 	return pool;
 }
 
 MongoClientPool* MongoClientPool::New(const MongoUri& uri, MongoError* error) {
-	auto* pool = MEM_NEW(MongoClientPool);
+	auto* pool = CLOUDENGINE_MEM_NEW(MongoClientPool);
 	pool->impl_->pool = mongoc_client_pool_new_with_error(
 		static_cast<const mongoc_uri_t*>(uri.RawUri()),
 		error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 	if (!pool->impl_->pool) {
-		MEM_DELETE(pool);
+		CLOUDENGINE_MEM_DELETE(pool);
 		return nullptr;
 	}
 	return pool;

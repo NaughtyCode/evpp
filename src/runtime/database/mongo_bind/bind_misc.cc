@@ -1,4 +1,4 @@
-﻿#if defined(ENGINE_MONGODB_ENABLED)
+#if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo_bind/bind_misc.h"
 
@@ -27,13 +27,13 @@ const char* kOptionalMeta = "mongoc.optional";
 
 int l_optional_gc(lua_State* L) {
 	auto* opt = GetUserdata<mongo::MongoOptional>(L, 1, kOptionalMeta);
-	MEM_DELETE(opt);
+	CLOUDENGINE_MEM_DELETE(opt);
 	*CheckUserdata<mongo::MongoOptional>(L, 1, kOptionalMeta) = nullptr;
 	return 0;
 }
 
 int l_optional_new(lua_State* L) {
-	auto* opt = MEM_NEW_NOTHROW(mongo::MongoOptional);
+	auto* opt = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoOptional);
 	if (!opt) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

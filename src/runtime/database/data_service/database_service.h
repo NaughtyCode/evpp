@@ -54,7 +54,7 @@ class DBThread;
 //   4. DatabaseService::Instance().Shutdown()   — stop threads, drain, destroy pool
 //   5. MongoSystem::Instance().Shutdown()       — mongoc_cleanup, global once
 
-class ENGINE_API DatabaseService {
+class CLOUD_ENGINE_API DatabaseService {
 	public:
 	static DatabaseService& Instance();
 

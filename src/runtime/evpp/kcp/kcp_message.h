@@ -9,7 +9,7 @@
 namespace evpp {
 namespace kcp {
 
-class EVPP_EXPORT Message : public Buffer {
+class CLOUD_ENGINE_API Message : public Buffer {
 	public:
 	Message(uint32_t conv, size_t buffer_size = 1472) : Buffer(buffer_size), conv_(conv) {
 		memset(&remote_addr_, 0, sizeof(remote_addr_));

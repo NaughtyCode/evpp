@@ -51,7 +51,7 @@ struct SnapshotValue {
 	int ref_val = LUA_NOREF;  // registry reference for functions/tables/userdata
 };
 
-class ENGINE_API ScriptReloader {
+class CLOUD_ENGINE_API ScriptReloader {
 	public:
 	ScriptReloader();
 	~ScriptReloader();

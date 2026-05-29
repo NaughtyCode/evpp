@@ -27,7 +27,7 @@ enum class EntityState {
 
 class EntityManager;
 
-class ENGINE_API Entity {
+class CLOUD_ENGINE_API Entity {
 public:
 	explicit Entity(EntityId id);
 	~Entity();

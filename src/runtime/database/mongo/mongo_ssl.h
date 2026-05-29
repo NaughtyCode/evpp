@@ -12,7 +12,7 @@ namespace engine {
 namespace mongo {
 
 // Wraps mongoc-ssl.h — SSL/TLS configuration for client connections.
-class ENGINE_API MongoSslOpts {
+class CLOUD_ENGINE_API MongoSslOpts {
 	public:
 	MongoSslOpts();
 	~MongoSslOpts();

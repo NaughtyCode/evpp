@@ -19,7 +19,7 @@ namespace mongo {
 //   auto uri = MongoUri::New("mongodb://localhost:27017");
 //   const char* db = uri.GetDatabase();
 //   uri.SetAppname("MyApp");
-class ENGINE_API MongoUri {
+class CLOUD_ENGINE_API MongoUri {
 	public:
 	static MongoUri New(const char* uri_string);
 	static MongoUri NewWithError(const char* uri_string, MongoError* error);

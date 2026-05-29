@@ -8,7 +8,7 @@
 namespace evpp {
 namespace httpc {
 class Request;
-class EVPP_EXPORT Response {
+class CLOUD_ENGINE_API Response {
 	public:
 	typedef std::map<evpp::Slice, evpp::Slice> Headers;
 #if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL)

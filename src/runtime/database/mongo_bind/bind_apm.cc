@@ -38,7 +38,7 @@ void PushBsonDocument(lua_State* L, const void* raw_bson) {
 	}
 	const auto* b = static_cast<const bson_t*>(raw_bson);
 	const uint8_t* data = bson_get_data(b);
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, data, b->len);
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, data, b->len);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -51,7 +51,7 @@ void PushBsonDocument(lua_State* L, const void* raw_bson) {
 // ═══════════════════════════════════════════════════════════════════════════// MongoApmCommandStartedEvent
 int l_apm_cmd_started_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmCommandStartedEvent>(L, 1, kMetaCmdStarted);
-	MEM_DELETE(ev);
+	CLOUDENGINE_MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmCommandStartedEvent>(L, 1, kMetaCmdStarted) = nullptr;
 	return 0;
 }
@@ -64,7 +64,7 @@ int l_apm_cmd_started_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmCommandStartedEvent, raw);
+	auto* ev = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoApmCommandStartedEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -182,7 +182,7 @@ const luaL_Reg kCmdStartedLib[] = {
 
 int l_apm_cmd_succeeded_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmCommandSucceededEvent>(L, 1, kMetaCmdSucceeded);
-	MEM_DELETE(ev);
+	CLOUDENGINE_MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmCommandSucceededEvent>(L, 1, kMetaCmdSucceeded) = nullptr;
 	return 0;
 }
@@ -195,7 +195,7 @@ int l_apm_cmd_succeeded_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmCommandSucceededEvent, raw);
+	auto* ev = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoApmCommandSucceededEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -320,7 +320,7 @@ const luaL_Reg kCmdSucceededLib[] = {
 
 int l_apm_cmd_failed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmCommandFailedEvent>(L, 1, kMetaCmdFailed);
-	MEM_DELETE(ev);
+	CLOUDENGINE_MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmCommandFailedEvent>(L, 1, kMetaCmdFailed) = nullptr;
 	return 0;
 }
@@ -333,7 +333,7 @@ int l_apm_cmd_failed_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmCommandFailedEvent, raw);
+	auto* ev = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoApmCommandFailedEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -474,7 +474,7 @@ const luaL_Reg kCmdFailedLib[] = {
 
 int l_apm_server_changed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerChangedEvent>(L, 1, kMetaServerChanged);
-	MEM_DELETE(ev);
+	CLOUDENGINE_MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmServerChangedEvent>(L, 1, kMetaServerChanged) = nullptr;
 	return 0;
 }
@@ -487,7 +487,7 @@ int l_apm_server_changed_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmServerChangedEvent, raw);
+	auto* ev = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoApmServerChangedEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -555,7 +555,7 @@ const luaL_Reg kServerChangedLib[] = {
 
 int l_apm_server_opening_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerOpeningEvent>(L, 1, kMetaServerOpening);
-	MEM_DELETE(ev);
+	CLOUDENGINE_MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmServerOpeningEvent>(L, 1, kMetaServerOpening) = nullptr;
 	return 0;
 }
@@ -568,7 +568,7 @@ int l_apm_server_opening_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmServerOpeningEvent, raw);
+	auto* ev = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoApmServerOpeningEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -622,7 +622,7 @@ const luaL_Reg kServerOpeningLib[] = {
 
 int l_apm_server_closed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerClosedEvent>(L, 1, kMetaServerClosed);
-	MEM_DELETE(ev);
+	CLOUDENGINE_MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmServerClosedEvent>(L, 1, kMetaServerClosed) = nullptr;
 	return 0;
 }
@@ -635,7 +635,7 @@ int l_apm_server_closed_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmServerClosedEvent, raw);
+	auto* ev = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoApmServerClosedEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -689,7 +689,7 @@ const luaL_Reg kServerClosedLib[] = {
 
 int l_apm_topology_changed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmTopologyChangedEvent>(L, 1, kMetaTopologyChanged);
-	MEM_DELETE(ev);
+	CLOUDENGINE_MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmTopologyChangedEvent>(L, 1, kMetaTopologyChanged) = nullptr;
 	return 0;
 }
@@ -702,7 +702,7 @@ int l_apm_topology_changed_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmTopologyChangedEvent, raw);
+	auto* ev = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoApmTopologyChangedEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -763,7 +763,7 @@ const luaL_Reg kTopologyChangedLib[] = {
 
 int l_apm_topology_opening_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmTopologyOpeningEvent>(L, 1, kMetaTopologyOpening);
-	MEM_DELETE(ev);
+	CLOUDENGINE_MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmTopologyOpeningEvent>(L, 1, kMetaTopologyOpening) = nullptr;
 	return 0;
 }
@@ -776,7 +776,7 @@ int l_apm_topology_opening_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmTopologyOpeningEvent, raw);
+	auto* ev = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoApmTopologyOpeningEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -823,7 +823,7 @@ const luaL_Reg kTopologyOpeningLib[] = {
 
 int l_apm_topology_closed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmTopologyClosedEvent>(L, 1, kMetaTopologyClosed);
-	MEM_DELETE(ev);
+	CLOUDENGINE_MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmTopologyClosedEvent>(L, 1, kMetaTopologyClosed) = nullptr;
 	return 0;
 }
@@ -836,7 +836,7 @@ int l_apm_topology_closed_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmTopologyClosedEvent, raw);
+	auto* ev = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoApmTopologyClosedEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -883,7 +883,7 @@ const luaL_Reg kTopologyClosedLib[] = {
 
 int l_apm_hb_started_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerHeartbeatStartedEvent>(L, 1, kMetaHbStarted);
-	MEM_DELETE(ev);
+	CLOUDENGINE_MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmServerHeartbeatStartedEvent>(L, 1, kMetaHbStarted) = nullptr;
 	return 0;
 }
@@ -896,7 +896,7 @@ int l_apm_hb_started_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmServerHeartbeatStartedEvent, raw);
+	auto* ev = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoApmServerHeartbeatStartedEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -942,7 +942,7 @@ const luaL_Reg kHbStartedLib[] = {
 
 int l_apm_hb_succeeded_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerHeartbeatSucceededEvent>(L, 1, kMetaHbSucceeded);
-	MEM_DELETE(ev);
+	CLOUDENGINE_MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmServerHeartbeatSucceededEvent>(L, 1, kMetaHbSucceeded) = nullptr;
 	return 0;
 }
@@ -955,7 +955,7 @@ int l_apm_hb_succeeded_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmServerHeartbeatSucceededEvent, raw);
+	auto* ev = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoApmServerHeartbeatSucceededEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -1019,7 +1019,7 @@ const luaL_Reg kHbSucceededLib[] = {
 
 int l_apm_hb_failed_gc(lua_State* L) {
 	auto* ev = GetUserdata<mongo::MongoApmServerHeartbeatFailedEvent>(L, 1, kMetaHbFailed);
-	MEM_DELETE(ev);
+	CLOUDENGINE_MEM_DELETE(ev);
 	*CheckUserdata<mongo::MongoApmServerHeartbeatFailedEvent>(L, 1, kMetaHbFailed) = nullptr;
 	return 0;
 }
@@ -1032,7 +1032,7 @@ int l_apm_hb_failed_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* ev = MEM_NEW_NOTHROW(mongo::MongoApmServerHeartbeatFailedEvent, raw);
+	auto* ev = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoApmServerHeartbeatFailedEvent, raw);
 	if (!ev) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -1101,13 +1101,13 @@ const luaL_Reg kHbFailedLib[] = {
 
 int l_apm_callbacks_gc(lua_State* L) {
 	auto* cb = GetUserdata<mongo::MongoApmCallbacks>(L, 1, kMetaCallbacks);
-	MEM_DELETE(cb);
+	CLOUDENGINE_MEM_DELETE(cb);
 	*CheckUserdata<mongo::MongoApmCallbacks>(L, 1, kMetaCallbacks) = nullptr;
 	return 0;
 }
 
 int l_apm_callbacks_new(lua_State* L) {
-	auto* cb = MEM_NEW_NOTHROW(mongo::MongoApmCallbacks);
+	auto* cb = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoApmCallbacks);
 	if (!cb) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

@@ -12,7 +12,7 @@
 namespace engine {
 namespace mongo {
 
-class ENGINE_API MongoReadPrefs {
+class CLOUD_ENGINE_API MongoReadPrefs {
 	public:
 	enum Mode {
 		kPrimary = 0,
@@ -54,7 +54,7 @@ class ENGINE_API MongoReadPrefs {
 	std::unique_ptr<Impl> impl_;
 };
 
-class ENGINE_API MongoWriteConcern {
+class CLOUD_ENGINE_API MongoWriteConcern {
 	public:
 	enum WValue {
 		kUnacknowledged = 0,
@@ -99,7 +99,7 @@ class ENGINE_API MongoWriteConcern {
 	std::unique_ptr<Impl> impl_;
 };
 
-class ENGINE_API MongoReadConcern {
+class CLOUD_ENGINE_API MongoReadConcern {
 	public:
 	static constexpr const char* kLevelAvailable = "available";
 	static constexpr const char* kLevelLocal = "local";

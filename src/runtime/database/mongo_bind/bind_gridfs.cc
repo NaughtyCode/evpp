@@ -22,13 +22,13 @@ const char* kFileOptsMeta = "mongoc.gridfs_file_opts";
 
 int l_file_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoGridFsFileOpts>(L, 1, kFileOptsMeta);
-	MEM_DELETE(opts);
+	CLOUDENGINE_MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoGridFsFileOpts>(L, 1, kFileOptsMeta) = nullptr;
 	return 0;
 }
 
 int l_file_opts_new(lua_State* L) {
-	auto* opts = MEM_NEW_NOTHROW(mongo::MongoGridFsFileOpts);
+	auto* opts = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoGridFsFileOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -167,7 +167,7 @@ int l_file_get_id(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -186,7 +186,7 @@ int l_file_get_metadata(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -225,7 +225,7 @@ int l_file_get_aliases(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

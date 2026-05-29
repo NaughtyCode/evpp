@@ -40,7 +40,7 @@ namespace engine {
 //   store.SetNull(2);                        // zero a slot
 //   store.Clear();                           // drop all
 
-class ENGINE_API VMCustomPtrStore {
+class CLOUD_ENGINE_API VMCustomPtrStore {
 	public:
 	//-------------------------------------------------------------------------
 	// Construction

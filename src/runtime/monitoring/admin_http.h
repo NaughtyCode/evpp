@@ -18,7 +18,7 @@ namespace monitoring {
 
 // Built-in admin HTTP server exposing health, stats, and metrics endpoints.
 // Runs on the engine's event loop, typically on a separate admin port.
-class ENGINE_API AdminHttpServer {
+class CLOUD_ENGINE_API AdminHttpServer {
 public:
 	AdminHttpServer();
 	~AdminHttpServer();

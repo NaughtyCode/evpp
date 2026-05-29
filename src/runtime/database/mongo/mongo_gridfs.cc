@@ -105,7 +105,7 @@ MongoGridFsFile::~MongoGridFsFile() {
 }
 
 void MongoGridFsFile::Destroy() {
-	MEM_DELETE(this);
+	CLOUDENGINE_MEM_DELETE(this);
 }
 
 const char* MongoGridFsFile::GetFilename() const {
@@ -248,7 +248,7 @@ MongoGridFsFileList::~MongoGridFsFileList() {
 }
 
 void MongoGridFsFileList::Destroy() {
-	MEM_DELETE(this);
+	CLOUDENGINE_MEM_DELETE(this);
 }
 
 MongoGridFsFile* MongoGridFsFileList::Next(MongoError* error) {
@@ -262,7 +262,7 @@ MongoGridFsFile* MongoGridFsFileList::Next(MongoError* error) {
 		}
 		return nullptr;
 	}
-	auto* result = MEM_NEW(MongoGridFsFile);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoGridFsFile);
 	result->impl_->file = file;
 	return result;
 }
@@ -293,7 +293,7 @@ MongoGridFs::~MongoGridFs() {
 }
 
 void MongoGridFs::Destroy() {
-	MEM_DELETE(this);
+	CLOUDENGINE_MEM_DELETE(this);
 }
 
 MongoGridFsFile* MongoGridFs::NewFile(MongoGridFsFileOpts* opts) {
@@ -301,7 +301,7 @@ MongoGridFsFile* MongoGridFs::NewFile(MongoGridFsFileOpts* opts) {
 	mongoc_gridfs_file_t* file = mongoc_gridfs_create_file(
 		impl_->gridfs, opts ? static_cast<mongoc_gridfs_file_opt_t*>(opts->Raw()) : nullptr);
 	if (!file) return nullptr;
-	auto* result = MEM_NEW(MongoGridFsFile);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoGridFsFile);
 	result->impl_->file = file;
 	return result;
 }
@@ -313,7 +313,7 @@ MongoGridFsFile* MongoGridFs::NewFileFromStream(void* stream, MongoGridFsFileOpt
 		static_cast<mongoc_stream_t*>(stream),
 		opts ? static_cast<mongoc_gridfs_file_opt_t*>(opts->Raw()) : nullptr);
 	if (!file) return nullptr;
-	auto* result = MEM_NEW(MongoGridFsFile);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoGridFsFile);
 	result->impl_->file = file;
 	return result;
 }
@@ -323,7 +323,7 @@ MongoGridFsFile* MongoGridFs::FindOneByFilename(const char* filename, MongoError
 	mongoc_gridfs_file_t* file = mongoc_gridfs_find_one_by_filename(
 		impl_->gridfs, filename, error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 	if (!file) return nullptr;
-	auto* result = MEM_NEW(MongoGridFsFile);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoGridFsFile);
 	result->impl_->file = file;
 	return result;
 }
@@ -338,7 +338,7 @@ MongoGridFsFile* MongoGridFs::FindOneWithOpts(const BsonDocument& filter,
 		opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr,
 		error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 	if (!file) return nullptr;
-	auto* result = MEM_NEW(MongoGridFsFile);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoGridFsFile);
 	result->impl_->file = file;
 	return result;
 }
@@ -351,7 +351,7 @@ MongoGridFsFileList* MongoGridFs::FindWithOpts(const BsonDocument& filter,
 									 static_cast<const bson_t*>(filter.RawBson()),
 									 opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr);
 	if (!list) return nullptr;
-	auto* result = MEM_NEW(MongoGridFsFileList);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoGridFsFileList);
 	result->impl_->list = list;
 	return result;
 }
@@ -407,13 +407,13 @@ MongoGridFsBucket* MongoGridFsBucket::New(void* raw_database,
 		read_prefs ? static_cast<const mongoc_read_prefs_t*>(read_prefs->RawReadPrefs()) : nullptr,
 		error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 	if (!bucket) return nullptr;
-	auto* result = MEM_NEW(MongoGridFsBucket);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoGridFsBucket);
 	result->impl_->bucket = bucket;
 	return result;
 }
 
 void MongoGridFsBucket::Destroy() {
-	MEM_DELETE(this);
+	CLOUDENGINE_MEM_DELETE(this);
 }
 
 void* MongoGridFsBucket::OpenUploadStream(const char* filename,
@@ -506,7 +506,7 @@ MongoCursor* MongoGridFsBucket::Find(const BsonDocument& filter, const BsonDocum
 								  static_cast<const bson_t*>(filter.RawBson()),
 								  opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr);
 	if (!cursor) return nullptr;
-	auto* result = MEM_NEW(MongoCursor);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoCursor);
 	result->SetCursor(cursor);
 	return result;
 }

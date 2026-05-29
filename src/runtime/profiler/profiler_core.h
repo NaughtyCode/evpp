@@ -14,7 +14,7 @@ class TracingSession;
 
 namespace engine {
 
-struct ENGINE_API ProfilerConfig {
+struct CLOUD_ENGINE_API ProfilerConfig {
 	std::string output_path = "trace.perfetto-trace";
 	uint32_t buffer_size_kb = 32768;
 	uint32_t duration_ms = 0;
@@ -22,7 +22,7 @@ struct ENGINE_API ProfilerConfig {
 	bool write_into_file = false;
 };
 
-class ENGINE_API ProfilerManager {
+class CLOUD_ENGINE_API ProfilerManager {
 	public:
 	static ProfilerManager& Get();
 

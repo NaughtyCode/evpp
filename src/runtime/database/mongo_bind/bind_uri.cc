@@ -20,14 +20,14 @@ const char* kMetaName = "mongoc.uri";
 
 int l_uri_gc(lua_State* L) {
 	auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
-	MEM_DELETE(uri);
+	CLOUDENGINE_MEM_DELETE(uri);
 	*CheckUserdata<mongo::MongoUri>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
 
 int l_uri_new(lua_State* L) {
 	const char* uri_str = luaL_checkstring(L, 1);
-	auto* uri = MEM_NEW_NOTHROW(mongo::MongoUri, mongo::MongoUri::New(uri_str));
+	auto* uri = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoUri, mongo::MongoUri::New(uri_str));
 	if (!uri) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -298,7 +298,7 @@ int l_uri_copy(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* copy = MEM_NEW_NOTHROW(mongo::MongoUri, uri->Copy());
+	auto* copy = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoUri, uri->Copy());
 	if (!copy) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -402,7 +402,7 @@ int l_uri_get_mechanism_properties(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -410,7 +410,7 @@ int l_uri_get_mechanism_properties(lua_State* L) {
 		return 3;
 	}
 	if (!uri->GetMechanismProperties(*doc)) {
-		MEM_DELETE(doc);
+		CLOUDENGINE_MEM_DELETE(doc);
 		lua_pushnil(L);
 		return 1;
 	}
@@ -423,7 +423,7 @@ int l_uri_new_with_error(lua_State* L) {
 	const char* uri_str = luaL_checkstring(L, 1);
 	mongo::MongoError error;
 	auto uri = mongo::MongoUri::NewWithError(uri_str, &error);
-	auto* uri_ptr = MEM_NEW_NOTHROW(mongo::MongoUri, std::move(uri));
+	auto* uri_ptr = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoUri, std::move(uri));
 	if (!uri_ptr) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -444,7 +444,7 @@ int l_uri_new_with_error(lua_State* L) {
 int l_uri_new_for_host_port(lua_State* L) {
 	const char* hostname = luaL_checkstring(L, 1);
 	auto port = static_cast<uint16_t>(luaL_checkinteger(L, 2));
-	auto* uri = MEM_NEW_NOTHROW(mongo::MongoUri, mongo::MongoUri::NewForHostPort(hostname, port));
+	auto* uri = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoUri, mongo::MongoUri::NewForHostPort(hostname, port));
 	if (!uri) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

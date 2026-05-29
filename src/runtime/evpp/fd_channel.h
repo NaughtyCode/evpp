@@ -14,7 +14,7 @@ class EventLoop;
 // This class doesn't own the file descriptor.
 // The file descriptor could be a socket,
 // an eventfd, a timerfd, or a signalfd
-class EVPP_EXPORT FdChannel {
+class CLOUD_ENGINE_API FdChannel {
 	public:
 	enum EventType {
 		kNone = 0x00,

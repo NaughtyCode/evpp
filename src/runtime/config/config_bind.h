@@ -12,7 +12,7 @@ namespace script {
 
 // Export the "config" Lua module with config.get/get_module/on_change/flush_changes
 // functions. Registered as a global table so Lua can call config.get(path), etc.
-ENGINE_API void ExportConfigBindings(ScriptVM& vm);
+CLOUD_ENGINE_API void ExportConfigBindings(ScriptVM& vm);
 
 // Flush pending config-change events for the given Lua state.
 // Must be called from the thread that owns `L` (typically the main/event-loop
@@ -20,7 +20,7 @@ ENGINE_API void ExportConfigBindings(ScriptVM& vm);
 // (including the FileWatcher thread); this function dispatches them to the
 // registered Lua on_change handlers.
 // Returns the number of callbacks invoked.
-ENGINE_API int FlushConfigCallbacks(lua_State* L);
+CLOUD_ENGINE_API int FlushConfigCallbacks(lua_State* L);
 
 }  // namespace script
 }  // namespace engine

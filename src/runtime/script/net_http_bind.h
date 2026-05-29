@@ -9,11 +9,11 @@ namespace script {
 
 // Push the net.http library table onto the Lua stack.
 // Table contains: get, post
-ENGINE_API void PushHttpLibrary(lua_State* L);
+CLOUD_ENGINE_API void PushHttpLibrary(lua_State* L);
 
 // Prevent in-flight HTTP callbacks from touching a freed Lua state,
 // then release all pending HTTP callback registry references.
-ENGINE_API void ShutdownHttpBindings();
+CLOUD_ENGINE_API void ShutdownHttpBindings();
 
 }  // namespace script
 }  // namespace engine

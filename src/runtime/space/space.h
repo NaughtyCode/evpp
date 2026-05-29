@@ -36,7 +36,7 @@ struct SpaceConfig {
 
 // Space — isolated game world with its own Lua VM and entity set
 
-class ENGINE_API Space {
+class CLOUD_ENGINE_API Space {
 public:
 	explicit Space(SpaceId id, const SpaceConfig& config);
 	~Space();

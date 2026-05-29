@@ -17,7 +17,7 @@ namespace script {
 //
 // The "cmsgpack_safe" module has the same API but wraps every call in
 // pcall: on error it returns (nil, errmsg) instead of raising.
-ENGINE_API void ExportMsgPack(ScriptVM& vm);
+CLOUD_ENGINE_API void ExportMsgPack(ScriptVM& vm);
 
 }  // namespace script
 }  // namespace engine

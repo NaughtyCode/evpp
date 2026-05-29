@@ -8,7 +8,7 @@ class ScriptVM;
 
 namespace script {
 
-ENGINE_API void ExportOrm(ScriptVM& vm);
+CLOUD_ENGINE_API void ExportOrm(ScriptVM& vm);
 
 }  // namespace script
 }  // namespace engine

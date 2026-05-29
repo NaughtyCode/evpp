@@ -17,7 +17,7 @@ namespace space {
 
 // ConnectionRouter — routes incoming TCP connections to Spaces
 
-class ENGINE_API ConnectionRouter {
+class CLOUD_ENGINE_API ConnectionRouter {
 public:
 	static ConnectionRouter& Instance();
 

@@ -18,7 +18,7 @@ InvokeTimerPtr InvokeTimer::Create(EventLoop* evloop,
 								   Duration timeout,
 								   const Functor& f,
 								   bool periodic) {
-	InvokeTimerPtr it(MEM_NEW(InvokeTimer, evloop, timeout, f, periodic));
+	InvokeTimerPtr it(CLOUDENGINE_MEM_NEW(InvokeTimer, evloop, timeout, f, periodic));
 	it->self_ = it;
 	return it;
 }
@@ -27,7 +27,7 @@ InvokeTimerPtr InvokeTimer::Create(EventLoop* evloop,
 								   Duration timeout,
 								   Functor&& f,
 								   bool periodic) {
-	InvokeTimerPtr it(MEM_NEW(InvokeTimer, evloop, timeout, std::move(f), periodic));
+	InvokeTimerPtr it(CLOUDENGINE_MEM_NEW(InvokeTimer, evloop, timeout, std::move(f), periodic));
 	it->self_ = it;
 	return it;
 }
@@ -46,7 +46,7 @@ void InvokeTimer::Start() {
 					 (void*) loop_,
 					 self_.use_count());
 	auto f = [this]() {
-		timer_.reset(MEM_NEW(TimerEventWatcher,
+		timer_.reset(CLOUDENGINE_MEM_NEW(TimerEventWatcher,
 			loop_,
 			[time_weak = std::weak_ptr<InvokeTimer>(shared_from_this())]() {
 				auto time_ptr = time_weak.lock();

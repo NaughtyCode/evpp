@@ -6,7 +6,7 @@
 #include "runtime/evpp/event_loop_thread.h"
 
 namespace evpp {
-class EVPP_EXPORT EventLoopThreadPool : public ServerStatus {
+class CLOUD_ENGINE_API EventLoopThreadPool : public ServerStatus {
 	public:
 	typedef std::function<void()> DoneCallback;
 

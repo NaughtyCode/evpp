@@ -1,4 +1,4 @@
-﻿#include "runtime/evpp/udp/udp_server.h"
+#include "runtime/evpp/udp/udp_server.h"
 
 #include "runtime/evpp/event_loop.h"
 #include "runtime/evpp/event_loop_thread_pool.h"
@@ -46,7 +46,7 @@ class Server::RecvThread {
 	}
 
 	bool Run() {
-		this->thread_.reset(MEM_NEW(std::thread, std::bind(&Server::RecvingLoop, this->server_, this)));
+		this->thread_.reset(CLOUDENGINE_MEM_NEW(std::thread, std::bind(&Server::RecvingLoop, this->server_, this)));
 		return true;
 	}
 
@@ -108,7 +108,7 @@ Server::~Server() {
 }
 
 bool Server::Init(int port) {
-	RecvThreadPtr t(MEM_NEW(RecvThread, this));
+	RecvThreadPtr t(CLOUDENGINE_MEM_NEW(RecvThread, this));
 	bool ret = t->Listen(port);
 	if (!ret) return false;
 	recv_threads_.push_back(t);
@@ -225,7 +225,7 @@ void Server::RecvingLoop(RecvThread* thread) {
 		// syscall for ~30% throughput improvement. Deferred: not available
 		// on Windows/macOS — would need platform-specific dispatch.
 
-		MessagePtr recv_msg(MEM_NEW(Message, thread->fd(), recv_buf_size_));
+		MessagePtr recv_msg(CLOUDENGINE_MEM_NEW(Message, thread->fd(), recv_buf_size_));
 		socklen_t addr_len = sizeof(struct sockaddr_storage);
 		int readn = ::recvfrom(thread->fd(),
 							   (char*) recv_msg->WriteBegin(),

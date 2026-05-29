@@ -12,7 +12,7 @@
 namespace engine {
 namespace mongo {
 
-class ENGINE_API MongoCursor {
+class CLOUD_ENGINE_API MongoCursor {
 	public:
 	MongoCursor();
 	~MongoCursor();

@@ -12,7 +12,7 @@ namespace engine {
 // Post-parse validation for all config types. Call after glaze::read_json()
 // to verify field ranges, required fields, and type constraints that JSON
 // syntax checking alone cannot catch.
-class ENGINE_API ConfigValidator {
+class CLOUD_ENGINE_API ConfigValidator {
 	public:
 	// Result type alias — canonical definition in i_config_manager.h.
 	using Result = ValidationResult;

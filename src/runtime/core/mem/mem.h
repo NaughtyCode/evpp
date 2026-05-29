@@ -22,7 +22,7 @@
 
 // ── Object allocation (new / delete) ────────────────────────────────────
 
-#define MEM_NEW(T, ...)                                                        \
+#define CLOUDENGINE_MEM_NEW(T, ...)                                                        \
 	([]() -> T* {                                                              \
 		auto* _p = new T(__VA_ARGS__);                                         \
 		engine::mem::MemStats::Instance().RecordAlloc(                          \
@@ -31,7 +31,7 @@
 		return _p;                                                             \
 	}())
 
-#define MEM_DELETE(ptr)                                                        \
+#define CLOUDENGINE_MEM_DELETE(ptr)                                                        \
 	do {                                                                       \
 		auto* _p = (ptr);                                                      \
 		engine::mem::MemStats::Instance().RecordFree(                          \
@@ -41,7 +41,7 @@
 
 // ── Array allocation (new[] / delete[]) ─────────────────────────────────
 
-#define MEM_NEW_ARR(T, n)                                                      \
+#define CLOUDENGINE_MEM_NEW_ARR(T, n)                                                      \
 	([&]() -> T* {                                                             \
 		size_t _count = (n);                                                   \
 		auto* _p = new T[_count];                                              \
@@ -51,7 +51,7 @@
 		return _p;                                                             \
 	}())
 
-#define MEM_DELETE_ARR(ptr)                                                    \
+#define CLOUDENGINE_MEM_DELETE_ARR(ptr)                                                    \
 	do {                                                                       \
 		auto* _p = (ptr);                                                      \
 		engine::mem::MemStats::Instance().RecordFree(                          \
@@ -61,7 +61,7 @@
 
 // ── C-style allocation (malloc / free / calloc / realloc) ───────────────
 
-#define MEM_MALLOC(size)                                                       \
+#define CLOUDENGINE_MEM_MALLOC(size)                                                       \
 	([&]() -> void* {                                                          \
 		size_t _sz = (size);                                                   \
 		void* _p = malloc(_sz);                                                \
@@ -70,7 +70,7 @@
 		return _p;                                                             \
 	}())
 
-#define MEM_FREE(ptr)                                                          \
+#define CLOUDENGINE_MEM_FREE(ptr)                                                          \
 	do {                                                                       \
 		void* _p = (ptr);                                                      \
 		engine::mem::MemStats::Instance().RecordFree(                          \
@@ -78,7 +78,7 @@
 		free(_p);                                                              \
 	} while (0)
 
-#define MEM_CALLOC(n, size)                                                    \
+#define CLOUDENGINE_MEM_CALLOC(n, size)                                                    \
 	([&]() -> void* {                                                          \
 		size_t _n = (n);                                                       \
 		size_t _sz = (size);                                                   \
@@ -88,7 +88,7 @@
 		return _p;                                                             \
 	}())
 
-#define MEM_REALLOC(ptr, size)                                                 \
+#define CLOUDENGINE_MEM_REALLOC(ptr, size)                                                 \
 	([&]() -> void* {                                                          \
 		void* _old = (ptr);                                                    \
 		size_t _sz = (size);                                                   \
@@ -100,7 +100,7 @@
 
 // ── Nothrow variants ────────────────────────────────────────────────────
 
-#define MEM_NEW_NOTHROW(T, ...)                                                \
+#define CLOUDENGINE_MEM_NEW_NOTHROW(T, ...)                                                \
 	([]() -> T* {                                                              \
 		auto* _p = new (std::nothrow) T(__VA_ARGS__);                          \
 		engine::mem::MemStats::Instance().RecordAlloc(                          \
@@ -109,7 +109,7 @@
 		return _p;                                                             \
 	}())
 
-#define MEM_NEW_ARR_NOTHROW(T, n)                                              \
+#define CLOUDENGINE_MEM_NEW_ARR_NOTHROW(T, n)                                              \
 	([&]() -> T* {                                                             \
 		size_t _count = (n);                                                   \
 		auto* _p = new (std::nothrow) T[_count];                               \
@@ -123,24 +123,24 @@
 
 // ── Object allocation (new / delete) ────────────────────────────────────
 
-#define MEM_NEW(T, ...)              new T(__VA_ARGS__)
-#define MEM_DELETE(ptr)              delete (ptr)
+#define CLOUDENGINE_MEM_NEW(T, ...)              new T(__VA_ARGS__)
+#define CLOUDENGINE_MEM_DELETE(ptr)              delete (ptr)
 
 // ── Array allocation (new[] / delete[]) ─────────────────────────────────
 
-#define MEM_NEW_ARR(T, n)            new T[n]
-#define MEM_DELETE_ARR(ptr)          delete[] (ptr)
+#define CLOUDENGINE_MEM_NEW_ARR(T, n)            new T[n]
+#define CLOUDENGINE_MEM_DELETE_ARR(ptr)          delete[] (ptr)
 
 // ── C-style allocation (malloc / free / calloc / realloc) ───────────────
 
-#define MEM_MALLOC(size)             malloc(size)
-#define MEM_FREE(ptr)                free(ptr)
-#define MEM_CALLOC(n, size)          calloc((n), (size))
-#define MEM_REALLOC(ptr, size)       realloc((ptr), (size))
+#define CLOUDENGINE_MEM_MALLOC(size)             malloc(size)
+#define CLOUDENGINE_MEM_FREE(ptr)                free(ptr)
+#define CLOUDENGINE_MEM_CALLOC(n, size)          calloc((n), (size))
+#define CLOUDENGINE_MEM_REALLOC(ptr, size)       realloc((ptr), (size))
 
 // ── Nothrow variants (return nullptr instead of throwing) ───────────────
 
-#define MEM_NEW_NOTHROW(T, ...)      new (std::nothrow) T(__VA_ARGS__)
-#define MEM_NEW_ARR_NOTHROW(T, n)    new (std::nothrow) T[n]
+#define CLOUDENGINE_MEM_NEW_NOTHROW(T, ...)      new (std::nothrow) T(__VA_ARGS__)
+#define CLOUDENGINE_MEM_NEW_ARR_NOTHROW(T, n)    new (std::nothrow) T[n]
 
 #endif  // ENGINE_MEM_STATS_ENABLED

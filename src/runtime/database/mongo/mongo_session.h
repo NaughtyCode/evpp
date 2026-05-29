@@ -14,7 +14,7 @@ namespace engine {
 namespace mongo {
 
 // Wraps mongoc_transaction_opt_t for configuring transaction options.
-class ENGINE_API MongoTransactionOpts {
+class CLOUD_ENGINE_API MongoTransactionOpts {
 	public:
 	MongoTransactionOpts();
 	~MongoTransactionOpts();
@@ -44,7 +44,7 @@ class ENGINE_API MongoTransactionOpts {
 };
 
 // Wraps mongoc_session_opt_t for configuring session options.
-class ENGINE_API MongoSessionOpts {
+class CLOUD_ENGINE_API MongoSessionOpts {
 	public:
 	MongoSessionOpts();
 	~MongoSessionOpts();
@@ -79,7 +79,7 @@ class ENGINE_API MongoSessionOpts {
 //   // ... do work ...
 //   session->CommitTransaction(nullptr, &error);
 //   delete session;
-class ENGINE_API MongoSession {
+class CLOUD_ENGINE_API MongoSession {
 	public:
 	enum TransactionState {
 		kNone = 0,

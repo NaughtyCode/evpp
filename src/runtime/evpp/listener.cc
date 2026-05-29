@@ -67,7 +67,7 @@ bool Listener::Listen(int backlog) {
 
 void Listener::Accept() {
 	ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*) this);
-	chan_.reset(MEM_NEW(FdChannel, loop_, fd_, true, false));
+	chan_.reset(CLOUDENGINE_MEM_NEW(FdChannel, loop_, fd_, true, false));
 	chan_->SetReadCallback(std::bind(&Listener::HandleAccept, this));
 	loop_->RunInLoop(std::bind(&FdChannel::AttachToLoop, chan_.get()));
 	ENGINE_LOG_INFO(engine::GetLogger(), "TCPServer is running at {}", addr_);

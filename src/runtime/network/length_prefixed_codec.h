@@ -29,7 +29,7 @@ namespace engine {
  *   std::string wire = codec.Encode("hello");  // [0,0,0,5] + "hello"
  *   auto msgs = codec.Decode(&buf);             // split buffer into messages
  */
-class ENGINE_API LengthPrefixedCodec {
+class CLOUD_ENGINE_API LengthPrefixedCodec {
 public:
 	/* Construct a codec with the given max message size in bytes.
 	 * @param max_message_size  Maximum allowed payload size (default 64 KiB).

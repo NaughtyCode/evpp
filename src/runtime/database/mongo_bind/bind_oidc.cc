@@ -18,7 +18,7 @@ int l_oidc_cred_gc(lua_State* L) {
 	auto* cred = GetUserdata<mongo::MongoOidcCredential>(L, 1, kCredMeta);
 	if (cred) {
 		cred->Destroy();
-		MEM_DELETE(cred);
+		CLOUDENGINE_MEM_DELETE(cred);
 	}
 	*CheckUserdata<mongo::MongoOidcCredential>(L, 1, kCredMeta) = nullptr;
 	return 0;
@@ -131,7 +131,7 @@ const char* kParamsMeta = "mongoc.oidc_callback_params";
 
 int l_oidc_params_gc(lua_State* L) {
 	auto* p = GetUserdata<mongo::MongoOidcCallbackParams>(L, 1, kParamsMeta);
-	MEM_DELETE(p);
+	CLOUDENGINE_MEM_DELETE(p);
 	*CheckUserdata<mongo::MongoOidcCallbackParams>(L, 1, kParamsMeta) = nullptr;
 	return 0;
 }
@@ -144,7 +144,7 @@ int l_oidc_params_new(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	auto* p = MEM_NEW_NOTHROW(mongo::MongoOidcCallbackParams, raw);
+	auto* p = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoOidcCallbackParams, raw);
 	if (!p) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

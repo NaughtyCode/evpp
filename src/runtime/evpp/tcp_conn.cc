@@ -30,7 +30,7 @@ TCPConn::TCPConn(EventLoop* l,
 	  type_(kIncoming),
 	  status_(kDisconnected) {
 	if (sockfd >= 0) {
-		chan_.reset(MEM_NEW(FdChannel, l, sockfd, false, false));
+		chan_.reset(CLOUDENGINE_MEM_NEW(FdChannel, l, sockfd, false, false));
 		chan_->SetReadCallback(std::bind(&TCPConn::HandleRead, this));
 		chan_->SetWriteCallback(std::bind(&TCPConn::HandleWrite, this));
 	}

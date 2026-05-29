@@ -71,7 +71,7 @@ struct MaterialEntry {
 	float restitution = 0.0f;
 };
 
-class ENGINE_API MaterialTable {
+class CLOUD_ENGINE_API MaterialTable {
 	public:
 	// Parse materials from a JSON array of MaterialEntry objects.
 	// Uses glaze for deserialization.

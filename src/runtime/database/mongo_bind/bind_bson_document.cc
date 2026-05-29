@@ -1,4 +1,4 @@
-﻿#if defined(ENGINE_MONGODB_ENABLED)
+#if defined(ENGINE_MONGODB_ENABLED)
 
 #include "runtime/database/mongo_bind/bind_bson_document.h"
 
@@ -21,7 +21,7 @@ const char* kMetaName = "bson.doc";
 
 int l_bson_doc_gc(lua_State* L) {
 	auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
-	MEM_DELETE(doc);
+	CLOUDENGINE_MEM_DELETE(doc);
 	*CheckUserdata<mongo::BsonDocument>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
@@ -29,7 +29,7 @@ int l_bson_doc_gc(lua_State* L) {
 // ── Constructors ──────────────────────────────────────────────────────
 
 int l_bson_doc_new(lua_State* L) {
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument);
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -49,7 +49,7 @@ int l_bson_doc_destroy(lua_State* L) {
 int l_bson_doc_from_json(lua_State* L) {
 	size_t len;
 	const char* json = luaL_checklstring(L, 1, &len);
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, 
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, 
 		mongo::BsonDocument::NewFromJson(reinterpret_cast<const uint8_t*>(json), len));
 	if (!doc) {
 		lua_pushnil(L);
@@ -65,7 +65,7 @@ int l_bson_doc_from_json(lua_State* L) {
 int l_bson_doc_from_data(lua_State* L) {
 	size_t len;
 	const char* data = luaL_checklstring(L, 1, &len);
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, 
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, 
 		mongo::BsonDocument::NewFromData(reinterpret_cast<const uint8_t*>(data), len));
 	if (!doc) {
 		lua_pushnil(L);
@@ -305,7 +305,7 @@ int l_bson_doc_copy(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* copy = MEM_NEW_NOTHROW(mongo::BsonDocument, doc->Copy());
+	auto* copy = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, doc->Copy());
 	if (!copy) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -387,7 +387,7 @@ int l_bson_doc_validate(lua_State* L) {
 int l_bson_doc_append_document_begin(lua_State* L) {
 	auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
 	const char* key = luaL_checkstring(L, 2);
-	auto* subdoc = MEM_NEW_NOTHROW(mongo::BsonDocument);
+	auto* subdoc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!subdoc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -395,7 +395,7 @@ int l_bson_doc_append_document_begin(lua_State* L) {
 		return 3;
 	}
 	if (!doc || !doc->AppendDocumentBegin(key, subdoc)) {
-		MEM_DELETE(subdoc);
+		CLOUDENGINE_MEM_DELETE(subdoc);
 		lua_pushboolean(L, false);
 		return 1;
 	}
@@ -414,7 +414,7 @@ int l_bson_doc_append_document_end(lua_State* L) {
 int l_bson_doc_append_array_begin(lua_State* L) {
 	auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
 	const char* key = luaL_checkstring(L, 2);
-	auto* array = MEM_NEW_NOTHROW(mongo::BsonDocument);
+	auto* array = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!array) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -422,7 +422,7 @@ int l_bson_doc_append_array_begin(lua_State* L) {
 		return 3;
 	}
 	if (!doc || !doc->AppendArrayBegin(key, array)) {
-		MEM_DELETE(array);
+		CLOUDENGINE_MEM_DELETE(array);
 		lua_pushboolean(L, false);
 		return 1;
 	}
@@ -441,7 +441,7 @@ int l_bson_doc_append_array_end(lua_State* L) {
 int l_bson_doc_append_array_unsafe_begin(lua_State* L) {
 	auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
 	const char* key = luaL_checkstring(L, 2);
-	auto* child = MEM_NEW_NOTHROW(mongo::BsonDocument);
+	auto* child = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!child) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");
@@ -449,7 +449,7 @@ int l_bson_doc_append_array_unsafe_begin(lua_State* L) {
 		return 3;
 	}
 	if (!doc || !doc->AppendArrayUnsafeBegin(key, child)) {
-		MEM_DELETE(child);
+		CLOUDENGINE_MEM_DELETE(child);
 		lua_pushboolean(L, false);
 		return 1;
 	}
@@ -687,7 +687,7 @@ int l_bson_doc_new_from_buffer(lua_State* L) {
 
 int l_bson_doc_sized_new(lua_State* L) {
 	auto size = static_cast<size_t>(luaL_checkinteger(L, 1));
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, mongo::BsonDocument::SizedNew(size));
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, mongo::BsonDocument::SizedNew(size));
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

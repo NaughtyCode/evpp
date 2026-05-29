@@ -41,32 +41,32 @@ struct MongoClient::Impl {
 
 // MongoClient
 MongoClient* MongoClient::New(const char* uri_string) {
-	auto* c = MEM_NEW(MongoClient);
+	auto* c = CLOUDENGINE_MEM_NEW(MongoClient);
 	c->impl_->client = mongoc_client_new(uri_string);
 	if (!c->impl_->client) {
-		MEM_DELETE(c);
+		CLOUDENGINE_MEM_DELETE(c);
 		return nullptr;
 	}
 	return c;
 }
 
 MongoClient* MongoClient::New(const MongoUri& uri) {
-	auto* c = MEM_NEW(MongoClient);
+	auto* c = CLOUDENGINE_MEM_NEW(MongoClient);
 	c->impl_->client = mongoc_client_new_from_uri(static_cast<const mongoc_uri_t*>(uri.RawUri()));
 	if (!c->impl_->client) {
-		MEM_DELETE(c);
+		CLOUDENGINE_MEM_DELETE(c);
 		return nullptr;
 	}
 	return c;
 }
 
 MongoClient* MongoClient::New(const MongoUri& uri, MongoError* error) {
-	auto* c = MEM_NEW(MongoClient);
+	auto* c = CLOUDENGINE_MEM_NEW(MongoClient);
 	c->impl_->client = mongoc_client_new_from_uri_with_error(
 		static_cast<const mongoc_uri_t*>(uri.RawUri()),
 		error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 	if (!c->impl_->client) {
-		MEM_DELETE(c);
+		CLOUDENGINE_MEM_DELETE(c);
 		return nullptr;
 	}
 	return c;
@@ -94,7 +94,7 @@ void MongoClient::ReleaseFromPool() {
 }
 
 MongoClient* MongoClient::FromPooled(void* raw_client) {
-	auto* c = MEM_NEW(MongoClient);
+	auto* c = CLOUDENGINE_MEM_NEW(MongoClient);
 	c->impl_->client = static_cast<mongoc_client_t*>(raw_client);
 	c->impl_->owned = false;  // pooled clients must be returned to the pool, not destroyed
 	return c;
@@ -129,7 +129,7 @@ void MongoClient::SetSslOpts(const void* ssl_opts) {
 MongoDatabase* MongoClient::GetDatabase(const char* name) {
 	if (!impl_ || !impl_->client) return nullptr;
 	mongoc_database_t* db = mongoc_client_get_database(impl_->client, name);
-	auto* result = MEM_NEW(MongoDatabase);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoDatabase);
 	result->impl_ = std::make_unique<MongoDatabase::Impl>();
 	result->impl_->db = db;
 	return result;
@@ -139,7 +139,7 @@ MongoDatabase* MongoClient::GetDefaultDatabase() {
 	if (!impl_ || !impl_->client) return nullptr;
 	mongoc_database_t* db = mongoc_client_get_default_database(impl_->client);
 	if (!db) return nullptr;
-	auto* result = MEM_NEW(MongoDatabase);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoDatabase);
 	result->impl_ = std::make_unique<MongoDatabase::Impl>();
 	result->impl_->db = db;
 	return result;
@@ -148,7 +148,7 @@ MongoDatabase* MongoClient::GetDefaultDatabase() {
 MongoCollection* MongoClient::GetCollection(const char* db_name, const char* coll_name) {
 	if (!impl_ || !impl_->client) return nullptr;
 	mongoc_collection_t* coll = mongoc_client_get_collection(impl_->client, db_name, coll_name);
-	auto* result = MEM_NEW(MongoCollection);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoCollection);
 	result->impl_ = std::make_unique<MongoCollection::Impl>();
 	result->impl_->coll = coll;
 	return result;
@@ -281,7 +281,7 @@ MongoSession* MongoClient::StartSession(const MongoSessionOpts* opts, MongoError
 		opts ? static_cast<const mongoc_session_opt_t*>(opts->RawSessionOpts()) : nullptr,
 		error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 	if (!session) return nullptr;
-	auto* result = MEM_NEW(MongoSession);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoSession);
 	result->SetRawSession(session);
 	return result;
 }
@@ -305,7 +305,7 @@ MongoCursor* MongoClient::FindDatabasesWithOpts(const BsonDocument* opts) {
 	mongoc_cursor_t* cursor = mongoc_client_find_databases_with_opts(
 		impl_->client, opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr);
 	if (!cursor) return nullptr;
-	auto* result = MEM_NEW(MongoCursor);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoCursor);
 	result->SetCursor(cursor);
 	return result;
 }
@@ -317,7 +317,7 @@ MongoChangeStream* MongoClient::Watch(const BsonDocument& pipeline, const BsonDo
 							static_cast<const bson_t*>(pipeline.RawBson()),
 							opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr);
 	if (!stream) return nullptr;
-	auto* result = MEM_NEW(MongoChangeStream);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoChangeStream);
 	result->SetRawStream(stream);
 	return result;
 }
@@ -466,7 +466,7 @@ MongoDatabase* MongoDatabase::Copy() const {
 	if (!impl_ || !impl_->db) return nullptr;
 	mongoc_database_t* db = mongoc_database_copy(impl_->db);
 	if (!db) return nullptr;
-	auto* result = MEM_NEW(MongoDatabase);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoDatabase);
 	result->impl_ = std::make_unique<Impl>();
 	result->impl_->db = db;
 	return result;
@@ -475,7 +475,7 @@ MongoDatabase* MongoDatabase::Copy() const {
 MongoCollection* MongoDatabase::GetCollection(const char* name) {
 	if (!impl_ || !impl_->db) return nullptr;
 	mongoc_collection_t* coll = mongoc_database_get_collection(impl_->db, name);
-	auto* result = MEM_NEW(MongoCollection);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoCollection);
 	result->impl_ = std::make_unique<MongoCollection::Impl>();
 	result->impl_->coll = coll;
 	return result;
@@ -491,7 +491,7 @@ MongoCollection* MongoDatabase::CreateCollection(const char* name,
 		options ? static_cast<const bson_t*>(options->RawBson()) : nullptr,
 		error ? static_cast<bson_error_t*>(error->RawError()) : nullptr);
 	if (!coll) return nullptr;
-	auto* result = MEM_NEW(MongoCollection);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoCollection);
 	result->impl_ = std::make_unique<MongoCollection::Impl>();
 	result->impl_->coll = coll;
 	return result;
@@ -549,7 +549,7 @@ MongoCollection* MongoCollection::Copy() const {
 	if (!impl_ || !impl_->coll) return nullptr;
 	mongoc_collection_t* coll = mongoc_collection_copy(impl_->coll);
 	if (!coll) return nullptr;
-	auto* result = MEM_NEW(MongoCollection);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoCollection);
 	result->impl_ = std::make_unique<Impl>();
 	result->impl_->coll = coll;
 	return result;
@@ -649,7 +649,7 @@ MongoCursor* MongoCollection::FindWithOpts(const BsonDocument& filter,
 		opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr,
 		read_prefs ? static_cast<const mongoc_read_prefs_t*>(read_prefs->RawReadPrefs()) : nullptr);
 	if (!cursor) return nullptr;
-	auto* result = MEM_NEW(MongoCursor);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoCursor);
 	result->SetCursor(cursor);
 	return result;
 }
@@ -784,7 +784,7 @@ MongoCursor* MongoDatabase::Aggregate(const BsonDocument& pipeline,
 		opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr,
 		read_prefs ? static_cast<const mongoc_read_prefs_t*>(read_prefs->RawReadPrefs()) : nullptr);
 	if (!cursor) return nullptr;
-	auto* result = MEM_NEW(MongoCursor);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoCursor);
 	result->SetCursor(cursor);
 	return result;
 }
@@ -796,7 +796,7 @@ MongoChangeStream* MongoDatabase::Watch(const BsonDocument& pipeline, const Bson
 							  static_cast<const bson_t*>(pipeline.RawBson()),
 							  opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr);
 	if (!stream) return nullptr;
-	auto* result = MEM_NEW(MongoChangeStream);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoChangeStream);
 	result->SetRawStream(stream);
 	return result;
 }
@@ -916,7 +916,7 @@ MongoCursor* MongoDatabase::FindCollectionsWithOpts(const BsonDocument* opts) {
 	mongoc_cursor_t* cursor = mongoc_database_find_collections_with_opts(
 		impl_->db, opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr);
 	if (!cursor) return nullptr;
-	auto* result = MEM_NEW(MongoCursor);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoCursor);
 	result->SetCursor(cursor);
 	return result;
 }
@@ -1003,7 +1003,7 @@ MongoCursor* MongoCollection::FindIndexes(const BsonDocument* opts) {
 	mongoc_cursor_t* cursor = mongoc_collection_find_indexes_with_opts(
 		impl_->coll, opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr);
 	if (!cursor) return nullptr;
-	auto* result = MEM_NEW(MongoCursor);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoCursor);
 	result->SetCursor(cursor);
 	return result;
 }
@@ -1024,7 +1024,7 @@ MongoCursor* MongoCollection::Aggregate(const BsonDocument& pipeline,
 		opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr,
 		read_prefs ? static_cast<const mongoc_read_prefs_t*>(read_prefs->RawReadPrefs()) : nullptr);
 	if (!cursor) return nullptr;
-	auto* result = MEM_NEW(MongoCursor);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoCursor);
 	result->SetCursor(cursor);
 	return result;
 }
@@ -1069,7 +1069,7 @@ MongoChangeStream* MongoCollection::Watch(const BsonDocument& pipeline, const Bs
 								static_cast<const bson_t*>(pipeline.RawBson()),
 								opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr);
 	if (!stream) return nullptr;
-	auto* result = MEM_NEW(MongoChangeStream);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoChangeStream);
 	result->SetRawStream(stream);
 	return result;
 }
@@ -1131,7 +1131,7 @@ MongoBulkOperation* MongoCollection::CreateBulkOperation(bool ordered, const voi
 	mongoc_bulk_operation_t* bulk = mongoc_collection_create_bulk_operation_with_opts(
 		impl_->coll, static_cast<const bson_t*>(opts.RawBson()));
 	if (!bulk) return nullptr;
-	auto* result = MEM_NEW(MongoBulkOperation);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoBulkOperation);
 	result->SetRawBulkOperation(bulk);
 	if (session_raw) result->SetClientSession(const_cast<void*>(session_raw));
 	return result;
@@ -1142,7 +1142,7 @@ MongoBulkOperation* MongoCollection::CreateBulkOperationWithOpts(const BsonDocum
 	mongoc_bulk_operation_t* bulk = mongoc_collection_create_bulk_operation_with_opts(
 		impl_->coll, opts ? static_cast<const bson_t*>(opts->RawBson()) : nullptr);
 	if (!bulk) return nullptr;
-	auto* result = MEM_NEW(MongoBulkOperation);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoBulkOperation);
 	result->SetRawBulkOperation(bulk);
 	return result;
 }

@@ -1,4 +1,4 @@
-﻿#include "runtime/script/net_udp_server_bind.h"
+#include "runtime/script/net_udp_server_bind.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -131,7 +131,7 @@ void ReleaseUdpServer(lua_State* L, UdpServerCtx* ctx) {
 			if (old_inst_ref != LUA_NOREF) {
 				luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
 			}
-			MEM_DELETE(ctx);
+			CLOUDENGINE_MEM_DELETE(ctx);
 			g_udp_alive.Release();
 		});
 	} else {
@@ -141,7 +141,7 @@ void ReleaseUdpServer(lua_State* L, UdpServerCtx* ctx) {
 		if (old_inst_ref != LUA_NOREF) {
 			luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
 		}
-		MEM_DELETE(ctx);
+		CLOUDENGINE_MEM_DELETE(ctx);
 	}
 }
 
@@ -154,7 +154,7 @@ int l_udp_server_listen(lua_State* L) {
 		return luaL_error(L, "expected number or string for port");
 	}
 
-	auto* ctx = MEM_NEW(UdpServerCtx);
+	auto* ctx = CLOUDENGINE_MEM_NEW(UdpServerCtx);
 	ctx->L = L;
 
 	if (lua_gettop(L) >= 2 && lua_isfunction(L, 2)) {
@@ -169,7 +169,7 @@ int l_udp_server_listen(lua_State* L) {
 	if (arg1_type == LUA_TNUMBER) {
 		lua_Integer port64 = luaL_checkinteger(L, 1);
 		if (port64 <= 0 || port64 > 65535) {
-			MEM_DELETE(ctx);
+			CLOUDENGINE_MEM_DELETE(ctx);
 			return luaL_error(L, "port out of range");
 		}
 		int port = static_cast<int>(port64);
@@ -183,7 +183,7 @@ int l_udp_server_listen(lua_State* L) {
 		if (ctx->on_message_ref != LUA_NOREF) {
 			luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
 		}
-		MEM_DELETE(ctx);
+		CLOUDENGINE_MEM_DELETE(ctx);
 		lua_pushnil(L);
 		lua_pushstring(L, "udp_server init failed");
 		return 2;
@@ -204,7 +204,7 @@ int l_udp_server_listen(lua_State* L) {
 		ctx->instance_ref = LUA_NOREF;
 		lua_pushnil(L);
 		lua_setfield(L, -2, "_ctx");  // null _ctx before delete
-		MEM_DELETE(ctx);
+		CLOUDENGINE_MEM_DELETE(ctx);
 		lua_pop(L, 1);	// pop instance table
 		lua_pushnil(L);
 		lua_pushstring(L, "udp_server start failed");
@@ -382,7 +382,7 @@ void ShutdownUdpServerBindings() {
 		if (old_inst_ref != LUA_NOREF && L_ptr) {
 			luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_inst_ref);
 		}
-		MEM_DELETE(ctx);
+		CLOUDENGINE_MEM_DELETE(ctx);
 	}
 
 	if (!ctxs.empty()) {

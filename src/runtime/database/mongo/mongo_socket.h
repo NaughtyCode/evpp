@@ -27,7 +27,7 @@ namespace mongo {
 struct MongoIovec;
 
 // Wraps mongoc-socket.h — low-level socket abstraction with timeout support.
-class ENGINE_API MongoSocket {
+class CLOUD_ENGINE_API MongoSocket {
 	public:
 	static MongoSocket* New(int domain, int type, int protocol);
 	void Destroy();
@@ -64,7 +64,7 @@ class ENGINE_API MongoSocket {
 };
 
 // Mirrors mongoc_socket_poll_t.
-struct ENGINE_API MongoSocketPollFd {
+struct CLOUD_ENGINE_API MongoSocketPollFd {
 	MongoSocket* socket = nullptr;
 	int events = 0;
 	int revents = 0;

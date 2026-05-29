@@ -13,7 +13,7 @@ namespace script {
 
 // Register mongoc and bson Lua modules into the given VM.
 // Creates two global module tables: "mongoc" and "bson".
-ENGINE_API void ExportMongo(ScriptVM& vm);
+CLOUD_ENGINE_API void ExportMongo(ScriptVM& vm);
 
 }  // namespace script
 }  // namespace engine

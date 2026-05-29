@@ -26,56 +26,56 @@ class BsonVectorPackedBitView;
 
 // BsonDocument vector append helpers (free functions)
 
-ENGINE_API bool BsonAppendVectorInt8Uninit(BsonDocument& doc,
+CLOUD_ENGINE_API bool BsonAppendVectorInt8Uninit(BsonDocument& doc,
 										   const char* key,
 										   size_t element_count,
 										   BsonVectorInt8View& view_out);
-ENGINE_API bool BsonAppendVectorFloat32Uninit(BsonDocument& doc,
+CLOUD_ENGINE_API bool BsonAppendVectorFloat32Uninit(BsonDocument& doc,
 											  const char* key,
 											  size_t element_count,
 											  BsonVectorFloat32View& view_out);
-ENGINE_API bool BsonAppendVectorPackedBitUninit(BsonDocument& doc,
+CLOUD_ENGINE_API bool BsonAppendVectorPackedBitUninit(BsonDocument& doc,
 												const char* key,
 												size_t element_count,
 												BsonVectorPackedBitView& view_out);
 
-ENGINE_API bool BsonAppendVectorInt8FromArray(BsonDocument& doc,
+CLOUD_ENGINE_API bool BsonAppendVectorInt8FromArray(BsonDocument& doc,
 											  const char* key,
 											  const BsonIter& iter,
 											  MongoError* error = nullptr);
-ENGINE_API bool BsonAppendVectorFloat32FromArray(BsonDocument& doc,
+CLOUD_ENGINE_API bool BsonAppendVectorFloat32FromArray(BsonDocument& doc,
 												 const char* key,
 												 const BsonIter& iter,
 												 MongoError* error = nullptr);
-ENGINE_API bool BsonAppendVectorPackedBitFromArray(BsonDocument& doc,
+CLOUD_ENGINE_API bool BsonAppendVectorPackedBitFromArray(BsonDocument& doc,
 												   const char* key,
 												   const BsonIter& iter,
 												   MongoError* error = nullptr);
 
-ENGINE_API bool BsonAppendArrayFromVectorInt8(BsonDocument& doc,
+CLOUD_ENGINE_API bool BsonAppendArrayFromVectorInt8(BsonDocument& doc,
 											  const char* key,
 											  const BsonVectorInt8ConstView& view);
-ENGINE_API bool BsonAppendArrayFromVectorFloat32(BsonDocument& doc,
+CLOUD_ENGINE_API bool BsonAppendArrayFromVectorFloat32(BsonDocument& doc,
 												 const char* key,
 												 const BsonVectorFloat32ConstView& view);
-ENGINE_API bool BsonAppendArrayFromVectorPackedBit(BsonDocument& doc,
+CLOUD_ENGINE_API bool BsonAppendArrayFromVectorPackedBit(BsonDocument& doc,
 												   const char* key,
 												   const BsonVectorPackedBitConstView& view);
 
 // BsonArrayBuilder vector append helpers (free functions)
 
-ENGINE_API bool BsonArrayBuilderAppendVectorInt8Elements(BsonArrayBuilder& builder,
+CLOUD_ENGINE_API bool BsonArrayBuilderAppendVectorInt8Elements(BsonArrayBuilder& builder,
 														 const BsonVectorInt8ConstView& view);
-ENGINE_API bool BsonArrayBuilderAppendVectorFloat32Elements(BsonArrayBuilder& builder,
+CLOUD_ENGINE_API bool BsonArrayBuilderAppendVectorFloat32Elements(BsonArrayBuilder& builder,
 															const BsonVectorFloat32ConstView& view);
-ENGINE_API bool BsonArrayBuilderAppendVectorPackedBitElements(
+CLOUD_ENGINE_API bool BsonArrayBuilderAppendVectorPackedBitElements(
 	BsonArrayBuilder& builder, const BsonVectorPackedBitConstView& view);
-ENGINE_API bool BsonArrayBuilderAppendVectorElements(BsonArrayBuilder& builder,
+CLOUD_ENGINE_API bool BsonArrayBuilderAppendVectorElements(BsonArrayBuilder& builder,
 													 const BsonIter& iter);
 
 // BsonVectorInt8ConstView
 
-class ENGINE_API BsonVectorInt8ConstView {
+class CLOUD_ENGINE_API BsonVectorInt8ConstView {
 	public:
 	BsonVectorInt8ConstView();
 
@@ -100,7 +100,7 @@ class ENGINE_API BsonVectorInt8ConstView {
 
 // BsonVectorInt8View
 
-class ENGINE_API BsonVectorInt8View {
+class CLOUD_ENGINE_API BsonVectorInt8View {
 	public:
 	BsonVectorInt8View();
 
@@ -124,7 +124,7 @@ class ENGINE_API BsonVectorInt8View {
 
 // BsonVectorFloat32ConstView
 
-class ENGINE_API BsonVectorFloat32ConstView {
+class CLOUD_ENGINE_API BsonVectorFloat32ConstView {
 	public:
 	BsonVectorFloat32ConstView();
 
@@ -148,7 +148,7 @@ class ENGINE_API BsonVectorFloat32ConstView {
 
 // BsonVectorFloat32View
 
-class ENGINE_API BsonVectorFloat32View {
+class CLOUD_ENGINE_API BsonVectorFloat32View {
 	public:
 	BsonVectorFloat32View();
 
@@ -173,7 +173,7 @@ class ENGINE_API BsonVectorFloat32View {
 
 // BsonVectorPackedBitConstView
 
-class ENGINE_API BsonVectorPackedBitConstView {
+class CLOUD_ENGINE_API BsonVectorPackedBitConstView {
 	public:
 	BsonVectorPackedBitConstView();
 
@@ -204,7 +204,7 @@ class ENGINE_API BsonVectorPackedBitConstView {
 
 // BsonVectorPackedBitView
 
-class ENGINE_API BsonVectorPackedBitView {
+class CLOUD_ENGINE_API BsonVectorPackedBitView {
 	public:
 	BsonVectorPackedBitView();
 

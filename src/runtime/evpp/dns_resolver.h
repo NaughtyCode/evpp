@@ -9,7 +9,7 @@ struct evdns_getaddrinfo_request;
 namespace evpp {
 class EventLoop;
 class TimerEventWatcher;
-class EVPP_EXPORT DNSResolver : public std::enable_shared_from_this<DNSResolver> {
+class CLOUD_ENGINE_API DNSResolver : public std::enable_shared_from_this<DNSResolver> {
 	public:
 	// IPv6 DNS resolution is not yet implemented. When needed, extend
 	// the resolver to support AF_INET6 via struct in6_addr and getaddrinfo.

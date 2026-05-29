@@ -31,7 +31,7 @@ class Service;
 //      4. Call Server::Start()
 //      5. Process HTTP request in callbacks
 //      6. At last call Server::Stop() to stop the whole server
-class EVPP_EXPORT Server : public ThreadDispatchPolicy, public ServerStatus {
+class CLOUD_ENGINE_API Server : public ThreadDispatchPolicy, public ServerStatus {
 	public:
 	Server(uint32_t thread_num = 0);
 

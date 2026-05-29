@@ -20,7 +20,7 @@ namespace mongo {
 //   bulk->UpdateOne(selector, update);
 //   uint32_t server_id = bulk->Execute(reply, &error);
 //   delete bulk;
-class ENGINE_API MongoBulkOperation {
+class CLOUD_ENGINE_API MongoBulkOperation {
 	public:
 	static MongoBulkOperation* New(bool ordered);
 

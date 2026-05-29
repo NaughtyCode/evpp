@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2024 GameTimerLib
 //
 // TimerManager implementation.
@@ -225,7 +225,7 @@ TimerId TimerManager::create_timer(HrTimerNode::Callback callback,
 								   TimerMode mode) {
 	auto entry = std::make_unique<TimerEntry>();
 	entry->kind = TimerEntry::Kind::kHrTimer;
-	entry->hrtimer = MEM_NEW(HrTimerNode);
+	entry->hrtimer = CLOUDENGINE_MEM_NEW(HrTimerNode);
 	entry->hrtimer->setup(std::move(callback), clock_id, mode);
 
 	TimerId id = allocate_id();
@@ -386,7 +386,7 @@ void TimerManager::set_timer_callback(TimerId id, HrTimerNode::Callback callback
 TimerId TimerManager::create_wheel_timer(TimerWheelNode::Callback callback, uint32_t flags) {
 	auto entry = std::make_unique<TimerEntry>();
 	entry->kind = TimerEntry::Kind::kWheelTimer;
-	entry->wheel_timer = MEM_NEW(TimerWheelNode);
+	entry->wheel_timer = CLOUDENGINE_MEM_NEW(TimerWheelNode);
 	entry->wheel_timer->setup(std::move(callback), flags);
 
 	TimerId id = allocate_id();
@@ -427,7 +427,7 @@ bool TimerManager::wheel_timer_pending(TimerId id) const {
 TimerId TimerManager::create_alarm(AlarmType type, Alarm::Callback callback) {
 	auto entry = std::make_unique<TimerEntry>();
 	entry->kind = TimerEntry::Kind::kAlarm;
-	entry->alarm = MEM_NEW(Alarm);
+	entry->alarm = CLOUDENGINE_MEM_NEW(Alarm);
 	entry->alarm->init(type, std::move(callback));
 
 	TimerId id = allocate_id();

@@ -49,7 +49,7 @@ MongoOidcCredential* MongoOidcCallbackParams::CancelWithTimeout() {
 	auto* raw = mongoc_oidc_callback_params_cancel_with_timeout(
 		static_cast<mongoc_oidc_callback_params_t*>(params_));
 	if (!raw) return nullptr;
-	auto* cred = MEM_NEW(MongoOidcCredential);
+	auto* cred = CLOUDENGINE_MEM_NEW(MongoOidcCredential);
 	cred->impl_->owned = false;
 	cred->impl_->cred = raw;
 	return cred;
@@ -58,10 +58,10 @@ MongoOidcCredential* MongoOidcCallbackParams::CancelWithTimeout() {
 // MongoOidcCredential
 
 MongoOidcCredential* MongoOidcCredential::New(const char* access_token) {
-	auto* c = MEM_NEW(MongoOidcCredential);
+	auto* c = CLOUDENGINE_MEM_NEW(MongoOidcCredential);
 	c->impl_->cred = mongoc_oidc_credential_new(access_token);
 	if (!c->impl_->cred) {
-		MEM_DELETE(c);
+		CLOUDENGINE_MEM_DELETE(c);
 		return nullptr;
 	}
 	return c;
@@ -69,10 +69,10 @@ MongoOidcCredential* MongoOidcCredential::New(const char* access_token) {
 
 MongoOidcCredential* MongoOidcCredential::NewWithExpiresIn(const char* access_token,
 														   int64_t expires_in) {
-	auto* c = MEM_NEW(MongoOidcCredential);
+	auto* c = CLOUDENGINE_MEM_NEW(MongoOidcCredential);
 	c->impl_->cred = mongoc_oidc_credential_new_with_expires_in(access_token, expires_in);
 	if (!c->impl_->cred) {
-		MEM_DELETE(c);
+		CLOUDENGINE_MEM_DELETE(c);
 		return nullptr;
 	}
 	return c;
@@ -138,7 +138,7 @@ mongoc_oidc_credential_t* oidc_trampoline(mongoc_oidc_callback_params_t* params)
 	}
 	if (!cred) return nullptr;
 	auto* raw = static_cast<mongoc_oidc_credential_t*>(cred->ReleaseRaw());
-	MEM_DELETE(cred);
+	CLOUDENGINE_MEM_DELETE(cred);
 	return raw;
 }
 
@@ -154,13 +154,13 @@ MongoOidcCallback* MongoOidcCallback::New(MongoOidcCallbackFn fn) {
 }
 
 MongoOidcCallback* MongoOidcCallback::NewWithUserData(MongoOidcCallbackFn fn, void* user_data) {
-	auto* c = MEM_NEW(MongoOidcCallback);
+	auto* c = CLOUDENGINE_MEM_NEW(MongoOidcCallback);
 	c->impl_->ctx = std::make_shared<OidcCtx>();
 	c->impl_->ctx->fn = std::move(fn);
 	c->impl_->ctx->user_data = user_data;
 	c->impl_->cb = mongoc_oidc_callback_new_with_user_data(oidc_trampoline, c->impl_->ctx.get());
 	if (!c->impl_->cb) {
-		MEM_DELETE(c);
+		CLOUDENGINE_MEM_DELETE(c);
 		return nullptr;
 	}
 	return c;
@@ -176,7 +176,7 @@ MongoOidcCallback::~MongoOidcCallback() {
 }
 
 void MongoOidcCallback::Destroy() {
-	MEM_DELETE(this);
+	CLOUDENGINE_MEM_DELETE(this);
 }
 
 void* MongoOidcCallback::GetUserData() const {

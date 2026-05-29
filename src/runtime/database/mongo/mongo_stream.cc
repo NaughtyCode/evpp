@@ -32,7 +32,7 @@ MongoStream::~MongoStream() {
 }
 
 void MongoStream::Destroy() {
-	MEM_DELETE(this);
+	CLOUDENGINE_MEM_DELETE(this);
 }
 
 void* MongoStream::ReleaseStream() {
@@ -53,10 +53,10 @@ void MongoStream::SetRawStream(void* stream) {
 
 MongoStream* MongoStream::NewBuffered(MongoStream* base_stream, size_t buffer_size) {
 	if (!base_stream || !base_stream->impl_->stream) return nullptr;
-	auto* result = MEM_NEW(MongoStream);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoStream);
 	result->impl_->stream = mongoc_stream_buffered_new(base_stream->impl_->stream, buffer_size);
 	if (!result->impl_->stream) {
-		MEM_DELETE(result);
+		CLOUDENGINE_MEM_DELETE(result);
 		return nullptr;
 	}
 	base_stream->ReleaseStream();  // ownership transferred to buffered stream
@@ -64,41 +64,41 @@ MongoStream* MongoStream::NewBuffered(MongoStream* base_stream, size_t buffer_si
 }
 
 MongoStream* MongoStream::NewFile(int fd) {
-	auto* result = MEM_NEW(MongoStream);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoStream);
 	result->impl_->stream = mongoc_stream_file_new(fd);
 	if (!result->impl_->stream) {
-		MEM_DELETE(result);
+		CLOUDENGINE_MEM_DELETE(result);
 		return nullptr;
 	}
 	return result;
 }
 
 MongoStream* MongoStream::NewFileForPath(const char* path, int flags, int mode) {
-	auto* result = MEM_NEW(MongoStream);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoStream);
 	result->impl_->stream = mongoc_stream_file_new_for_path(path, flags, mode);
 	if (!result->impl_->stream) {
-		MEM_DELETE(result);
+		CLOUDENGINE_MEM_DELETE(result);
 		return nullptr;
 	}
 	return result;
 }
 
 MongoStream* MongoStream::NewGridFs(void* gridfs_file) {
-	auto* result = MEM_NEW(MongoStream);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoStream);
 	result->impl_->stream =
 		mongoc_stream_gridfs_new(static_cast<mongoc_gridfs_file_t*>(gridfs_file));
 	if (!result->impl_->stream) {
-		MEM_DELETE(result);
+		CLOUDENGINE_MEM_DELETE(result);
 		return nullptr;
 	}
 	return result;
 }
 
 MongoStream* MongoStream::NewSocket(void* socket) {
-	auto* result = MEM_NEW(MongoStream);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoStream);
 	result->impl_->stream = mongoc_stream_socket_new(static_cast<mongoc_socket_t*>(socket));
 	if (!result->impl_->stream) {
-		MEM_DELETE(result);
+		CLOUDENGINE_MEM_DELETE(result);
 		return nullptr;
 	}
 	return result;
@@ -109,11 +109,11 @@ MongoStream* MongoStream::NewTls(MongoStream* base_stream,
 								 void* ssl_opts,
 								 int client) {
 	if (!base_stream || !base_stream->impl_->stream) return nullptr;
-	auto* result = MEM_NEW(MongoStream);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoStream);
 	result->impl_->stream = mongoc_stream_tls_new_with_hostname(
 		base_stream->impl_->stream, host, static_cast<mongoc_ssl_opt_t*>(ssl_opts), client);
 	if (!result->impl_->stream) {
-		MEM_DELETE(result);
+		CLOUDENGINE_MEM_DELETE(result);
 		return nullptr;
 	}
 	base_stream->ReleaseStream();  // ownership transferred to TLS stream
@@ -126,11 +126,11 @@ MongoStream* MongoStream::NewTlsOpenssl(MongoStream* base_stream,
 										int client) {
 #ifdef MONGOC_ENABLE_SSL_OPENSSL
 	if (!base_stream || !base_stream->impl_->stream) return nullptr;
-	auto* result = MEM_NEW(MongoStream);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoStream);
 	result->impl_->stream = mongoc_stream_tls_openssl_new(
 		base_stream->impl_->stream, host, static_cast<mongoc_ssl_opt_t*>(ssl_opts), client);
 	if (!result->impl_->stream) {
-		MEM_DELETE(result);
+		CLOUDENGINE_MEM_DELETE(result);
 		return nullptr;
 	}
 	base_stream->ReleaseStream();  // ownership transferred to TLS stream
@@ -150,11 +150,11 @@ MongoStream* MongoStream::NewTlsSecureChannel(MongoStream* base_stream,
 											  int client) {
 #ifdef MONGOC_ENABLE_SSL_SECURE_CHANNEL
 	if (!base_stream || !base_stream->impl_->stream) return nullptr;
-	auto* result = MEM_NEW(MongoStream);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoStream);
 	result->impl_->stream = mongoc_stream_tls_secure_channel_new(
 		base_stream->impl_->stream, host, static_cast<mongoc_ssl_opt_t*>(ssl_opts), client);
 	if (!result->impl_->stream) {
-		MEM_DELETE(result);
+		CLOUDENGINE_MEM_DELETE(result);
 		return nullptr;
 	}
 	base_stream->ReleaseStream();  // ownership transferred to TLS stream
@@ -174,11 +174,11 @@ MongoStream* MongoStream::NewTlsSecureTransport(MongoStream* base_stream,
 												int client) {
 #ifdef MONGOC_ENABLE_SSL_SECURE_TRANSPORT
 	if (!base_stream || !base_stream->impl_->stream) return nullptr;
-	auto* result = MEM_NEW(MongoStream);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoStream);
 	result->impl_->stream = mongoc_stream_tls_secure_transport_new(
 		base_stream->impl_->stream, host, static_cast<mongoc_ssl_opt_t*>(ssl_opts), client);
 	if (!result->impl_->stream) {
-		MEM_DELETE(result);
+		CLOUDENGINE_MEM_DELETE(result);
 		return nullptr;
 	}
 	base_stream->ReleaseStream();  // ownership transferred to TLS stream
@@ -198,7 +198,7 @@ MongoStream* MongoStream::GetBaseStream() {
 	if (!impl_ || !impl_->stream) return nullptr;
 	mongoc_stream_t* base = mongoc_stream_get_base_stream(impl_->stream);
 	if (!base) return nullptr;
-	auto* result = MEM_NEW(MongoStream);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoStream);
 	result->impl_->stream = base;
 	result->impl_->owned = false;  // borrowed reference
 	return result;
@@ -208,7 +208,7 @@ MongoStream* MongoStream::GetTlsStream() {
 	if (!impl_ || !impl_->stream) return nullptr;
 	mongoc_stream_t* tls = mongoc_stream_get_tls_stream(impl_->stream);
 	if (!tls) return nullptr;
-	auto* result = MEM_NEW(MongoStream);
+	auto* result = CLOUDENGINE_MEM_NEW(MongoStream);
 	result->impl_->stream = tls;
 	result->impl_->owned = false;  // borrowed reference
 	return result;

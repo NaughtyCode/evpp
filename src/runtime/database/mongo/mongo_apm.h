@@ -15,7 +15,7 @@ namespace mongo {
 
 // APM Event Types — read-only accessors for command/SDAM events
 
-class ENGINE_API MongoApmCommandStartedEvent {
+class CLOUD_ENGINE_API MongoApmCommandStartedEvent {
 	public:
 	explicit MongoApmCommandStartedEvent(const void* raw_event);
 	const void* GetCommand() const;	 // returns const bson_t*
@@ -33,7 +33,7 @@ class ENGINE_API MongoApmCommandStartedEvent {
 	const void* event_;
 };
 
-class ENGINE_API MongoApmCommandSucceededEvent {
+class CLOUD_ENGINE_API MongoApmCommandSucceededEvent {
 	public:
 	explicit MongoApmCommandSucceededEvent(const void* raw_event);
 	int64_t GetDuration() const;
@@ -52,7 +52,7 @@ class ENGINE_API MongoApmCommandSucceededEvent {
 	const void* event_;
 };
 
-class ENGINE_API MongoApmCommandFailedEvent {
+class CLOUD_ENGINE_API MongoApmCommandFailedEvent {
 	public:
 	explicit MongoApmCommandFailedEvent(const void* raw_event);
 	int64_t GetDuration() const;
@@ -72,7 +72,7 @@ class ENGINE_API MongoApmCommandFailedEvent {
 	const void* event_;
 };
 
-class ENGINE_API MongoApmServerChangedEvent {
+class CLOUD_ENGINE_API MongoApmServerChangedEvent {
 	public:
 	explicit MongoApmServerChangedEvent(const void* raw_event);
 	const void* GetHost() const;
@@ -85,7 +85,7 @@ class ENGINE_API MongoApmServerChangedEvent {
 	const void* event_;
 };
 
-class ENGINE_API MongoApmServerOpeningEvent {
+class CLOUD_ENGINE_API MongoApmServerOpeningEvent {
 	public:
 	explicit MongoApmServerOpeningEvent(const void* raw_event);
 	const void* GetHost() const;
@@ -96,7 +96,7 @@ class ENGINE_API MongoApmServerOpeningEvent {
 	const void* event_;
 };
 
-class ENGINE_API MongoApmServerClosedEvent {
+class CLOUD_ENGINE_API MongoApmServerClosedEvent {
 	public:
 	explicit MongoApmServerClosedEvent(const void* raw_event);
 	const void* GetHost() const;
@@ -107,7 +107,7 @@ class ENGINE_API MongoApmServerClosedEvent {
 	const void* event_;
 };
 
-class ENGINE_API MongoApmTopologyChangedEvent {
+class CLOUD_ENGINE_API MongoApmTopologyChangedEvent {
 	public:
 	explicit MongoApmTopologyChangedEvent(const void* raw_event);
 	void GetTopologyId(void* oid_out) const;
@@ -119,7 +119,7 @@ class ENGINE_API MongoApmTopologyChangedEvent {
 	const void* event_;
 };
 
-class ENGINE_API MongoApmTopologyOpeningEvent {
+class CLOUD_ENGINE_API MongoApmTopologyOpeningEvent {
 	public:
 	explicit MongoApmTopologyOpeningEvent(const void* raw_event);
 	void GetTopologyId(void* oid_out) const;
@@ -129,7 +129,7 @@ class ENGINE_API MongoApmTopologyOpeningEvent {
 	const void* event_;
 };
 
-class ENGINE_API MongoApmTopologyClosedEvent {
+class CLOUD_ENGINE_API MongoApmTopologyClosedEvent {
 	public:
 	explicit MongoApmTopologyClosedEvent(const void* raw_event);
 	void GetTopologyId(void* oid_out) const;
@@ -139,7 +139,7 @@ class ENGINE_API MongoApmTopologyClosedEvent {
 	const void* event_;
 };
 
-class ENGINE_API MongoApmServerHeartbeatStartedEvent {
+class CLOUD_ENGINE_API MongoApmServerHeartbeatStartedEvent {
 	public:
 	explicit MongoApmServerHeartbeatStartedEvent(const void* raw_event);
 	const void* GetHost() const;
@@ -150,7 +150,7 @@ class ENGINE_API MongoApmServerHeartbeatStartedEvent {
 	const void* event_;
 };
 
-class ENGINE_API MongoApmServerHeartbeatSucceededEvent {
+class CLOUD_ENGINE_API MongoApmServerHeartbeatSucceededEvent {
 	public:
 	explicit MongoApmServerHeartbeatSucceededEvent(const void* raw_event);
 	int64_t GetDuration() const;
@@ -163,7 +163,7 @@ class ENGINE_API MongoApmServerHeartbeatSucceededEvent {
 	const void* event_;
 };
 
-class ENGINE_API MongoApmServerHeartbeatFailedEvent {
+class CLOUD_ENGINE_API MongoApmServerHeartbeatFailedEvent {
 	public:
 	explicit MongoApmServerHeartbeatFailedEvent(const void* raw_event);
 	int64_t GetDuration() const;
@@ -194,7 +194,7 @@ using MongoApmServerHeartbeatSucceededCb =
 using MongoApmServerHeartbeatFailedCb =
 	std::function<void(const MongoApmServerHeartbeatFailedEvent&)>;
 
-class ENGINE_API MongoApmCallbacks {
+class CLOUD_ENGINE_API MongoApmCallbacks {
 	public:
 	MongoApmCallbacks();
 	~MongoApmCallbacks();

@@ -12,7 +12,7 @@ struct evhttp_connection;
 namespace evpp {
 namespace httpc {
 class ConnPool;
-class EVPP_EXPORT Conn {
+class CLOUD_ENGINE_API Conn {
 	public:
 	Conn(EventLoop* loop,
 		 const std::string& host,

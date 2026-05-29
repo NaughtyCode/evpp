@@ -22,7 +22,7 @@ const char* kMetaName = "mongoc.cursor";
 int l_cursor_gc(lua_State* L) {
 	auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
 	if (cursor) cursor->Destroy();
-	MEM_DELETE(cursor);
+	CLOUDENGINE_MEM_DELETE(cursor);
 	*CheckUserdata<mongo::MongoCursor>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
@@ -163,7 +163,7 @@ int l_cursor_current(lua_State* L) {
 		lua_pushnil(L);
 		return 1;
 	}
-	auto* doc = MEM_NEW_NOTHROW(mongo::BsonDocument, mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
+	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, mongo::BsonDocument::NewFromData(bson_get_data(raw), raw->len));
 	if (!doc) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

@@ -14,10 +14,10 @@ namespace script {
 // See: net_tcp_client_bind.h, net_tcp_server_bind.h, net_http_bind.h,
 //      net_udp_client_bind.h, net_udp_server_bind.h, and net.lua
 // for full API docs.
-ENGINE_API void ExportNet(ScriptVM& vm);
+CLOUD_ENGINE_API void ExportNet(ScriptVM& vm);
 
 // Cancel all network objects and release Lua function references.
-ENGINE_API void ShutdownNetBindings();
+CLOUD_ENGINE_API void ShutdownNetBindings();
 
 }  // namespace script
 }  // namespace engine

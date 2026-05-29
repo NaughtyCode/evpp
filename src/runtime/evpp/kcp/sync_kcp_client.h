@@ -16,7 +16,7 @@ namespace sync {
 // purpose is testing the KCP server.  The client creates a UDP socket,
 // wraps it in a KCP session, and provides blocking send / request‑response
 // calls.
-class EVPP_EXPORT Client {
+class CLOUD_ENGINE_API Client {
 	public:
 	Client();
 	~Client();

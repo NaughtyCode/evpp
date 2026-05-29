@@ -188,7 +188,7 @@ MongoSession::~MongoSession() {
 }
 
 void MongoSession::Destroy() {
-	MEM_DELETE(this);
+	CLOUDENGINE_MEM_DELETE(this);
 }
 
 bool MongoSession::StartTransaction(const MongoTransactionOpts* opts, MongoError* error) {
@@ -282,11 +282,11 @@ const void* MongoSession::GetTransactionOptsRaw() const {
 }
 
 MongoSession* MongoSession::CreateEmpty() {
-	return MEM_NEW(MongoSession);
+	return CLOUDENGINE_MEM_NEW(MongoSession);
 }
 
 void MongoSession::Destroy(MongoSession* session) {
-	MEM_DELETE(session);
+	CLOUDENGINE_MEM_DELETE(session);
 }
 
 namespace {

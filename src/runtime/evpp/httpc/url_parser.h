@@ -11,7 +11,7 @@
 
 namespace evpp {
 namespace httpc {
-struct EVPP_EXPORT URLParser {
+struct CLOUD_ENGINE_API URLParser {
 	public:
 	std::string schema;
 	std::string host;

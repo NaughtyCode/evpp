@@ -16,7 +16,7 @@ class MongoHostList;
 class MongoReadPrefs;
 
 // Wraps mongoc-server-description.h — describes a single MongoDB server.
-class ENGINE_API MongoServerDescription {
+class CLOUD_ENGINE_API MongoServerDescription {
 	public:
 	explicit MongoServerDescription(void* raw);	 // takes mongoc_server_description_t* (non-owning)
 	~MongoServerDescription();
@@ -44,7 +44,7 @@ class ENGINE_API MongoServerDescription {
 };
 
 // Wraps mongoc-topology-description.h — describes the entire cluster topology.
-class ENGINE_API MongoTopologyDescription {
+class CLOUD_ENGINE_API MongoTopologyDescription {
 	public:
 	explicit MongoTopologyDescription(
 		void* raw);	 // takes mongoc_topology_description_t* (non-owning)

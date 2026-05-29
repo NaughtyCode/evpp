@@ -16,13 +16,13 @@ const char* kMetaName = "mongoc.bulk_write_update_one_opts";
 
 int l_opts_gc(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoBulkWriteUpdateOneOpts>(L, 1, kMetaName);
-	MEM_DELETE(opts);
+	CLOUDENGINE_MEM_DELETE(opts);
 	*CheckUserdata<mongo::MongoBulkWriteUpdateOneOpts>(L, 1, kMetaName) = nullptr;
 	return 0;
 }
 
 int l_opts_new(lua_State* L) {
-	auto* opts = MEM_NEW_NOTHROW(mongo::MongoBulkWriteUpdateOneOpts);
+	auto* opts = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoBulkWriteUpdateOneOpts);
 	if (!opts) {
 		lua_pushnil(L);
 		lua_pushstring(L, "allocation failure");

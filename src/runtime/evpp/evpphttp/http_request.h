@@ -5,7 +5,7 @@
 #include "runtime/evpp/evpphttp/http_parser.h"
 namespace evpp {
 namespace evpphttp {
-class EVPP_EXPORT HttpRequest {
+class CLOUD_ENGINE_API HttpRequest {
 	public:
 	inline bool completed() const {
 		return is_completed;

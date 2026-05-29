@@ -56,7 +56,7 @@ struct FindOptions {
 // ORM session provides typed CRUD operations.
 // All operations go through DatabaseService for actual IO
 // and are cached via EntityCache.
-class ENGINE_API OrmSession {
+class CLOUD_ENGINE_API OrmSession {
 public:
 	static OrmSession& Instance();
 
