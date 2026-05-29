@@ -358,6 +358,8 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 
 `LoadRuntimeFromString` 不加锁直接写入 `runtime_config_`——如果另一个线程正在 `GetRuntimeConfig()` 的 shared_lock 下拷贝，会产生数据竞争。
 
+**当前实际影响:** `LoadRuntimeFromString` 系列方法（含 `LoadClientFromString`、`LoadServerFromString`）当前仅在单元测试中被调用（单线程上下文），生产代码路径不使用此 API。因此该数据竞争是**潜伏性的**——当前不会在生产环境触发，但 API 本身不提供任何保护，未来任何在多线程上下文中使用该 API 的代码都会触发未定义行为。
+
 ---
 
 ## 6. 文件与格式
@@ -452,7 +454,7 @@ void HandleHealth(...) {
 }
 ```
 
-只检查 `Engine::running()` 和 `frame_count`。**不验证任何后端依赖项的状态**：
+只检查 `Engine::running()` 和 `frame_count`。**不验证任何后端依赖项的状态**。更根本的问题是 `"status":"ok"` 是硬编码的——即使 `running` 为 false，返回的 JSON 仍然是 `"status":"ok"`。换言之，这个健康检查端点在任何情况下都返回 "ok"，是一个纯粹的占位符实现：
 
 - 数据库连接池是否健康？（`DatabaseService::IsHealthy()` 存在但未被调用）
 - 物理模拟线程是否正常运行？
@@ -659,7 +661,18 @@ Engine 定义了 6 个明确的清理阶段（CleanupPhase 枚举），但没有
 
 在容器编排中，这阻碍了正确的 `preStop` hook 设计——无法让负载均衡器在排空连接期间移除 Pod，而在数据持久化期间等待。
 
-### 8.10 无启动探针（Startup Probe）区分
+### 8.10 无 Core Dump 配置
+
+生产环境中，进程崩溃时的 core dump 是根因分析的关键依据。但当前系统完全没有 core dump 相关配置：
+
+- **无启用/禁用开关:** core dump 完全依赖系统的 `ulimit -c`，进程不自管理
+- **无输出路径配置:** core dump 写入当前工作目录（或 `/proc/sys/kernel/core_pattern` 指定的路径），无法按实例区分
+- **无大小限制:** 对于内存占用数十 GB 的服务器进程，core dump 可能填满磁盘
+- **无 core dump 过滤器:** 无法控制哪些内存区域写入 core（如排除 MongoDB 连接缓冲区等敏感数据）
+
+在容器化环境中，core dump 通常需要写入特定卷（如 `emptyDir` 或 `hostPath`）并通过 sidecar 上传到对象存储。当前进程完全依赖宿主机内核配置，无法适配这些场景。
+
+### 8.11 无启动探针（Startup Probe）区分
 
 当前健康检查端点是一个二元开关：event loop 启动后返回 `"status":"ok"`，启动前端口未绑定。
 
@@ -807,7 +820,7 @@ $ evpp-config-validate --config-dir resources/config
   [OK]   runtime.json: valid
   [OK]   server.json: valid
   [WARN] db_service.json: thread_pool.thread_count=4 but connection_pool.max_pool_size=3 (min recommendation: thread_count * 2)
-  [FAIL] physics.json: error at line 42: "gravityY" is not a recognized key (did you mean "gravityY"?)
+  [FAIL] physics.json: error at line 42: "gravityy" is not a recognized key (did you mean "gravityY"?)
 ```
 
 **现状:** CI/CD 管道只能做 JSON 语法检查（`jq . server.json`），完全无法做业务级别的配置校验。
@@ -862,18 +875,44 @@ uint32_t max_connections_ = 10000;
 - 没有消息处理优先级配置（先处理支付回调，后处理聊天消息）
 - 没有基于延迟的自动降级（`p99 > N ms → 暂停非关键定时器`）
 
-### 11.3 运维时间窗口不感知
+### 11.3 无优雅降级（Graceful Degradation）配置
+
+服务器由多个子系统组成（网络、数据库、物理模拟、Lua VM、脚本热更），各子系统有独立的故障模式。当前设计是"全有或全无"——任何关键子系统故障都导致整个进程退出。
+
+生产环境需要更细粒度的降级策略，但没有配置项支持：
+
+- **物理引擎崩溃时的行为:** 如果物理线程 panic，应该继续处理纯逻辑请求还是整体关闭？对于大厅/聊天服务器（不使用物理），物理引擎崩溃不应影响服务
+- **数据库断连时的行为:** 数据库连接断开后，应拒绝所有需要持久化的请求（返回 503）但继续处理只读请求，还是直接关闭？
+- **MongoDB 集群不可用时的行为:** 如果 MongoDB 只用于审计日志而非核心逻辑，其不可用不应阻塞服务器启动
+- **脚本热更失败时的行为:** 脚本校验失败时，应保留旧脚本继续运行（当前行为）还是拒绝热更并告警？
+
+没有任何 `failure_policy` 或 `degradation_mode` 配置来定义这些场景的行为。每个子系统的故障传播策略是隐式的（硬编码在 `Cleanup()` 调用链中），运维人员无法根据业务需求调整。
+
+### 11.4 运维时间窗口不感知
 
 没有配置项支持：
 - **计划维护窗口:** "2026-06-01T02:00:00 开始拒绝新连接，02:30:00 开始关闭"
 - **滚动重启协调:** 集群中多个进程依次重启时的时间偏移配置
 - **业务高峰保护:** "每天 20:00-22:00 期间禁止自动配置变更"
 
-### 11.4 日志采样率不可配置
+### 11.5 日志采样率不可配置
 
 在高吞吐量场景下（如每秒 10000 条消息），每个请求都打印 INFO 日志会产生巨大的 I/O 压力。但日志级别是全局的——无法配置为"ERROR 全量打印，WARN 打印 10%，INFO 打印 1%"。
 
-### 11.5 多实例部署的身份标识缺失
+### 11.6 文件描述符上限不可配置
+
+服务器进程的 file descriptor 消耗来源包括：客户端 TCP 连接（每连接一个 FD）、数据库连接池（每连接一个 FD）、FileWatcher（每监控目录一个 inotify FD）、日志文件、管理端口监听 socket、事件循环内部 FD 等。
+
+在默认配置下（10000 客户端连接 + 16 数据库连接 + 4 物理线程通信），FD 消耗轻松超过系统默认的 `RLIMIT_NOFILE`（通常为 1024）。但进程完全没有：
+
+- **启动时检查并提升 RLIMIT_NOFILE:** 进程不调用 `setrlimit()` 提升 FD 上限
+- **FD 上限的配置项:** 无法通过 JSON 配置目标 FD 上限
+- **FD 使用量监控:** 无指标暴露当前 FD 使用量/上限比率
+- **FD 耗尽预警:** 无法在 FD 使用率达到 80% 时触发告警
+
+这导致在中等并发场景下，进程可能因 `EMFILE`（Too many open files）而拒绝新连接——而运维人员只能通过 `lsof -p <pid>` 在故障发生后排查。
+
+### 11.7 多实例部署的身份标识缺失
 
 在同一个集群中运行多个服务器实例时，无法通过配置文件区分实例身份：
 
@@ -1147,8 +1186,6 @@ static void BM_Config_ParseRuntime(benchmark::State& state) {
 | **P0-6** | **健康检查不验证后端依赖** | `admin_http.cc:35-43` | **K8s 无法正确判断 Pod 健康状态** |
 | **P0-7** | **Physics JSON 静默忽略未知键** | `physics_config.cc:77` | **拼写错误的物理参数被无声丢弃，物理行为错误** |
 | **P0-8** | **配置文件无 torn write 保护** | `config.cc:53-117` | **半写入文件被 Reload() 读取，加载不完整配置** |
-| **P0-9** | **Lua 层无游戏业务配置框架** | 全局 | **游戏策划无法配置数值，所有业务配置需从零手写** |
-| **P0-10** | **无配置引用完整性校验** | 全局 | **item/monster/skill ID 悬空引用导致运行时崩溃** |
 
 ### P1 — 严重影响开发与运维效率
 
@@ -1168,8 +1205,9 @@ static void BM_Config_ParseRuntime(benchmark::State& state) {
 | **P1-12** | **配置文件无 FileWatcher 自动检测** | N/A | **修改配置文件后进程无感知，需手动触发 Reload** |
 | **P1-13** | **连接数上限硬编码 10000** | `tcp_server.h:150` | **高并发场景需重新编译才能提升限制** |
 | **P1-14** | **无配置 profile 层级系统（dev/staging/prod）** | 全局 | **每个环境维护完整配置副本，环境切换靠编译宏** |
-| **P1-15** | **游戏业务配置无导表工具链** | 全局 | **策划无法用 Excel/CSV 编辑数值，依赖程序员手写 JSON** |
-| **P1-16** | **无配置跨系统引用管理** | 全局 | **item→drop_table→monster 引用链断裂时无检测** |
+| **P1-15** | **Lua 层无游戏业务配置框架** | 全局 | **游戏策划无法配置数值，所有业务配置需从零手写** |
+| **P1-16** | **无配置引用完整性校验** | 全局 | **item/monster/skill ID 悬空引用导致运行时崩溃** |
+| **P1-17** | **无优雅降级（Graceful Degradation）配置** | `engine.cc` Cleanup() | **子系统故障传播策略硬编码，无法按业务需求调整** |
 
 ### P2 — 影响运维质量与安全
 
@@ -1191,6 +1229,10 @@ static void BM_Config_ParseRuntime(benchmark::State& state) {
 | P2-14 | Lua 层无 config API | N/A | 业务脚本无法读取配置 |
 | P2-15 | 开发期 debug 日志受编译宏控制 | `engine_api.h:20` | Debug 构建和生产构建日志能力不同，排查问题困难 |
 | P2-16 | 客户端-服务器配置无同步机制 | N/A | 双端共享的 ID/属性可能不一致 |
+| P2-17 | 游戏业务配置无导表工具链 | 全局 | 策划无法用 Excel/CSV 编辑数值，依赖程序员手写 JSON |
+| P2-18 | 无配置跨系统引用管理 | 全局 | item→drop_table→monster 引用链断裂时无检测 |
+| P2-19 | 无 Core Dump 配置（路径/大小/启用） | `engine.cc` | 崩溃分析依赖系统默认 ulimit，容器环境无法适配 |
+| P2-20 | 文件描述符上限不可配置和自动管理 | `engine.cc` | 中等并发下可能因 EMFILE 拒绝连接 |
 
 ### P3 — 可改进项
 
