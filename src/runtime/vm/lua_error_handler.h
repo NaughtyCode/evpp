@@ -53,6 +53,7 @@ inline int PushLuaErrorHandler(lua_State* L) {
 inline int PushLuaErrorHandlerForCall(lua_State* L, int nargs) {
 	int f_idx = lua_gettop(L) - nargs;
 	int err_idx = PushLuaErrorHandler(L);
+	(void) err_idx;
 	lua_insert(L, f_idx);
 	return f_idx;  // error handler is now at f_idx
 }

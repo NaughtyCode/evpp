@@ -83,7 +83,7 @@ endif (CMAKE_BENCHMARK_TESTING)
 
 # ── MSVC compile options ────────────────────────────────────────────────
 if(MSVC)
-    add_definitions(-D_WIN32_WINNT=0x0A00)
+    add_definitions(-D_WIN32_WINNT=0x0A00 -D_CRT_SECURE_NO_WARNINGS)
     add_compile_options(/bigobj /Zc:preprocessor /utf-8)
 
     # Enable warning level 4 (equivalent to -Wall -Wextra)
@@ -94,7 +94,7 @@ if(MSVC)
     # C4127: conditional expression is constant (common in template instantiations)
     # C4201: nonstandard extension: nameless struct/union (used in evpp net layer)
     # C4503: decorated name length exceeded (compiler limitation for template-heavy code)
-    add_compile_options(/wd4100 /wd4127 /wd4201 /wd4503)
+    add_compile_options(/wd4100 /wd4127 /wd4201 /wd4251 /wd4503)
 
     if(ENGINE_WERROR)
         add_compile_options(/WX)
