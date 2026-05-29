@@ -97,6 +97,7 @@ inline LuaCallResult SafeCallLua(lua_State* L, LuaCallOptions opts) {
 	}
 
 	int err_idx = PushLuaErrorHandler(L);
+	(void) err_idx;
 	lua_insert(L, func_idx);  // move error handler below function
 
 	int rc = lua_pcall(L, opts.nargs, opts.nresults, func_idx);

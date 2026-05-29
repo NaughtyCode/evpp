@@ -118,6 +118,7 @@ inline void CallInstMethod(lua_State* L, int inst_ref, const char* method) {
 	// Stack: function, instance (nargs=1)
 	int f_idx = lua_gettop(L) - 1;
 	int err_idx = PushLuaErrorHandler(L);
+	(void) err_idx;
 	lua_insert(L, f_idx);
 	// Stack: err_handler, function, instance
 	if (lua_pcall(L, 1, 0, f_idx) != LUA_OK) {
@@ -148,6 +149,7 @@ inline void CallInstMethodStr(lua_State* L, int inst_ref, const char* method,
 	// Stack: function, instance, arg (nargs=2)
 	int f_idx = lua_gettop(L) - 2;
 	int err_idx = PushLuaErrorHandler(L);
+	(void) err_idx;
 	lua_insert(L, f_idx);
 	// Stack: err_handler, function, instance, arg
 	if (lua_pcall(L, 2, 0, f_idx) != LUA_OK) {
@@ -180,6 +182,7 @@ inline void CallInstMethodTableStr(lua_State* L, int inst_ref, const char* metho
 	// Stack: function, instance, table, arg (nargs=3)
 	int f_idx = lua_gettop(L) - 3;
 	int err_idx = PushLuaErrorHandler(L);
+	(void) err_idx;
 	lua_insert(L, f_idx);
 	// Stack: err_handler, function, instance, table, arg
 	if (lua_pcall(L, 3, 0, f_idx) != LUA_OK) {
