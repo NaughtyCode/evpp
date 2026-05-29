@@ -250,6 +250,13 @@ if(NOT TARGET CloudEngine)
 
     target_compile_definitions(CloudEngine PRIVATE ENGINE_BUILD LUA_BUILD_AS_DLL LUA_CORE LUA_LIB)
 
+# CLOUD_ENGINE_API — platform-differentiated DLL export/import
+if(WIN32)
+    target_compile_definitions(CloudEngine PRIVATE "CLOUD_ENGINE_API=__declspec(dllexport)")
+else()
+    target_compile_definitions(CloudEngine PRIVATE "CLOUD_ENGINE_API=__attribute__((visibility(\"default\")))")
+endif()
+
     if(ENGINE_PHYSICS_ENABLED)
         target_compile_definitions(CloudEngine PUBLIC ENGINE_PHYSICS_ENABLED)
     endif()
@@ -372,6 +379,13 @@ target_include_directories(GameServer
 )
 
 target_link_libraries(GameServer CloudEngine)
+
+# CLOUD_ENGINE_API — import from CloudEngine.dll
+if(WIN32)
+    target_compile_definitions(GameServer PRIVATE "CLOUD_ENGINE_API=__declspec(dllimport)")
+else()
+    target_compile_definitions(GameServer PRIVATE "CLOUD_ENGINE_API=__attribute__((visibility(\"default\")))")
+endif()
 
 if(WIN32)
     target_link_libraries(GameServer ws2_32)

@@ -271,6 +271,7 @@ if(ENGINE_PHYSICS_ENABLED)
 endif()
 
 target_compile_definitions(GameClient PRIVATE ENGINE_BUILD CLIENT_BUILD)
+target_compile_definitions(GameClient PRIVATE "CLOUD_ENGINE_API=")
 
 if(ENGINE_PHYSICS_ENABLED)
     target_compile_definitions(GameClient PUBLIC ENGINE_PHYSICS_ENABLED)

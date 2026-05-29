@@ -48,25 +48,3 @@
 #define PRIu64 "lu"
 #endif
 #endif
-
-// ═══════════════════════════════════════════════════════════════════════════
-// DLL export / import
-// ═══════════════════════════════════════════════════════════════════════════
-
-// CLOUD_ENGINE_API — used by engine-layer classes (physics, vm, script, profiler, etc.)
-// Both are compiled into CloudEngine.dll. ENGINE_BUILD is defined by
-// runtime/CMakeLists.txt when building the library.
-
-#if defined(_WIN32) || defined(__CYGWIN__)
-#ifdef ENGINE_BUILD
-#define CLOUD_ENGINE_API __declspec(dllexport)
-#else
-#define CLOUD_ENGINE_API __declspec(dllimport)
-#endif
-#else
-#if __GNUC__ >= 4
-#define CLOUD_ENGINE_API __attribute__((visibility("default")))
-#else
-#define CLOUD_ENGINE_API
-#endif
-#endif
