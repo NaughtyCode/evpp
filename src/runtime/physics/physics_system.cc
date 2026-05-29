@@ -31,7 +31,6 @@ PhysicsSystem& PhysicsSystem::Instance() {
 // Initialize — load configs + create ScriptVM + load scripts [D22]
 
 bool PhysicsSystem::Initialize(const std::string& config_dir,
-							   const std::string& assets_path,
 							   const std::string& scripts_dir) {
 	ENGINE_PROFILE_SCOPE("engine.physics", "Initialize");
 	if (is_initialized_) {
@@ -40,7 +39,6 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
 	}
 
 	config_dir_ = config_dir;
-	assets_path_ = assets_path;
 	scripts_dir_ = scripts_dir;
 
 	// ── Load configs ──────────────────────────────────────────────────
@@ -49,6 +47,15 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
 		ENGINE_LOG_ERROR(GetLogger(), "PhysicsSystem: config loading failed");
 		config_manager_.reset();
 		return false;
+	}
+
+	// Compute assets_path from PhysicsConfig.scene_path.
+	// config_dir is <resource_dir>/physics/config; scene_path is relative to
+	// resource_dir (e.g. "/physics/data/scene.json").
+	{
+		std::string resource_dir =
+			std::filesystem::path(config_dir).parent_path().parent_path().string();
+		assets_path_ = resource_dir + config_manager_->GetPhysicsConfig().scene_path;
 	}
 
 	ENGINE_LOG_INFO(GetLogger(), "PhysicsSystem: configs loaded from [{}]", config_dir);

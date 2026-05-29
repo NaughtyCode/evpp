@@ -4,6 +4,7 @@
 #include <unordered_set>
 
 #include "runtime/config/config.h"
+#include "runtime/config/i_config_manager.h"
 #include "runtime/core/engine_api.h"
 
 namespace engine {
@@ -13,11 +14,8 @@ namespace engine {
 // syntax checking alone cannot catch.
 class ENGINE_API ConfigValidator {
 	public:
-	struct Result {
-		bool valid = true;
-		std::string errors;   // accumulated error messages
-		std::string warnings; // non-fatal diagnostics
-	};
+	// Result type alias — canonical definition in i_config_manager.h.
+	using Result = ValidationResult;
 
 	static Result Validate(const RuntimeConfig& config);
 	static Result ValidateServer(const ServerConfig& config);

@@ -9,6 +9,8 @@
 
 #include <glaze/glaze.hpp>
 
+#include "runtime/config/i_config_manager.h"
+
 namespace engine {
 
 // LayerConfig — collision layer definitions (nested in physics.json)
@@ -31,6 +33,7 @@ struct LayerConfig {
 struct PhysicsConfig {
 	// Design doc §5.1 required fields
 	int version = 1;
+	std::string scene_path = "/physics/data/scene.json";
 	float gravity_x = 0.0f;
 	float gravity_y = -9.81f;
 	float gravity_z = 0.0f;
@@ -142,6 +145,8 @@ struct glz::meta<engine::PhysicsConfig> {
 	using T = engine::PhysicsConfig;
 	static constexpr auto value = glz::object("version",
 											  &T::version,
+											  "scenePath",
+											  &T::scene_path,
 											  "gravityX",
 											  &T::gravity_x,
 											  "gravityY",
@@ -267,23 +272,37 @@ struct glz::meta<engine::ThresholdsConfig> {
 
 namespace engine {
 
-// PhysicsConfigManager — independent config manager (not dependent on
-// engine::ConfigManager). Owns all 4 config structs and handles loading,
-// validation, and hot-reload of supported fields.
+// PhysicsConfigManager — config manager for the physics subsystem.
+// Implements IConfigManager for polymorphic config lifecycle management.
+// Owns all 4 config structs and handles loading, validation, and hot-reload.
 
-class PhysicsConfigManager {
+class PhysicsConfigManager : public IConfigManager {
 	public:
 	PhysicsConfigManager() = default;
 
+	// ── IConfigManager interface ─────────────────────────────────────
+
 	// Load all 4 JSON files from config_dir.
 	// Returns false if any file is missing or has format errors [D22].
-	bool Load(const std::string& config_dir);
+	bool Load(const std::string& config_dir) override;
+
+	// Full reload of all config files.
+	bool Reload(const std::string& config_dir) override;
+
+	// Validate currently loaded configs.
+	ValidationResult Validate() const override;
+
+	// Dump all configs to JSON.
+	std::string Dump() const override;
+
+	// ── Selective hot-reload ─────────────────────────────────────────
 
 	// Runtime hot-reload (only fields marked for hot-reload)
 	bool ReloadThresholds(const std::string& config_dir);
 	bool ReloadLogLevel(const std::string& config_dir);
 
-	// Accessors
+	// ── Accessors ────────────────────────────────────────────────────
+
 	const PhysicsConfig& GetPhysicsConfig() const {
 		return physics_config_;
 	}

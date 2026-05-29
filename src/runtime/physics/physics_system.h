@@ -96,7 +96,6 @@ class PhysicsSystem {
 	// VM and config.
 
 	bool Initialize(const std::string& config_dir,
-					const std::string& assets_path,
 					const std::string& scripts_dir);
 	bool Start();
 	void Shutdown();

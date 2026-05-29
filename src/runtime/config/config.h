@@ -9,7 +9,10 @@
 
 #include <cstdlib>
 
+#include <glaze/glaze.hpp>
+
 #include "runtime/config/config_constants.h"
+#include "runtime/config/i_config_manager.h"
 #include "runtime/config/limits.h"
 #include "runtime/core/engine_api.h"
 
@@ -124,7 +127,6 @@ struct RuntimeConfig {
 	FrameConfig frame;
 	std::string scripts_dir = config::kDefaultRuntimeScriptsDir;
 	std::string sandbox_level = "strict";
-	std::string physics_scene_path = "/physics/data/scene.json";
 	std::string environment = "development";  // deployment target (dev/staging/prod)
 };
 
@@ -145,24 +147,22 @@ struct MsgpackConfig {
 // MongoDB cluster config — loaded from the path referenced by
 // server.json's "mongodb_dev" / "mongodb_public" fields.
 //
-// NOTE: Member names use camelCase to match the source JSON keys directly
-// (glaze auto-reflection matches member names to JSON keys). This differs
-// from the rest of the config structs because the mongodb config files
-// were authored in camelCase.
+// C++ members use snake_case. JSON keys remain camelCase;
+// the mapping is handled by glz::meta specializations below.
 
 struct MongoDbConnectionOptions {
-	std::string readPreference = "primaryPreferred";
-	int maxPoolSize = 10;
-	int connectTimeoutMS = 5000;
-	int serverSelectionTimeoutMS = 5000;
-	int socketTimeoutMS = 30000;
+	std::string read_preference = "primaryPreferred";
+	int max_pool_size = 10;
+	int connect_timeout_ms = 5000;
+	int server_selection_timeout_ms = 5000;
+	int socket_timeout_ms = 30000;
 };
 
 struct MongoDbConnectionConfig {
 	std::string uri;
 	std::vector<std::string> hosts;
-	std::string replicaSet;
-	bool directConnection = false;
+	std::string replica_set;
+	bool direct_connection = false;
 	MongoDbConnectionOptions options;
 };
 
@@ -181,21 +181,21 @@ struct MongoDbNodeConfig {
 	int priority = 0;
 	std::string role;
 	std::string config;
-	std::string dbPath;
-	std::string logPath;
-	std::string pidFile;
+	std::string db_path;
+	std::string log_path;
+	std::string pid_file;
 };
 
 struct MongoDbSecurityConfig {
 	bool authentication = false;
 	bool tls = false;
-	std::string bindIp = "127.0.0.1";
+	std::string bind_ip = "127.0.0.1";
 	std::string note;
 };
 
 struct MongoDbStorageConfig {
 	std::string engine = "wiredTiger";
-	bool directoryPerDB = true;
+	bool directory_per_db = true;
 	std::string compression = "snappy";
 	bool journal = true;
 };
@@ -211,7 +211,7 @@ struct MongoDbScriptsConfig {
 struct MongoDbDriverInfo {
 	std::string package;
 	std::string version;
-	std::string testProgram;
+	std::string test_program;
 	std::string example;
 };
 
@@ -288,9 +288,12 @@ struct ServerConfig {
 
 // ConfigManager — loads configs from JSON files at startup
 
-class ENGINE_API ConfigManager {
+class ENGINE_API ConfigManager : public IConfigManager {
 	public:
 	static ConfigManager& Instance();
+
+	// Factory: creates an independent (non-singleton) ConfigManager.
+	static std::unique_ptr<IConfigManager> Create();
 
 	/* Callback type for config reload notifications.
 	 * Callbacks MUST NOT throw — exceptions are caught and logged. */
@@ -365,12 +368,15 @@ class ENGINE_API ConfigManager {
 	// are preserved).
 	bool Reload(const std::string& config_dir);
 
+	// Validate — validate the currently loaded in-memory config.
+	ValidationResult Validate() const override;
+
 	// ValidateOnly — parse + validate files without applying changes.
 	// Returns the validation result. Does not modify current config.
-	ConfigValidator::Result ValidateOnly(const std::string& config_dir);
+	ValidationResult ValidateOnly(const std::string& config_dir);
 
 	// Dump — serialize current config to JSON for snapshot/audit.
-	std::string Dump() const;
+	std::string Dump() const override;
 	std::string DumpRuntime() const;
 	std::string DumpServer() const;
 
@@ -510,3 +516,122 @@ class ENGINE_API ConfigManager {
 };
 
 }  // namespace engine
+
+// ── glaze reflection metadata for MongoDB structs ──────────────────────────
+// JSON keys use camelCase (matching existing mongodb config files);
+// C++ members use snake_case (matching the rest of the codebase).
+
+template <>
+struct glz::meta<engine::MongoDbConnectionOptions> {
+	using T = engine::MongoDbConnectionOptions;
+	static constexpr auto value = glz::object(
+		"readPreference", &T::read_preference,
+		"maxPoolSize", &T::max_pool_size,
+		"connectTimeoutMS", &T::connect_timeout_ms,
+		"serverSelectionTimeoutMS", &T::server_selection_timeout_ms,
+		"socketTimeoutMS", &T::socket_timeout_ms);
+};
+
+template <>
+struct glz::meta<engine::MongoDbConnectionConfig> {
+	using T = engine::MongoDbConnectionConfig;
+	static constexpr auto value = glz::object(
+		"uri", &T::uri,
+		"hosts", &T::hosts,
+		"replicaSet", &T::replica_set,
+		"directConnection", &T::direct_connection,
+		"options", &T::options);
+};
+
+template <>
+struct glz::meta<engine::MongoDbClusterInfo> {
+	using T = engine::MongoDbClusterInfo;
+	static constexpr auto value = glz::object(
+		"type", &T::type,
+		"name", &T::name,
+		"version", &T::version,
+		"shell", &T::shell);
+};
+
+template <>
+struct glz::meta<engine::MongoDbNodeConfig> {
+	using T = engine::MongoDbNodeConfig;
+	static constexpr auto value = glz::object(
+		"id", &T::id,
+		"name", &T::name,
+		"host", &T::host,
+		"port", &T::port,
+		"priority", &T::priority,
+		"role", &T::role,
+		"config", &T::config,
+		"dbPath", &T::db_path,
+		"logPath", &T::log_path,
+		"pidFile", &T::pid_file);
+};
+
+template <>
+struct glz::meta<engine::MongoDbSecurityConfig> {
+	using T = engine::MongoDbSecurityConfig;
+	static constexpr auto value = glz::object(
+		"authentication", &T::authentication,
+		"tls", &T::tls,
+		"bindIp", &T::bind_ip,
+		"note", &T::note);
+};
+
+template <>
+struct glz::meta<engine::MongoDbStorageConfig> {
+	using T = engine::MongoDbStorageConfig;
+	static constexpr auto value = glz::object(
+		"engine", &T::engine,
+		"directoryPerDB", &T::directory_per_db,
+		"compression", &T::compression,
+		"journal", &T::journal);
+};
+
+template <>
+struct glz::meta<engine::MongoDbScriptsConfig> {
+	using T = engine::MongoDbScriptsConfig;
+	static constexpr auto value = glz::object(
+		"start", &T::start,
+		"stop", &T::stop,
+		"status", &T::status,
+		"init", &T::init,
+		"shell", &T::shell);
+};
+
+template <>
+struct glz::meta<engine::MongoDbDriverInfo> {
+	using T = engine::MongoDbDriverInfo;
+	static constexpr auto value = glz::object(
+		"package", &T::package,
+		"version", &T::version,
+		"testProgram", &T::test_program,
+		"example", &T::example);
+};
+
+template <>
+struct glz::meta<engine::MongoDbDriversConfig> {
+	using T = engine::MongoDbDriversConfig;
+	static constexpr auto value = glz::object(
+		"cpp", &T::cpp,
+		"python", &T::python,
+		"nodejs", &T::nodejs,
+		"go", &T::go,
+		"java", &T::java);
+};
+
+template <>
+struct glz::meta<engine::MongoDbConfig> {
+	using T = engine::MongoDbConfig;
+	static constexpr auto value = glz::object(
+		"_description", &T::_description,
+		"_updated", &T::_updated,
+		"cluster", &T::cluster,
+		"connection", &T::connection,
+		"nodes", &T::nodes,
+		"security", &T::security,
+		"storage", &T::storage,
+		"scripts", &T::scripts,
+		"drivers", &T::drivers);
+};

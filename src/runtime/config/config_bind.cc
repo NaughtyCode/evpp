@@ -54,7 +54,6 @@ int l_config_get(lua_State* L) {
     if (p == "resource_dir")           return PushConfigValue(L, rt.resource_dir);
     if (p == "scripts_dir")            return PushConfigValue(L, rt.scripts_dir);
     if (p == "sandbox_level")          return PushConfigValue(L, rt.sandbox_level);
-    if (p == "physics_scene_path")     return PushConfigValue(L, rt.physics_scene_path);
     if (p == "environment")            return PushConfigValue(L, rt.environment);
 
     // RuntimeConfig — log.*

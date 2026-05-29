@@ -1,7 +1,7 @@
 # Task 9: Config Manager Unification
 
 **Priority:** P1 — architecture
-**Status:** pending
+**Status:** done
 **Dependencies:** Task 1 (core-validation-fix), Task 2 (thread-safety-fix), Task 7 (physics-config-fix)
 
 ## Scope

@@ -39,6 +39,10 @@ ConfigManager& ConfigManager::Instance() {
 	return instance;
 }
 
+std::unique_ptr<IConfigManager> ConfigManager::Create() {
+	return std::make_unique<ConfigManager>();
+}
+
 // From JSON strings (text)
 
 bool ConfigManager::LoadRuntimeFromString(const std::string& json) {
@@ -258,7 +262,6 @@ ConfigChangeSet ConfigManager::Diff(const RuntimeConfig& old_rt,
 	EmitChange(changes, "resource_dir", old_rt.resource_dir, new_rt.resource_dir);
 	EmitChange(changes, "scripts_dir", old_rt.scripts_dir, new_rt.scripts_dir);
 	EmitChange(changes, "sandbox_level", old_rt.sandbox_level, new_rt.sandbox_level);
-	EmitChange(changes, "physics_scene_path", old_rt.physics_scene_path, new_rt.physics_scene_path);
 	EmitChange(changes, "environment", old_rt.environment, new_rt.environment);
 
 	// LogConfig
@@ -733,6 +736,30 @@ std::string ConfigManager::InterpolateEnvVars(const std::string& value) {
 				ENGINE_LOG_ERROR(l, "ConfigManager: env var ${} not set and no default", var_name);
 		}
 		result.replace(match.position(), match.length(), replacement);
+	}
+	return result;
+}
+
+// ── Validate ─────────────────────────────────────────────────────────────
+
+ValidationResult ConfigManager::Validate() const {
+	std::shared_lock<std::shared_mutex> lock(config_mutex_);
+	auto result = ConfigValidator::Validate(runtime_config_);
+	auto srv_result = ConfigValidator::ValidateServer(server_config_);
+	if (!srv_result.valid) {
+		result.valid = false;
+		if (!result.errors.empty()) result.errors += "; ";
+		result.errors += srv_result.errors;
+	}
+	if (!srv_result.warnings.empty()) {
+		if (!result.warnings.empty()) result.warnings += "; ";
+		result.warnings += srv_result.warnings;
+	}
+	auto cross = ConfigValidator::ValidateCross(runtime_config_, server_config_);
+	if (!cross.valid) {
+		result.valid = false;
+		if (!result.errors.empty()) result.errors += "; ";
+		result.errors += cross.errors;
 	}
 	return result;
 }

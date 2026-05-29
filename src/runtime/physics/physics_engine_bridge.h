@@ -104,8 +104,11 @@ class PhysicsEngineBridge {
 	/// Does NOT start the physics thread.
 	/// Thread: MT only. Must be called before Start().
 	bool Initialize(const std::string& config_dir,
-					const std::string& assets_path,
 					const std::string& scripts_dir);
+
+	// (deprecated) kept for ABI compatibility — assets_path is now
+	// read from PhysicsConfig.scene_path.
+	// (removed deprecated overload — assets_path now read from PhysicsConfig.scene_path)
 
 	/// Start the physics thread. Physics simulation begins.
 	/// Thread: MT only. Must be called after Initialize().
@@ -166,7 +169,7 @@ class PhysicsEngineBridge {
 		return instance;
 	}
 
-	bool Initialize(const std::string&, const std::string&, const std::string&) {
+	bool Initialize(const std::string&, const std::string&) {
 		return false;
 	}
 	bool Start() {

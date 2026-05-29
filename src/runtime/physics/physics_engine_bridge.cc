@@ -73,13 +73,12 @@ PhysicsEngineBridge& PhysicsEngineBridge::Instance() {
 // ---------------------------------------------------------------------------
 
 bool PhysicsEngineBridge::Initialize(const std::string& config_dir,
-									 const std::string& assets_path,
 									 const std::string& scripts_dir) {
 	// Capture the calling thread as the "main thread".
 	// All subsequent MT-only calls verify against this ID.
 	main_thread_id_ = std::this_thread::get_id();
 
-	bool ok = PhysicsSystem::Instance().Initialize(config_dir, assets_path, scripts_dir);
+	bool ok = PhysicsSystem::Instance().Initialize(config_dir, scripts_dir);
 
 	// Re-verify in case Initialize() is called a second time from a
 	// different thread (lifecycle methods should all be on the same thread).

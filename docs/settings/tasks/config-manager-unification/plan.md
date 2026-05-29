@@ -1,58 +1,66 @@
 # Implementation Plan: Config Manager Unification
 
-## Step 1: Define IConfigManager interface
+## Step 1: Define IConfigManager interface [DONE]
 
 Create `src/runtime/config/i_config_manager.h`:
-```cpp
-class IConfigManager {
-public:
-    virtual ~IConfigManager() = default;
-    virtual bool Load(const std::string& config_dir) = 0;
-    virtual bool Reload(const std::string& config_dir) = 0;
-    virtual std::string Dump() const = 0;  // JSON snapshot
-    virtual ConfigValidator::Result Validate() const = 0;
-};
-```
+- `ValidationResult` struct with `valid`, `errors`, `warnings`
+- `IConfigManager` abstract interface: `Load()`, `Reload()`, `Validate()`, `Dump()`
 
-## Step 2: Refactor ConfigManager to implement IConfigManager
+## Step 2: Refactor ConfigManager to implement IConfigManager [DONE]
+
+Modify `config.h` / `config.cc`:
+- `class ConfigManager : public IConfigManager`
+- Add `Validate()` override — validates current in-memory config
+- Add `static std::unique_ptr<IConfigManager> Create()` factory for non-singleton instances
+- `Dump()` now marked `override`
+
+## Step 3: Refactor PhysicsConfigManager to implement IConfigManager [DONE]
+
+Modify `physics_config.h` / `physics_config.cc`:
+- `class PhysicsConfigManager : public IConfigManager`
+- Add `Validate()` override — wraps existing `ValidateConfigs()`, returns `ValidationResult`
+- Add `Dump()` override — serializes all 4 configs to JSON
+- Add `Reload()` override — full reload of all 4 files with validation + rollback
+- Keep `ReloadThresholds()` and `ReloadLogLevel()` as public for selective hot-reload
+
+## Step 4: Fix MongoDB config naming [DONE]
 
 Modify `config.h`:
-- `class ConfigManager : public IConfigManager`
-- Add `Validate()` override
-- Add `Dump()` override (serialize all configs to JSON)
-- Add static factory method: `static std::unique_ptr<IConfigManager> Create()` for non-singleton instances
+- Renamed all MongoDB C++ struct members to snake_case
+- Added `glaze::meta` specializations for all `MongoDb*` structs
+- JSON keys remain camelCase (matching existing config files)
+- No external code changes needed — `connection.uri` was already snake_case
 
-## Step 3: Refactor PhysicsConfigManager to implement IConfigManager
+## Step 5: Move physics_scene_path [DONE]
+
+Modify `config.h`:
+- Removed `physics_scene_path` from `RuntimeConfig`
 
 Modify `physics_config.h`:
-- `class PhysicsConfigManager : public IConfigManager`
-- Add `Validate()` override (wrap existing `ValidateConfigs()`)
-- Add `Dump()` override
-- Add `Reload()` override (full reload, not just thresholds/log level)
-- Change `ReloadThresholds()` and `ReloadLogLevel()` to private helper methods
-
-## Step 4: Fix MongoDB config naming
-
-Modify `config.h`:
-- Add `glaze::meta` specializations for all `MongoDb*` structs
-- Map camelCase JSON keys to snake_case C++ members
-- Rename C++ members: `readPreference` → `read_preference`, `maxPoolSize` → `max_pool_size`, etc.
-- Update all code references to new member names
-
-## Step 5: Move physics_scene_path
-
-Modify `config.h`:
-- Remove `physics_scene_path` from `RuntimeConfig`
-- Add `scene_path` to `PhysicsConfig`
+- Added `scene_path` to `PhysicsConfig` with default `"/physics/data/scene.json"`
+- Added `"scenePath"` → `scene_path` mapping in `glaze::meta`
 
 Modify `engine.cc`:
-- Update physics init to read `scene_path` from PhysicsConfig instead of RuntimeConfig
+- Physics init reads `scene_path` from PhysicsConfig (loaded inside Initialize)
 
-## Step 6: Update tests
+Modify `physics_engine_bridge.h/.cc`:
+- Removed `assets_path` parameter from `Initialize()`
 
-In test files:
-- Test: ConfigManager implements IConfigManager interface
-- Test: PhysicsConfigManager implements IConfigManager interface
-- Test: Factory creates independent ConfigManager instances
-- Test: Dump() produces valid JSON matching current config
-- Test: MongoDB snake_case members work with existing JSON files
+Modify `physics_system.h/.cc`:
+- Removed `assets_path` parameter from `Initialize()`
+- Computes `assets_path_` from `PhysicsConfig.scene_path` after config loading
+
+Modify `config_bind.cc`:
+- Removed `physics_scene_path` from Lua `config.get()` (now on PhysicsConfig)
+
+Modify `config.cc`:
+- Removed `physics_scene_path` from `Diff()` change tracking
+
+## Step 6: Update tests [DEFERRED]
+
+Test files need updating for the new interface. Key test cases:
+- ConfigManager implements IConfigManager interface
+- PhysicsConfigManager implements IConfigManager interface
+- Factory creates independent ConfigManager instances
+- Dump() produces valid JSON matching current config
+- MongoDB snake_case members work with existing JSON files

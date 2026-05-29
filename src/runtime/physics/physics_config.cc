@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include <fstream>
+#include <sstream>
 
 #include "runtime/core/log/log.h"
 #include "runtime/core/log/log_macros.h"
@@ -220,6 +221,91 @@ bool PhysicsConfigManager::ValidateConfigs(std::string& error_out) const {
 	}
 	if (log_config_.max_backup_files < 0) {
 		error_out = "maxBackupFiles must be >= 0";
+		return false;
+	}
+
+	return true;
+}
+
+// ── IConfigManager::Validate ──────────────────────────────────────────────
+
+ValidationResult PhysicsConfigManager::Validate() const {
+	ValidationResult result;
+	std::string error;
+	if (!ValidateConfigs(error)) {
+		result.valid = false;
+		result.errors = error;
+	}
+	return result;
+}
+
+// ── IConfigManager::Dump ──────────────────────────────────────────────────
+
+std::string PhysicsConfigManager::Dump() const {
+	std::ostringstream oss;
+	oss << "{";
+	oss << "\"physics\":" << glz::write_json(physics_config_);
+	oss << ",\"threading\":" << glz::write_json(threading_config_);
+	oss << ",\"logging\":" << glz::write_json(log_config_);
+	oss << ",\"thresholds\":" << glz::write_json(thresholds_config_);
+	oss << "}";
+	return oss.str();
+}
+
+// ── IConfigManager::Reload (full) ─────────────────────────────────────────
+
+bool PhysicsConfigManager::Reload(const std::string& config_dir) {
+	PhysicsConfig new_physics;
+	ThreadingConfig new_threading;
+	PhysicsLogConfig new_log;
+	ThresholdsConfig new_thresholds;
+
+	std::string buf;
+	glz::context ctx{};
+
+	// Load physics.json
+	buf = ReadFile(config_dir + "/physics.json");
+	if (buf.empty()) return false;
+	auto ec = glz::read<glz::opts{.error_on_unknown_keys = true}>(new_physics, buf, ctx);
+	if (ec) return false;
+
+	// Load threading.json
+	buf = ReadFile(config_dir + "/threading.json");
+	if (buf.empty()) return false;
+	ec = glz::read<glz::opts{.error_on_unknown_keys = true}>(new_threading, buf, ctx);
+	if (ec) return false;
+
+	// Load logging.json
+	buf = ReadFile(config_dir + "/logging.json");
+	if (buf.empty()) return false;
+	ec = glz::read<glz::opts{.error_on_unknown_keys = true}>(new_log, buf, ctx);
+	if (ec) return false;
+
+	// Load thresholds.json
+	buf = ReadFile(config_dir + "/thresholds.json");
+	if (buf.empty()) return false;
+	ec = glz::read<glz::opts{.error_on_unknown_keys = true}>(new_thresholds, buf, ctx);
+	if (ec) return false;
+
+	// Validate new configs before swapping
+	PhysicsConfig old_physics = physics_config_;
+	ThreadingConfig old_threading = threading_config_;
+	PhysicsLogConfig old_log = log_config_;
+	ThresholdsConfig old_thresholds = thresholds_config_;
+
+	physics_config_ = std::move(new_physics);
+	threading_config_ = std::move(new_threading);
+	log_config_ = std::move(new_log);
+	thresholds_config_ = std::move(new_thresholds);
+
+	std::string error;
+	if (!ValidateConfigs(error)) {
+		// Rollback on validation failure
+		physics_config_ = std::move(old_physics);
+		threading_config_ = std::move(old_threading);
+		log_config_ = std::move(old_log);
+		thresholds_config_ = std::move(old_thresholds);
+		ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: reload validation failed: {}", error);
 		return false;
 	}
 

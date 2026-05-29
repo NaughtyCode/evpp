@@ -236,9 +236,8 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	{
 		ENGINE_LOG_INFO(logger, "initializing physics...");
 		auto phys_cfg = runtime_cfg.resource_dir + "/physics/config";
-		auto phys_data = runtime_cfg.resource_dir + runtime_cfg.physics_scene_path;
 		bool ok = PhysicsEngineBridge::Instance().Initialize(
-			phys_cfg, phys_data, runtime_cfg.scripts_dir);
+			phys_cfg, runtime_cfg.scripts_dir);
 		if (!ok) {
 			ENGINE_LOG_WARN(logger, "physics system failed to initialize");
 		} else {
@@ -507,7 +506,7 @@ void Engine::ApplyConfigChanges() {
 				"engine: sandbox_level changed to {} — restart required for VM sandbox change",
 				entry.new_value);
 		}
-		// Other fields (resource_dir, physics_scene_path, server settings)
+		// Other fields (resource_dir, server settings)
 		// are logged by ConfigManager::Reload() — consumers read them on demand.
 	}
 }
