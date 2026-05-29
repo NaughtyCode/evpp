@@ -174,6 +174,7 @@ typedef enum {
 typedef struct bcon_append_ctx_frame {
    int i;
    bool is_array;
+   uint8_t padding[3];
    bson_t bson;
 } bcon_append_ctx_frame_t;
 

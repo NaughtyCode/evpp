@@ -183,7 +183,7 @@ namespace glz::zmij
 #if ZMIJ_HAS_BUILTIN(__builtin_clzll)
          return __builtin_clzll(x);
 #elif defined(_M_AMD64) && defined(__AVX2__)
-         return __lzcnt64(x);
+         return static_cast<int>(__lzcnt64(x));
 #elif defined(_M_AMD64) || defined(_M_ARM64)
          unsigned long idx;
          _BitScanReverse64(&idx, x);

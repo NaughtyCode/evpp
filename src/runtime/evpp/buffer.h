@@ -13,8 +13,8 @@
 namespace evpp {
 class CLOUD_ENGINE_API Buffer {
 	public:
-	static const size_t kCheapPrependSize;
-	static const size_t kInitialSize;
+	static constexpr size_t kCheapPrependSize = 8;
+	static constexpr size_t kInitialSize = 1024;
 
 	explicit Buffer(size_t initial_size = kInitialSize,
 					size_t reserved_prepend_size = kCheapPrependSize)
@@ -508,7 +508,7 @@ class CLOUD_ENGINE_API Buffer {
 	size_t write_index_;
 	size_t reserved_prepend_size_;
 		size_t max_capacity_;
-	static const char kCRLF[];
+	static constexpr char kCRLF[] = "\r\n";
 };
 
 }

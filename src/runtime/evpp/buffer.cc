@@ -15,11 +15,6 @@
 #include "runtime/evpp/sockets.h"
 
 namespace evpp {
-const char Buffer::kCRLF[] = "\r\n";
-
-const size_t Buffer::kCheapPrependSize = 8;
-const size_t Buffer::kInitialSize = 1024;
-
 ssize_t Buffer::ReadFromFD(evpp_socket_t fd, int* savedErrno) {
 
 		/* Refuse to read if already at max capacity */

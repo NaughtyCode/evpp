@@ -3130,7 +3130,7 @@ evhttp_send_notfound(struct evhttp_request *req, const char *url)
 #define REASON_FORMAT "<p>The requested URL %s was not found on this server.</p>"
 	char   *escaped_url = NULL;
 	char   *reason = NULL;
-	size_t reason_len;
+	size_t reason_len = 0;
 
 	url = (url != NULL ? url : req->uri);
 	if (url != NULL)
