@@ -255,7 +255,7 @@ void Server::RecvingLoop(RecvThread* thread) {
 		socklen_t addr_len = sizeof(struct sockaddr_storage);
 		int readn = ::recvfrom(thread->fd(),
 							   (char*) recv_msg->WriteBegin(),
-							   recv_buf_size_,
+							   static_cast<int>(recv_buf_size_),
 							   0,
 							   recv_msg->mutable_remote_addr(),
 							   &addr_len);
@@ -298,6 +298,8 @@ void Server::RecvingLoop(RecvThread* thread) {
 	thread->SetStatus(kStopped);
 }
 
+}  // namespace udp
+}  // namespace evpp
 
 /*
 Benchmark data：Intel(R) Xeon(R) CPU E5-2630 0 @ 2.30GHz 24 core
@@ -383,4 +385,4 @@ udp message length QPS：
 17:21:26     96200.00  96198.00      0.00      0.00
 17:21:27     97431.00  97432.00      0.00      0.00
 
-*/}
+*/

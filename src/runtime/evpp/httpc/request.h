@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <memory>
 
 #include "runtime/evpp/event_loop.h"
 #include "runtime/evpp/httpc/conn.h"
@@ -15,7 +16,7 @@ class Response;
 class Conn;
 typedef std::function<void(const std::shared_ptr<Response>&)> Handler;
 
-class CLOUD_ENGINE_API Request {
+class CLOUD_ENGINE_API Request : public std::enable_shared_from_this<Request> {
 	public:
 	// @brief Create a HTTP Request and create Conn from pool.
 	//  Do a HTTP GET request if body is empty or HTTP POST request if body is not empty.
@@ -67,6 +68,7 @@ class CLOUD_ENGINE_API Request {
 	void HandleResponse(struct evhttp_request* r);
 	void ExecuteInLoop();
 	void Retry();
+	void Complete(const std::shared_ptr<Response>& response);
 
 	protected:
 	static const std::string empty_;
@@ -81,6 +83,7 @@ class CLOUD_ENGINE_API Request {
 	std::string body_;
 	std::shared_ptr<Conn> conn_;
 	Handler handler_;
+	std::shared_ptr<Request> self_holder_;
 
 	// The retried times
 	int retried_ = 0;

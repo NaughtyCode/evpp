@@ -13,8 +13,8 @@
 namespace evpp {
 class CLOUD_ENGINE_API Buffer {
 	public:
-	static constexpr size_t kCheapPrependSize = 8;
-	static constexpr size_t kInitialSize = 1024;
+	inline static constexpr size_t kCheapPrependSize = 8;
+	inline static constexpr size_t kInitialSize = 1024;
 
 	explicit Buffer(size_t initial_size = kInitialSize,
 					size_t reserved_prepend_size = kCheapPrependSize)
@@ -307,11 +307,11 @@ class CLOUD_ENGINE_API Buffer {
 	// and return result of readv, errno is saved into saved_errno
 	ssize_t ReadFromFD(evpp_socket_t fd, int* saved_errno);
 
-		/* Maximum total capacity in bytes. When length() reaches this
-		 * limit, ReadFromFD returns 0 (no more data read). Default 256KB. */
-		void SetMaxCapacity(size_t max) { max_capacity_ = max; }
-		size_t GetMaxCapacity() const { return max_capacity_; }
-		bool AtMaxCapacity() const { return length() >= max_capacity_; }
+	/* Maximum unread bytes accepted by ReadFromFD. 0 disables the cap.
+	 * Default is 256 KiB. */
+	void SetMaxCapacity(size_t max) { max_capacity_ = max; }
+	size_t GetMaxCapacity() const { return max_capacity_; }
+	bool AtMaxCapacity() const { return max_capacity_ > 0 && length() >= max_capacity_; }
 
 	// Next returns a slice containing the next n bytes from the buffer,
 	// advancing the buffer as if the bytes had been returned by Read.
@@ -511,8 +511,8 @@ class CLOUD_ENGINE_API Buffer {
 	size_t read_index_;
 	size_t write_index_;
 	size_t reserved_prepend_size_;
-		size_t max_capacity_;
-	static constexpr char kCRLF[] = "\r\n";
+	size_t max_capacity_;
+	inline static constexpr char kCRLF[] = "\r\n";
 };
 
 }

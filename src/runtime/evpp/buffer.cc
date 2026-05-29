@@ -11,39 +11,61 @@
 
 #include "runtime/evpp/buffer.h"
 
+#include <algorithm>
+#include <limits>
+
 #include "runtime/evpp/inner_pre.h"
 #include "runtime/evpp/sockets.h"
 
 namespace evpp {
 ssize_t Buffer::ReadFromFD(evpp_socket_t fd, int* savedErrno) {
-
-		/* Refuse to read if already at max capacity */
-		if (AtMaxCapacity()) {
-			if (savedErrno) *savedErrno = 0;
-			return 0;
-		}
 	// saved an ioctl()/FIONREAD call to tell how much to read
 	char extrabuf[65536];
 	struct iovec vec[2];
 	const size_t writable = WritableBytes();
-	vec[0].iov_base = begin() + write_index_;
-	vec[0].iov_len = writable;
-	vec[1].iov_base = extrabuf;
-	vec[1].iov_len = sizeof extrabuf;
+	const size_t readable = length();
+	if (max_capacity_ > 0 && readable >= max_capacity_) {
+		if (savedErrno) *savedErrno = 0;
+		return 0;
+	}
+
+	const size_t iov_len_max = static_cast<size_t>((std::numeric_limits<unsigned long>::max)());
+	const size_t max_read =
+		max_capacity_ > 0 ? (std::min)(max_capacity_ - readable, writable + sizeof extrabuf)
+						  : writable + sizeof extrabuf;
+	if (max_read == 0) {
+		if (savedErrno) *savedErrno = 0;
+		return 0;
+	}
+
+	const size_t inline_len = (std::min)((std::min)(writable, max_read), iov_len_max);
+	int iovcnt = 0;
+	if (inline_len > 0) {
+		vec[iovcnt].iov_base = begin() + write_index_;
+		vec[iovcnt].iov_len = static_cast<unsigned long>(inline_len);
+		++iovcnt;
+	}
+
+	const size_t extra_len = (std::min)(sizeof extrabuf, max_read - inline_len);
+	if (extra_len > 0) {
+		vec[iovcnt].iov_base = extrabuf;
+		vec[iovcnt].iov_len = static_cast<unsigned long>(extra_len);
+		++iovcnt;
+	}
+
 	// when there is enough space in this buffer, don't read into extrabuf.
 	// when extrabuf is used, we read 64k bytes at most.
-	const int iovcnt = (writable < sizeof extrabuf) ? 2 : 1;
 	const ssize_t n = ::readv(fd, vec, iovcnt);
 
 	if (n < 0) {
 		if (savedErrno) {
 			*savedErrno = EVPP_ERRNO;
 		}
-	} else if (static_cast<size_t>(n) <= writable) {
+	} else if (static_cast<size_t>(n) <= inline_len) {
 		write_index_ += n;
 	} else {
-		write_index_ = capacity_;
-		Append(extrabuf, n - writable);
+		write_index_ += inline_len;
+		Append(extrabuf, static_cast<size_t>(n) - inline_len);
 	}
 
 	return n;

@@ -45,7 +45,8 @@ Request::Request(EventLoop* loop,
 #endif
 		return;
 	}
-	uri_ = evhttp_uri_get_path(evuri);
+	const char* path = evhttp_uri_get_path(evuri);
+	uri_ = (path && *path) ? path : "/";
 	if (uri_[0] == 0) {
 		uri_ = "/";
 	}
@@ -55,7 +56,20 @@ Request::Request(EventLoop* loop,
 		uri_ += query;
 	}
 
-	host_ = evhttp_uri_get_host(evuri);
+	const char* host = evhttp_uri_get_host(evuri);
+	if (!host || !*host) {
+		evhttp_uri_free(evuri);
+		port_ = 80;
+		uri_ = "/";
+		host_ = http_url;
+#if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL)
+		conn_.reset(CLOUDENGINE_MEM_NEW(Conn, loop, host_, port_, false, timeout));
+#else
+		conn_.reset(CLOUDENGINE_MEM_NEW(Conn, loop, host_, port_, timeout));
+#endif
+		return;
+	}
+	host_ = host;
 
 	port_ = evhttp_uri_get_port(evuri);
 
@@ -92,7 +106,8 @@ Request::~Request() {
 
 void Request::Execute(const Handler& h) {
 	handler_ = h;
-	loop_->RunInLoop(std::bind(&Request::ExecuteInLoop, this));
+	self_holder_ = shared_from_this();
+	loop_->RunInLoop([self = self_holder_]() { self->ExecuteInLoop(); });
 }
 
 void Request::ExecuteInLoop() {
@@ -177,7 +192,7 @@ failed:
 	}
 
 	std::shared_ptr<Response> response(CLOUDENGINE_MEM_NEW(Response, this, nullptr));
-	handler_(response);
+	Complete(response);
 }
 
 void Request::AddHeader(const std::string& header, const std::string& value) {
@@ -197,8 +212,16 @@ void Request::Retry() {
 	if (retry_interval_.IsZero()) {
 		ExecuteInLoop();
 	} else {
-		loop_->RunAfter(retry_interval_, std::bind(&Request::ExecuteInLoop, this));
+		loop_->RunAfter(retry_interval_, [self = shared_from_this()]() { self->ExecuteInLoop(); });
 	}
+}
+
+void Request::Complete(const std::shared_ptr<Response>& response) {
+	auto self = shared_from_this();
+	if (handler_) {
+		handler_(response);
+	}
+	self_holder_.reset();
 }
 
 void Request::HandleResponse(struct evhttp_request* r, void* v) {
@@ -209,6 +232,7 @@ void Request::HandleResponse(struct evhttp_request* r, void* v) {
 
 void Request::HandleResponse(struct evhttp_request* r) {
 	assert(loop_->IsInLoopThread());
+	auto self = shared_from_this();
 
 	if (r) {
 		int response_code = r->response_code;
@@ -228,7 +252,7 @@ void Request::HandleResponse(struct evhttp_request* r) {
 				conn_.reset();
 			}
 
-			handler_(response);
+			Complete(response);
 			return;
 		}
 	}
@@ -279,7 +303,7 @@ void Request::HandleResponse(struct evhttp_request* r) {
 		conn_.reset();
 	}
 
-	handler_(response);
+	Complete(response);
 }
 
 }  // httpc

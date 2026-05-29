@@ -5,6 +5,8 @@
 #include "runtime/evpp/libevent.h"
 #include "runtime/evpp/sockets.h"
 
+#include <string>
+
 extern "C" {
 #include "thirdparty/kcp/ikcp.h"
 }
@@ -31,7 +33,7 @@ static int kcp_output_callback(const char* buf, int len, ikcpcb* /*kcp*/, void* 
 		return -1;
 	}
 	int sent = ::send(self->sockfd(), buf, len, 0);
-	return (sent >= 0) ? 0 : -1;
+	return (sent == len) ? 0 : -1;
 }
 
 // Client
@@ -44,19 +46,25 @@ Client::~Client() {
 }
 
 void Client::SetKcpNodelay(int nodelay, int interval, int resend, int nc) {
-	kcp_nodelay_ = nodelay;
-	kcp_interval_ = interval;
-	kcp_resend_ = resend;
-	kcp_nc_ = nc;
+	kcp_nodelay_ = nodelay ? 1 : 0;
+	kcp_interval_ = interval > 0 ? interval : 10;
+	kcp_resend_ = resend >= 0 ? resend : 0;
+	kcp_nc_ = nc ? 1 : 0;
 }
 
 void Client::SetKcpWndSize(int sndwnd, int rcvwnd) {
-	kcp_sndwnd_ = sndwnd;
-	kcp_rcvwnd_ = rcvwnd;
+	if (sndwnd > 0) {
+		kcp_sndwnd_ = sndwnd;
+	}
+	if (rcvwnd > 0) {
+		kcp_rcvwnd_ = rcvwnd;
+	}
 }
 
 void Client::SetKcpMtu(int mtu) {
-	kcp_mtu_ = mtu;
+	if (mtu > 24 && mtu <= 65535) {
+		kcp_mtu_ = mtu;
+	}
 }
 
 bool Client::Connect(const struct sockaddr_in& addr, uint32_t conv) {
@@ -67,13 +75,13 @@ bool Client::Connect(const struct sockaddr_in& addr, uint32_t conv) {
 }
 
 bool Client::Connect(const char* host, int port, uint32_t conv) {
-	char buf[64];
+	std::string addr;
 	if (strchr(host, ':')) {
-		snprintf(buf, sizeof buf, "[%s]:%d", host, port);
+		addr = std::string("[") + host + "]:" + std::to_string(port);
 	} else {
-		snprintf(buf, sizeof buf, "%s:%d", host, port);
+		addr = std::string(host) + ":" + std::to_string(port);
 	}
-	return Connect(buf, conv);
+	return Connect(addr.c_str(), conv);
 }
 
 bool Client::Connect(const struct sockaddr_storage& addr, uint32_t conv) {
@@ -92,8 +100,16 @@ bool Client::Connect(const char* addr, uint32_t conv) {
 }
 
 bool Client::Connect() {
+	Close();
 	int domain = (remote_addr_.ss_family == AF_INET6) ? AF_INET6 : AF_INET;
 	sockfd_ = ::socket(domain, SOCK_DGRAM, 0);
+	if (sockfd_ == INVALID_SOCKET) {
+		ENGINE_LOG_ERROR(engine::GetLogger(),
+						 "KCP client failed to create socket, errno={} {}",
+						 EVPP_ERRNO,
+						 strerror(EVPP_ERRNO));
+		return false;
+	}
 	sock::SetReuseAddr(sockfd_);
 
 	struct sockaddr* addr = reinterpret_cast<struct sockaddr*>(&remote_addr_);

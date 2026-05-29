@@ -128,24 +128,20 @@ void TCPConn::Send(const void* data, size_t len, MessagePriority priority) {
 		ENGINE_LOG_WARN(engine::GetLogger(), "Send dropped: connection {} not connected", id_);
 		return;
 	}
-
-	uint32_t allowed = rate_limiter_.Consume(static_cast<uint32_t>(len));
-	if (allowed < static_cast<uint32_t>(len)) {
-		pending_messages_.push({priority,
-								std::string(static_cast<const char*>(data) + allowed,
-											len - static_cast<size_t>(allowed)),
-								std::chrono::duration_cast<std::chrono::nanoseconds>(
-									std::chrono::steady_clock::now().time_since_epoch()).count()});
-	}
-	if (allowed == 0) {
+	if (len == 0 || data == nullptr) {
 		return;
 	}
+
+	std::string message(static_cast<const char*>(data), len);
 
 	if (loop_->IsInLoopThread()) {
-		SendInLoop(data, allowed);
+		SendPriorityInLoop(std::move(message), priority);
 		return;
 	}
-	Send(Slice(static_cast<const char*>(data), allowed));
+	auto self = shared_from_this();
+	loop_->RunInLoop([self, message = std::move(message), priority]() mutable {
+		self->SendPriorityInLoop(std::move(message), priority);
+	});
 }
 
 void TCPConn::Send(Buffer* buf) {
@@ -168,6 +164,32 @@ void TCPConn::SendInLoop(const Slice& message) {
 
 void TCPConn::SendStringInLoop(const std::string& message) {
 	SendInLoop(message.data(), message.size());
+}
+
+bool TCPConn::SendPriorityInLoop(std::string data, MessagePriority priority) {
+	assert(loop_->IsInLoopThread());
+
+	if (status_ != kConnected || data.empty()) {
+		return false;
+	}
+
+	const uint32_t request_size = data.size() > UINT32_MAX
+									  ? UINT32_MAX
+									  : static_cast<uint32_t>(data.size());
+	uint32_t allowed = rate_limiter_.Consume(request_size);
+	if (allowed < data.size()) {
+		pending_messages_.push({priority,
+								data.substr(static_cast<size_t>(allowed)),
+								std::chrono::duration_cast<std::chrono::nanoseconds>(
+									std::chrono::steady_clock::now().time_since_epoch()).count()});
+		SchedulePendingFlush();
+	}
+	if (allowed == 0) {
+		return false;
+	}
+
+	SendInLoop(data.data(), static_cast<size_t>(allowed));
+	return true;
 }
 
 void TCPConn::SendInLoop(const void* data, size_t len) {
@@ -377,7 +399,9 @@ void TCPConn::HandleWrite() {
 				while (!pending_messages_.empty()) {
 					PendingMessage msg = pending_messages_.top();
 					pending_messages_.pop();
-					SendInLoop(msg.data.data(), msg.data.size());
+					if (!SendPriorityInLoop(std::move(msg.data), msg.priority)) {
+						break;
+					}
 					if (output_buffer_.length() > 0) {
 						chan_->EnableWriteEvent();
 						break;
@@ -412,7 +436,9 @@ void TCPConn::HandleWrite() {
 			while (!pending_messages_.empty()) {
 				PendingMessage msg = pending_messages_.top();
 				pending_messages_.pop();
-				SendInLoop(msg.data.data(), msg.data.size());
+				if (!SendPriorityInLoop(std::move(msg.data), msg.priority)) {
+					break;
+				}
 				if (output_buffer_.length() > 0) {
 					chan_->EnableWriteEvent();
 					break;
@@ -436,6 +462,41 @@ void TCPConn::HandleWrite() {
 			HandleError();
 		}
 	}
+}
+
+void TCPConn::FlushPendingMessages() {
+	assert(loop_->IsInLoopThread());
+	pending_flush_timer_.reset();
+
+	if (status_ != kConnected) {
+		while (!pending_messages_.empty()) {
+			pending_messages_.pop();
+		}
+		return;
+	}
+
+	while (output_buffer_.length() == 0 && !pending_messages_.empty()) {
+		PendingMessage msg = pending_messages_.top();
+		pending_messages_.pop();
+		if (!SendPriorityInLoop(std::move(msg.data), msg.priority)) {
+			break;
+		}
+	}
+
+	if (!pending_messages_.empty() && output_buffer_.length() == 0) {
+		SchedulePendingFlush();
+	}
+}
+
+void TCPConn::SchedulePendingFlush() {
+	assert(loop_->IsInLoopThread());
+	if (pending_flush_timer_ || pending_messages_.empty() || status_ != kConnected) {
+		return;
+	}
+
+	pending_flush_timer_ = loop_->RunAfter(
+		Duration(0.001),
+		std::bind(&TCPConn::FlushPendingMessages, shared_from_this()));
 }
 
 void TCPConn::DelayClose() {
@@ -492,6 +553,13 @@ void TCPConn::HandleClose() {
 						 (void*) loop_);
 		delay_close_timer_->Cancel();
 		delay_close_timer_.reset();
+	}
+	if (pending_flush_timer_) {
+		pending_flush_timer_->Cancel();
+		pending_flush_timer_.reset();
+	}
+	while (!pending_messages_.empty()) {
+		pending_messages_.pop();
 	}
 
 	if (conn_fn_) {

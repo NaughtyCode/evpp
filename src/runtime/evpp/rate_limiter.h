@@ -45,7 +45,10 @@ class RateLimiter {
 		return allowed;
 	}
 
-	uint32_t max_bytes_per_sec() const { return max_bytes_per_sec_; }
+	uint32_t max_bytes_per_sec() const {
+		std::lock_guard<std::mutex> lock(mutex_);
+		return max_bytes_per_sec_;
+	}
 
 	private:
 	void Refill() {
@@ -58,7 +61,9 @@ class RateLimiter {
 		uint64_t new_tokens = static_cast<uint64_t>(max_bytes_per_sec_) *
 							  static_cast<uint64_t>(elapsed_ns) / 1'000'000'000ULL;
 		if (new_tokens > 0) {
-			tokens_ = (std::min)(tokens_ + static_cast<uint32_t>(new_tokens), max_bytes_per_sec_);
+			uint64_t tokens = static_cast<uint64_t>(tokens_) + new_tokens;
+			tokens_ = static_cast<uint32_t>(
+				(std::min)(tokens, static_cast<uint64_t>(max_bytes_per_sec_)));
 			last_refill_time_ = now;
 		}
 	}

@@ -44,13 +44,19 @@ inline std::string Message::remote_ip() const {
 }
 
 inline bool SendMessage(evpp_socket_t fd, const struct sockaddr* addr, const char* d, size_t dlen) {
+	if (fd == INVALID_SOCKET || addr == nullptr || (d == nullptr && dlen > 0)) {
+		return false;
+	}
 	if (dlen == 0) {
 		return true;
+	}
+	if (dlen > 65535) {
+		return false;
 	}
 
 	socklen_t addrlen =
 		(addr->sa_family == AF_INET6) ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
-	int sentn = ::sendto(fd, d, dlen, 0, addr, addrlen);
+	int sentn = ::sendto(fd, d, static_cast<int>(dlen), 0, addr, addrlen);
 	if (sentn < 0 || static_cast<size_t>(sentn) != dlen) {
 		return false;
 	}

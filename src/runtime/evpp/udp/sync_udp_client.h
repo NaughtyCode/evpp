@@ -1,6 +1,8 @@
 #include "runtime/evpp/inner_pre.h"
 #include "runtime/evpp/udp/udp_message.h"
 
+#include <string>
+
 namespace evpp {
 namespace udp {
 namespace sync {

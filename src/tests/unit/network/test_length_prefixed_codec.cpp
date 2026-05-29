@@ -159,6 +159,15 @@ TEST_CASE("LengthPrefixedCodec encode to Buffer output", "[network][codec]") {
 	REQUIRE(messages[0] == "test");
 }
 
+TEST_CASE("LengthPrefixedCodec handles null buffers", "[network][codec]") {
+	engine::LengthPrefixedCodec codec(64 * 1024);
+
+	codec.Encode("ignored", nullptr);
+
+	auto messages = codec.Decode(nullptr);
+	REQUIRE(messages.empty());
+}
+
 TEST_CASE("LengthPrefixedCodec trailing incomplete header", "[network][codec]") {
 	engine::LengthPrefixedCodec codec(64 * 1024);
 	evpp::Buffer buf;

@@ -45,7 +45,13 @@ class CLOUD_ENGINE_API Server : public ThreadDispatchPolicy {
 	}
 
 	void set_recv_buf_size(size_t v) {
-		recv_buf_size_ = v;
+		if (v < 1472) {
+			recv_buf_size_ = 1472;
+		} else if (v > 65535) {
+			recv_buf_size_ = 65535;
+		} else {
+			recv_buf_size_ = v;
+		}
 	}
 
 	private:

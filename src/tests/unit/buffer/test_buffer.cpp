@@ -198,6 +198,14 @@ TEST_CASE("Buffer Reserve grows capacity", "[buffer][mutate]") {
     REQUIRE(buf.capacity() >= 4096);
 }
 
+TEST_CASE("Buffer max capacity can be disabled", "[buffer][mutate]") {
+    evpp::Buffer buf;
+    buf.SetMaxCapacity(0);
+    buf.Append("data", 4);
+    REQUIRE_FALSE(buf.AtMaxCapacity());
+    REQUIRE(buf.GetMaxCapacity() == 0);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Buffer: search helpers
 // ═══════════════════════════════════════════════════════════════════════════

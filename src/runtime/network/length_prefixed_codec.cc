@@ -1,6 +1,7 @@
 #include "runtime/network/length_prefixed_codec.h"
 
 #include <cstring>
+#include <limits>
 
 #include "runtime/evpp/buffer.h"
 #include "runtime/profiler/profiler_events.h"
@@ -25,6 +26,9 @@ std::string LengthPrefixedCodec::Encode(const std::string& payload) {
 	if (max_message_size_ > 0 && payload.size() > max_message_size_) {
 		return {};
 	}
+	if (payload.size() > std::numeric_limits<uint32_t>::max()) {
+		return {};
+	}
 
 	std::string result;
 	result.reserve(kHeaderSize + payload.size());
@@ -38,7 +42,13 @@ std::string LengthPrefixedCodec::Encode(const std::string& payload) {
 
 void LengthPrefixedCodec::Encode(const std::string& payload, evpp::Buffer* output) {
 	ENGINE_PROFILE_SCOPE("engine.script", "NetEncodeBuf");
+	if (!output) {
+		return;
+	}
 	if (max_message_size_ > 0 && payload.size() > max_message_size_) {
+		return;
+	}
+	if (payload.size() > std::numeric_limits<uint32_t>::max()) {
 		return;
 	}
 
@@ -50,6 +60,9 @@ void LengthPrefixedCodec::Encode(const std::string& payload, evpp::Buffer* outpu
 std::vector<std::string> LengthPrefixedCodec::Decode(evpp::Buffer* buffer) {
 	ENGINE_PROFILE_SCOPE("engine.script", "NetDecode");
 	std::vector<std::string> messages;
+	if (!buffer) {
+		return messages;
+	}
 	size_t readable = buffer->length();
 
 	while (readable >= kHeaderSize) {
@@ -64,15 +77,16 @@ std::vector<std::string> LengthPrefixedCodec::Decode(evpp::Buffer* buffer) {
 			break;
 		}
 
-		if (readable < kHeaderSize + msg_len) {
+		const size_t msg_len_size = static_cast<size_t>(msg_len);
+		if (readable - kHeaderSize < msg_len_size) {
 			/* Incomplete message — wait for more data */
 			break;
 		}
 
 		/* Extract complete message */
 		buffer->Skip(kHeaderSize);  /* consume length header */
-		messages.emplace_back(buffer->data(), msg_len);
-		buffer->Skip(msg_len);  /* consume message body */
+		messages.emplace_back(buffer->data(), msg_len_size);
+		buffer->Skip(msg_len_size);  /* consume message body */
 		readable = buffer->length();
 	}
 

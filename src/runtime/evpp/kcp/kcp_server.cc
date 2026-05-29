@@ -1,6 +1,7 @@
 #include "runtime/evpp/kcp/kcp_server.h"
 
 #include <condition_variable>
+#include <unordered_map>
 
 #include "runtime/evpp/event_loop.h"
 #include "runtime/evpp/event_loop_thread_pool.h"
@@ -140,6 +141,9 @@ class Server::KcpSession {
 
 	// Check whether the session has been idle for too long.
 	bool IsTimeout(uint32_t timeout_ms) const {
+		if (timeout_ms == 0) {
+			return false;
+		}
 		IUINT32 now = kcp_clock();
 		return kcp_timediff(now, last_active_) > static_cast<IINT32>(timeout_ms);
 	}
@@ -148,7 +152,7 @@ class Server::KcpSession {
 	int OnOutput(const char* buf, int len) {
 		struct sockaddr* addr = sock::sockaddr_cast(&remote_addr_);
 		int sent = ::sendto(fd_, buf, len, 0, addr, addrlen_);
-		return (sent >= 0) ? 0 : -1;
+		return (sent == len) ? 0 : -1;
 	}
 
 	private:
@@ -376,19 +380,25 @@ bool Server::IsStopped() const {
 }
 
 void Server::SetKcpNodelay(int nodelay, int interval, int resend, int nc) {
-	kcp_nodelay_ = nodelay;
-	kcp_interval_ = interval;
-	kcp_resend_ = resend;
-	kcp_nc_ = nc;
+	kcp_nodelay_ = nodelay ? 1 : 0;
+	kcp_interval_ = interval > 0 ? interval : 10;
+	kcp_resend_ = resend >= 0 ? resend : 0;
+	kcp_nc_ = nc ? 1 : 0;
 }
 
 void Server::SetKcpWndSize(int sndwnd, int rcvwnd) {
-	kcp_sndwnd_ = sndwnd;
-	kcp_rcvwnd_ = rcvwnd;
+	if (sndwnd > 0) {
+		kcp_sndwnd_ = sndwnd;
+	}
+	if (rcvwnd > 0) {
+		kcp_rcvwnd_ = rcvwnd;
+	}
 }
 
 void Server::SetKcpMtu(int mtu) {
-	kcp_mtu_ = mtu;
+	if (mtu > kKcpOverhead && mtu <= 65535) {
+		kcp_mtu_ = mtu;
+	}
 }
 
 void Server::SetSessionTimeoutMs(uint32_t timeout_ms) {

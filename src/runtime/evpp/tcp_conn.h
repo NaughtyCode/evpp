@@ -201,7 +201,10 @@ class CLOUD_ENGINE_API TCPConn : public std::enable_shared_from_this<TCPConn> {
 	void HandleError();
 	void SendInLoop(const Slice& message);
 	void SendInLoop(const void* data, size_t len);
+	bool SendPriorityInLoop(std::string data, MessagePriority priority);
 	void SendStringInLoop(const std::string& message);
+	void FlushPendingMessages();
+	void SchedulePendingFlush();
 
 	struct PendingMessage {
 		MessagePriority priority;
@@ -239,6 +242,7 @@ class CLOUD_ENGINE_API TCPConn : public std::enable_shared_from_this<TCPConn> {
 	// Default is 0 second which means we disable this feature by default.
 	Duration close_delay_ = Duration(0.0);
 	std::shared_ptr<InvokeTimer> delay_close_timer_;  // The timer to delay close this TCPConn
+	std::shared_ptr<InvokeTimer> pending_flush_timer_;
 
 	ConnectionCallback conn_fn_;  // This will be called to the user application layer
 	MessageCallback msg_fn_;  // This will be called to the user application layer
