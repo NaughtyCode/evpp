@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <string>
@@ -11,8 +12,18 @@
 
 namespace engine {
 
-// Forward declaration for database service config
+// Forward declarations
 struct DbServiceConfig;
+class FileWatcher;
+
+// ConfigChangeEntry — describes a single field change in a config reload.
+struct ConfigChangeEntry {
+	std::string field_path;   // dotted path, e.g. "frame.target_fps"
+	std::string old_value;    // stringified old value
+	std::string new_value;    // stringified new value
+};
+
+using ConfigChangeSet = std::vector<ConfigChangeEntry>;
 
 // Config structs — aggregates for glaze auto-reflection (C++23).
 // JSON key names match struct member names (snake_case).
@@ -190,7 +201,7 @@ class ENGINE_API ConfigManager {
 
 	/* Callback type for config reload notifications.
 	 * Callbacks MUST NOT throw — exceptions are caught and logged. */
-	using ReloadCallback = std::function<void()>;
+	using ReloadCallback = std::function<void(const ConfigChangeSet&)>;
 
 	ConfigManager(const ConfigManager&) = delete;
 	ConfigManager& operator=(const ConfigManager&) = delete;
@@ -204,6 +215,31 @@ class ENGINE_API ConfigManager {
 
 	/* Unregister a previously registered callback by ID. */
 	void UnregisterReloadCallback(int id);
+
+	// ── Rollback ─────────────────────────────────────────────────────
+
+	/* Rollback to the configuration snapshot saved before the last
+	 * successful Reload(). Returns false if no snapshot is available.
+	 * Notifies reload callbacks with a ConfigChangeSet describing the
+	 * reverted changes. */
+	bool Rollback();
+
+	/* True if a previous-config snapshot is available for rollback. */
+	bool CanRollback() const;
+
+	// ── Auto-reload (FileWatcher) ────────────────────────────────────
+
+	/* Enable automatic config reload when .json files change in the
+	 * config directory tree. The watcher runs on a background thread;
+	 * reload + callbacks are dispatched to the event loop if one is set.
+	 * Not thread-safe — call from the main thread during Init(). */
+	void EnableAutoReload(const std::string& config_dir);
+
+	/* Disable auto-reload and stop the watcher thread. */
+	void DisableAutoReload();
+
+	/* True if the config FileWatcher is active. */
+	bool IsAutoReloadEnabled() const;
 
 	// ── From JSON strings (text) ─────────────────────────────────────
 
@@ -329,13 +365,25 @@ class ENGINE_API ConfigManager {
 	// any referenced mongodb config files.
 	void LoadMongoDbConfigsFromServer();
 
-	// Notify all registered reload callbacks. Called after successful Reload().
-	void NotifyReloadCallbacks();
+	// Build a field-level change set by diffing old and new configs.
+	static ConfigChangeSet Diff(const RuntimeConfig& old_rt,
+								const RuntimeConfig& new_rt,
+								const ServerConfig& old_srv,
+								const ServerConfig& new_srv);
+
+	// Notify all registered reload callbacks with the given change set.
+	void NotifyReloadCallbacks(const ConfigChangeSet& changes);
 
 	mutable std::shared_mutex config_mutex_;
 	RuntimeConfig runtime_config_;
 	ClientConfig client_config_;
 	ServerConfig server_config_;
+
+	// Previous config snapshots for rollback support.
+	RuntimeConfig previous_runtime_config_;
+	ClientConfig previous_client_config_;
+	ServerConfig previous_server_config_;
+	bool has_previous_ = false;
 
 	// Cached mongodb cluster configs — loaded alongside server.json.
 	MongoDbConfig mongo_dev_config_;
@@ -348,6 +396,10 @@ class ENGINE_API ConfigManager {
 	std::vector<std::pair<int, ReloadCallback>> callbacks_;
 	int next_callback_id_ = 1;
 	std::atomic<bool> reloading_{false};
+
+	// Auto-reload: FileWatcher for .json config files.
+	std::unique_ptr<FileWatcher> config_watcher_;
+	std::string config_watcher_dir_;
 };
 
 }  // namespace engine

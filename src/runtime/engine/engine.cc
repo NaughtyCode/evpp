@@ -290,15 +290,29 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		}
 	}
 
-	// Register config reload subscribers.
-	// These callbacks are invoked after each successful ConfigManager::Reload().
+	// Register config reload subscriber.
+	// Callback stores changes for main-thread application in FrameLoop.
 	{
-		ConfigManager::Instance().RegisterReloadCallback([]() {
-			auto* logger = GetLogger();
-			auto rt = ConfigManager::Instance().GetRuntimeConfig();
-			ENGINE_LOG_INFO(logger,
-				"config reloaded: frame_interval=[{}ms], log_level=[{}], sandbox=[{}]",
-				rt.frame.interval_ms, rt.log.level, rt.sandbox_level);
+		config_dir_ = std::filesystem::path(runtime_cfg.resource_dir).parent_path().string()
+					  + "/config";
+		ConfigManager::Instance().RegisterReloadCallback([this](const ConfigChangeSet& changes) {
+			std::lock_guard<std::mutex> lock(pending_config_mutex_);
+			// Merge changes — if the same field changed again before we
+			// applied the previous batch, keep only the latest old→new.
+			for (const auto& entry : changes) {
+				bool found = false;
+				for (auto& existing : pending_config_changes_) {
+					if (existing.field_path == entry.field_path) {
+						existing.new_value = entry.new_value;
+						found = true;
+						break;
+					}
+				}
+				if (!found) {
+					pending_config_changes_.push_back(entry);
+				}
+			}
+			config_changes_pending_.store(true, std::memory_order_release);
 		});
 		ENGINE_LOG_INFO(logger, "config reload subscriber registered");
 	}
@@ -342,6 +356,18 @@ void Engine::Start() {
 	});
 	if (!sigterm_watcher_->Init() || !sigterm_watcher_->AsyncWait()) {
 		ENGINE_LOG_ERROR(logger, "failed to initialize SIGTERM watcher");
+	}
+
+	sighup_watcher_ = std::make_unique<evpp::SignalEventWatcher>(SIGHUP, loop_, [this]() {
+		auto* logger = GetLogger();
+		ENGINE_LOG_INFO(logger, "SIGHUP received, reloading config...");
+		if (!config_dir_.empty()) {
+			bool ok = ConfigManager::Instance().Reload(config_dir_);
+			ENGINE_LOG_INFO(logger, "SIGHUP config reload: {}", ok ? "OK" : "FAILED");
+		}
+	});
+	if (!sighup_watcher_->Init() || !sighup_watcher_->AsyncWait()) {
+		ENGINE_LOG_ERROR(logger, "failed to initialize SIGHUP watcher");
 	}
 #endif
 
@@ -400,6 +426,66 @@ void Engine::Shutdown() {
 		if (owned_loop_) {
 			owned_loop_->Stop();
 		}
+	}
+}
+
+// ApplyConfigChanges — apply pending config changes on the main thread.
+
+void Engine::ApplyConfigChanges() {
+	ConfigChangeSet changes;
+	{
+		std::lock_guard<std::mutex> lock(pending_config_mutex_);
+		changes = std::move(pending_config_changes_);
+		pending_config_changes_.clear();
+	}
+
+	if (changes.empty()) return;
+
+	auto* logger = GetLogger();
+	for (const auto& entry : changes) {
+		if (entry.field_path == "frame.target_fps" ||
+			entry.field_path == "frame.interval_ms") {
+			auto rt = ConfigManager::Instance().GetRuntimeConfig();
+			std::chrono::milliseconds new_interval;
+			if (rt.frame.target_fps > 0) {
+				new_interval = std::chrono::milliseconds(1000 / rt.frame.target_fps);
+			} else {
+				new_interval = std::chrono::milliseconds(rt.frame.interval_ms);
+			}
+
+			if (new_interval != frame_interval_) {
+				frame_interval_ = new_interval;
+				// Reschedule frame timer on this (main) thread.
+				if (frame_timer_ && running_ && loop_) {
+					frame_timer_->Cancel();
+					frame_timer_ = loop_->RunEvery(
+						evpp::Duration(frame_interval_.count() *
+									   evpp::Duration::kMillisecond),
+						[this]() { Tick(); });
+				}
+				ENGINE_LOG_INFO(logger,
+					"engine: frame_interval updated to {}ms (target_fps={})",
+					frame_interval_.count(), rt.frame.target_fps);
+			}
+		} else if (entry.field_path == "log.level") {
+			auto rt = ConfigManager::Instance().GetRuntimeConfig();
+			ENGINE_LOG_INFO(logger,
+				"engine: log level changed to {} — restart required for full effect",
+				rt.log.level);
+		} else if (entry.field_path == "log.dir") {
+			auto rt = ConfigManager::Instance().GetRuntimeConfig();
+			if (logger) {
+				ENGINE_LOG_INFO(logger,
+					"engine: log dir changed to {} — restart required for full effect",
+					rt.log.dir);
+			}
+		} else if (entry.field_path == "sandbox_level") {
+			ENGINE_LOG_WARN(logger,
+				"engine: sandbox_level changed to {} — restart required for VM sandbox change",
+				entry.new_value);
+		}
+		// Other fields (resource_dir, physics_scene_path, server settings)
+		// are logged by ConfigManager::Reload() — consumers read them on demand.
 	}
 }
 
@@ -468,6 +554,7 @@ void Engine::Cleanup() {
 	sigint_watcher_.reset();
 #ifndef _WIN32
 	sigterm_watcher_.reset();
+	sighup_watcher_.reset();
 #endif
 
 	{
@@ -488,6 +575,12 @@ void Engine::Cleanup() {
 
 void Engine::FrameLoop() {
 	if (!running_) return;
+
+	// Apply any pending config changes from a hot-reload.
+	if (config_changes_pending_.load(std::memory_order_acquire)) {
+		ApplyConfigChanges();
+		config_changes_pending_.store(false, std::memory_order_release);
+	}
 
 	auto frame_start = std::chrono::steady_clock::now();
 	auto elapsed =

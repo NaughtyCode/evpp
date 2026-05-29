@@ -1,23 +1,25 @@
 # Changelog: Hot-Reload Consumer Fix
 
-## [Unreleased]
+## [2026-05-29] — Task complete
 
 ### Added
-- (pending) `ConfigChangeSet` struct with field-level diff info
-- (pending) `ConfigChangeEntry` struct (field_path, old_value, new_value)
-- (pending) `ConfigManager::Rollback()` method
-- (pending) `ConfigManager::CanRollback()` method
-- (pending) `ConfigManager::EnableAutoReload(bool)` toggle
-- (pending) Config FileWatcher (reuses ScriptReloader's FileWatcher infra)
-- (pending) SIGHUP signal handler for config reload
-- (pending) `Diff()` helper for computing config changes
+- `ConfigChangeSet` struct with field-level diff info (`ConfigChangeEntry`: field_path, old_value, new_value)
+- `ConfigManager::Diff()` — computes change set between old and new configs
+- `ConfigManager::Rollback()` — restores previous config snapshot
+- `ConfigManager::CanRollback()` — checks if snapshot is available
+- `ConfigManager::EnableAutoReload()` / `DisableAutoReload()` / `IsAutoReloadEnabled()` — FileWatcher-based auto-reload
+- SIGHUP signal handler in `Engine::Start()` — triggers `ConfigManager::Reload()` on Unix
+- `Engine::ApplyConfigChanges()` — main-thread application of hot-reloaded config changes
 
 ### Changed
-- (pending) `ReloadCallback` signature: `void()` → `void(const ConfigChangeSet&)`
-- (pending) `Reload()` now computes and passes change set to callbacks
-- (pending) Engine reload callback now actually applies changes (frame, log, sandbox)
+- `ReloadCallback` signature: `void()` → `void(const ConfigChangeSet&)`
+- `Reload()` now saves previous config for rollback, builds change set, passes to callbacks
+- `NotifyReloadCallbacks()` now accepts and forwards `ConfigChangeSet`
+- `LoadRuntimeFromString()` now saves previous config snapshot (enables rollback testing)
+- Engine reload callback replaced with pending-changes pattern (main-thread dispatch via `FrameLoop`)
+- Engine callback applies: frame_interval recalculation + timer reschedule, log level warning, sandbox_level warning
 
 ### Fixed
-- (pending) P0-3: Config hot-reload callbacks only logged, didn't propagate changes
-- (pending) P1-12: No FileWatcher for config files — manual reload only
-- (pending) P1-11: No rollback mechanism for bad config
+- P0-3: Config hot-reload callbacks now propagate changes to engine subsystems
+- P1-12: Config FileWatcher added — `.json` files in config dir trigger auto-reload
+- P1-11: Config rollback implemented — `Rollback()` restores pre-reload snapshot

@@ -12,6 +12,7 @@
 #include "runtime/config/config_validator.h"
 #include "runtime/core/log/log.h"
 #include "runtime/database/data_service/db_service_config.h"
+#include "runtime/vm/file_watcher.h"
 
 namespace engine {
 
@@ -54,7 +55,9 @@ bool ConfigManager::LoadRuntimeFromString(const std::string& json) {
 	}
 	{
 		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		previous_runtime_config_ = std::move(runtime_config_);
 		runtime_config_ = std::move(temp);
+		has_previous_ = true;
 	}
 	return true;
 }
@@ -169,6 +172,84 @@ bool ConfigManager::Load(const std::string& config_dir) {
 	return true;
 }
 
+// ── Diff helper ────────────────────────────────────────────────────────────
+
+namespace {
+
+template <typename T>
+std::string ToString(const T& val) {
+	if constexpr (std::is_same_v<T, std::string>) {
+		return val;
+	} else if constexpr (std::is_same_v<T, int>) {
+		return std::to_string(val);
+	} else if constexpr (std::is_same_v<T, double>) {
+		return std::to_string(val);
+	} else if constexpr (std::is_same_v<T, size_t>) {
+		return std::to_string(val);
+	} else if constexpr (std::is_same_v<T, bool>) {
+		return val ? "true" : "false";
+	} else {
+		return "<complex>";
+	}
+}
+
+void EmitChange(ConfigChangeSet& changes, const std::string& path,
+				const std::string& old_val, const std::string& new_val) {
+	if (old_val != new_val) {
+		changes.push_back({path, old_val, new_val});
+	}
+}
+
+}  // namespace
+
+ConfigChangeSet ConfigManager::Diff(const RuntimeConfig& old_rt,
+									 const RuntimeConfig& new_rt,
+									 const ServerConfig& old_srv,
+									 const ServerConfig& new_srv) {
+	ConfigChangeSet changes;
+
+	// ── RuntimeConfig fields ──────────────────────────────────────────
+	EmitChange(changes, "resource_dir", old_rt.resource_dir, new_rt.resource_dir);
+	EmitChange(changes, "scripts_dir", old_rt.scripts_dir, new_rt.scripts_dir);
+	EmitChange(changes, "sandbox_level", old_rt.sandbox_level, new_rt.sandbox_level);
+	EmitChange(changes, "physics_scene_path", old_rt.physics_scene_path, new_rt.physics_scene_path);
+
+	// LogConfig
+	EmitChange(changes, "log.dir", old_rt.log.dir, new_rt.log.dir);
+	EmitChange(changes, "log.level", old_rt.log.level, new_rt.log.level);
+	EmitChange(changes, "log.rotation_size_mb",
+			   ToString(old_rt.log.rotation_size_mb), ToString(new_rt.log.rotation_size_mb));
+	EmitChange(changes, "log.max_backup_files",
+			   ToString(old_rt.log.max_backup_files), ToString(new_rt.log.max_backup_files));
+	EmitChange(changes, "log.rotation_frequency", old_rt.log.rotation_frequency, new_rt.log.rotation_frequency);
+
+	// FrameConfig
+	EmitChange(changes, "frame.target_fps",
+			   ToString(old_rt.frame.target_fps), ToString(new_rt.frame.target_fps));
+	EmitChange(changes, "frame.interval_ms",
+			   ToString(old_rt.frame.interval_ms), ToString(new_rt.frame.interval_ms));
+	EmitChange(changes, "frame.slow_threshold_multiplier",
+			   ToString(old_rt.frame.slow_threshold_multiplier),
+			   ToString(new_rt.frame.slow_threshold_multiplier));
+
+	// ── ServerConfig fields ──────────────────────────────────────────
+	EmitChange(changes, "http.timeout_sec",
+			   ToString(old_srv.http.timeout_sec), ToString(new_srv.http.timeout_sec));
+	EmitChange(changes, "msgpack.max_nesting_depth",
+			   ToString(old_srv.msgpack.max_nesting_depth), ToString(new_srv.msgpack.max_nesting_depth));
+	EmitChange(changes, "msgpack.max_payload_size",
+			   ToString(old_srv.msgpack.max_payload_size), ToString(new_srv.msgpack.max_payload_size));
+	EmitChange(changes, "server.scripts_dir", old_srv.scripts_dir, new_srv.scripts_dir);
+	EmitChange(changes, "admin_port",
+			   ToString(old_srv.admin_port), ToString(new_srv.admin_port));
+	EmitChange(changes, "admin_bind_address", old_srv.admin_bind_address, new_srv.admin_bind_address);
+	EmitChange(changes, "mongodb_dev", old_srv.mongodb_dev, new_srv.mongodb_dev);
+	EmitChange(changes, "mongodb_public", old_srv.mongodb_public, new_srv.mongodb_public);
+	EmitChange(changes, "db_service", old_srv.db_service, new_srv.db_service);
+
+	return changes;
+}
+
 // Reload (runtime — logger is available)
 
 bool ConfigManager::Reload(const std::string& config_dir) {
@@ -241,12 +322,14 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 		}
 	}
 
-	// Snapshot old values before swap for diff logging.
+	// Snapshot old values before swap for diff + rollback.
 	RuntimeConfig old_runtime;
+	ClientConfig old_client;
 	ServerConfig old_server;
 	{
 		std::shared_lock<std::shared_mutex> lock(config_mutex_);
 		old_runtime = runtime_config_;
+		old_client = client_config_;
 		old_server = server_config_;
 	}
 
@@ -265,44 +348,25 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 		}
 	}
 
-	// Field-level diff logging.
+	// Save previous config for rollback.
 	{
-		auto& rt = runtime_config_;
-		int changes = 0;
-		if (old_runtime.frame.target_fps != rt.frame.target_fps) {
-			ENGINE_LOG_INFO(logger, "config: frame.target_fps: {} -> {}",
-							old_runtime.frame.target_fps, rt.frame.target_fps);
-			changes++;
-		}
-		if (old_runtime.frame.interval_ms != rt.frame.interval_ms) {
-			ENGINE_LOG_INFO(logger, "config: frame.interval_ms: {} -> {}",
-							old_runtime.frame.interval_ms, rt.frame.interval_ms);
-			changes++;
-		}
-		if (old_runtime.log.level != rt.log.level) {
-			ENGINE_LOG_INFO(logger, "config: log.level: {} -> {}",
-							old_runtime.log.level, rt.log.level);
-			changes++;
-		}
-		if (old_runtime.sandbox_level != rt.sandbox_level) {
-			ENGINE_LOG_INFO(logger, "config: sandbox_level: {} -> {}",
-							old_runtime.sandbox_level, rt.sandbox_level);
-			changes++;
-		}
-		if (old_runtime.resource_dir != rt.resource_dir) {
-			ENGINE_LOG_INFO(logger, "config: resource_dir: {} -> {}",
-							old_runtime.resource_dir, rt.resource_dir);
-			changes++;
-		}
-		if (old_server.admin_port != server_config_.admin_port) {
-			ENGINE_LOG_INFO(logger, "config: admin_port: {} -> {}",
-							old_server.admin_port, server_config_.admin_port);
-			changes++;
-		}
-		ENGINE_LOG_INFO(logger, "ConfigManager: config reloaded ({} fields changed)", changes);
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		previous_runtime_config_ = std::move(old_runtime);
+		previous_client_config_ = std::move(old_client);
+		previous_server_config_ = std::move(old_server);
+		has_previous_ = true;
 	}
 
-	NotifyReloadCallbacks();
+	// Build field-level change set and log it.
+	ConfigChangeSet changes = Diff(previous_runtime_config_, runtime_config_,
+								   previous_server_config_, server_config_);
+	for (const auto& entry : changes) {
+		ENGINE_LOG_INFO(logger, "config: {}: {} -> {}",
+						entry.field_path, entry.old_value, entry.new_value);
+	}
+	ENGINE_LOG_INFO(logger, "ConfigManager: config reloaded ({} fields changed)", changes.size());
+
+	NotifyReloadCallbacks(changes);
 	return true;
 }
 
@@ -461,7 +525,7 @@ void ConfigManager::UnregisterReloadCallback(int id) {
 		callbacks_.end());
 }
 
-void ConfigManager::NotifyReloadCallbacks() {
+void ConfigManager::NotifyReloadCallbacks(const ConfigChangeSet& changes) {
 	if (reloading_.exchange(true)) return;  // prevent re-entrant reload
 
 	std::vector<std::pair<int, ReloadCallback>> callbacks_copy;
@@ -472,7 +536,7 @@ void ConfigManager::NotifyReloadCallbacks() {
 	auto* logger = GetLogger();
 	for (auto& [id, callback] : callbacks_copy) {
 		try {
-			callback();
+			callback(changes);
 		} catch (const std::exception& e) {
 			ENGINE_LOG_ERROR(logger,
 							 "ConfigManager: reload callback #{} failed: {}", id, e.what());
@@ -483,6 +547,89 @@ void ConfigManager::NotifyReloadCallbacks() {
 	}
 
 	reloading_.store(false);
+}
+
+// ── Rollback ─────────────────────────────────────────────────────────────
+
+bool ConfigManager::Rollback() {
+	std::lock_guard<std::shared_mutex> lock(config_mutex_);
+	if (!has_previous_) return false;
+
+	// Swap current with previous.
+	RuntimeConfig old_runtime = std::move(runtime_config_);
+	ClientConfig old_client = std::move(client_config_);
+	ServerConfig old_server = std::move(server_config_);
+
+	runtime_config_ = std::move(previous_runtime_config_);
+	client_config_ = std::move(previous_client_config_);
+	server_config_ = std::move(previous_server_config_);
+
+	// The previous snapshot is now consumed; save the just-evicted config
+	// so the user can rollback again (toggle behavior).
+	previous_runtime_config_ = std::move(old_runtime);
+	previous_client_config_ = std::move(old_client);
+	previous_server_config_ = std::move(old_server);
+	// has_previous_ stays true — we just exchanged snapshots.
+
+	auto* logger = GetLogger();
+	ENGINE_LOG_INFO(logger, "ConfigManager: rollback executed");
+
+	// Build change set for the reversion and notify subscribers.
+	ConfigChangeSet changes = Diff(previous_runtime_config_, runtime_config_,
+								   previous_server_config_, server_config_);
+	for (const auto& entry : changes) {
+		ENGINE_LOG_INFO(logger, "config (rollback): {}: {} -> {}",
+						entry.field_path, entry.old_value, entry.new_value);
+	}
+
+	// Notify outside the lock (callbacks may be slow).
+	// We already have a lock_guard, so callbacks run with lock held —
+	// this is the same trade-off as Reload().
+	NotifyReloadCallbacks(changes);
+	return true;
+}
+
+bool ConfigManager::CanRollback() const {
+	std::shared_lock<std::shared_mutex> lock(config_mutex_);
+	return has_previous_;
+}
+
+// ── Auto-reload (FileWatcher) ──────────────────────────────────────────────
+
+void ConfigManager::EnableAutoReload(const std::string& config_dir) {
+	if (config_watcher_) {
+		DisableAutoReload();
+	}
+
+	config_watcher_dir_ = config_dir;
+	config_watcher_ = std::make_unique<FileWatcher>();
+	config_watcher_->WatchDirectory(config_dir, ".json");
+	config_watcher_->SetChangeCallback([this](const std::vector<std::string>& /*files*/) {
+		// Reload on any .json change in the config tree.
+		// Reload() is self-contained and thread-safe.
+		if (!config_watcher_dir_.empty()) {
+			Reload(config_watcher_dir_);
+		}
+	});
+	config_watcher_->PrimeKnownFiles();
+	config_watcher_->Start(1000);  // poll every 1s
+
+	auto* logger = GetLogger();
+	if (logger) {
+		ENGINE_LOG_INFO(logger, "ConfigManager: auto-reload enabled, watching [{}]", config_dir);
+	}
+}
+
+void ConfigManager::DisableAutoReload() {
+	if (config_watcher_) {
+		config_watcher_->Stop();
+		config_watcher_.reset();
+	}
+	config_watcher_dir_.clear();
+}
+
+bool ConfigManager::IsAutoReloadEnabled() const {
+	return config_watcher_ && config_watcher_->IsRunning();
 }
 
 void ConfigManager::LoadMongoDbConfigsFromServer() {

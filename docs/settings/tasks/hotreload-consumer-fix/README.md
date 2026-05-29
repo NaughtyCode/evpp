@@ -1,7 +1,7 @@
 # Task 3: Hot-Reload Consumer Fix
 
 **Priority:** P0 — makes Reload functional
-**Status:** pending
+**Status:** done
 **Dependencies:** Task 1 (core-validation-fix), Task 2 (thread-safety-fix)
 
 ## Scope

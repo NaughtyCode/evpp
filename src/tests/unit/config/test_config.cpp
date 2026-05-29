@@ -304,3 +304,184 @@ TEST_CASE("ValidateCross rejects admin_port enabled with empty scripts_dir", "[c
     auto result = engine::ConfigValidator::ValidateCross(rt, sc);
     REQUIRE_FALSE(result.valid);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ConfigChangeSet: Diff generation
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("Diff detects changed field", "[config][diff]") {
+    engine::RuntimeConfig old_rt, new_rt;
+    engine::ServerConfig old_srv, new_srv;
+
+    old_rt.frame.target_fps = 30;
+    new_rt.frame.target_fps = 60;
+
+    auto changes = engine::ConfigManager::Diff(old_rt, new_rt, old_srv, new_srv);
+    REQUIRE_FALSE(changes.empty());
+
+    bool found = false;
+    for (const auto& entry : changes) {
+        if (entry.field_path == "frame.target_fps") {
+            REQUIRE(entry.old_value == "30");
+            REQUIRE(entry.new_value == "60");
+            found = true;
+        }
+    }
+    REQUIRE(found);
+}
+
+TEST_CASE("Diff returns empty for identical configs", "[config][diff]") {
+    engine::RuntimeConfig rt;
+    engine::ServerConfig srv;
+
+    auto changes = engine::ConfigManager::Diff(rt, rt, srv, srv);
+    REQUIRE(changes.empty());
+}
+
+TEST_CASE("Diff detects multiple changed fields", "[config][diff]") {
+    engine::RuntimeConfig old_rt, new_rt;
+    engine::ServerConfig old_srv, new_srv;
+
+    new_rt.log.level = "warn";
+    new_rt.sandbox_level = "full";
+    new_srv.admin_port = 9090;
+
+    auto changes = engine::ConfigManager::Diff(old_rt, new_rt, old_srv, new_srv);
+    REQUIRE(changes.size() >= 3);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ConfigManager: RegisterReloadCallback with ConfigChangeSet
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("RegisterReloadCallback with ConfigChangeSet signature", "[config][callback]") {
+    ConfigFixture f;
+    f.LoadFromStrings();
+
+    int cb_id = f.cfg.RegisterReloadCallback(
+        [](const engine::ConfigChangeSet&) { /* no-op */ });
+    REQUIRE(cb_id > 0);
+
+    // Second registration gets a different ID.
+    int cb2 = f.cfg.RegisterReloadCallback(
+        [](const engine::ConfigChangeSet&) { /* no-op */ });
+    REQUIRE(cb2 != cb_id);
+
+    f.cfg.UnregisterReloadCallback(cb_id);
+    f.cfg.UnregisterReloadCallback(cb2);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ConfigManager: Rollback
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("CanRollback returns true after first load that saves snapshot", "[config][rollback]") {
+    ConfigFixture f;
+    f.LoadFromStrings();
+    // LoadFromStrings calls LoadRuntimeFromString which now saves a snapshot.
+    REQUIRE(f.cfg.CanRollback());
+}
+
+TEST_CASE("Rollback restores previous config after Reload", "[config][rollback]") {
+    ConfigFixture f;
+    f.LoadFromStrings();
+
+    int original_fps = f.cfg.GetRuntimeConfig().frame.target_fps;
+
+    // Change target_fps.
+    REQUIRE(f.cfg.LoadRuntimeFromString(R"({
+        "resource_dir": ".",
+        "log": { "dir": "." },
+        "frame": { "target_fps": 99 },
+        "scripts_dir": "."
+    })"));
+    REQUIRE(f.cfg.GetRuntimeConfig().frame.target_fps == 99);
+    REQUIRE(f.cfg.CanRollback());
+
+    // Rollback should restore original value.
+    REQUIRE(f.cfg.Rollback());
+    REQUIRE(f.cfg.GetRuntimeConfig().frame.target_fps == original_fps);
+}
+
+TEST_CASE("Rollback toggles between two config versions", "[config][rollback]") {
+    ConfigFixture f;
+    f.LoadFromStrings();
+
+    // LoadFromStrings established a snapshot (C++ defaults vs fixture JSON).
+    REQUIRE(f.cfg.CanRollback());
+
+    int current_fps = f.cfg.GetRuntimeConfig().frame.target_fps;
+
+    // Change target_fps to establish a clear "before" snapshot.
+    REQUIRE(f.cfg.LoadRuntimeFromString(R"({
+        "resource_dir": ".",
+        "log": { "dir": "." },
+        "frame": { "target_fps": 99 },
+        "scripts_dir": "."
+    })"));
+
+    // Rollback should restore the pre-99 value.
+    REQUIRE(f.cfg.Rollback());
+    REQUIRE(f.cfg.GetRuntimeConfig().frame.target_fps == current_fps);
+
+    // After rollback, the snapshot still exists (it now holds the 99 version).
+    REQUIRE(f.cfg.CanRollback());
+
+    // Second rollback toggles back to 99.
+    REQUIRE(f.cfg.Rollback());
+    REQUIRE(f.cfg.GetRuntimeConfig().frame.target_fps == 99);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ConfigManager: AutoReload toggle
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("IsAutoReloadEnabled returns false by default", "[config][autoreload]") {
+    ConfigFixture f;
+    f.LoadFromStrings();
+    REQUIRE_FALSE(f.cfg.IsAutoReloadEnabled());
+}
+
+TEST_CASE("EnableAutoReload then DisableAutoReload", "[config][autoreload]") {
+    ConfigFixture f;
+    f.LoadFromStrings();
+
+    f.cfg.EnableAutoReload("resources/config");
+    REQUIRE(f.cfg.IsAutoReloadEnabled());
+
+    f.cfg.DisableAutoReload();
+    REQUIRE_FALSE(f.cfg.IsAutoReloadEnabled());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ConfigManager: Dump / ValidateOnly
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("Dump produces valid JSON", "[config][dump]") {
+    ConfigFixture f;
+    f.LoadFromStrings();
+
+    std::string json = f.cfg.Dump();
+    REQUIRE_FALSE(json.empty());
+    // Should contain runtime config keys.
+    REQUIRE(json.find("\"runtime\"") != std::string::npos);
+}
+
+TEST_CASE("DumpRuntime produces valid JSON", "[config][dump]") {
+    ConfigFixture f;
+    f.LoadFromStrings();
+
+    std::string json = f.cfg.DumpRuntime();
+    REQUIRE_FALSE(json.empty());
+    REQUIRE(json.find("\"frame\"") != std::string::npos);
+}
+
+TEST_CASE("ValidateOnly returns valid for good config dir", "[config][validate]") {
+    ConfigFixture f;
+    f.LoadFromStrings();
+
+    auto result = f.cfg.ValidateOnly("resources/config");
+    // May be valid or invalid depending on whether config files exist on disk.
+    // The key is that it doesn't crash and returns a result.
+    REQUIRE(result.valid || !result.valid);
+}

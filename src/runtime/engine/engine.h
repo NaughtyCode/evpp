@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -121,6 +122,11 @@ class ENGINE_API Engine {
 	// destroying the engine.
 	void Cleanup();
 
+	// Apply pending config changes on the main thread.
+	// Called automatically from FrameLoop() when config changes are
+	// detected via reload callback.
+	void ApplyConfigChanges();
+
 	// ── Accessors ────────────────────────────────────────────────────
 
 	bool running() const {
@@ -170,8 +176,15 @@ class ENGINE_API Engine {
 	std::unique_ptr<evpp::SignalEventWatcher> sigint_watcher_;
 #ifndef _WIN32
 	std::unique_ptr<evpp::SignalEventWatcher> sigterm_watcher_;
+	std::unique_ptr<evpp::SignalEventWatcher> sighup_watcher_;
 #endif
 	evpp::InvokeTimerPtr frame_timer_;
+
+	// Pending config changes for main-thread application.
+	std::mutex pending_config_mutex_;
+	ConfigChangeSet pending_config_changes_;
+	std::atomic<bool> config_changes_pending_{false};
+	std::string config_dir_;
 };
 
 }  // namespace engine
