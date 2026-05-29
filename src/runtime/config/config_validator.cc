@@ -17,6 +17,22 @@ const std::unordered_set<std::string> kValidLogLevels = {
 	"trace", "debug", "info", "warn", "error", "critical"
 };
 
+const std::unordered_set<std::string> kValidRenderBackends = {
+	"opengl", "vulkan", "directx11", "directx12", "metal"
+};
+
+const std::unordered_set<std::string> kValidAudioBackends = {
+	"openal", "xaudio2", "coreaudio", "wasapi"
+};
+
+const std::unordered_set<std::string> kValidTextureQualities = {
+	"low", "medium", "high", "ultra"
+};
+
+const std::unordered_set<std::string> kValidColorBlindModes = {
+	"none", "protanopia", "deuteranopia", "tritanopia"
+};
+
 void MergeResult(ConfigValidator::Result& dest, const ConfigValidator::Result& src) {
 	if (!src.valid) {
 		dest.valid = false;
@@ -122,6 +138,111 @@ ConfigValidator::Result ConfigValidator::ValidateClient(const ClientConfig& conf
 	Result r;
 
 	CheckNotEmpty(r, config.scripts_dir, "scripts_dir");
+
+	// ── Render ────────────────────────────────────────────────────────
+	CheckEnum(r, config.render.backend, kValidRenderBackends, "render.backend");
+	CheckRange(r, config.render.resolution_width, 1, 16384, "render.resolution_width");
+	CheckRange(r, config.render.resolution_height, 1, 16384, "render.resolution_height");
+	CheckRange(r, config.render.max_fps, 1, 1000, "render.max_fps");
+	if (config.render.msaa_samples != 0 && config.render.msaa_samples != 2 &&
+		config.render.msaa_samples != 4 && config.render.msaa_samples != 8 &&
+		config.render.msaa_samples != 16) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "render.msaa_samples (" + std::to_string(config.render.msaa_samples) +
+					") must be 0, 2, 4, 8, or 16";
+	}
+
+	// ── Window ────────────────────────────────────────────────────────
+	if (!config.window.title.empty() && config.window.title.size() > 256) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "window.title must be <= 256 characters";
+	}
+	CheckRange(r, config.window.width, 1, 16384, "window.width");
+	CheckRange(r, config.window.height, 1, 16384, "window.height");
+
+	// ── Input ─────────────────────────────────────────────────────────
+	if (config.input.mouse_sensitivity < 0.01f || config.input.mouse_sensitivity > 100.0f) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "input.mouse_sensitivity (" + std::to_string(config.input.mouse_sensitivity) +
+					") must be in [0.01, 100.0]";
+	}
+	if (config.input.gamepad_deadzone < 0.0f || config.input.gamepad_deadzone > 1.0f) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "input.gamepad_deadzone (" + std::to_string(config.input.gamepad_deadzone) +
+					") must be in [0.0, 1.0]";
+	}
+
+	// ── Audio ─────────────────────────────────────────────────────────
+	CheckEnum(r, config.audio.backend, kValidAudioBackends, "audio.backend");
+	CheckRange(r, config.audio.sample_rate, 8000, 384000, "audio.sample_rate");
+	CheckRange(r, config.audio.channels, 1, 16, "audio.channels");
+	if (config.audio.master_volume < 0.0f || config.audio.master_volume > 1.0f) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "audio.master_volume (" + std::to_string(config.audio.master_volume) +
+					") must be in [0.0, 1.0]";
+	}
+	if (config.audio.music_volume < 0.0f || config.audio.music_volume > 1.0f) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "audio.music_volume must be in [0.0, 1.0]";
+	}
+	if (config.audio.sfx_volume < 0.0f || config.audio.sfx_volume > 1.0f) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "audio.sfx_volume must be in [0.0, 1.0]";
+	}
+
+	// ── Network ───────────────────────────────────────────────────────
+	if (config.network.server_port != 0) {
+		CheckRange(r, config.network.server_port, 1, 65535, "network.server_port");
+	}
+	CheckRange(r, config.network.timeout_ms, 100, 300000, "network.timeout_ms");
+	CheckRange(r, config.network.reconnect_max_retries, 0, 1000, "network.reconnect_max_retries");
+	if (config.network.reconnect_base_delay_ms > config.network.reconnect_max_delay_ms) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "network.reconnect_base_delay_ms must be <= reconnect_max_delay_ms";
+	}
+	CheckRange(r, config.network.interpolation_delay_ms, 0, 5000, "network.interpolation_delay_ms");
+
+	// ── Assets ────────────────────────────────────────────────────────
+	CheckEnum(r, config.assets.texture_quality, kValidTextureQualities, "assets.texture_quality");
+	CheckRange(r, config.assets.streaming_budget_mb, 0, 65536, "assets.streaming_budget_mb");
+	if (config.assets.lod_bias < 0.0f || config.assets.lod_bias > 10.0f) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "assets.lod_bias must be in [0.0, 10.0]";
+	}
+
+	// ── UI ────────────────────────────────────────────────────────────
+	CheckEnum(r, config.ui.color_blind_mode, kValidColorBlindModes, "ui.color_blind_mode");
+	CheckRange(r, config.ui.font_size, 1, 256, "ui.font_size");
+	if (config.ui.scale < 0.25f || config.ui.scale > 10.0f) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "ui.scale (" + std::to_string(config.ui.scale) +
+					") must be in [0.25, 10.0]";
+	}
+
+	// ── Warnings ──────────────────────────────────────────────────────
+	if (config.audio.master_volume > 0.0f && config.audio.master_volume < 0.01f) {
+		CheckWarning(r, true, "audio.master_volume is effectively muted (< 0.01)");
+	}
+	if (config.network.server_port != 0 && config.network.server_port < 1024) {
+		CheckWarning(r, true, "network.server_port < 1024 may require elevated privileges");
+	}
+
+	if (!r.valid) {
+		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "[config] client validation failed: {}", r.errors);
+	}
+	if (!r.warnings.empty()) {
+		if (auto* l = GetLogger()) ENGINE_LOG_WARN(l, "[config] client validation warning: {}", r.warnings);
+	}
 
 	return r;
 }

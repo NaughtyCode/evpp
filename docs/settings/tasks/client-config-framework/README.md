@@ -1,7 +1,7 @@
 # Task 10: Client Config Framework
 
 **Priority:** P0 — client integration blocker
-**Status:** pending
+**Status:** done
 **Dependencies:** Task 1 (core-validation-fix), Task 4 (runtime-environment-selection), Task 9 (config-manager-unification)
 
 ## Scope

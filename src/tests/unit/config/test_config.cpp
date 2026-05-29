@@ -1,6 +1,9 @@
 #include "wsa_init.h"
 #include <catch2/catch_test_macros.hpp>
+#include <filesystem>
+#include <fstream>
 #include "config_fixture.h"
+#include "runtime/config/platform_paths.h"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ConfigManager: JSON string loading
@@ -571,4 +574,362 @@ TEST_CASE("ServerConfig active_mongodb can be set via JSON", "[config][environme
     })"));
     auto srv = cfg.GetServerConfig();
     REQUIRE(srv.active_mongodb == "public");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ClientConfig: struct parsing
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("ClientConfig parses all sub-structs from JSON", "[config][client]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    std::string client_json = R"({
+        "scripts_dir": "resources/script/client",
+        "render": {
+            "backend": "vulkan",
+            "resolution_width": 2560,
+            "resolution_height": 1440,
+            "fullscreen": true,
+            "vsync": false,
+            "msaa_samples": 8,
+            "hdr": true,
+            "max_fps": 144
+        },
+        "window": {
+            "title": "Test Game",
+            "width": 1920,
+            "height": 1080,
+            "resizable": false,
+            "borderless": true,
+            "monitor": 1
+        },
+        "input": {
+            "mouse_sensitivity": 2.5,
+            "mouse_invert_y": true,
+            "gamepad_deadzone": 0.2,
+            "touch_enabled": false
+        },
+        "audio": {
+            "backend": "wasapi",
+            "sample_rate": 48000,
+            "channels": 6,
+            "master_volume": 0.75,
+            "music_volume": 0.5,
+            "sfx_volume": 0.9,
+            "spatial_audio": true,
+            "mute_when_unfocused": false
+        },
+        "network": {
+            "server_address": "game.example.com",
+            "server_port": 9000,
+            "reconnect_max_retries": 5,
+            "reconnect_base_delay_ms": 1000,
+            "reconnect_max_delay_ms": 15000,
+            "timeout_ms": 10000,
+            "client_prediction": false,
+            "interpolation_delay_ms": 50
+        },
+        "assets": {
+            "root_path": "data/assets",
+            "streaming_budget_mb": 1024,
+            "lod_bias": 2.0,
+            "texture_quality": "ultra",
+            "preload_list": ["hero.mesh", "world.map"]
+        },
+        "ui": {
+            "font_path": "fonts/roboto.ttf",
+            "font_size": 16,
+            "scale": 1.25,
+            "locale": "zh_CN",
+            "theme": "light",
+            "color_blind_mode": "protanopia"
+        },
+        "platform": {
+            "save_data_path": "/custom/saves",
+            "cache_path": "/custom/cache",
+            "locale": "zh_CN"
+        },
+        "first_run_completed": true
+    })";
+
+    REQUIRE(cfg.LoadClientFromString(client_json));
+    auto cc = cfg.GetClientConfig();
+
+    REQUIRE(cc.render.backend == "vulkan");
+    REQUIRE(cc.render.resolution_width == 2560);
+    REQUIRE(cc.render.resolution_height == 1440);
+    REQUIRE(cc.render.fullscreen == true);
+    REQUIRE(cc.render.vsync == false);
+    REQUIRE(cc.render.msaa_samples == 8);
+    REQUIRE(cc.render.hdr == true);
+    REQUIRE(cc.render.max_fps == 144);
+
+    REQUIRE(cc.window.title == "Test Game");
+    REQUIRE(cc.window.width == 1920);
+    REQUIRE(cc.window.height == 1080);
+    REQUIRE(cc.window.resizable == false);
+    REQUIRE(cc.window.borderless == true);
+    REQUIRE(cc.window.monitor == 1);
+
+    REQUIRE(cc.input.mouse_sensitivity == 2.5f);
+    REQUIRE(cc.input.mouse_invert_y == true);
+    REQUIRE(cc.input.gamepad_deadzone == 0.2f);
+    REQUIRE(cc.input.touch_enabled == false);
+
+    REQUIRE(cc.audio.backend == "wasapi");
+    REQUIRE(cc.audio.sample_rate == 48000);
+    REQUIRE(cc.audio.channels == 6);
+    REQUIRE(cc.audio.master_volume == 0.75f);
+
+    REQUIRE(cc.network.server_address == "game.example.com");
+    REQUIRE(cc.network.server_port == 9000);
+    REQUIRE(cc.network.reconnect_max_retries == 5);
+    REQUIRE(cc.network.client_prediction == false);
+
+    REQUIRE(cc.assets.root_path == "data/assets");
+    REQUIRE(cc.assets.streaming_budget_mb == 1024);
+    REQUIRE(cc.assets.texture_quality == "ultra");
+    REQUIRE(cc.assets.preload_list.size() == 2);
+
+    REQUIRE(cc.ui.font_path == "fonts/roboto.ttf");
+    REQUIRE(cc.ui.locale == "zh_CN");
+    REQUIRE(cc.ui.color_blind_mode == "protanopia");
+
+    REQUIRE(cc.platform.save_data_path == "/custom/saves");
+    REQUIRE(cc.first_run_completed == true);
+}
+
+TEST_CASE("ClientConfig falls back to C++ defaults for missing fields", "[config][client]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    REQUIRE(cfg.LoadClientFromString(R"({
+        "scripts_dir": "."
+    })"));
+    auto cc = cfg.GetClientConfig();
+
+    REQUIRE(cc.render.backend == "opengl");
+    REQUIRE(cc.render.resolution_width == 1920);
+    REQUIRE(cc.render.vsync == true);
+    REQUIRE(cc.audio.sample_rate == 44100);
+    REQUIRE(cc.audio.master_volume == 1.0f);
+    REQUIRE(cc.network.server_port == 7777);
+    REQUIRE(cc.assets.texture_quality == "high");
+    REQUIRE(cc.first_run_completed == false);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ClientConfig: validation
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("ValidateClient rejects unknown render backend", "[config][client][validation]") {
+    engine::ClientConfig cc;
+    cc.scripts_dir = ".";
+    cc.render.backend = "nonexistent";
+
+    auto result = engine::ConfigValidator::ValidateClient(cc);
+    REQUIRE_FALSE(result.valid);
+}
+
+TEST_CASE("ValidateClient rejects volume out of range", "[config][client][validation]") {
+    engine::ClientConfig cc;
+    cc.scripts_dir = ".";
+    cc.audio.master_volume = 1.5f;
+
+    auto result = engine::ConfigValidator::ValidateClient(cc);
+    REQUIRE_FALSE(result.valid);
+}
+
+TEST_CASE("ValidateClient rejects resolution zero", "[config][client][validation]") {
+    engine::ClientConfig cc;
+    cc.scripts_dir = ".";
+    cc.render.resolution_width = 0;
+
+    auto result = engine::ConfigValidator::ValidateClient(cc);
+    REQUIRE_FALSE(result.valid);
+}
+
+TEST_CASE("ValidateClient rejects invalid server port", "[config][client][validation]") {
+    engine::ClientConfig cc;
+    cc.scripts_dir = ".";
+    cc.network.server_port = 99999;
+
+    auto result = engine::ConfigValidator::ValidateClient(cc);
+    REQUIRE_FALSE(result.valid);
+}
+
+TEST_CASE("ValidateClient accepts valid ClientConfig", "[config][client][validation]") {
+    engine::ClientConfig cc;
+    cc.scripts_dir = ".";
+
+    auto result = engine::ConfigValidator::ValidateClient(cc);
+    REQUIRE(result.valid);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ClientConfig: 3-layer loading
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("3-layer merge: user settings override factory settings", "[config][client][layered]") {
+    auto& cfg = engine::ConfigManager::Instance();
+
+    // Layer 1+2: load factory JSON
+    REQUIRE(cfg.LoadClientFromString(R"({
+        "scripts_dir": "factory_scripts",
+        "render": { "backend": "opengl", "max_fps": 30 },
+        "audio": { "master_volume": 0.8 }
+    })"));
+    auto cc = cfg.GetClientConfig();
+    REQUIRE(cc.scripts_dir == "factory_scripts");
+    REQUIRE(cc.render.max_fps == 30);
+
+    // Layer 3: user override (only some fields)
+    REQUIRE(cfg.LoadClientFromString(R"({
+        "scripts_dir": "factory_scripts",
+        "render": { "backend": "opengl", "max_fps": 60 }
+    })"));
+    cc = cfg.GetClientConfig();
+    REQUIRE(cc.render.max_fps == 60);
+    REQUIRE(cc.audio.master_volume == 0.8f);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ClientConfig: Save/Load user settings
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("SaveClientUserSettings and LoadClientUserSettings round-trip", "[config][client][persist]") {
+    auto& cfg = engine::ConfigManager::Instance();
+
+    REQUIRE(cfg.LoadClientFromString(R"({
+        "scripts_dir": ".",
+        "render": { "max_fps": 120, "vsync": false },
+        "audio": { "master_volume": 0.5 }
+    })"));
+
+    std::string test_path = "test_user_settings.json";
+
+    REQUIRE(cfg.SaveClientUserSettings(test_path));
+
+    // Modify in-memory config
+    REQUIRE(cfg.LoadClientFromString(R"({
+        "scripts_dir": ".",
+        "render": { "max_fps": 30, "vsync": true },
+        "audio": { "master_volume": 0.8 }
+    })"));
+    REQUIRE(cfg.GetClientConfig().render.max_fps == 30);
+
+    // Load saved settings
+    REQUIRE(cfg.LoadClientUserSettings(test_path));
+    REQUIRE(cfg.GetClientConfig().render.max_fps == 120);
+    REQUIRE(cfg.GetClientConfig().render.vsync == false);
+    REQUIRE(cfg.GetClientConfig().audio.master_volume == 0.5f);
+
+    // Cleanup
+    std::error_code ec;
+    std::filesystem::remove(test_path, ec);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ClientConfig: corruption recovery
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("Corrupted user settings falls back gracefully", "[config][client][corruption]") {
+    auto& cfg = engine::ConfigManager::Instance();
+
+    std::string corrupt_path = "test_corrupt_settings.json";
+    {
+        std::ofstream ofs(corrupt_path);
+        ofs << "{ this is not valid JSON }";
+    }
+
+    // Load factory defaults first
+    REQUIRE(cfg.LoadClientFromString(R"({
+        "scripts_dir": ".",
+        "render": { "max_fps": 60 }
+    })"));
+    int fps_before = cfg.GetClientConfig().render.max_fps;
+
+    // Attempt to load corrupted user settings
+    bool loaded = cfg.LoadClientUserSettings(corrupt_path);
+    REQUIRE(loaded);
+    // Config should be unchanged
+    REQUIRE(cfg.GetClientConfig().render.max_fps == fps_before);
+
+    // Cleanup
+    std::error_code ec;
+    std::filesystem::remove(corrupt_path, ec);
+    std::filesystem::remove(corrupt_path + ".corrupt", ec);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ClientConfig: LoadClientLayered
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("LoadClientLayered applies factory then user layers", "[config][client][layered]") {
+    auto& cfg = engine::ConfigManager::Instance();
+
+    std::string factory_path = "test_factory_client.json";
+    std::string user_path = "test_user_layer_settings.json";
+
+    {
+        std::ofstream ofs(factory_path);
+        ofs << R"({"scripts_dir": "factory_dir", "render": {"max_fps": 30}})";
+    }
+    {
+        std::ofstream ofs(user_path);
+        ofs << R"({"render": {"max_fps": 90}})";
+    }
+
+    REQUIRE(cfg.LoadClientLayered(factory_path, user_path));
+    auto cc = cfg.GetClientConfig();
+
+    REQUIRE(cc.render.max_fps == 90);
+    REQUIRE(cc.scripts_dir == "factory_dir");
+    REQUIRE(cc.first_run_completed == true);
+
+    // Cleanup
+    std::error_code ec;
+    std::filesystem::remove(factory_path, ec);
+    std::filesystem::remove(user_path, ec);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Platform paths
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("GetUserDataPath returns non-empty string", "[config][platform]") {
+    std::string path = engine::platform::GetUserDataPath("evpp_test");
+    REQUIRE_FALSE(path.empty());
+}
+
+TEST_CASE("GetUserSettingsPath appends settings.json", "[config][platform]") {
+    std::string path = engine::platform::GetUserSettingsPath("evpp_test");
+    REQUIRE_FALSE(path.empty());
+    REQUIRE(path.find("settings.json") != std::string::npos);
+}
+
+TEST_CASE("GetUserDataPath produces different paths for different apps", "[config][platform]") {
+    std::string path1 = engine::platform::GetUserDataPath("app_a");
+    std::string path2 = engine::platform::GetUserDataPath("app_b");
+    REQUIRE(path1 != path2);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ClientConfig: ResetClientUserSettings
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("ResetClientUserSettings restores C++ defaults", "[config][client]") {
+    auto& cfg = engine::ConfigManager::Instance();
+
+    REQUIRE(cfg.LoadClientFromString(R"({
+        "scripts_dir": "custom_scripts",
+        "render": { "max_fps": 200, "vsync": false }
+    })"));
+    REQUIRE(cfg.GetClientConfig().render.max_fps == 200);
+
+    std::string reset_path = "test_reset_settings.json";
+    REQUIRE(cfg.ResetClientUserSettings(reset_path));
+
+    auto cc = cfg.GetClientConfig();
+    REQUIRE(cc.render.backend == "opengl");
+    REQUIRE(cc.render.max_fps == 60);
+    REQUIRE(cc.render.vsync == true);
+    REQUIRE(cc.first_run_completed == false);
 }

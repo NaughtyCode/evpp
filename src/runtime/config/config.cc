@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <regex>
 #include <sstream>
 
@@ -10,6 +11,7 @@
 
 #include "runtime/config/config_constants.h"
 #include "runtime/config/config_validator.h"
+#include "runtime/config/platform_paths.h"
 #include "runtime/core/log/log.h"
 #include "runtime/database/data_service/db_service_config.h"
 #include "runtime/vm/file_watcher.h"
@@ -33,6 +35,8 @@ void CheckPlaintextCredentials(const std::string& uri, const std::string& contex
 }
 
 }  // namespace
+
+ConfigManager::~ConfigManager() = default;
 
 ConfigManager& ConfigManager::Instance() {
 	static ConfigManager instance;
@@ -143,6 +147,146 @@ bool ConfigManager::LoadServerFromFile(const std::string& path) {
 	return true;
 }
 
+// ── Client user settings (3-layer loading) ──────────────────────────────
+
+bool ConfigManager::LoadClientUserSettings(const std::string& user_settings_path) {
+	std::error_code ec;
+	if (!std::filesystem::exists(user_settings_path, ec)) {
+		return true;
+	}
+
+	ClientConfig merged;
+	{
+		std::shared_lock<std::shared_mutex> lock(config_mutex_);
+		merged = client_config_;
+	}
+
+	std::string buf;
+	auto err = glz::read_file_json(merged, user_settings_path, buf);
+	if (err) {
+		if (auto* l = GetLogger())
+			ENGINE_LOG_WARN(l,
+				"ConfigManager: user settings [{}] are corrupt ({}). "
+				"Renaming to .corrupt and continuing with factory defaults.",
+				user_settings_path, glz::format_error(err, buf));
+
+		std::error_code rename_ec;
+		std::filesystem::rename(user_settings_path, user_settings_path + ".corrupt", rename_ec);
+		if (rename_ec) {
+			if (auto* l = GetLogger())
+				ENGINE_LOG_ERROR(l,
+					"ConfigManager: failed to rename corrupt settings [{}]: {}",
+					user_settings_path, rename_ec.message());
+		}
+		return true;
+	}
+
+	{
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		client_config_ = std::move(merged);
+	}
+
+	if (auto* l = GetLogger())
+		ENGINE_LOG_INFO(l, "ConfigManager: loaded user settings [{}]", user_settings_path);
+	return true;
+}
+
+bool ConfigManager::SaveClientUserSettings(const std::string& user_settings_path) const {
+	std::filesystem::path file_path(user_settings_path);
+	std::error_code ec;
+	std::filesystem::create_directories(file_path.parent_path(), ec);
+	if (ec) {
+		if (auto* l = GetLogger())
+			ENGINE_LOG_ERROR(l,
+				"ConfigManager: failed to create user settings directory [{}]: {}",
+				file_path.parent_path().string(), ec.message());
+		return false;
+	}
+
+	ClientConfig current;
+	{
+		std::shared_lock<std::shared_mutex> lock(config_mutex_);
+		current = client_config_;
+	}
+
+	auto json_result = glz::write_json(current);
+	if (!json_result) {
+		if (auto* l = GetLogger())
+			ENGINE_LOG_ERROR(l,
+				"ConfigManager: failed to serialize user settings [{}]: {}",
+				user_settings_path,
+				glz::format_error(json_result.error()));
+		return false;
+	}
+	std::string json = std::move(*json_result);
+
+	// Write to a temporary file first, then rename for atomicity.
+	std::string tmp_path = user_settings_path + ".tmp";
+	{
+		std::ofstream ofs(tmp_path, std::ios::out | std::ios::trunc);
+		if (!ofs) {
+			if (auto* l = GetLogger())
+				ENGINE_LOG_ERROR(l,
+					"ConfigManager: failed to open user settings [{}] for writing",
+					user_settings_path);
+			return false;
+		}
+		ofs << json;
+		if (!ofs) {
+			ofs.close();
+			std::filesystem::remove(tmp_path);
+			return false;
+		}
+	}
+	std::error_code rename_ec;
+	std::filesystem::rename(tmp_path, user_settings_path, rename_ec);
+	if (rename_ec) {
+		std::filesystem::remove(tmp_path);
+		return false;
+	}
+
+	if (auto* l = GetLogger())
+		ENGINE_LOG_INFO(l, "ConfigManager: saved user settings [{}]", user_settings_path);
+	return true;
+}
+
+bool ConfigManager::LoadClientLayered(const std::string& factory_path,
+                                       const std::string& user_settings_path) {
+	ClientConfig fresh;
+	{
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		client_config_ = fresh;
+	}
+
+	if (!LoadClientFromFile(factory_path)) {
+		return false;
+	}
+
+	LoadClientUserSettings(user_settings_path);
+
+	{
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		client_config_.first_run_completed = true;
+	}
+
+	return true;
+}
+
+bool ConfigManager::ResetClientUserSettings(const std::string& user_settings_path) {
+	std::error_code ec;
+	std::filesystem::remove(user_settings_path, ec);
+
+	ClientConfig fresh;
+	{
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		client_config_ = std::move(fresh);
+	}
+
+	if (auto* l = GetLogger())
+		ENGINE_LOG_INFO(l, "ConfigManager: reset client user settings");
+	return true;
+}
+
 bool ConfigManager::Load(const std::string& config_dir) {
 	using namespace config;
 
@@ -167,6 +311,16 @@ bool ConfigManager::Load(const std::string& config_dir) {
 	std::string client_path = config_dir + kClientConfigFile;
 	if (std::filesystem::exists(client_path, ec)) {
 		have_client = LoadClientFromFile(client_path);
+		// Layer 3: load user overrides from <user_data>/settings.json.
+		// Best-effort — failure doesn't invalidate the config.
+		if (have_client) {
+			std::string user_settings = platform::GetUserSettingsPath(kDefaultWindowTitle);
+			LoadClientUserSettings(user_settings);
+			{
+				std::lock_guard<std::shared_mutex> lock(config_mutex_);
+				client_config_.first_run_completed = true;
+			}
+		}
 	}
 	std::string server_path = config_dir + kServerConfigFile;
 	if (std::filesystem::exists(server_path, ec)) {
@@ -357,6 +511,20 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 		auto ec3 = glz::read_file_json(new_client, client_path, buf);
 		if (!ec3) {
 			have_client = true;
+			// Layer 3: load user overrides on top of factory settings.
+			std::string user_path = platform::GetUserSettingsPath(config::kDefaultWindowTitle);
+			std::error_code uec;
+			if (std::filesystem::exists(user_path, uec)) {
+				std::string ubuf;
+				auto uerr = glz::read_file_json(new_client, user_path, ubuf);
+				if (uerr) {
+					if (auto* l = GetLogger())
+						ENGINE_LOG_WARN(l,
+							"ConfigManager: reload user settings [{}] parse error: {}",
+							user_path, glz::format_error(uerr, ubuf));
+				}
+			}
+			new_client.first_run_completed = true;
 		}
 	}
 

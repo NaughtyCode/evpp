@@ -130,9 +130,114 @@ struct RuntimeConfig {
 	std::string environment = "development";  // deployment target (dev/staging/prod)
 };
 
-// Client config — loaded from resources/config/client/client.json.
+// ── Client config sub-structs ──────────────────────────────────────────────
+// Each struct holds one subsystem of client-only configuration.
+// All members have C++ defaults (Layer 1 of the 3-layer loading model).
+
+// Render backend selection. Valid values match the RenderBackendX constants.
+struct RenderConfig {
+	std::string backend = "opengl";
+	int resolution_width = 1920;
+	int resolution_height = 1080;
+	bool fullscreen = false;
+	bool vsync = true;
+	int msaa_samples = 4;
+	bool hdr = false;
+	int max_fps = 60;
+};
+
+struct WindowConfig {
+	std::string title = "CloudEngine";
+	int width = 1280;
+	int height = 720;
+	bool resizable = true;
+	bool borderless = false;
+	int monitor = 0;  // 0 = primary
+};
+
+struct InputConfig {
+	float mouse_sensitivity = 1.0f;
+	bool mouse_invert_y = false;
+	float gamepad_deadzone = 0.15f;
+	bool touch_enabled = true;
+};
+
+struct AudioConfig {
+	std::string backend = "openal";
+	int sample_rate = 44100;
+	int channels = 2;  // stereo
+	float master_volume = 1.0f;
+	float music_volume = 0.8f;
+	float sfx_volume = 1.0f;
+	bool spatial_audio = false;
+	bool mute_when_unfocused = true;
+};
+
+struct NetworkClientConfig {
+	std::string server_address = "127.0.0.1";
+	int server_port = 7777;
+	int reconnect_max_retries = 10;
+	int reconnect_base_delay_ms = 500;
+	int reconnect_max_delay_ms = 30000;
+	int timeout_ms = 5000;
+	bool client_prediction = true;
+	int interpolation_delay_ms = 100;
+};
+
+struct AssetConfig {
+	std::string root_path = "resources/assets";
+	int streaming_budget_mb = 512;
+	float lod_bias = 1.0f;
+	std::string texture_quality = "high";  // "low", "medium", "high", "ultra"
+	std::vector<std::string> preload_list;
+};
+
+struct UIConfig {
+	std::string font_path = "resources/fonts/default.ttf";
+	int font_size = 14;
+	float scale = 1.0f;
+	std::string locale = "en_US";
+	std::string theme = "dark";
+	std::string color_blind_mode = "none";  // "none", "protanopia", "deuteranopia", "tritanopia"
+};
+
+struct PlatformConfig {
+	std::string save_data_path;
+	std::string cache_path;
+	std::string locale;
+};
+
+// ── Runtime / Client / Server boundary ───────────────────────────────────
+//
+// RuntimeConfig  — shared by client and server builds.
+//                  log, frame, resource_dir, sandbox_level, scripts_dir,
+//                  environment.
+//
+// ClientConfig   — client-only. render, window, input, audio, network,
+//                  assets, ui, platform, scripts_dir.
+//
+// ServerConfig   — server-only. admin, mongodb, db_service, msgpack, http,
+//                  resource_limits, instance, tcp_keepalive.
+
+// Client config — loaded from resources/config/client/client.json (Layer 2),
+// with user overrides from <user_data>/settings.json (Layer 3).
 struct ClientConfig {
+	// Shared with RuntimeConfig (per-build defaults may differ)
 	std::string scripts_dir = config::kDefaultClientScriptsDir;
+
+	// Client-only subsystems
+	RenderConfig render;
+	WindowConfig window;
+	InputConfig input;
+	AudioConfig audio;
+	NetworkClientConfig network;
+	AssetConfig assets;
+	UIConfig ui;
+	PlatformConfig platform;
+
+	// Set to true after first successful launch. Used to detect first-run
+	// experience (e.g. show welcome dialog, create default user settings).
+	bool first_run_completed = false;
 };
 
 struct HttpConfig {
@@ -302,6 +407,12 @@ class ENGINE_API ConfigManager : public IConfigManager {
 	ConfigManager(const ConfigManager&) = delete;
 	ConfigManager& operator=(const ConfigManager&) = delete;
 
+	// Destructor defined in config.cc where FileWatcher is complete.
+	// Required because ENGINE_API forces destructor generation in every TU
+	// that includes this header, and unique_ptr<FileWatcher> needs the
+	// complete type.
+	~ConfigManager();
+
 	// ── Reload notification ──────────────────────────────────────────
 
 	/* Register a callback to be invoked after each successful Reload().
@@ -349,6 +460,30 @@ class ENGINE_API ConfigManager : public IConfigManager {
 	bool LoadClientFromFile(const std::string& path);
 	bool LoadServerFromFile(const std::string& path);
 
+	// ── Client user settings (3-layer loading) ───────────────────────
+
+	// Layer 3: load user overrides from <user_data>/settings.json.
+	// Overwrites only fields present in the JSON; others keep their
+	// Layer 2 (factory) values. Returns false on parse failure, which
+	// triggers corruption recovery (rename corrupt file, keep Layer 2).
+	bool LoadClientUserSettings(const std::string& user_settings_path);
+
+	// Persist current ClientConfig to <user_data>/settings.json.
+	// Writes the full config (not just overrides) to simplify the
+	// on-disk format. Returns false on I/O failure (filesystem full, etc.).
+	bool SaveClientUserSettings(const std::string& user_settings_path) const;
+
+	// Full layered load: Layer 1 (C++ defaults) → Layer 2 (factory JSON)
+	// → Layer 3 (user settings JSON).  On corruption of Layer 3, the
+	// corrupt file is renamed to *.corrupt and loading continues with
+	// Layer 2 only.
+	bool LoadClientLayered(const std::string& factory_path,
+	                       const std::string& user_settings_path);
+
+	// Reset user settings: delete settings.json and reset ClientConfig
+	// to factory defaults (Layer 2 only).
+	bool ResetClientUserSettings(const std::string& user_settings_path);
+
 	// Set/get the active deployment environment. Must be called
 	// BEFORE Load() for profile layering to take effect.
 	// Default is development. Overridden by --env CLI / EVPP_ENV.
@@ -357,9 +492,10 @@ class ENGINE_API ConfigManager : public IConfigManager {
 
 	// Load all configs from a directory tree:
 	//   {config_dir}/runtime/runtime.json
-	//   {config_dir}/profiles/{env}.json  (profile overlay, optional)
-	//   {config_dir}/client/client.json   (optional)
-	//   {config_dir}/server/server.json   (optional)
+	//   {config_dir}/profiles/{env}.json       (profile overlay, optional)
+	//   {config_dir}/client/client.json        (optional, Layer 2)
+	//   <user_data>/settings.json              (optional, Layer 3 override)
+	//   {config_dir}/server/server.json        (optional)
 	bool Load(const std::string& config_dir);
 
 	// ── Reload ───────────────────────────────────────────────────────

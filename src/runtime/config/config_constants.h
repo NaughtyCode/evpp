@@ -55,6 +55,44 @@ inline constexpr int kDefaultTcpKeepaliveIdleSec = 0;
 inline constexpr int kDefaultTcpKeepaliveIntervalSec = 0;
 inline constexpr int kDefaultTcpKeepaliveCount = 0;
 
+// Client config defaults
+
+inline constexpr const char* kDefaultClientUserSettingsFile = "settings.json";
+
+// RenderConfig defaults
+inline constexpr const char* kDefaultRenderBackend = "opengl";
+inline constexpr int kDefaultResolutionWidth = 1920;
+inline constexpr int kDefaultResolutionHeight = 1080;
+inline constexpr int kDefaultMsaaSamples = 4;
+inline constexpr int kDefaultMaxFps = 60;
+
+// WindowConfig defaults
+inline constexpr const char* kDefaultWindowTitle = "CloudEngine";
+inline constexpr int kDefaultWindowWidth = 1280;
+inline constexpr int kDefaultWindowHeight = 720;
+
+// AudioConfig defaults
+inline constexpr const char* kDefaultAudioBackend = "openal";
+inline constexpr int kDefaultSampleRate = 44100;
+inline constexpr int kDefaultChannels = 2;
+
+// NetworkClientConfig defaults
+inline constexpr const char* kDefaultServerAddress = "127.0.0.1";
+inline constexpr int kDefaultServerPort = 7777;
+inline constexpr int kDefaultReconnectMaxRetries = 10;
+inline constexpr int kDefaultReconnectBaseDelayMs = 500;
+inline constexpr int kDefaultReconnectMaxDelayMs = 30000;
+inline constexpr int kDefaultNetworkTimeoutMs = 5000;
+inline constexpr int kDefaultInterpolationDelayMs = 100;
+
+// AssetConfig defaults
+inline constexpr const char* kDefaultAssetRootPath = "resources/assets";
+inline constexpr int kDefaultStreamingBudgetMb = 512;
+
+// UIConfig defaults
+inline constexpr const char* kDefaultFontPath = "resources/assets/fonts/default.ttf";
+inline constexpr int kDefaultFontSize = 14;
+
 // PID file defaults
 
 inline constexpr const char* kDefaultPidFile = "server.pid";
