@@ -1,7 +1,7 @@
 # 配置系统深度缺陷分析报告
 
 **日期:** 2026-05-29
-**修订:** R7 — 三视角联合终审（服务器+客户端+运维专家）：修复 SIGHUP 引用、字段名错误、server-centric 遗留表述、附录 A 仅服务器端、双端身份标识差异等 10 项跨视角一致性问题
+**修订:** R8 — 三视角联合终审（第二轮）：修复 server-centric 遗留表述、附录 C 遗漏 ClientConfig、sandbox_level 字符串校验风险、物理热更描述不准确等 5 项精准修正
 **范围:** 全部配置系统 + Lua 绑定层 + 游戏业务配置需求分析 + 客户端配置需求分析 + 双端配置差异管理
 **方法:** 逐文件审查 + 多角度交叉验证 + 运维场景模拟 + 故障模式与影响分析 (FMEA) + 游戏服务器/客户端全生命周期模拟 + 客户端全平台部署模拟 + 三视角交叉一致性校验
 
@@ -78,7 +78,7 @@ struct RuntimeConfig {
 };
 ```
 
-`physics_scene_path` 属于物理子系统的资产路径，却定义在 `RuntimeConfig` 中。当物理子系统被禁用时（`ENGINE_PHYSICS_ENABLED=OFF`），这个字段仍然存在且需要默认值。类似的，`sandbox_level` 是 VM 层面的配置，却放在顶层 `RuntimeConfig`。
+`physics_scene_path` 属于物理子系统的资产路径，却定义在 `RuntimeConfig` 中。当物理子系统被禁用时（`ENGINE_PHYSICS_ENABLED=OFF`），这个字段仍然存在且需要默认值。`sandbox_level` 是 VM 层面的配置，放在顶层 `RuntimeConfig` 尚可接受（双端都需要），但它是自由格式字符串（`"strict"`）而非枚举——拼写错误如 `"stirct"` 会静默通过，导致脚本以非预期的沙箱级别运行。
 
 **影响:** 子系统配置无法独立分发。一个子系统配置变更需要修改全局顶层结构体，违反开闭原则。
 
@@ -160,7 +160,7 @@ ConfigManager::Instance().RegisterReloadCallback([]() {
 - `ReloadThresholds()` — 只热更碰撞检测阈值
 - `ReloadLogLevel()` — 只热更物理日志级别
 
-`PhysicsConfig`（重力、求解器参数、最大刚体数等）和 `ThreadingConfig`（线程模型、任务队列大小）**不支持热更**——修改后必须重启物理线程。
+`PhysicsConfig`（重力、求解器参数、最大刚体数等）和 `ThreadingConfig`（线程模型、任务队列大小）**不支持热更**——这些参数在 `PhysicsEngineBridge::Initialize()` 时传入 Bullet 引擎，之后无法动态修改。PhysicsEngineBridge 只有 `Init()`/`Shutdown()` 生命周期，无 `Restart()` API，修改后必须重启整个进程。
 
 ### 2.3 Config 热更与 Script 热更无协调
 
@@ -1103,7 +1103,7 @@ C++ 侧的 `ConfigManager` 提供了基础设施配置（日志、帧率、网�
 
 ### 13.1 游戏业务配置的典型需求
 
-以下是一个通用游戏服务器必然需要的配置数据类型，全部缺失框架支持：
+以下是一个通用游戏（客户端+服务器）必然需要的业务配置数据类型，全部缺失框架支持：
 
 | 配置类型 | 示例 | 数据特征 | 当前状态 |
 |---------|------|---------|---------|
@@ -1209,7 +1209,7 @@ C++ 侧的 `ConfigManager` 提供了基础设施配置（日志、帧率、网�
 └────────────────────┴─────────────────────────────┘
 ```
 
-**当前问题:** 这条分界线是模糊的。`physics_scene_path` 物理资产路径定义在 `RuntimeConfig` 中（理论上应是 ServerConfig 或独立的 PhysicsConfig），而 `sandbox_level` 在客户端构建中同样需要（限制客户端脚本权限）却放在 RuntimeConfig 里位置正确但语义不明。
+**当前问题:** 这条分界线是模糊的。`physics_scene_path` 物理资产路径定义在 `RuntimeConfig` 中（理论上应是 ServerConfig 或独立的 PhysicsConfig——客户端不需要物理场景数据）。`sandbox_level` 虽然放在 RuntimeConfig 位置正确（客户端和服务器都需要脚本沙箱），但这种"碰巧正确"没有经过有意识的双端评审。
 
 **设计原则:**
 - **共享层 (RuntimeConfig):** 两端都需要且在两端语义相同的配置。如果某个字段在两端需要不同的默认值（如 `target_fps`：服务器 30，客户端 60），应分别在 ServerConfig/ClientConfig 中定义，共享层只放无歧义的公共字段
@@ -1720,6 +1720,9 @@ MongoDbConfig (随 server.json 加载)
 ├── MongoDbStorageConfig
 ├── MongoDbScriptsConfig
 └── MongoDbDriversConfig
+
+ClientConfig (当前仅 1 字段，见 §1.5)
+├── scripts_dir → ScriptVM::SetImportPath()（客户端入口脚本路径）
 
 独立配置（不归 ConfigManager 管）
 ├── ProfilerConfig    → profiler_core.h（硬编码）
