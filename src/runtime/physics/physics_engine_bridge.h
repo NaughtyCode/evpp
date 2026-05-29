@@ -5,6 +5,17 @@
 #include <string>
 #include <thread>
 
+#include "runtime/core/engine_api.h"
+
+// PHYSICS_API: only use dllexport/dllimport when physics is actually enabled.
+// When disabled, the class consists entirely of inline stubs that must be
+// compiled directly into each translation unit.
+#ifdef ENGINE_PHYSICS_ENABLED
+#define PHYSICS_API ENGINE_API
+#else
+#define PHYSICS_API
+#endif
+
 // PhysicsEngineBridge — sole public API entry point into the physics subsystem
 //
 // [Thread-Safety Boundary]
@@ -83,7 +94,7 @@ struct PhysicsFrameResult {
 };
 #endif	// ENGINE_PHYSICS_ENABLED
 
-class PhysicsEngineBridge {
+class PHYSICS_API PhysicsEngineBridge {
 	public:
 	PhysicsEngineBridge(const PhysicsEngineBridge&) = delete;
 	PhysicsEngineBridge& operator=(const PhysicsEngineBridge&) = delete;

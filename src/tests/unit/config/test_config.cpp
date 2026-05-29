@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <fstream>
 #include "config_fixture.h"
+#include "runtime/config/config_validator.h"
 #include "runtime/config/platform_paths.h"
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -486,7 +487,7 @@ TEST_CASE("ValidateOnly returns valid for good config dir", "[config][validate]"
     auto result = f.cfg.ValidateOnly("resources/config");
     // May be valid or invalid depending on whether config files exist on disk.
     // The key is that it doesn't crash and returns a result.
-    REQUIRE(result.valid || !result.valid);
+    REQUIRE((result.valid || !result.valid));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

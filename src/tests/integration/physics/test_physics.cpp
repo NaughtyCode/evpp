@@ -19,7 +19,7 @@ TEST_CASE("Physics bridge initialize and shutdown", "[integration][physics]") {
     auto& bridge = engine::PhysicsEngineBridge::Instance();
 
     // Initialize with a simple config
-    REQUIRE_NOTHROW(bridge.Initialize("resources/config"));
+    REQUIRE_NOTHROW(bridge.Initialize("resources/config", "resources/script/physics"));
 
     REQUIRE(bridge.IsInitialized());
 
@@ -37,7 +37,7 @@ TEST_CASE("Physics bridge Tick completes without error", "[integration][physics]
     auto& bridge = engine::PhysicsEngineBridge::Instance();
 
     if (!bridge.IsInitialized()) {
-        bridge.Initialize("resources/config");
+        bridge.Initialize("resources/config", "resources/script/physics");
     }
     if (!bridge.IsRunning()) {
         bridge.Start();

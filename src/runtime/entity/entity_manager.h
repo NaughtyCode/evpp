@@ -9,6 +9,7 @@
 
 #include "entity.h"
 #include "entity_id.h"
+#include "runtime/core/engine_api.h"
 
 namespace engine {
 
@@ -16,7 +17,7 @@ class TimerManager;
 
 namespace entity {
 
-class EntityManager {
+class ENGINE_API EntityManager {
 public:
 	static EntityManager& Instance();
 

@@ -248,7 +248,7 @@ if(NOT TARGET CloudEngine)
         ${ENGINE_ROOT}/thirdparty/concurrentqueue/concurrentqueue
     )
 
-    target_compile_definitions(CloudEngine PRIVATE ENGINE_BUILD)
+    target_compile_definitions(CloudEngine PRIVATE ENGINE_BUILD LUA_BUILD_AS_DLL LUA_CORE LUA_LIB)
 
     if(ENGINE_PHYSICS_ENABLED)
         target_compile_definitions(CloudEngine PUBLIC ENGINE_PHYSICS_ENABLED)

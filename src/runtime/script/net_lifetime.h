@@ -5,6 +5,8 @@
 #include <mutex>
 #include <vector>
 
+#include "runtime/core/engine_api.h"
+
 struct lua_State;
 
 namespace engine {
@@ -30,7 +32,7 @@ namespace script {
 // (typically the main event loop). Shutdown/WaitDrain must be called
 // from the shutdown thread (not inside a TryAcquire/Release scope).
 // ═══════════════════════════════════════════════════════════════════════════
-class NetAliveGuard {
+class ENGINE_API NetAliveGuard {
 public:
     NetAliveGuard() = default;
     ~NetAliveGuard() = default;
@@ -93,7 +95,7 @@ private:
 //   3. During shutdown, after WaitDrain:
 //        g_xxx_pending.UnrefAll(L);
 // ═══════════════════════════════════════════════════════════════════════════
-class PendingRefTracker {
+class ENGINE_API PendingRefTracker {
 public:
     PendingRefTracker() = default;
     ~PendingRefTracker() = default;

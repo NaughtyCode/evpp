@@ -600,6 +600,12 @@ class ENGINE_API ConfigManager : public IConfigManager {
 	bool LoadMongoDbDevConfigLocked(MongoDbConfig& out) const;
 	bool LoadMongoDbPublicConfigLocked(MongoDbConfig& out) const;
 
+	// Build a field-level change set by diffing old and new configs.
+	static ConfigChangeSet Diff(const RuntimeConfig& old_rt,
+	                            const RuntimeConfig& new_rt,
+	                            const ServerConfig& old_srv,
+	                            const ServerConfig& new_srv);
+
 	private:
 	ConfigManager() = default;
 
@@ -613,12 +619,6 @@ class ENGINE_API ConfigManager : public IConfigManager {
 	// Shared loading helper: after server config is populated, load
 	// any referenced mongodb config files.
 	void LoadMongoDbConfigsFromServer();
-
-	// Build a field-level change set by diffing old and new configs.
-	static ConfigChangeSet Diff(const RuntimeConfig& old_rt,
-								const RuntimeConfig& new_rt,
-								const ServerConfig& old_srv,
-								const ServerConfig& new_srv);
 
 	// Notify all registered reload callbacks with the given change set.
 	void NotifyReloadCallbacks(const ConfigChangeSet& changes);

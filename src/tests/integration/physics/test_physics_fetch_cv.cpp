@@ -22,7 +22,7 @@ TEST_CASE("FetchResult returns within timeout when no data", "[integration][phys
 	auto& bridge = engine::PhysicsEngineBridge::Instance();
 
 	if (!bridge.IsInitialized()) {
-		bridge.Initialize("resources/config");
+		bridge.Initialize("resources/config", "resources/script/physics");
 	}
 	if (!bridge.IsRunning()) {
 		bridge.Start();
@@ -44,7 +44,7 @@ TEST_CASE("FetchResult timeout returns nullopt", "[integration][physics][cv]") {
 	auto& bridge = engine::PhysicsEngineBridge::Instance();
 
 	if (!bridge.IsInitialized()) {
-		bridge.Initialize("resources/config");
+		bridge.Initialize("resources/config", "resources/script/physics");
 	}
 	if (!bridge.IsRunning()) {
 		bridge.Start();
@@ -66,7 +66,7 @@ TEST_CASE("FetchResult receives result from physics thread without busy-wait", "
 	auto& bridge = engine::PhysicsEngineBridge::Instance();
 
 	if (!bridge.IsInitialized()) {
-		bridge.Initialize("resources/config");
+		bridge.Initialize("resources/config", "resources/script/physics");
 	}
 	if (!bridge.IsRunning()) {
 		bridge.Start();
@@ -90,7 +90,7 @@ TEST_CASE("Multiple FetchResult calls without new data wait on CV", "[integratio
 	auto& bridge = engine::PhysicsEngineBridge::Instance();
 
 	if (!bridge.IsInitialized()) {
-		bridge.Initialize("resources/config");
+		bridge.Initialize("resources/config", "resources/script/physics");
 	}
 	if (!bridge.IsRunning()) {
 		bridge.Start();

@@ -400,9 +400,6 @@ int l_config_unregister(lua_State* L) {
 
 // ── config.flush_changes() ───────────────────────────────────────────────
 
-// Forward declaration — the implementation is FlushConfigCallbacks below.
-int FlushConfigCallbacks(lua_State* L);
-
 int l_config_flush_changes(lua_State* L) {
     int count = FlushConfigCallbacks(L);
     lua_pushinteger(L, static_cast<lua_Integer>(count));

@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
@@ -389,7 +390,7 @@ str_val = "hello"
 
 	lua_getglobal(L, "num_val");
 	REQUIRE(lua_isnumber(L, -1));
-	REQUIRE(lua_tonumber(L, -1) == Approx(3.14));
+	REQUIRE(lua_tonumber(L, -1) == Catch::Approx(3.14));
 	lua_pop(L, 1);
 
 	lua_getglobal(L, "str_val");

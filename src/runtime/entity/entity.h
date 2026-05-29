@@ -12,6 +12,7 @@
 
 #include "attribute.h"
 #include "entity_id.h"
+#include "runtime/core/engine_api.h"
 #include "runtime/core/timer/timer_manager.h"
 
 namespace engine {
@@ -26,7 +27,7 @@ enum class EntityState {
 
 class EntityManager;
 
-class Entity {
+class ENGINE_API Entity {
 public:
 	explicit Entity(EntityId id);
 	~Entity();

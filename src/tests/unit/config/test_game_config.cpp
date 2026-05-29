@@ -1,4 +1,5 @@
 #include "wsa_init.h"
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -186,8 +187,8 @@ TEST_CASE("ConfigTable GetFloat by key column", "[game_config][table]") {
     REQUIRE(table.LoadFromJson(tmp.file("data.json")));
     table.BuildIndex("id");
 
-    REQUIRE(table.GetFloat("id", "1", "rate") == Approx(1.5));
-    REQUIRE(table.GetFloat("id", "2", "rate") == Approx(2.75));
+    REQUIRE(table.GetFloat("id", "1", "rate") == Catch::Approx(1.5));
+    REQUIRE(table.GetFloat("id", "2", "rate") == Catch::Approx(2.75));
 }
 
 TEST_CASE("ConfigTable GetBool by key column", "[game_config][table]") {

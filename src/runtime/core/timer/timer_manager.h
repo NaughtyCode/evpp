@@ -39,6 +39,7 @@
 #include "runtime/core/timer/hr_timer.h"
 #include "runtime/core/timer/timer_core.h"
 #include "runtime/core/timer/timer_wheel.h"
+#include "runtime/core/engine_api.h"
 
 namespace engine {
 
@@ -49,7 +50,7 @@ inline constexpr TimerId kInvalidTimerId = 0;
 
 // TimerManager — central timer management system
 
-class TimerManager {
+class ENGINE_API TimerManager {
 	public:
 	// Construction
 

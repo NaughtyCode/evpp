@@ -10,19 +10,19 @@
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 TEST_CASE("ResourceLimits defaults are non-zero", "[limits][constants]") {
-    REQUIRE(engine::ResourceLimits::kDefaultMaxMessageSize > 0);
-    REQUIRE(engine::ResourceLimits::kDefaultMaxBufferCapacity > 0);
-    REQUIRE(engine::ResourceLimits::kDefaultMaxHttpBodySize > 0);
-    REQUIRE(engine::ResourceLimits::kDefaultMaxMsgpackDepth > 0);
+    REQUIRE(engine::config::kDefaultMaxMessageSize > 0);
+    REQUIRE(engine::config::kDefaultMaxBufferCapacity > 0);
+    REQUIRE(engine::config::kDefaultMaxHttpBodySize > 0);
+    REQUIRE(engine::config::kDefaultMaxMsgpackDepth > 0);
 }
 
 TEST_CASE("Max message size is at least 1KB", "[limits][constants]") {
-    REQUIRE(engine::ResourceLimits::kDefaultMaxMessageSize >= 1024);
+    REQUIRE(engine::config::kDefaultMaxMessageSize >= 1024);
 }
 
 TEST_CASE("Buffer capacity is larger than message size", "[limits][constants]") {
-    REQUIRE(engine::ResourceLimits::kDefaultMaxBufferCapacity >=
-            engine::ResourceLimits::kDefaultMaxMessageSize);
+    REQUIRE(engine::config::kDefaultMaxBufferCapacity >=
+            engine::config::kDefaultMaxMessageSize);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -61,7 +61,7 @@ TEST_CASE("Buffer SetMaxCapacity changes the limit", "[limits][buffer]") {
 TEST_CASE("Codec default max matches ResourceLimits", "[limits][codec]") {
     engine::LengthPrefixedCodec codec;
     REQUIRE(codec.GetMaxMessageSize() ==
-            engine::ResourceLimits::kDefaultMaxMessageSize);
+            engine::config::kDefaultMaxMessageSize);
 }
 
 TEST_CASE("Codec Encode rejects oversized payload", "[limits][codec]") {

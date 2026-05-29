@@ -201,16 +201,20 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 				}
 			}
 		}
-		auto uri = mongo::MongoUri::New(mongo_cfg.connection.uri.c_str());
+		if (mongo_cfg.connection.uri.empty()) {
+			ENGINE_LOG_INFO(logger, "database service skipped: no MongoDB URI configured");
+		} else {
+			auto uri = mongo::MongoUri::New(mongo_cfg.connection.uri.c_str());
 
-		if (db_svc_config.connection_pool.wait_queue_timeout_ms > 0) {
-			uri.SetOptionAsInt32(
-				"waitQueueTimeoutMS",
-				static_cast<int32_t>(db_svc_config.connection_pool.wait_queue_timeout_ms));
+			if (db_svc_config.connection_pool.wait_queue_timeout_ms > 0) {
+				uri.SetOptionAsInt32(
+					"waitQueueTimeoutMS",
+					static_cast<int32_t>(db_svc_config.connection_pool.wait_queue_timeout_ms));
+			}
+
+			bool ok = DatabaseService::Instance().Initialize(db_svc_config, uri);
+			ENGINE_LOG_INFO(logger, "database service initialized, ok=[{}]", ok);
 		}
-
-		bool ok = DatabaseService::Instance().Initialize(db_svc_config, uri);
-		ENGINE_LOG_INFO(logger, "database service initialized, ok=[{}]", ok);
 	}
 #endif
 

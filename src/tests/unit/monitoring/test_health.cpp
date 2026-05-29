@@ -84,7 +84,7 @@ TEST_CASE("PhysicsEngineBridge::IsInitialized after Init", "[health][physics]") 
     engine.Init(rt_cfg, "resources/script/server", &loop);
 
     // Physics should be initialized after Engine::Init
-    REQUIRE(PhysicsEngineBridge::Instance().IsInitialized());
+    REQUIRE(engine::PhysicsEngineBridge::Instance().IsInitialized());
 
     engine.Cleanup();
 }
