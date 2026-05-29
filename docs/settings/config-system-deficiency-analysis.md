@@ -1,7 +1,7 @@
 # 配置系统深度缺陷分析报告
 
 **日期:** 2026-05-29
-**修订:** R4 — 新增游戏服务器开发专家视角：开发期 vs 发布期配置差异、游戏数据配置框架缺失
+**修订:** R5 — 顶级运维/服务器专家深度复核：优先级重分类、补充运维关切（core dump/FD/优雅降级/TCP keepalive）、修复多项事实性错误
 **范围:** 全部配置系统 + Lua 绑定层 + 游戏业务配置需求分析
 **方法:** 逐文件审查 + 多角度交叉验证 + 运维场景模拟 + 故障模式与影响分析 (FMEA) + 游戏服务器开发全生命周期模拟
 
@@ -39,7 +39,7 @@
 | 单例模式 | Meyer's singleton | 普通类，由 PhysicsEngineBridge 持有 |
 | 校验 | ConfigValidator（未调用，见 §3.1） | ValidateConfigs（内联，~90行） |
 | 热更新 | Reload() 全量重载 | ReloadThresholds() / ReloadLogLevel() 逐字段 |
-| 读取方式 | by-value copy + shared_lock | const& 直接返回（无锁） |
+| 读取方式 | by-value copy + shared_lock | const& 直接返回（无锁） ⚠️ ReloadThresholds() 可并发写入 |
 | glaze 反射 | 默认（snake_case key→member） | 显式 glaze::meta（camelCase key→snake_case member） |
 
 **根因:** PhysicsConfigManager 是为物理子系统独立设计的，未复用 ConfigManager 的任何基础设施（文件读取、校验框架、回调通知）。两个管理器各行其道，新增第三个子系统（如 AI）时将面临"选择哪个模式"的困扰——选 ConfigManager 则依赖单例，选 PhysicsConfigManager 则需重写全套加载/校验/热更。
@@ -297,7 +297,7 @@ auto mongo = cfg.GetMongoDbDevConfig();  // 等待 shared_lock（被线程 A 阻
 
 一个粗粒度锁保护了所有配置类型。如果有高频读取某类配置的需求，它会被其他无关配置的读写阻塞。
 
-### 5.2 callbacks_mutex_ 用 shared_mutex 却只做排他锁定
+### 5.2 callbacks_mutex_ 的 shared_mutex 收益有限
 
 ```cpp
 mutable std::shared_mutex callbacks_mutex_;  // shared_mutex
@@ -536,7 +536,7 @@ static constexpr uint32_t kDefaultMaxMsgpackDepth = 64;
 
 | 影响 | 详情 |
 |------|------|
-| **无法多环境部署同一二进制** | 同一个 Release 构建在 staging 环境和 production 环境行为不同——但 staging 应该用 dev DB，而 Release 构建强制使用 public DB |
+| **无法多环境部署同一二进制** | Release 构建在所有环境（staging/production）行为相同——都使用 public DB。但 staging 环境需要使用 dev DB 进行测试，而这是不可能的，因为 DB 选择在编译时已固定 |
 | **无法运行时切换** | 配置文件中同时有 `mongodb_dev` 和 `mongodb_public` 两个字段，但选择哪个是硬编码的。没有 `--env=staging` 或 `EVPP_ENV=production` 运行时覆盖 |
 | **回滚风险** | 生产环境需要紧急切换到备份数据库时，必须重新编译——这在凌晨 3 点的故障场景中是不可接受的 |
 | **CI/CD 不友好** | 同一个 Docker 镜像在 staging 通过测试后推送到 production，行为却因编译选项不同而改变——这违反了"构建一次，到处部署"的基本原则 |
@@ -603,7 +603,7 @@ DatabaseService::Instance().Shutdown();        // DB 线程排空 —— 可能�
 服务器进程不写 PID 文件，不使用文件锁防止多实例冲突。两个进程可以同时启动在同一配置目录下，竞争同一日志目录和数据库连接。
 
 运维影响：
-- **进程管理:** systemd/upstart/supervisord 等进程管理器通常依赖 PID 文件来跟踪进程
+- **进程管理:** supervisord/upstart 等传统进程管理器依赖 PID 文件来跟踪进程；systemd 虽通过 cgroups 跟踪进程，但 PID 文件在运维脚本和监控中仍然常用
 - **多实例防护:** 没有机制防止运维人员意外启动第二个实例
 - **健康检查脚本:** `kill -0 $(cat server.pid)` 是检查进程存活的常用方式
 
@@ -728,7 +728,7 @@ JSON 配置文件没有任何完整性保护——无校验和、无数字签名
 
 ## 10. 配置变更管理与完整性保护
 
-### 10.1 配置文件的 Torn Write（部分写入）漏洞
+### 10.1 配置文件的非原子写入（Partial Write）漏洞
 
 `ConfigManager::Reload()` 和 `Load()` 通过 `glz::read_file_json` 直接读取文件，**没有任何原子性保护**：
 
@@ -838,6 +838,8 @@ $ evpp-config-validate --config-dir resources/config
 
 **为什么 PhysicsConfigManager 选择 `error_on_unknown_keys = false`？** 文档未说明。推测是为了向前兼容——允许新版本的 C++ 代码读取旧版本的 JSON 配置文件（旧文件可能缺少新字段）。但代价是**丢失所有拼写错误的反馈**。
 
+**相关但更隐蔽的问题：** glaze 的默认行为对**缺失字段**（`error_on_missing_keys`）也不报错——如果 JSON 文件中漏写了某个字段，该字段静默使用 C++ 默认值。ConfigManager 和 PhysicsConfigManager 都没有将此行为设为报错。这意味着一个"看起来完整"的配置文件可能实际缺失了关键字段（如运维人员从旧版本模板复制了配置文件但遗漏了新版本新增的必填字段），而系统不会给出任何警告。
+
 ### 10.7 配置变更无 Webhook / 事件通知
 
 `ConfigManager::Reload()` 完成后只触发进程内的 `ReloadCallback`（目前也只是打日志），**完全不通知外部系统**：
@@ -868,12 +870,18 @@ uint32_t max_connections_ = 10000;
 
 虽然存在 `SetMaxConnections(uint32_t)` 的 public setter，但它只在 C++ 层面可用。Lua 绑定层没有暴露这个接口。
 
+此外，**TCP keepalive 参数完全不可配置**——`SO_KEEPALIVE` 的 idle 时间、探测间隔、探测次数使用操作系统默认值（通常为 idle=7200s, interval=75s, count=9）。在以下生产场景中这是不可接受的：
+- 客户端异常断连（崩溃、网络分区）后，服务器端连接可能残留 2 小时以上才被内核清理
+- 在 NAT/负载均衡器后面部署时，中间设备的空闲连接超时通常为 5-30 分钟，远短于 TCP keepalive 默认值
+- WebSocket/长连接场景需要秒级的连接存活检测，依赖操作系统默认值完全不够
+
 ### 11.2 无过载保护（Load Shedding）配置
 
 当服务器接近容量上限时，没有配置驱动的降级策略：
 - 没有"拒绝新连接"的阈值配置（如 `reject_new_connections_when_memory_above_mb`）
 - 没有消息处理优先级配置（先处理支付回调，后处理聊天消息）
 - 没有基于延迟的自动降级（`p99 > N ms → 暂停非关键定时器`）
+- **没有背压（Backpressure）机制:** 当 event loop 过载时，没有机制减缓 `accept()` 新连接或暂停从已连接 socket 读取数据——TCP 缓冲区会继续填满，造成"假装正常但延迟飙升"的隐蔽故障模式
 
 ### 11.3 无优雅降级（Graceful Degradation）配置
 
@@ -1125,12 +1133,12 @@ C++ 侧的 `ConfigManager` 提供了基础设施配置（日志、帧率、网�
 
 | 能力 | 紧迫度 | 说明 |
 |------|-------|------|
-| CSV/Excel 导表工具链 | P0 | 策划不接受直接编辑 JSON |
-| 配置引用完整性校验 | P0 | 悬空引用导致运行时崩溃 |
-| Lua 层 config API | P0 | 业务脚本无法获取配置 |
-| 多环境 profile 覆盖 | P1 | dev/staging/prod 维护成本爆炸 |
-| 配置热更通知 | P1 | 策划改数值后需要重启才生效 |
-| 双端共享的配置导出 | P1 | 客户端需要同步配置 |
+| CSV/Excel 导表工具链 | 必须 | 策划不接受直接编辑 JSON |
+| 配置引用完整性校验 | 必须 | 悬空引用导致运行时崩溃 |
+| Lua 层 config API | 必须 | 业务脚本无法获取配置 |
+| 多环境 profile 覆盖 | 重要 | dev/staging/prod 维护成本爆炸 |
+| 配置热更通知 | 重要 | 策划改数值后需要重启才生效 |
+| 双端共享的配置导出 | 重要 | 客户端需要同步配置 |
 
 ---
 
@@ -1185,7 +1193,7 @@ static void BM_Config_ParseRuntime(benchmark::State& state) {
 | **P0-5** | **MongoDB 凭证明文存储在 JSON 文件中** | `mongodb_dev.json:13` | **密码泄露风险，违反安全合规** |
 | **P0-6** | **健康检查不验证后端依赖** | `admin_http.cc:35-43` | **K8s 无法正确判断 Pod 健康状态** |
 | **P0-7** | **Physics JSON 静默忽略未知键** | `physics_config.cc:77` | **拼写错误的物理参数被无声丢弃，物理行为错误** |
-| **P0-8** | **配置文件无 torn write 保护** | `config.cc:53-117` | **半写入文件被 Reload() 读取，加载不完整配置** |
+| **P0-8** | **配置文件无非原子写入保护（partial write）** | `config.cc:53-117` | **半写入文件被 Reload() 读取，加载不完整配置** |
 
 ### P1 — 严重影响开发与运维效率
 
@@ -1256,6 +1264,8 @@ static void BM_Config_ParseRuntime(benchmark::State& state) {
 | P3-16 | 无网络模拟配置（延迟/丢包） | N/A | QA 无法在本地复现网络问题 |
 | P3-17 | 无 GM/管理命令配置开关 | N/A | 需编译期区分有无 GM 功能 |
 | P3-18 | 无认证绕过开关（开发期用） | N/A | 本地开发每次需配 JWT token |
+| P3-19 | TCP keepalive 参数不可配置 | `tcp_server.h` | 死连接检测依赖 OS 默认值（idle=2h），NAT/长连接场景不可用 |
+| P3-20 | JSON 缺失字段静默使用默认值（`error_on_missing_keys` 未启用） | `config.cc` / `physics_config.cc` | 运维人员从旧版本模板复制配置时遗漏新字段，系统无告警 |
 
 ---
 
@@ -1303,14 +1313,19 @@ SIGINT / SIGTERM / Shutdown()
   │
   ├─ running_ = false  →  event loop 退出
   │
-  ├─ Phase 1: Physics Shutdown     — PhysicsThread join，无超时
-  ├─ Phase 2: Script Reloader Stop — 停止 FileWatcher，释放 Lua 引用
-  ├─ Phase 3: Database Shutdown    — DBThread join + 排空响应队列，无超时
-  ├─ Phase 4: Network Shutdown     — RPC DrainPendingQueue（"shutdown" 错误），
-  │                                   TCP 连接直接断开，无通知
-  ├─ Phase 5: Timer Shutdown       — TimerManager 取消所有定时器
-  ├─ Phase 6: Script Destroyed     — Lua GC + VM 销毁
-  └─ Phase 7: Final Logs           — Profiler flush + save trace
+  ├─ Phase 1: Physics Shutdown     — PhysicsThread join + ScriptReloader::Stop()
+  │                                   （在 PhysicsShutdown 阶段内停止 FileWatcher，
+  │                                    防止 watcher 线程在 Lua VM 销毁期间访问 Lua state）
+  ├─ Phase 2: Database Shutdown    — DBThread join + 排空响应队列 + MongoSystem::Shutdown()
+  │                                   + frame_timer_ 取消 + admin_server_ 停止
+  ├─ Phase 3: Network Shutdown     — ShutdownRpcBindings + ShutdownNetBindings
+  │                                   [REQUIRES script_vm_ alive]
+  ├─ Phase 4: Timer Shutdown       — ShutdownEntityBindings + ShutdownTimerBindings
+  │                                   [REQUIRES script_vm_ alive]
+  ├─ Phase 5: Script Destroyed     — script_vm_->DestroyScript() + Lua GC + VM 销毁
+  │                                   + timer_mgr_->shutdown()
+  └─ Phase 6: Final Logs           — 信号 watcher 重置 + Profiler flush/stop/save/Shutdown
+                                     + ShutdownLogger()
 ```
 
 ## 附录 C: 配置结构体依赖关系
