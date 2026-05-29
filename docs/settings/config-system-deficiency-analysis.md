@@ -1,9 +1,9 @@
 # 配置系统深度缺陷分析报告
 
 **日期:** 2026-05-29
-**修订:** R2 — 新增运维专家视角（第 7 章重写、新增第 9 章、优先级表更新）
-**范围:** `src/runtime/config/`、`src/runtime/physics/physics_config.*`、`src/runtime/database/`、`src/runtime/engine/`、`src/server/`、配置消费侧全链路
-**方法:** 逐文件审查 + 多角度交叉验证 + 运维场景模拟
+**修订:** R4 — 新增游戏服务器开发专家视角：开发期 vs 发布期配置差异、游戏数据配置框架缺失
+**范围:** 全部配置系统 + Lua 绑定层 + 游戏业务配置需求分析
+**方法:** 逐文件审查 + 多角度交叉验证 + 运维场景模拟 + 故障模式与影响分析 (FMEA) + 游戏服务器开发全生命周期模拟
 
 ---
 
@@ -18,8 +18,12 @@
 7. [可观测性与运维](#7-可观测性与运维)
 8. [部署与生命周期管理](#8-部署与生命周期管理)
 9. [安全与凭证管理](#9-安全与凭证管理)
-10. [可测试性](#10-可测试性)
-11. [问题汇总与优先级](#11-问题汇总与优先级)
+10. [配置变更管理与完整性保护](#10-配置变更管理与完整性保护)
+11. [配置驱动的运维控制缺失](#11-配置驱动的运维控制缺失)
+12. [开发期与发布期配置差异](#12-开发期与发布期配置差异)
+13. [游戏业务配置框架缺失](#13-游戏业务配置框架缺失)
+14. [可测试性](#14-可测试性)
+15. [问题汇总与优先级](#15-问题汇总与优先级)
 
 ---
 
@@ -709,9 +713,391 @@ JSON 配置文件没有任何完整性保护——无校验和、无数字签名
 
 ---
 
-## 10. 可测试性
+## 10. 配置变更管理与完整性保护
 
-### 10.1 测试污染全局单例
+### 10.1 配置文件的 Torn Write（部分写入）漏洞
+
+`ConfigManager::Reload()` 和 `Load()` 通过 `glz::read_file_json` 直接读取文件，**没有任何原子性保护**：
+
+```
+部署工具 (Ansible/Chef/K8s ConfigMap)       ConfigManager::Reload()
+     │                                              │
+     ├─ 开始写入 server.json ──────────────────────────────────────
+     │  [写入 50%...]                               │
+     │                                       ├─ read_file_json() 读到半截 JSON
+     │                                       ├─ 解析失败 → return false
+     │                                       └─ 当前配置保持不变（正确回退）
+     │  [写入完成]                                │
+```
+
+当前行为是"解析失败 → 保持旧配置"，这是正确的。但有一个更危险的场景：**JSON 语法碰巧在截断点仍然合法**。例如：
+
+```json
+{
+  "http": { "timeout_sec": 10.0 },
+  "msgpack": { "max_nesting_depth": 16 }
+```
+
+如果文件在中间被截断，glaze 会收到一个语法错误。但如果截断点恰好在 `}` 之后（部分配置完成写入），则会被解析为"不完整的配置"，缺失字段使用默认值——而**没有任何机制检测缺失字段**（`error_on_missing_keys = false` 是 glaze 默认值）。
+
+**缓解方案（行业标准）:**
+- **原子写入协议:** 部署工具写入临时文件（`server.json.tmp`），然后 `rename()` 到目标路径（POSIX 保证 rename 是原子的）
+- **校验和:** 配置文件包含 SHA256 校验和，由 Reload() 在解析前验证
+- **双文件切换:** 维护 `server.json.A` 和 `server.json.B`，通过符号链接切换
+
+### 10.2 多文件配置变更不是原子的
+
+`Reload()` 按顺序处理三个文件：
+
+```cpp
+// 解析 runtime.json → 成功 ✓
+// 解析 client.json  → 成功 ✓
+// 解析 server.json  → 失败 ✗  → return false
+// 但 runtime_config_ 和 client_config_ 已经被 swap 了吗？ → 没有
+```
+
+看代码实现（config.cc:108-177），Reload() 先解析全部文件到临时变量，全部成功后才在锁内 swap。所以当前实现在**逻辑上**是原子的——全成功或全回退。
+
+但这里有一个**文档和行为一致性**问题：如果 operator 期望"修改 A 和 B 两个文件 → reload → 两个变更一起生效"，当前行为满足。但如果 operator 只修改了 server.json 并调用 Reload()，三个文件都会被重新解析并 swap——这是预期行为，但 reload 的"最小变更感知"为零。
+
+**真正的问题在于:** Reload() 的原子性只覆盖 ConfigManager 内部。MongoDB 配置的重载（`ReloadMongoDbConfigs`）和 PhysicsConfigManager 的热更不在同一原子域内。
+
+### 10.3 无配置回滚快照
+
+`Reload()` 成功后旧配置被新配置覆盖，旧值完全丢失：
+
+```cpp
+{
+    std::lock_guard<std::shared_mutex> lock(config_mutex_);
+    runtime_config_ = std::move(new_runtime);  // 旧值被 move 覆盖，永久丢失
+    // ...
+}
+```
+
+如果新配置导致运行时行为异常（如 `target_fps` 被错误设置为 1000，CPU 使用率飙升至 100%），**无法回滚到上一个已知良好的配置**。运维人员必须：
+1. 从备份中恢复配置文件
+2. 再次调用 Reload()
+3. 祈祷不会引入新的问题
+
+**对比行业实践:** Kubernetes ConfigMap 支持 `kubectl rollout undo`；etcd 的 v3 API 自带 revision 历史；nginx 重载配置失败时保留旧 worker。本系统对配置变更的态度是"一往无前"。
+
+### 10.4 配置文件无变更检测——不会自动触发 Reload
+
+`ScriptReloader` 通过 `FileWatcher` 监控脚本文件变更并自动热更。但**配置文件没有任何 FileWatcher**：
+
+```
+ScriptReloader:   FileWatcher 检测 .lua 变更 → 校验 → 热更   ← 自动化
+ConfigManager:    (无 FileWatcher) → 等待外部触发 Reload()   ← 手动
+```
+
+运维人员必须通过以下方式之一触发配置重载：
+- 手动调用 `ConfigManager::Reload()`
+- 实现 SIGHUP 处理器（目前也没有，见 §8.2）
+- 暴露 HTTP 端点（目前也没有）
+
+**任何方式都需要额外的代码或不存在的功能。** 配置文件被修改后，进程完全无感知，直到运维人员手动干预。
+
+### 10.5 无独立配置校验 CLI 工具
+
+`ConfigValidator::Validate()` 存在但未集成到运行时。也没有将其编译为独立的 CLI 工具用于 CI/CD 管道中预检配置变更：
+
+```
+# 开发者期望的 CI/CD 流程：
+$ evpp-config-validate --config-dir resources/config
+  [OK]   runtime.json: valid
+  [OK]   server.json: valid
+  [WARN] db_service.json: thread_pool.thread_count=4 but connection_pool.max_pool_size=3 (min recommendation: thread_count * 2)
+  [FAIL] physics.json: error at line 42: "gravityY" is not a recognized key (did you mean "gravityY"?)
+```
+
+**现状:** CI/CD 管道只能做 JSON 语法检查（`jq . server.json`），完全无法做业务级别的配置校验。
+
+### 10.6 未知 JSON 键的处理行为不一致：ConfigManager vs PhysicsConfigManager
+
+这是从源码层面发现的一个关键差异：
+
+| 管理器 | JSON 键打错时的行为 | glaze 调用方式 |
+|--------|-------------------|---------------|
+| ConfigManager | **报错** — 整个文件加载失败 | `glz::read_json(config, json)` → 内部使用 `opts{}`（默认 `error_on_unknown_keys = true`） |
+| PhysicsConfigManager | **静默忽略** — 使用 C++ 默认值 | `glz::read<glz::opts{.error_on_unknown_keys = false}>(config, buf, ctx)` |
+
+**实际场景:** 运维人员在 `physics.json` 中将 `gravityY` 错误地写成 `gravityy`（小写 y）。PhysicsConfigManager 的 `error_on_unknown_keys = false` 使得这条配置被静默忽略，物理引擎使用 C++ 默认值 `-9.81f`。如果本意是设置为 `-3.71f`（火星重力），这个错误会**无声地**产生完全不同的物理行为——而且没有任何日志、警告或提示。
+
+**为什么 PhysicsConfigManager 选择 `error_on_unknown_keys = false`？** 文档未说明。推测是为了向前兼容——允许新版本的 C++ 代码读取旧版本的 JSON 配置文件（旧文件可能缺少新字段）。但代价是**丢失所有拼写错误的反馈**。
+
+### 10.7 配置变更无 Webhook / 事件通知
+
+`ConfigManager::Reload()` 完成后只触发进程内的 `ReloadCallback`（目前也只是打日志），**完全不通知外部系统**：
+
+- Prometheus / Grafana 无法收到配置变更事件
+- 配置管理数据库（CMDB）无法自动更新
+- 审计系统无法记录配置变更的发起者和时间
+- Slack / PagerDuty 无法发送变更通知
+
+对于 SOC2 / ISO 27001 合规环境，配置变更的完整审计追踪是强制要求。
+
+---
+
+## 11. 配置驱动的运维控制缺失
+
+### 11.1 连接数上限是硬编码的
+
+`tcp_server.h:150`:
+
+```cpp
+uint32_t max_connections_ = 10000;
+```
+
+服务器最大连接数固定为 10000，不在任何 JSON 配置文件中。在高并发场景需要提升限制时，必须重新编译。没有配置项可以：
+- 设置最大并发连接数
+- 设置每 IP 最大连接数（防 DDoS）
+- 设置连接建立速率限制（`max_conn_per_second`）
+
+虽然存在 `SetMaxConnections(uint32_t)` 的 public setter，但它只在 C++ 层面可用。Lua 绑定层没有暴露这个接口。
+
+### 11.2 无过载保护（Load Shedding）配置
+
+当服务器接近容量上限时，没有配置驱动的降级策略：
+- 没有"拒绝新连接"的阈值配置（如 `reject_new_connections_when_memory_above_mb`）
+- 没有消息处理优先级配置（先处理支付回调，后处理聊天消息）
+- 没有基于延迟的自动降级（`p99 > N ms → 暂停非关键定时器`）
+
+### 11.3 运维时间窗口不感知
+
+没有配置项支持：
+- **计划维护窗口:** "2026-06-01T02:00:00 开始拒绝新连接，02:30:00 开始关闭"
+- **滚动重启协调:** 集群中多个进程依次重启时的时间偏移配置
+- **业务高峰保护:** "每天 20:00-22:00 期间禁止自动配置变更"
+
+### 11.4 日志采样率不可配置
+
+在高吞吐量场景下（如每秒 10000 条消息），每个请求都打印 INFO 日志会产生巨大的 I/O 压力。但日志级别是全局的——无法配置为"ERROR 全量打印，WARN 打印 10%，INFO 打印 1%"。
+
+### 11.5 多实例部署的身份标识缺失
+
+在同一个集群中运行多个服务器实例时，无法通过配置文件区分实例身份：
+
+```json
+// 期望的配置（不存在）:
+{
+    "instance": {
+        "id": "game-server-03",
+        "region": "us-east-1",
+        "zone": "a",
+        "cluster": "production"
+    }
+}
+```
+
+缺少实例标识导致：
+- 日志文件中无法区分来自哪个实例
+- 指标聚合时需要从 IP/主机名推断实例身份
+- 无法配置"本实例独有"的行为差异
+
+---
+
+## 12. 开发期与发布期配置差异
+
+作为一个通用游戏服务器引擎，配置系统必须支撑两个截然不同的生命周期阶段。当前实现将这两个阶段的差异分散在编译期宏、默认值、CLI 参数和手写 JSON 中，没有统一的"配置 profile"概念。
+
+### 12.1 当前 dev/prod 差异实现方式一览
+
+通过全面审查，以下是当前区分开发期和发布期行为的所有机制：
+
+| 机制 | 使用位置 | 影响 | 问题 |
+|------|---------|------|------|
+| `#ifndef NDEBUG` | `engine.cc:178` | 选择 MongoDB dev/public 集群 | 编译期决定，无法运行时切换 |
+| `#ifdef _DEBUG` | `engine_api.h:20` | 定义 `H_DEBUG_MODE` 宏 | 全局编译开关，无细分控制 |
+| `#ifdef H_DEBUG_MODE` | `inner_pre.cc`, `tcp_server.cc` 等 | 额外的 debug 日志输出 | 零散的 `#ifdef` 散布在代码中 |
+| `sandbox_level` JSON 字段 | `runtime.json` → `engine.cc:203-208` | **仅有的运行时配置**控制脚本安全级别 | 只在 Init() 时使用，不能热更 |
+| C++ 默认值 | `config.h:20-179` 全部成员初始化器 | "开箱即用"的开发期默认值 | 开发默认值 = 生产默认值，无区分 |
+| CLI `--log_dir=` `--scripts_dir=` | `server.cc:63-71` | 启动时覆盖 JSON 配置 | Ad-hoc CLI 参数，无统一覆盖框架 |
+| `server.json` 的 `admin_port` | `engine.cc:283` | 0 = 禁用管理端口 | 开发期默认 8081（open），生产应设为 0 或 127.0.0.1 |
+
+**结论: 只有 `sandbox_level` 一个字段提供了真正的 dev/prod 运行时区分能力，其余全部依赖编译期宏或手写 JSON 差异。**
+
+### 12.2 开发期需求 vs 当前能力
+
+以下是游戏服务器在开发阶段的关键配置需求，以及当前实现的支持程度：
+
+| 开发期需求 | 当前支持 | 差距 |
+|-----------|---------|------|
+| 所有脚本在本地一键启动 | ✅ `sandbox_level=Full` 允许 `io`/`os`/`debug` | — |
+| 详细调试日志 | ❌ | 日志级别 `debug` 可配，但 debug 日志本身需要 `H_DEBUG_MODE` 编译宏才编译进去 |
+| 热重载所有内容 | ⚠️ | Script 有 FileWatcher，Config 无。修改 JSON 需手动触发 Reload() |
+| 数据库连接本地开发集群 | ❌ | `#ifndef NDEBUG` 选择 dev，但这是编译期行为。Debug 构建无法连生产 DB，Release 构建无法连开发 DB |
+| 性能分析器默认开启 | ❌ | Profiler 硬编码在 `engine.cc:121-124`，总是启用。开发期可能想要更大的缓冲区，生产期可能想关闭 |
+| 确定性的随机种子（可复现 Bug） | ❌ | 随机种子不受配置控制，完全由系统熵决定 |
+| GM/作弊命令开关 | ❌ | 没有 GM 命令系统，自然也没有配置开关 |
+| 物理调试可视化 | ❌ | 无物理调试配置（如 Bullet 的 `setDebugDrawer`） |
+| 跳过认证 | ❌ | 认证依赖 JWT，无 "auth bypass" 开发模式 |
+| 模拟高延迟/丢包 | ❌ | 无网络模拟配置 |
+| 压力测试模式（关闭限流） | ❌ | RateLimiter 存在但无配置暴露，最大连接数硬编码 10000 |
+| 自动化测试的配置注入 | ❌ | 测试只能通过 `LoadRuntimeFromString` 全量替换配置 |
+
+### 12.3 发布期需求 vs 当前能力
+
+| 发布期需求 | 当前支持 | 差距 |
+|-----------|---------|------|
+| 严格的安全沙箱 | ✅ `sandbox_level=Strict` | — |
+| 最小化日志输出 | ✅ `log.level=info` 可配 | 但 debug 日志代码已编译进二进制（Release 构建 `H_DEBUG_MODE` 未定义），无法在需要时临时打开 |
+| 连接生产数据库 | ⚠️ | 仅 Release 构建可用。Debug 构建的运维工具无法连接生产 DB |
+| 管理端口仅绑定 127.0.0.1 | ❌ | 绑定地址不可配置，默认 `0.0.0.0` |
+| 优雅关闭（连接排空） | ❌ | 见 §8.3 |
+| 健康检查通过所有依赖项 | ❌ | 见 §7.4 |
+| 速率限制 | ❌ | 无全局配置暴露 |
+| 监控指标完整 | ⚠️ | Metrics 存在但缺少配置变更、关停进度等运维指标（见 §7.8） |
+| 审计日志 | ❌ | 无操作审计能力 |
+| 配置变更需审批记录 | ❌ | 无变更追踪（见 §10.7） |
+
+### 12.4 核心问题：缺少配置 Profile 层级系统
+
+行业标准做法是将配置分层，从基础到具体逐级覆盖：
+
+```
+Base Profile (common.json)
+  ├─ 所有环境的公共配置
+  │
+  ├─ Dev Profile Overlay (dev.json)
+  │   ├─ sandbox_level = Full
+  │   ├─ log.level = debug
+  │   ├─ mongo.use_dev = true
+  │   ├─ admin_port = 8081
+  │   ├─ profiler.enabled = true
+  │   └─ auth.bypass = true
+  │
+  ├─ Staging Profile Overlay (staging.json)
+  │   ├─ sandbox_level = Strict
+  │   ├─ log.level = info
+  │   ├─ mongo.use_dev = true
+  │   ├─ load_test_mode = true
+  │   └─ profiler.enabled = true
+  │
+  └─ Production Profile Overlay (prod.json)
+      ├─ sandbox_level = Strict
+      ├─ log.level = warn
+      ├─ mongo.use_public = true
+      ├─ admin_port = 0
+      ├─ max_connections = 50000
+      ├─ rate_limit.enabled = true
+      └─ profiler.enabled = false
+```
+
+等效配置层级在很多游戏引擎中都有实现：
+
+| 引擎 | 机制 |
+|------|------|
+| Unreal Engine | `DefaultEngine.ini` → `DefaultEngineUser.ini` → `Engine.ini` 层级覆盖 |
+| Unity | ScriptableObject + Addressables 按环境加载 |
+| Amazon Lumberyard | `.setreg` 文件 + CVar 系统 |
+| 自定义游戏服务器 | etcd/consul KV + 环境变量覆盖 |
+
+**当前系统完全没有这类层级覆盖机制。** 每个环境需要维护完整的、独立的 JSON 文件副本，环境之间的差异无法一目了然地对比。
+
+### 12.5 Lua 脚本层的配置真空
+
+C++ 侧的 `ConfigManager` 提供了基础设施配置（日志、帧率、网络），但 Lua 脚本层**完全没有游戏业务配置的支持**。
+
+当前 Lua 脚本访问配置的唯一方式是通过 C++ 绑定函数间接获取（如 `msgpack_bind.cc` 读取 `max_nesting_depth`），Lua 开发者没有：
+
+- **Lua API 读取配置:** `config.get("frame.target_fps")` — 不存在
+- **Lua 模块级配置:** `config.load("my_module")` → 返回该模块的配置表 — 不存在
+- **Lua 侧配置热更回调:** `config.on_change("my_module", function(old, new) ... end)` — 不存在
+
+`resources/script/runtime/init.lua:15` 中的 `-- import("runtime.common_config")` 是注释掉的占位符，暗示开发者计划了 Lua 层配置模块但尚未实现。
+
+---
+
+## 13. 游戏业务配置框架缺失
+
+引擎提供了网络、数据库、物理等基础设施，但**游戏业务逻辑运行在 Lua 层**。Lua 开发者需要配置的数据类型远超 C++ 层现有的简单 JSON 映射。
+
+### 13.1 游戏业务配置的典型需求
+
+以下是一个通用游戏服务器必然需要的配置数据类型，全部缺失框架支持：
+
+| 配置类型 | 示例 | 数据特征 | 当前状态 |
+|---------|------|---------|---------|
+| **数值平衡表** | 角色属性曲线、技能伤害公式 | 大量浮点数，需要插值（LERP） | 开发者须从零实现 CSV/JSON 加载和插值逻辑 |
+| **掉落表** | 怪物掉落物品、概率权重 | 概率分布，加权随机 | 无概率引擎，须手写加权随机 |
+| **经验曲线** | Lv.1→2 需 100EXP, Lv.2→3 需 250EXP | 分段/公式，逆查（根据 EXP 查 Level） | 须手写查表和公式 |
+| **任务/事件配置** | NPC ID、对话树、奖励列表 | 树状结构，引用其他配置 | 须手写嵌套 JSON 解析 |
+| **AI 行为树参数** | 巡逻半径、追击距离、技能释放条件 | 大量阈值参数 | 须手写结构体 |
+| **物品/装备属性** | 攻击力、耐久度、套装效果 | 属性模板 + 实例变体 | 须手写属性系统 |
+| **场景/地图配置** | 出生点、怪物刷新区域、碰撞体积 | 空间坐标 + 实体模板引用 | 与物理场景配置割裂 |
+| **商城/定价** | 商品 ID、价格（多种货币）、限购数量 | 多币种，限时/限量 | 须手写逻辑 |
+| **本地化文本** | 所有语言的 UI 文本和系统消息 | Key-Value，多语言 | 无 po/mo/JSON 加载器 |
+
+### 13.2 数值策划的工作流断裂
+
+在成熟的游戏开发流程中，数值策划（Game Designer / Numerical Designer）通过 Excel/CSV 编辑数值，导表工具将 Excel 转换为游戏可读的格式，服务器和客户端共享同一份数值配置。
+
+当前引擎的配置系统处于这样一个状态：
+- **引擎基建配置（JSON）：** 给程序员用的，策划不碰
+- **游戏业务配置：** 框架不存在，策划和程序之间没有任何工具链
+
+如果基于当前引擎开发一款实际游戏，典型的工作流可能是：
+
+```
+策划在 Excel 中修改 "monster.csv" 的 HP 值
+  → 导出为 monster.json
+  → 放入 resources/script/data/
+  → 服务器重启或手动 Lua 热更加载新 JSON
+  → ❌ 没有校验（HP 可以写成负数）
+  → ❌ 没有回滚（改错了只能手动恢复文件）
+  → ❌ 没有热更通知（其他系统不知道怪物属性变了）
+```
+
+### 13.3 配置的跨系统引用与一致性
+
+游戏配置的核心挑战之一是**引用完整性**。典型例子：
+
+```json
+// monster.json
+{ "id": "goblin_01", "drop_table": "goblin_drop" }
+
+// drop_table.json  
+{ "id": "goblin_drop", "items": [{"item_id": "sword_01", "weight": 0.3}] }
+
+// item.json
+{ "id": "sword_01", "name": "铁剑", "atk": 15 }
+```
+
+如果 `item.json` 中的 `sword_01` 被删除或改名，`drop_table.json` 中的引用变为悬空引用。当前系统完全没有：
+- **引用完整性校验:** 加载时检查所有 `item_id` 引用是否指向存在的物品
+- **配置拓扑排序:** 确保依赖的配置先加载（先加载 `item.json`，再加载引用它的 `drop_table.json`）
+- **级联变更通知:** 当 `sword_01` 攻击力从 15 改为 20 时，所有引用它的系统应收到通知
+
+### 13.4 配置的客户端-服务器共享
+
+在典型的客户端-服务器架构中，许多配置是双端共享的：
+
+```
+客户端需要: 物品名称、图标路径、技能特效参数 → 用于渲染
+服务器需要: 物品属性、伤害公式、掉落逻辑 → 用于逻辑计算
+共享部分:  物品 ID、基础属性、装备槽位等 — 必须保持一致
+```
+
+当前引擎是纯服务器引擎，但配置系统没有预留"导出客户端可读格式"的能力。当客户端团队需要一份同步的配置时，必须手工维护。
+
+### 13.5 缺失的配置能力总结：发布一款游戏至少需要
+
+假设基于本引擎开发一款中等规模的 MMORPG（约 50 种怪物、200 种物品、30 个 NPC、100 个任务），配置系统至少需要以下新增能力：
+
+| 能力 | 紧迫度 | 说明 |
+|------|-------|------|
+| CSV/Excel 导表工具链 | P0 | 策划不接受直接编辑 JSON |
+| 配置引用完整性校验 | P0 | 悬空引用导致运行时崩溃 |
+| Lua 层 config API | P0 | 业务脚本无法获取配置 |
+| 多环境 profile 覆盖 | P1 | dev/staging/prod 维护成本爆炸 |
+| 配置热更通知 | P1 | 策划改数值后需要重启才生效 |
+| 双端共享的配置导出 | P1 | 客户端需要同步配置 |
+
+---
+
+## 14. 可测试性
+
+### 14.1 测试污染全局单例
 
 ```cpp
 // test_config.cpp
@@ -723,15 +1109,15 @@ TEST_CASE("ConfigManager rejects invalid JSON", "[config][error]") {
 
 每个测试用例都直接修改全局 ConfigManager 的状态。测试执行顺序依赖 Catch2 的随机种子——同一测试套件在不同运行中可能因为顺序不同而通过或失败。`ConfigFixture::LoadFromStrings()` 试图通过在 setUp 中重载来"重置"状态，但这只是掩盖而非解决根本问题。
 
-### 10.2 无 mock/fake 接口
+### 14.2 无 mock/fake 接口
 
 ConfigManager 没有抽象接口（IConfigManager），`PhysicsConfigManager` 也没有抽象接口。所有配置消费者直接依赖具体类，无法在单元测试中注入 mock 配置。
 
-### 10.3 fuzz 测试不覆盖文件路径
+### 14.3 fuzz 测试不覆盖文件路径
 
 `config_parse_fuzz.cpp` 只测试 `LoadRuntimeFromString`、`LoadClientFromString`、`LoadServerFromString`。没有覆盖文件加载路径（`LoadRuntimeFromFile`）和 Reload 路径。文件 I/O 相关的缓冲区溢出、路径遍历、BOM 处理错误无法通过模糊测试检测。
 
-### 10.4 基准测试不反映真实场景
+### 14.4 基准测试不反映真实场景
 
 ```cpp
 // bench_config.cpp
@@ -747,7 +1133,7 @@ static void BM_Config_ParseRuntime(benchmark::State& state) {
 
 ---
 
-## 11. 问题汇总与优先级
+## 15. 问题汇总与优先级
 
 ### P0 — 阻塞上线（不解决则不可在生产环境运行）
 
@@ -759,6 +1145,10 @@ static void BM_Config_ParseRuntime(benchmark::State& state) {
 | **P0-4** | **Dev/Prod DB 选择是编译期行为** | `engine.cc:178-182` | **同一二进制无法多环境部署；回滚需重编译** |
 | **P0-5** | **MongoDB 凭证明文存储在 JSON 文件中** | `mongodb_dev.json:13` | **密码泄露风险，违反安全合规** |
 | **P0-6** | **健康检查不验证后端依赖** | `admin_http.cc:35-43` | **K8s 无法正确判断 Pod 健康状态** |
+| **P0-7** | **Physics JSON 静默忽略未知键** | `physics_config.cc:77` | **拼写错误的物理参数被无声丢弃，物理行为错误** |
+| **P0-8** | **配置文件无 torn write 保护** | `config.cc:53-117` | **半写入文件被 Reload() 读取，加载不完整配置** |
+| **P0-9** | **Lua 层无游戏业务配置框架** | 全局 | **游戏策划无法配置数值，所有业务配置需从零手写** |
+| **P0-10** | **无配置引用完整性校验** | 全局 | **item/monster/skill ID 悬空引用导致运行时崩溃** |
 
 ### P1 — 严重影响开发与运维效率
 
@@ -774,6 +1164,12 @@ static void BM_Config_ParseRuntime(benchmark::State& state) {
 | **P1-8** | **缺少 SIGHUP 配置重载** | `engine.cc:322-344` | **违反 Unix 服务器运维标准惯例** |
 | **P1-9** | **无连接优雅排空** | `engine.h:44-56` | **客户端在服务器关闭时连接被暴力断开** |
 | **P1-10** | **无可配置关闭超时** | `engine.cc:392-402` | **子系统 hang 住时 Cleanup() 永远阻塞，K8s SIGKILL 丢数据** |
+| **P1-11** | **无配置回滚快照** | `config.cc:160-167` | **新配置导致故障时无法一键回滚到上一版本** |
+| **P1-12** | **配置文件无 FileWatcher 自动检测** | N/A | **修改配置文件后进程无感知，需手动触发 Reload** |
+| **P1-13** | **连接数上限硬编码 10000** | `tcp_server.h:150` | **高并发场景需重新编译才能提升限制** |
+| **P1-14** | **无配置 profile 层级系统（dev/staging/prod）** | 全局 | **每个环境维护完整配置副本，环境切换靠编译宏** |
+| **P1-15** | **游戏业务配置无导表工具链** | 全局 | **策划无法用 Excel/CSV 编辑数值，依赖程序员手写 JSON** |
+| **P1-16** | **无配置跨系统引用管理** | 全局 | **item→drop_table→monster 引用链断裂时无检测** |
 
 ### P2 — 影响运维质量与安全
 
@@ -789,6 +1185,12 @@ static void BM_Config_ParseRuntime(benchmark::State& state) {
 | P2-8 | admin_port 绑定地址不可配置 | `admin_http.cc:76-97` | 管理端点可能意外暴露到公网 |
 | P2-9 | 无外部 Secret 注入支持 | 全局 | 密码管理依赖明文文件 |
 | P2-10 | 缺少 Prometheus 配置相关指标 | `metrics.h` | 配置系统本身不可观测 |
+| P2-11 | 无独立 config-validate CLI 工具 | N/A | CI/CD 无法预检配置变更 |
+| P2-12 | 配置变更无 Webhook/事件通知 | N/A | 外部审计/监控系统无法感知变更 |
+| P2-13 | 无过载保护/降级策略配置 | N/A | 高负载时无自动保护机制 |
+| P2-14 | Lua 层无 config API | N/A | 业务脚本无法读取配置 |
+| P2-15 | 开发期 debug 日志受编译宏控制 | `engine_api.h:20` | Debug 构建和生产构建日志能力不同，排查问题困难 |
+| P2-16 | 客户端-服务器配置无同步机制 | N/A | 双端共享的 ID/属性可能不一致 |
 
 ### P3 — 可改进项
 
@@ -804,6 +1206,14 @@ static void BM_Config_ParseRuntime(benchmark::State& state) {
 | P3-8 | CleanupPhase 不对外可见 | `engine.h:57-66` | 无法向负载均衡器报告关闭进度 |
 | P3-9 | 缺少 Startup/Readiness/Liveness 探针区分 | `admin_http.cc:35-43` | 容器编排健康检查粗粒度 |
 | P3-10 | 缺少配置包含/覆盖机制 | 全部 JSON 文件 | 多环境管理需要复制完整配置文件 |
+| P3-11 | ConfigManager 与 PhysicsConfigManager 未知键处理不一致 | `config.cc` / `physics_config.cc` | 同样的 typo 在两边行为不同，破坏运维直觉 |
+| P3-12 | 日志采样率不可配置 | N/A | 高吞吐场景 INFO 日志产生 I/O 风暴 |
+| P3-13 | 无实例身份标识配置 | N/A | 多实例集群中无法区分日志/指标来源 |
+| P3-14 | 无计划维护窗口/业务高峰保护 | N/A | 无法配置时间感知的运维策略 |
+| P3-15 | 无确定性随机种子配置 | N/A | 无法复现随机性 Bug |
+| P3-16 | 无网络模拟配置（延迟/丢包） | N/A | QA 无法在本地复现网络问题 |
+| P3-17 | 无 GM/管理命令配置开关 | N/A | 需编译期区分有无 GM 功能 |
+| P3-18 | 无认证绕过开关（开发期用） | N/A | 本地开发每次需配 JWT token |
 
 ---
 
