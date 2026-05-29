@@ -13,7 +13,7 @@ CloudEngine - 全景架构图
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                        GameClient C API  (src/client/)                        │
 │                                                                              │
-│  client.h  ── Pure C, ABI-safe, 900+ line API surface                        │
+│  client.h  - Pure C, ABI-safe API surface                                    │
 │  ┌───────────────┬───────────────┬───────────────┬──────────────┐            │
 │  │ client.cpp    │ client_net.cpp│ client_udp.cpp│client_kcp.cpp │            │
 │  │ lifecycle     │ TCP client    │ UDP client    │ KCP client    │            │
@@ -21,7 +21,7 @@ CloudEngine - 全景架构图
 │  └───────┬───────┴───────┬───────┴───────┬───────┴──────┬───────┘            │
 │          │ client_timer  │ client_log    │              │                    │
 │          └───────────────┴───────────────┴──────────────┘                    │
-│                          │  C++ → C opaques                                  │
+│                          │  C++ -> C opaques                                  │
 └──────────────────────────┼───────────────────────────────────────────────────┘
                            │
                            ▼
@@ -30,56 +30,104 @@ CloudEngine - 全景架构图
 │                                                                              │
 │  ┌─────────────────────────────────────────────────────────────────────┐     │
 │  │                        SERVER  (src/server/)                         │     │
-│  │  main.cc ── WinSock → ConfigManager → Engine::Init() → Engine::Run() │     │
+│  │  main.cc - WinSock -> ConfigManager -> Engine::Init() -> Run()       │     │
 │  └───────────────────────────────┬─────────────────────────────────────┘     │
 │                                  │                                           │
 │  ┌───────────────────────────────▼─────────────────────────────────────┐     │
 │  │                      ENGINE CORE                                     │     │
 │  │                                                                      │     │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐       │     │
-│  │  │ Engine       │  │ ConfigManager│  │ TimerManager         │       │     │
-│  │  │ singleton    │  │ singleton    │  │ singleton             │       │     │
-│  │  │              │  │              │  │                      │       │     │
-│  │  │ Init()       │  │ Load(json)   │  │ HrTimer (ns-precise) │       │     │
-│  │  │ Start()      │  │ Reload()     │  │ TimerWheel (ms-bulk) │       │     │
-│  │  │ Run()        │  │ engine.json  │  │ AlarmTimer           │       │     │
-│  │  │ Tick()       │  │ server.json  │  │ ClockManager         │       │     │
-│  │  │ Shutdown()   │  │              │  │                      │       │     │
-│  │  │ Cleanup()    │  │              │  │ update() per tick    │       │     │
-│  │  └──────┬───────┘  └──────────────┘  └──────────┬───────────┘       │     │
-│  └─────────┼───────────────────────────────────────┼───────────────────┘     │
-│            │                                       │                          │
-│  ┌─────────▼───────────────────────────────────────▼───────────────────┐     │
-│  │                     LUA VM LAYER                                     │     │
+│  │  ┌────────────────┐  ┌────────────────┐  ┌────────────────────┐     │     │
+│  │  │ Engine         │  │ ConfigManager  │  │ TimerManager       │     │     │
+│  │  │ singleton      │  │ singleton      │  │ (non-singleton,    │     │     │
+│  │  │                │  │                │  │  injectable)        │     │     │
+│  │  │ Init()         │  │ Load(json)     │  │                    │     │     │
+│  │  │ Start()        │  │ Reload()       │  │ HrTimer (ns-prec)  │     │     │
+│  │  │ Run()          │  │ ReloadCallback │  │ TimerWheel (ms)    │     │     │
+│  │  │ Tick()  (lib)  │  │ engine/server/ │  │ AlarmTimer         │     │     │
+│  │  │ Shutdown()     │  │ client/runtime │  │ ClockManager       │     │     │
+│  │  │ Cleanup()      │  │ mongodb configs│  │                    │     │     │
+│  │  │ CleanupPhase   │  │ db_service cfg │  │ update() per tick  │     │     │
+│  │  └──────┬─────────┘  └────────────────┘  └──────────┬─────────┘     │     │
+│  └─────────┼───────────────────────────────────────────┼───────────────┘     │
+│            │                                           │                      │
+│  ┌─────────▼───────────────────────────────────────────▼────────────────┐     │
+│  │                     LUA VM LAYER                                      │     │
 │  │                                                                      │     │
-│  │  ┌────────────────────┐  ┌──────────────────────────────┐           │     │
-│  │  │ ScriptVM           │  │ Script Bindings (Lua ↔ C++)  │           │     │
-│  │  │                    │  │                              │           │     │
-│  │  │ lua_State* wrapper │  │ script_bind.cc: ExportAll()  │           │     │
-│  │  │ InitScript()       │  │                              │           │     │
-│  │  │ UpdateScript()     │  │ ┌──────────┬────────────────┐│           │     │
-│  │  │ DestroyScript()    │  │ │ Module   │ File           ││           │     │
-│  │  │ DoString/DoFile    │  │ ├──────────┼────────────────┤│           │     │
-│  │  │ DoDirectory()      │  │ │ net      │ net_bind.cc    ││           │     │
-│  │  │ RegisterModule()   │  │ │ net.http │ net_http_bind  ││           │     │
-│  │  │ RegisterCallback() │  │ │ net.tcp  │ net_client+    ││           │     │
-│  │  │ CustomPtrStore     │  │ │          │ server_bind    ││           │     │
-│  │  │ ScriptImporter     │  │ │ net.udp  │ net_udp_*     ││           │     │
-│  │  └────────────────────┘  │ │ net.kcp  │ net_kcp_*     ││           │     │
-│  │                          │ │ timer    │ timer_bind.cc ││           │     │
-│  │                          │ │ log      │ log_bind.cc   ││           │     │
-│  │                          │ │ msgpack  │ msgpack_bind  ││           │     │
-│  │                          │ │ import   │ import_bind   ││           │     │
-│  │                          │ └──────────┴────────────────┘│           │     │
-│  │                          └──────────────────────────────┘           │     │
-│  └────────────────────────────────────────────────────────────────────┘     │
+│  │  ┌────────────────────┐  ┌──────────────────────────────────────┐   │     │
+│  │  │ ScriptVM           │  │ Script Bindings (Lua <-> C++)        │   │     │
+│  │  │                    │  │                                      │   │     │
+│  │  │ lua_State* wrapper │  │ script_bind.cc: ExportAll(vm,tm)    │   │     │
+│  │  │ InitScript()       │  │ (injectable TimerManager)           │   │     │
+│  │  │ UpdateScript()     │  │                                      │   │     │
+│  │  │ DestroyScript()    │  │ Modules:                             │   │     │
+│  │  │ DoString/DoFile    │  │  net        net_tcp_client/server    │   │     │
+│  │  │ DoDirectory()      │  │  net.http   net_udp_client/server    │   │     │
+│  │  │ RegisterFunction() │  │  net.kcp    net_kcp_client/server    │   │     │
+│  │  │ RegisterModule()   │  │  timer      log        msgpack       │   │     │
+│  │  │ RegisterCallback() │  │  import     entity     space         │   │     │
+│  │  │ Sandbox levels     │  │  aoi        auth      rpc           │   │     │
+│  │  │ CoroutineScheduler │  │  orm        mongodb   db_service    │   │     │
+│  │  │ ScriptReloader     │  │  mem        profiler               │   │     │
+│  │  │ FileWatcher        │  └──────────────────────────────────────┘   │     │
+│  │  │ CustomPtrStore     │                                             │     │
+│  │  │ ScriptImporter     │                                             │     │
+│  │  └────────────────────┘                                             │     │
+│  └─────────────────────────────────────────────────────────────────────┘     │
+│                                  │                                           │
+│  ┌───────────────────────────────▼─────────────────────────────────────┐     │
+│  │                     ENTITY & SPACE SYSTEM                            │     │
+│  │                                                                      │     │
+│  │  ┌───────────────────────────────────────────────────────┐          │     │
+│  │  │ EntityManager (singleton)                              │          │     │
+│  │  │  CreateEntity / GetEntity / DestroyEntity              │          │     │
+│  │  │  FindByConnection / FindByPhysicsBodyId (O(1) lookup)  │          │     │
+│  │  │  ForEachActive / Count / ActiveCount                   │          │     │
+│  │  └──────────────────────┬────────────────────────────────┘          │     │
+│  │                         │ owns                                      │     │
+│  │  ┌──────────────────────▼────────────────────────────────┐          │     │
+│  │  │ Entity                                                 │          │     │
+│  │  │  AttributeTable (key-value property store)             │          │     │
+│  │  │  Components (C++ type-erased + Lua named)              │          │     │
+│  │  │  Connection binding + Physics body linkage             │          │     │
+│  │  │  Timer ownership (auto-cancel on Destroy)              │          │     │
+│  │  │  State: Created -> Active -> Suspended -> Destroyed     │          │     │
+│  │  └────────────────────────────────────────────────────────┘          │     │
+│  │                                                                      │     │
+│  │  ┌───────────────────────────────────────────────────────┐          │     │
+│  │  │ SpaceManager (singleton)                               │          │     │
+│  │  │  CreateSpace / GetSpace / DestroySpace                 │          │     │
+│  │  │  GetDefaultSpace (backward-compat single-VM mode)      │          │     │
+│  │  │  ForEachSpace                                          │          │     │
+│  │  └──────────────────────┬────────────────────────────────┘          │     │
+│  │                         │ owns                                      │     │
+│  │  ┌──────────────────────▼────────────────────────────────┐          │     │
+│  │  │ Space (isolated game world)                            │          │     │
+│  │  │  Own ScriptVM + Entity set + IdAllocator               │          │     │
+│  │  │  Player join/leave lifecycle                           │          │     │
+│  │  │  Per-frame Update(delta_ms)                            │          │     │
+│  │  │  Per-space entry scripts                               │          │     │
+│  │  └────────────────────────────────────────────────────────┘          │     │
+│  │                                                                      │     │
+│  │  ┌───────────────────────────────────────────────────────┐          │     │
+│  │  │ SpaceMessageRouter (singleton)                         │          │     │
+│  │  │  Cross-space async messages via SPSC queue             │          │     │
+│  │  │  SendMessage / ProcessPending                          │          │     │
+│  │  └───────────────────────────────────────────────────────┘          │     │
+│  │                                                                      │     │
+│  │  ┌───────────────────────────────────────────────────────┐          │     │
+│  │  │ AOIManager + SpatialIndex                              │          │     │
+│  │  │  SpatialGrid with AOI radius tracking                  │          │     │
+│  │  │  Enter/leave event callbacks per entity                │          │     │
+│  │  │  Visibility set computation + radius queries           │          │     │
+│  │  └───────────────────────────────────────────────────────┘          │     │
+│  └─────────────────────────────────────────────────────────────────────┘     │
 │                                  │                                           │
 │  ┌───────────────────────────────▼─────────────────────────────────────┐     │
 │  │                     NETWORK LAYER (evpp)                             │     │
 │  │                                                                      │     │
 │  │  ┌──────────────────────────────────────────────────────────┐       │     │
 │  │  │              Event Loop Infrastructure                    │       │     │
-│  │  │  EventLoop ── EventLoopThread ── EventLoopThreadPool     │       │     │
+│  │  │  EventLoop -- EventLoopThread -- EventLoopThreadPool     │       │     │
 │  │  │  (libevent event_base wrapper, per-thread event loops)   │       │     │
 │  │  └──────────────────────────────────────────────────────────┘       │     │
 │  │                                                                      │     │
@@ -87,52 +135,121 @@ CloudEngine - 全景架构图
 │  │  │ TCP          │ HTTP         │ UDP          │ KCP          │      │     │
 │  │  │              │              │              │              │      │     │
 │  │  │ TcpServer    │ http::Server │ UdpServer    │ kcp::Server  │      │     │
-│  │  │  ├─TcpConn   │  ├─Service   │  ├─message   │  ├─KcpSession│      │     │
-│  │  │  ├─Listener  │  └─Context   │  └─callback  │  └─ikcpcb    │      │     │
-│  │  │  └─Callbacks │              │              │              │      │     │
+│  │  │  +TcpConn    │  +Service    │  +message    │  +KcpSession │      │     │
+│  │  │  +Listener   │  +Context    │  +callback   │  +ikcpcb     │      │     │
+│  │  │  +Callbacks  │              │              │              │      │     │
 │  │  │              │              │              │              │      │     │
 │  │  │ TcpClient    │ httpc::Conn  │ UdpClient    │kcp::SyncClient│    │     │
-│  │  │  ├─Connector │ httpc::Pool  │  (sync)      │  (sync)      │      │     │
-│  │  │  └─Callbacks │ httpc::Req   │              │              │      │     │
+│  │  │  +Connector  │ httpc::Pool  │  (sync)      │  (sync)      │      │     │
+│  │  │  +Callbacks  │ httpc::Req   │              │              │      │     │
 │  │  │              │ httpc::Resp  │              │              │      │     │
 │  │  └──────────────┴──────────────┴──────────────┴──────────────┘      │     │
 │  │                                                                      │     │
 │  │  Support: Buffer, DNS-Resolver, Sockets, FD-Channel, Duration        │     │
-│  └────────────────────────────────────────────────────────────────────┘     │
+│  │  Network codec: LengthPrefixedCodec (length-prefix framing)          │     │
+│  └─────────────────────────────────────────────────────────────────────┘     │
+│                                  │                                           │
+│  ┌───────────────────────────────▼─────────────────────────────────────┐     │
+│  │                   SERVICES & MIDDLEWARE                              │     │
+│  │                                                                      │     │
+│  │  ┌─────────────────────────┐  ┌──────────────────────────────────┐  │     │
+│  │  │ RPC SYSTEM              │  │ AUTH SYSTEM                      │  │     │
+│  │  │                         │  │                                  │  │     │
+│  │  │ RpcServer               │  │ SessionManager (singleton)       │  │     │
+│  │  │  RegisterService/Method │  │  SetBackend (pluggable auth)    │  │     │
+│  │  │  HandleRequest          │  │  CreateSession / IsSessionValid │  │     │
+│  │  │  shared_mutex protected │  │  RevokeSession / CleanupExpired │  │     │
+│  │  │                         │  │  max sessions per account       │  │     │
+│  │  │ RpcClient               │  │                                  │  │     │
+│  │  │  async call + timeout   │  │ AuthBackend (interface)         │  │     │
+│  │  │  thread-safe            │  │  JWT / custom implementations   │  │     │
+│  │  └─────────────────────────┘  └──────────────────────────────────┘  │     │
+│  │                                                                      │     │
+│  │  ┌────────────────────────────────────────────────────────────┐      │     │
+│  │  │ MONITORING                                                 │      │     │
+│  │  │  AdminHttpServer (health/stats/metrics on admin port)      │      │     │
+│  │  │  Metrics (tracking counters, gauges, histograms)           │      │     │
+│  │  └────────────────────────────────────────────────────────────┘      │     │
+│  └─────────────────────────────────────────────────────────────────────┘     │
+│                                  │                                           │
+│  ┌───────────────────────────────▼─────────────────────────────────────┐     │
+│  │                   DATABASE LAYER                                     │     │
+│  │                                                                      │     │
+│  │  ┌──────────────────────────────────────────────────────────┐       │     │
+│  │  │ MongoClientPool (connection pool, shared across threads)  │       │     │
+│  │  └──────────────────────┬───────────────────────────────────┘       │     │
+│  │                         │                                           │     │
+│  │  ┌──────────────────────▼──────┬────────────────────────────┐      │     │
+│  │  │ DBThread[0]                 │ DBThread[1] ... DBThread[N]│      │     │
+│  │  │  Own EventLoop              │  Own EventLoop             │      │     │
+│  │  │  Own TimerManager           │  Own TimerManager          │      │     │
+│  │  │  Own DBScriptVM (Lua VM)    │  Own DBScriptVM            │      │     │
+│  │  │  Pop client from pool       │  Pop client from pool      │      │     │
+│  │  │  SPSC: MT->DBT (requests)   │  SPSC: MT->DBT             │      │     │
+│  │  │  SPSC: DBT->MT (responses)  │  SPSC: DBT->MT             │      │     │
+│  │  └─────────────────────────────┴───────────────────────────┘       │     │
+│  │                                                                      │     │
+│  │  C++ MongoDB Wrapper Layer:                                          │     │
+│  │    MongoClient, MongoCursor, MongoBson, MongoBulk, MongoSession      │     │
+│  │    MongoGridFS, MongoChangeStream, MongoEncryption, MongoSSL         │     │
+│  │    MongoUri, MongoOID, MongoTopology, MongoHostList                  │     │
+│  │                                                                      │     │
+│  │  Lua MongoDB Bindings (mongo_bind/):                                 │     │
+│  │    60+ binding files covering full mongo-c-driver API surface        │     │
+│  │    client, collection, database, cursor, bson, bulkwrite, etc.      │     │
+│  │                                                                      │     │
+│  │  ORM Layer:                                                          │     │
+│  │    orm.h/.cc + orm_bind.cc - C++ and Lua ORM for MongoDB             │     │
+│  └─────────────────────────────────────────────────────────────────────┘     │
 │                                  │                                           │
 │  ┌───────────────────────────────▼─────────────────────────────────────┐     │
 │  │                   OPTIONAL SUBSYSTEMS                                │     │
 │  │                                                                      │     │
-│  │  ┌────────────────────┐  ┌──────────────────────────────────┐       │     │
-│  │  │ PHYSICS            │  │ PROFILER                         │       │     │
-│  │  │ (ENGINE_PHYSICS_*  │  │                                  │       │     │
-│  │  │  ENABLED guard)    │  │ Perfetto tracing backend         │       │     │
-│  │  │                    │  │ profiler_core.cc                 │       │     │
-│  │  │ PhysicsEngineBridge│  │ Macro-based instrumentation     │       │     │
-│  │  │  ├─PhysicsSystem   │  │                                  │       │     │
-│  │  │  ├─PhysicsWorld    │  │                                  │       │     │
-│  │  │  ├─PhysicsThread   │  │                                  │       │     │
-│  │  │  ├─MaterialTable   │  │                                  │       │     │
-│  │  │  ├─LayerConfig     │  │                                  │       │     │
-│  │  │  └─AssetLoader     │  │                                  │       │     │
-│  │  │                    │  │                                  │       │     │
-│  │  │ JoltPhysics v5.5.1 │  │                                  │       │     │
-│  │  └────────────────────┘  └──────────────────────────────────┘       │     │
-│  └────────────────────────────────────────────────────────────────────┘     │
+│  │  ┌─────────────────────┐  ┌──────────────────────┐                  │     │
+│  │  │ PHYSICS             │  │ PROFILER             │                  │     │
+│  │  │ (ENGINE_PHYSICS_*   │  │                      │                  │     │
+│  │  │  ENABLED guard)     │  │ Perfetto tracing     │                  │     │
+│  │  │                     │  │ ~55 trace events     │                  │     │
+│  │  │ PhysicsEngineBridge │  │ Macro-based instr.   │                  │     │
+│  │  │ PhysicsSystem       │  │ 6 hot-path systems   │                  │     │
+│  │  │ PhysicsThread       │  │                      │                  │     │
+│  │  │  Own EventLoop      │  │                      │                  │     │
+│  │  │  Own TimerManager   │  │                      │                  │     │
+│  │  │  Own PhysicsWorld   │  │                      │                  │     │
+│  │  │  SPSC: MT<->PT      │  │                      │                  │     │
+│  │  │  PostStepCallback   │  │                      │                  │     │
+│  │  │  condition_variable │  │                      │                  │     │
+│  │  │                     │  │                      │                  │     │
+│  │  │ PhysicsWorld        │  │                      │                  │     │
+│  │  │ PhysicsVM (Lua VM)  │  │                      │                  │     │
+│  │  │ PhysicsConfig       │  │                      │                  │     │
+│  │  │ PhysicsDiff         │  │                      │                  │     │
+│  │  │ PhysicsAssets       │  │                      │                  │     │
+│  │  │ PhysicsMaterials    │  │                      │                  │     │
+│  │  │ PhysicsLayers       │  │                      │                  │     │
+│  │  │ PhysicsCommands     │  │                      │                  │     │
+│  │  │                     │  │                      │                  │     │
+│  │  │ JoltPhysics v5.5.1  │  │                      │                  │     │
+│  │  └─────────────────────┘  └──────────────────────┘                  │     │
+│  └─────────────────────────────────────────────────────────────────────┘     │
 │                                  │                                           │
 │  ┌───────────────────────────────▼─────────────────────────────────────┐     │
 │  │                   THIRD-PARTY DEPENDENCIES                           │     │
 │  │                                                                      │     │
 │  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌──────┐ ┌───────────────┐       │     │
 │  │  │libevent│ │ Lua    │ │ Quill  │ │ glaze│ │concurrentqueue│       │     │
-│  │  │event   │ │onelua.c│ │async   │ │JSON  │ │lock-free MPMC │       │     │
-│  │  │loop    │ │VM 5.4+ │ │logging │ │refl. │ │queue          │       │     │
+│  │  │event   │ │Lua     │ │async   │ │JSON  │ │lock-free MPMC │       │     │
+│  │  │loop    │ │VM 5.5  │ │logging │ │refl. │ │queue (SPSC)   │       │     │
 │  │  └────────┘ └────────┘ └────────┘ └──────┘ └───────────────┘       │     │
-│  │  ┌────────┐ ┌────────────────┐                                      │     │
-│  │  │ KCP    │ │ Perfetto       │                                      │     │
-│  │  │ikcp.c  │ │ tracing SDK    │                                      │     │
-│  │  └────────┘ └────────────────┘                                      │     │
-│  └────────────────────────────────────────────────────────────────────┘     │
+│  │  ┌────────┐ ┌──────────────┐ ┌──────────────┐ ┌────────────┐       │     │
+│  │  │ KCP    │ │ Perfetto     │ │ mongo-c-     │ │ BoringSSL  │       │     │
+│  │  │ikcp.c  │ │ tracing SDK  │ │ driver 1.29+ │ │ TLS/SSL    │       │     │
+│  │  └────────┘ └──────────────┘ └──────────────┘ └────────────┘       │     │
+│  │  ┌────────┐ ┌──────────────┐ ┌──────────────┐                      │     │
+│  │  │rapidjson││ gflags       │ │ Google Test  │                      │     │
+│  │  │JSON    ││ CLI flags    │ │ test framework│                      │     │
+│  │  └────────┘ └──────────────┘ └──────────────┘                      │     │
+│  └─────────────────────────────────────────────────────────────────────┘     │
 └──────────────────────────────────────────────────────────────────────────────┘
 
 
@@ -142,61 +259,137 @@ CloudEngine - 全景架构图
 
   main()
     │
-    ├─[1] WinSockGuard (WSAStartup)
+    +-[1] WinSockGuard (WSAStartup)
     │
-    ├─[2] ConfigManager::Instance().Load("resources/config")
-    │     ├─ engine.json  → EngineConfig { log, frame, scripts_dir }
-    │     └─ server.json  → ServerConfig { http, msgpack }
+    +-[2] ConfigManager::Instance().Load("resources/config")
+    │     + runtime/runtime.json -> RuntimeConfig { log, frame, scripts_dir, sandbox }
+    │     + server/server.json   -> ServerConfig { http, msgpack, admin_port, mongodb_*, db_service }
+    │     + client/client.json   -> ClientConfig { scripts_dir }
+    │     + MongoDB cluster configs (auto-loaded from paths in server.json)
+    │     + DbServiceConfig (from db_service.json)
     │
-    ├─[3] Engine::Instance().Init(engine_config)
-    │     ├─ InitLogger()             → Quill async logger
-    │     ├─ ProfilerManager::Init()  → Perfetto tracing
-    │     ├─ TimerManager::create_instance() + initialize()
-    │     ├─ EventLoop creation       → libevent event_base
-    │     ├─ ScriptVM creation        → luaL_newstate() + luaL_openlibs()
-    │     ├─ PhysicsEngineBridge::Initialize() → (no-op when disabled)
-    │     ├─ ScriptVM::DoDirectory("resources/script")
-    │     │     └─ each .lua file → ScriptVM::DoFile()
-    │     │           └─ may call require("net"), require("timer"), ...
-    │     │                 → luaopen_* functions registered via
-    │     │                   script::ExportAll() during VM init
-    │     └─ ScriptVM::InitScript()   → calls global Lua OnInit()
+    +-[3] Engine::Instance().Init(runtime_config, entry_scripts_dir, [external_loop])
+    │     + InitLogger()              -> Quill async logger
+    │     + ProfilerManager::Init()   -> Perfetto tracing
+    │     + TimerManager::create()    -> non-singleton, owned by Engine
+    │     + EventLoop creation        -> libevent event_base (if standalone mode)
+    │     + ScriptVM creation         -> luaL_newstate() + luaL_openlibs() + sandbox
+    │     + PhysicsEngineBridge::Init() -> (no-op when ENGINE_PHYSICS_ENABLED=OFF)
+    │     + ScriptVM::DoDirectory(resources/script/runtime)  -> common runtime scripts
+    │     + ScriptVM::DoDirectory(entry_scripts_dir)         -> role-specific scripts
+    │     + ScriptVM::InitScript()    -> calls global Lua OnInit()
     │
-    ├─[4] Engine::Run()
-    │     ├─ Engine::Start()
-    │     │     ├─ frame_timer_ = loop_->setInterval(frame_interval)
-    │     │     │     └─ each tick: Engine::FrameLoop()
-    │     │     ├─ sigint_watcher_ (Ctrl+C handler)
-    │     │     └─ sigterm_watcher_ (Linux only)
+    +-[4] Engine::Run()  [standalone mode]
+    │     + Engine::Start()
+    │     │     + frame_timer_ = loop_->setInterval(frame_interval)
+    │     │     │     -> each tick: Engine::FrameLoop()
+    │     │     + sigint_watcher_ (Ctrl+C handler)
+    │     │     + sigterm_watcher_ (Linux only)
     │     │
-    │     └─ loop_->Run()  →  blocks until Shutdown()
+    │     + loop_->Run()  -> blocks until Shutdown()
     │
-    └─[5] ShutdownLogger()
+    +-[5] Engine::Cleanup()  [ordered CleanupPhase]
+    │     + CleanupPhase::PhysicsShutdown   -> stop physics VM + thread
+    │     + CleanupPhase::DatabaseShutdown  -> stop DB threads + drain queues
+    │     + CleanupPhase::NetworkShutdown   -> [REQUIRES script_vm_ alive]
+    │     + CleanupPhase::TimerShutdown     -> [REQUIRES script_vm_ alive]
+    │     + CleanupPhase::ScriptDestroyed   -> lua_close + lifecycle hooks
+    │     + CleanupPhase::FinalLogs         -> GC stats, cleanup confirmation
+    │
+    +-[6] ShutdownLogger()
+
+
+     [Library mode (host provides EventLoop)]
+
+       engine.Init(config, entry_scripts, &external_loop);
+       while (running) {
+           external_loop_dispatch_pending();
+           engine.Tick();   // timer update + Lua update, frame-rate limited
+       }
+       engine.Cleanup();
 
 
 ════════════════════════════════════════════════════════════════════════════════
                         每帧循环 (Per-Frame Loop)
 ════════════════════════════════════════════════════════════════════════════════
 
-  frame_timer fires
+  frame_timer fires  [standalone]  OR  host calls Engine::Tick()  [library mode]
     │
-    └─ Engine::FrameLoop()
+    +- Engine::FrameLoop()
          │
-         ├─ TimerManager::update()
-         │     ├─ HrTimerManager::process_expired()
-         │     ├─ TimerWheel::advance()
-         │     └─ AlarmTimerManager::process_expired()
+         +- TimerManager::update()          [main thread timer mgr]
+         │     + HrTimerManager::process_expired()
+         │     + TimerWheel::advance()
+         │     + AlarmTimerManager::process_expired()
          │
-         ├─ PhysicsEngineBridge::Tick(frame_count, delta_time)  (if enabled)
+         +- PhysicsEngineBridge::FetchResult()
+         │     + Dequeue PhysicsFrameResult from physics thread SPSC
+         │     + Invoke PhysicsResultHandler callback
          │
-         └─ ScriptVM::UpdateScript()  →  calls global Lua OnTick()
-               │
-               └─ Lua scripts may:
-                     ├─ send/receive network data (net module)
-                     ├─ create/cancel timers (timer module)
-                     ├─ log messages (log module)
-                     ├─ pack/unpack msgpack (msgpack module)
-                     └─ import other modules (import module)
+         +- SpaceMessageRouter::ProcessPending()
+         │     + Deliver cross-space messages
+         │
+         +- SpaceManager::ForEachSpace()
+         │     + Each Space::Update(delta_ms) -> calls space's Lua OnTick()
+         │
+         +- ScriptVM::UpdateScript()         [main VM]
+         │     + calls global Lua OnTick()
+         │     + Lua scripts may:
+         │           + send/receive network data (net module)
+         │           + create/cancel timers (timer module)
+         │           + read/write entities (entity/space modules)
+         │           + query AOI visibility (aoi module)
+         │           + make RPC calls (rpc module)
+         │           + manage auth sessions (auth module)
+         │           + log messages (log module)
+         │           + pack/unpack msgpack (msgpack module)
+         │           + import modules (import module)
+         │
+         +- Metrics collection
+         +- Slow-frame detection (log warning if frame > threshold)
+
+
+════════════════════════════════════════════════════════════════════════════════
+                           线程模型 (Thread Model)
+════════════════════════════════════════════════════════════════════════════════
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │ MAIN THREAD (MT)                                                    │
+  │                                                                      │
+  │  Engine::EventLoop (libevent)                                        │
+  │    + FrameLoop (frame_timer)                                         │
+  │    + TimerManager update                                             │
+  │    + Network IO (TCP/HTTP/UDP/KCP servers + clients)                 │
+  │    + ScriptVM update (Lua OnTick)                                    │
+  │    + Entity/Space/SpaceMessageRouter                                 │
+  │    + RpcServer / RpcClient                                           │
+  │    + SessionManager (auth)                                           │
+  │    + AdminHttpServer                                                 │
+  └───────┬──────────────────┬───────────────────────────────┐          │
+          │ SPSC             │ SPSC                          │ SPSC     │
+          ▼                  ▼                               ▼          │
+  ┌───────────────┐  ┌───────────────┐  ┌──────────────────────────────┐│
+  │ PHYSICS       │  │ DB THREAD     │  │ ... DB THREAD N              ││
+  │ THREAD        │  │ [0]           │  │                              ││
+  │               │  │               │  │ Each DBThread:               ││
+  │ Own EventLoop │  │ Own EventLoop │  │  Own EventLoop               ││
+  │ Own TimerMgr  │  │ Own TimerMgr  │  │  Own TimerManager            ││
+  │ Own PhysicsVM │  │ Own DBScriptVM│  │  Own DBScriptVM              ││
+  │ PhysicsWorld  │  │ MongoClient   │  │  MongoClient (exclusive)     ││
+  │ (exclusive)   │  │ (exclusive)   │  │                              ││
+  │               │  │               │  │ SPSC: MT<->DBT (req/resp)    ││
+  │ SPSC: MT<->PT │  │ SPSC: MT<->DBT│  │ moodycamel::ConcurrentQueue  ││
+  │ moodycamel    │  │ moodycamel    │  │                              ││
+  │ ConcurrentQ   │  │ ConcurrentQ   │  │                              ││
+  │               │  │               │  │                              ││
+  │ CV wake on    │  │               │  │                              ││
+  │ command enq   │  │               │  │                              ││
+  └───────────────┘  └───────────────┘  └──────────────────────────────┘│
+                                                                         │
+  All cross-thread communication via SPSC lock-free queues.              │
+  No shared mutable state between threads.                              │
+  Each thread has its own TimerManager (non-singleton, injectable).     │
+  Each thread's timers are updated in its own EventLoop.                │
 
 
 ════════════════════════════════════════════════════════════════════════════════
@@ -204,32 +397,67 @@ CloudEngine - 全景架构图
 ════════════════════════════════════════════════════════════════════════════════
 
   Engine
-   ├─ owns → ScriptVM
-   ├─ owns → EventLoop (or uses external)
-   ├─ depends on → ConfigManager (singleton)
-   ├─ depends on → TimerManager (singleton)
-   ├─ depends on → PhysicsEngineBridge (singleton)
-   └─ depends on → ProfilerManager (singleton)
+   + owns -> ScriptVM (main Lua VM)
+   + owns -> TimerManager (main thread, injectable)
+   + owns -> EventLoop (in standalone mode) or uses external (library mode)
+   + owns -> AdminHttpServer
+   + owns -> ScriptReloader + FileWatcher
+   + depends on -> ConfigManager (singleton)
+   + depends on -> PhysicsEngineBridge (singleton)
+   + depends on -> ProfilerManager (singleton)
+   + depends on -> EntityManager (singleton)
+   + depends on -> SpaceManager (singleton)
 
-  ScriptVM
-   ├─ owns → lua_State* (Lua VM)
-   ├─ owns → ScriptImporter (module loader)
-   ├─ owns → CustomPtrStore (void* array)
-   └─ registers → script::ExportAll() → 9 Lua modules
+  ScriptVM (one per Space + one main VM)
+   + owns -> lua_State* (Lua VM)
+   + owns -> ScriptImporter (module loader)
+   + owns -> CustomPtrStore (void* array)
+   + owns -> CoroutineScheduler
+   + owns -> LuaSandbox
+   + registers -> 20+ Lua modules via script::ExportAll()
+
+  Space (isolated game world)
+   + owns -> ScriptVM (per-space Lua VM)
+   + owns -> Entity set
+   + owns -> SequentialIdAllocator
+   + owns -> Player connection map
+   + uses -> SpaceMessageRouter for cross-space comms
+
+  Entity
+   + owns -> AttributeTable
+   + owns -> Components (C++ type-erased + Lua named)
+   + owns -> Timer references (auto-cancel on Destroy)
+   + linked -> TCPConn (optional, for player entities)
+   + linked -> PhysicsBody (optional, for physics-simulated entities)
+
+  DBThread (per-thread, ENGINE_MONGODB_ENABLED)
+   + owns -> EventLoop (dedicated std::thread)
+   + owns -> TimerManager (per-thread)
+   + owns -> DBScriptVM (per-thread Lua VM)
+   + borrows -> MongoClient from MongoClientPool (exclusive pop/push)
+   + SPSC queues -> moodycamel::ConcurrentQueue<DbRequest/Response>
+
+  PhysicsThread (ENGINE_PHYSICS_ENABLED)
+   + owns -> EventLoop (dedicated std::thread)
+   + owns -> TimerManager (per-thread)
+   + owns -> PhysicsWorld (JoltPhysics)
+   + owns -> PhysicsVM (Lua VM for collision callbacks)
+   + condition_variable wake on command enqueue
+   + SPSC queues -> moodycamel::ConcurrentQueue<PhysicsCommand/FrameResult>
 
   EventLoop (libevent wrapper)
-   ├─ used by → TcpServer, TcpClient, HttpServer, HttpcClient
-   ├─ used by → UdpServer, UdpClient
-   ├─ used by → KcpServer, KcpSyncClient
-   ├─ used by → InvokeTimer (frame timer)
-   └─ used by → SignalEventWatcher
+   + used by -> TcpServer, TcpClient, HttpServer, HttpcClient
+   + used by -> UdpServer, UdpClient
+   + used by -> KcpServer, KcpSyncClient
+   + used by -> InvokeTimer (frame timer)
+   + used by -> SignalEventWatcher
 
   GameClient (optional C API)
-   ├─ wraps → Engine (singleton)
-   ├─ exposes → TCP, UDP, KCP, HTTP via opaque handles
-   ├─ exposes → Timer (timeout, interval)
-   ├─ exposes → Logging (6 levels)
-   └─ exposes → Script (DoString, DoFile, RegisterFunction)
+   + wraps -> Engine (singleton)
+   + exposes -> TCP, UDP, KCP, HTTP via opaque handles
+   + exposes -> Timer (timeout, interval)
+   + exposes -> Logging (6 levels)
+   + exposes -> Script (DoString, DoFile, RegisterFunction)
 
 
 ════════════════════════════════════════════════════════════════════════════════
@@ -237,94 +465,283 @@ CloudEngine - 全景架构图
 ════════════════════════════════════════════════════════════════════════════════
 
   src/
-  ├─ CMakeLists.txt              ← 主构建入口
-  ├─ server/
-  │   ├─ CMakeLists.txt
-  │   └─ main.cc                 ← 独立服务器入口
+  +- CMakeLists.txt              <- 主构建入口
+  +- server/
+  │   +- CMakeLists.txt
+  │   +- main.cc                 <- 独立服务器入口
   │
-  ├─ runtime/
-  │   ├─ CMakeLists.txt          ← CloudEngine.dll 构建
-  │   ├─ engine/
-  │   │   ├─ engine.h / .cc      ← 引擎核心（单例）
-  │   │   └─ CMakeLists.txt
-  │   ├─ config/
-  │   │   ├─ config.h / .cc      ← 配置管理器
-  │   ├─ core/
-  │   │   ├─ log/                ← 日志系统 (Quill)
-  │   │   └─ timer/              ← 高精度定时器
-  │   │       ├─ timer_manager.h/.cc
-  │   │       ├─ hr_timer.h/.cc
-  │   │       ├─ timer_wheel.h/.cc
-  │   │       └─ alarm_timer.h/.cc
-  │   ├─ vm/
-  │   │   ├─ vm.h / .cc          ← Lua VM 封装
-  │   │   ├─ script_importer.h/.cc
-  │   │   └─ custom_ptr_store.h/.cc
-  │   ├─ script/
-  │   │   ├─ script_bind.cc      ← 统一注册入口
-  │   │   ├─ net_bind.cc         ← net 基础模块
-  │   │   ├─ net_http_bind.cc    ← HTTP 客户端
-  │   │   ├─ net_tcp_client_bind.cc  ← TCP 客户端
-  │   │   ├─ net_tcp_server_bind.cc  ← TCP 服务器
-  │   │   ├─ net_udp_client_bind.cc
-  │   │   ├─ net_udp_server_bind.cc
-  │   │   ├─ net_kcp_client_bind.cc
-  │   │   ├─ net_kcp_server_bind.cc
-  │   │   ├─ timer_bind.cc
-  │   │   ├─ log_bind.cc
-  │   │   ├─ msgpack_bind.cc
-  │   │   └─ import_bind.cc
-  │   ├─ evpp/                   ← 网络库（内联）
-  │   │   ├─ event_loop.h/.cc
-  │   │   ├─ tcp_server/client/conn.h/.cc
-  │   │   ├─ http/
-  │   │   │   ├─ http_server.h/.cc
-  │   │   │   ├─ service.h/.cc
-  │   │   │   └─ context.h/.cc
-  │   │   ├─ httpc/
-  │   │   │   ├─ conn.h/.cc
-  │   │   │   ├─ conn_pool.h/.cc
-  │   │   │   ├─ request.h/.cc
-  │   │   │   ├─ response.h/.cc
-  │   │   │   └─ ssl.h/.cc
-  │   │   ├─ udp/
-  │   │   │   ├─ udp_server.h/.cc
-  │   │   │   └─ sync_udp_client.h/.cc
-  │   │   └─ kcp/
-  │   │       ├─ kcp_server.h/.cc
-  │   │       ├─ sync_kcp_client.h/.cc
-  │   │       └─ kcp_message.h
-  │   ├─ physics/
-  │   │   ├─ physics_engine_bridge.h/.cc
-  │   │   ├─ physics_world/thread/system.h/.cc
-  │   │   └─ ...
-  │   ├─ profiler/
-  │   │   └─ profiler_core.h/.cc
-  │   └─ thirdparty/
-  │       ├─ libevent/
-  │       ├─ lua/lua/
-  │       ├─ quill/quill/
-  │       ├─ glaze/glaze/
-  │       ├─ kcp/
-  │       ├─ concurrentqueue/
-  │       └─ perfetto/
+  +- runtime/
+  │   +- CMakeLists.txt          <- CloudEngine.dll 构建
+  │   +- engine/
+  │   │   +- engine.h / .cc      <- 引擎核心（单例）
+  │   │   +- CMakeLists.txt
+  │   +- config/
+  │   │   +- config.h            <- 配置管理器 + 所有 config structs
+  │   │   +- config_constants.h  <- 默认常量
+  │   +- core/
+  │   │   +- engine_api.h        <- DLL export/import macros
+  │   │   +- log/                <- 日志系统 (Quill)
+  │   │   +- mem/                <- MEM_NEW/DELETE/MALLOC/FREE macros + stats
+  │   │   +- timer/              <- 高精度定时器 (非单例, 可注入)
+  │   │       +- timer_manager.h/.cc  <- TimerManager 主 API
+  │   │       +- hr_timer.h           <- 高精度定时器 (ns)
+  │   │       +- timer_wheel.h        <- 时间轮定时器 (ms, 批量)
+  │   │       +- alarm_timer.h        <- 闹钟定时器
+  │   │       +- timer_core.h         <- 定时器核心类型
+  │   │       +- clock_source.h       <- 时钟源管理
+  │   │       +- timer_queue.h        <- 定时器队列
+  │   │       +- timer.h              <- 统一头文件
+  │   +- vm/
+  │   │   +- vm.h / .cc              <- ScriptVM (Lua VM RAII wrapper)
+  │   │   +- script_importer.h/.cc   <- Lua module loader
+  │   │   +- script_reloader.h/.cc   <- 热重载 (file watch + debounce + rollback)
+  │   │   +- file_watcher.h/.cc      <- 文件监控
+  │   │   +- coroutine_scheduler.h/.cc <- Lua 协程调度器
+  │   │   +- sandbox.h/.cc           <- Lua 沙箱 (Full/Restricted/Strict)
+  │   │   +- custom_ptr_store.h/.cc  <- C++指针 -> Lua 映射存储
+  │   │   +- lua_error_handler.h     <- 统一 Lua 错误处理 + traceback
+  │   +- script/
+  │   │   +- script_bind.h/.cc       <- 统一注册入口 ExportAll(vm, tm)
+  │   │   +- net_bind.h/.cc          <- 网络基础模块
+  │   │   +- net_http_bind.h/.cc     <- HTTP 客户端
+  │   │   +- net_tcp_client_bind.h/.cc  <- TCP 客户端
+  │   │   +- net_tcp_server_bind.h/.cc  <- TCP 服务器
+  │   │   +- net_udp_client_bind.h/.cc
+  │   │   +- net_udp_server_bind.h/.cc
+  │   │   +- net_kcp_client_bind.h/.cc
+  │   │   +- net_kcp_server_bind.h/.cc
+  │   │   +- net_lifetime.h/.cc     <- 网络对象生命周期管理
+  │   │   +- timer_bind.h/.cc       <- 定时器绑定
+  │   │   +- log_bind.h/.cc         <- 日志绑定
+  │   │   +- msgpack_bind.h/.cc     <- MessagePack 绑定
+  │   │   +- import_bind.h/.cc      <- import 模块绑定
+  │   │   +- entity_bind.h/.cc      <- Entity API 绑定
+  │   │   +- space_bind.h/.cc       <- Space API 绑定
+  │   │   +- aoi_bind.h/.cc         <- AOI 绑定
+  │   │   +- auth_bind.h/.cc        <- 认证绑定
+  │   │   +- rpc_bind.h/.cc         <- RPC 绑定
+  │   │   +- orm_bind.h/.cc         <- ORM 绑定
+  │   │   +- mem_bind.h/.cc         <- 内存统计绑定
+  │   │   +- bind_util.h/.cc        <- 绑定工具函数
+  │   +- entity/
+  │   │   +- entity.h / .cc         <- Entity (属性 + 组件 + 连接 + 物理 + 定时器)
+  │   │   +- entity_id.h            <- EntityId + SequentialIdAllocator
+  │   │   +- entity_manager.h/.cc   <- EntityManager (单例, O(1)查询)
+  │   │   +- attribute.h            <- AttributeTable
+  │   +- space/
+  │   │   +- space.h / .cc          <- Space (独立游戏世界, 自有 VM + Entity)
+  │   │   +- space_manager.h/.cc    <- SpaceManager (单例)
+  │   │   +- space_message.h/.cc    <- SpaceMessageRouter (跨空间消息, SPSC)
+  │   │   +- connection_router.h/.cc <- 连接路由
+  │   +- aoi/
+  │   │   +- aoi_manager.h/.cc      <- AOIManager (AOI 半径 + 进入/离开事件)
+  │   │   +- spatial_index.h/.cc    <- SpatialGrid (空间网格)
+  │   +- network/
+  │   │   +- length_prefixed_codec.h/.cc  <- 长度前缀编解码器
+  │   +- auth/
+  │   │   +- auth_backend.h/.cc     <- AuthBackend (认证后端接口)
+  │   │   +- auth_protocol.h        <- SessionInfo / AuthCredential
+  │   │   +- session_manager.h/.cc  <- SessionManager (单例)
+  │   +- rpc/
+  │   │   +- rpc_server.h/.cc       <- RpcServer (服务注册 + 线程安全 dispatch)
+  │   │   +- rpc_client.h/.cc       <- RpcClient (异步 RPC 调用)
+  │   │   +- rpc_protocol.h         <- RpcRequest / RpcResponse 协议
+  │   +- database/
+  │   │   +- cache.h                <- 缓存接口
+  │   │   +- db_backend.h           <- 数据库后端接口
+  │   │   +- orm.h / .cc            <- C++ ORM 层
+  │   │   +- mongo/                 <- mongo-c-driver C++ wrapper (60+ 文件)
+  │   │   │   +- mongo_client.h/.cc, mongo_client_pool.h/.cc
+  │   │   │   +- mongo_cursor, mongo_bson, mongo_bulk, mongo_session
+  │   │   │   +- mongo_gridfs, mongo_change_stream, mongo_encryption
+  │   │   │   +- mongo_uri, mongo_oid, mongo_topology, mongo_ssl
+  │   │   │   +- mongo_error, mongo_log, mongo_init, ...
+  │   │   +- mongo_bind/            <- MongoDB Lua 绑定 (60+ 文件)
+  │   │   │   +- mongo_bind.h/.cc   <- 主注册入口
+  │   │   │   +- bind_client, bind_collection, bind_database, bind_cursor
+  │   │   │   +- bind_bson_document, bind_bson_iter, bind_bson_vector
+  │   │   │   +- bind_bulkwrite, bind_change_stream, bind_gridfs
+  │   │   │   +- bind_session, bind_ssl, bind_encryption, ...
+  │   │   +- data_service/
+  │   │   │   +- database_service.h/.cc    <- 数据库服务
+  │   │   │   +- db_thread.h/.cc           <- 每线程 MongoDB worker
+  │   │   │   +- db_script_vm.h/.cc        <- 每线程 Lua VM for DB scripts
+  │   │   │   +- db_request.h              <- DbRequest / DbResponse
+  │   │   │   +- db_service_config.h       <- DbServiceConfig
+  │   │   │   +- db_service_main_bind.h/.cc <- DB 服务 Lua 绑定
+  │   │   │   +- module_access.h           <- 内部 header guard
+  │   │   +- service/               <- 服务层文档
+  │   +- physics/
+  │   │   +- physics_engine_bridge.h/.cc  <- 物理引擎桥接（外部 API）
+  │   │   +- physics_system.h/.cc         <- 物理系统管理
+  │   │   +- physics_thread.h/.cc         <- 专用物理线程 (SPSC)
+  │   │   +- physics_world.h/.cc          <- JoltPhysics 世界封装
+  │   │   +- physics_vm.h/.cc             <- 物理线程 Lua VM
+  │   │   +- physics_commands.h/.cc       <- 物理命令 (SPSC)
+  │   │   +- physics_diff.h/.cc           <- 物理状态差量
+  │   │   +- physics_config.h/.cc         <- 物理配置
+  │   │   +- physics_assets.h/.cc         <- 物理资源加载
+  │   │   +- physics_materials.h/.cc      <- 材质表
+  │   │   +- physics_layers.h/.cc         <- 层配置
+  │   │   +- physics_bindings.h/.cc       <- 物理 Lua 绑定
+  │   │   +- physics_log.h                <- 物理日志
+  │   +- monitoring/
+  │   │   +- admin_http.h/.cc      <- AdminHttpServer (健康/状态/指标)
+  │   │   +- metrics.h/.cc         <- 指标 (计数器/仪表/直方图)
+  │   +- profiler/
+  │   │   +- profiler_core.h/.cc   <- Perfetto 追踪后端 + 宏
+  │   +- evpp/                     <- 网络库（内联）
+  │   │   +- event_loop.h/.cc
+  │   │   +- tcp_server/client/conn.h/.cc
+  │   │   +- http/
+  │   │   │   +- http_server.h/.cc, service.h/.cc, context.h/.cc
+  │   │   +- httpc/
+  │   │   │   +- conn.h/.cc, conn_pool.h/.cc, request.h/.cc
+  │   │   │   +- response.h/.cc, ssl.h/.cc
+  │   │   +- udp/
+  │   │   │   +- udp_server.h/.cc, sync_udp_client.h/.cc
+  │   │   +- kcp/
+  │   │   │   +- kcp_server.h/.cc, sync_kcp_client.h/.cc, kcp_message.h
+  │   │   +- evpphttp/             <- HTTP 协议工具
   │
-  ├─ client/
-  │   ├─ CMakeLists.txt          ← GameClient.dll 构建
-  │   ├─ include/
-  │   │   └─ client.h            ← C API 头文件
-  │   └─ src/
-  │       ├─ client.cpp          ← 引擎生命周期
-  │       ├─ client_internal.h   ← C++ 内部实现
-  │       ├─ client_log.cpp      ← 日志桥接
-  │       ├─ client_timer.cpp    ← 定时器桥接
-  │       ├─ client_net.cpp      ← TCP 客户端/服务器桥接
-  │       ├─ client_udp.cpp      ← UDP 桥接
-  │       └─ client_kcp.cpp      ← KCP 桥接
+  +- thirdparty/                   <- 第三方库
+  │   +- libevent/                 <- 事件循环
+  │   +- lua/src/                  <- Lua 5.5.0 (标准目录布局)
+  │   +- quill/                    <- 异步日志
+  │   +- glaze/                    <- JSON 反射 (C++23)
+  │   +- kcp/                      <- KCP 可靠 UDP
+  │   +- concurrentqueue/          <- 无锁 MPMC/SPSC 队列
+  │   +- perfetto/                 <- 追踪 SDK
+  │   +- boringssl/                <- TLS/SSL
+  │   +- mongo-c-driver/           <- MongoDB C 驱动 1.29+
+  │   +- rapidjson/                <- JSON 解析
+  │   +- gflags/                   <- CLI 参数解析
+  │   +- gtest/                    <- 测试框架
+  │   +- JoltPhysics/              <- 物理引擎 v5.5.1
+  │   +- mysql/                    <- MySQL 客户端
+  │   +- memcached/                <- Memcached 客户端
+  │   +- libhashkit/               <- 哈希工具库
+  │   +- win32code/                <- Windows 辅助
+  │   +- wininclude/               <- Windows 头文件
   │
-  └─ tests/
-      ├─ unit/                   ← 单元测试
-      ├─ smoke/                  ← 冒烟测试
-      ├─ apps/evmc/              ← memcache 客户端
-      ├─ apps/evnsq/             ← NSQ 客户端
-      └─ ...
+  +- client/
+  │   +- CMakeLists.txt            <- GameClient.dll 构建
+  │   +- include/
+  │   │   +- client.h              <- C API 头文件
+  │   +- src/
+  │       +- client.cpp            <- 引擎生命周期
+  │       +- client_internal.h     <- C++ 内部实现
+  │       +- client_log.cpp        <- 日志桥接
+  │       +- client_timer.cpp      <- 定时器桥接
+  │       +- client_net.cpp        <- TCP 客户端/服务器桥接
+  │       +- client_udp.cpp        <- UDP 桥接
+  │       +- client_kcp.cpp        <- KCP 桥接
+  │
+  +- tests/
+      +- unit/                     <- 单元测试 (30+ 目录)
+      │   +- aoi, auth, buffer, client_api, config, coroutine
+      │   +- database, engine, entity, hotreload, monitoring
+      │   +- network, rpc, script, space, timer, vm
+      +- integration/              <- 集成测试
+      │   +- client_api, entity, network, physics, space
+      +- performance/              <- 性能测试
+      +- fuzz/                     <- 模糊测试
+      +- smoke/                    <- 冒烟测试
+      +- lua/                      <- Lua 测试
+      │   +- harness, import, log, msgpack, net, timer, lua_runner
+      +- test_utils/               <- 测试工具
+      +- fixtures/                 <- 测试固定数据
+      +- fakes/                    <- 测试替身
+
+
+  resources/
+  +- config/
+  │   +- runtime/    runtime.json  <- 运行时配置
+  │   +- server/     server.json   <- 服务器配置
+  │   +- client/     client.json   <- 客户端配置
+  +- script/
+  │   +- runtime/common/           <- 通用运行时脚本
+  │   +- runtime/net/              <- 网络脚本
+  │   +- server/                   <- 服务器入口脚本
+  │   +- client/                   <- 客户端入口脚本
+  │   +- db_service/               <- 数据库服务脚本
+  │   +- tests/harness/            <- 测试辅助脚本
+  +- physics/
+  │   +- data/                     <- 物理场景数据
+  │   +- configs/                  <- 物理配置
+  +- api/                          <- Lua API 文档 (20+ 模块)
+      +- aoi, auth, config, db_service, engine, entity
+      +- import, log, mem, mongodb, msgpack, net, orm
+      +- physics, profiler, rpc, script_vm, space, timer
+      +- mongodb/bson, mongodb/mongoc
+      +- net/http, net/kcp_client, net/kcp_server
+      +- net/tcp_client, net/tcp_server, net/udp_client, net/udp_server
+
+
+════════════════════════════════════════════════════════════════════════════════
+                      Lua 模块一览 (Lua Module Index)
+════════════════════════════════════════════════════════════════════════════════
+
+  模块            C++ 注册函数             Lua 侧路径
+  ─────          ─────────────           ────────────
+  net             ExportNet              require("net")          网络基础
+  net.http        ExportNet              net.http                 HTTP 客户端
+  net.tcp_client  ExportNet              net.tcp_client           TCP 客户端
+  net.tcp_server  ExportNet              net.tcp_server           TCP 服务器
+  net.udp_client  ExportNet              net.udp_client           UDP 客户端
+  net.udp_server  ExportNet              net.udp_server           UDP 服务器
+  net.kcp_client  ExportNet              net.kcp_client           KCP 客户端
+  net.kcp_server  ExportNet              net.kcp_server           KCP 服务器
+  timer           ExportTimer(vm,tm)     timer                    定时器
+  log             ExportLog              log                      日志
+  msgpack         ExportMsgPack          msgpack                  MessagePack
+  import          (builtin)              import                   模块导入
+  entity          ExportEntity           entity                   Entity CRUD
+  space           ExportSpace            space                    Space 管理
+  aoi             ExportAOI              aoi                      AOI 系统
+  auth            ExportAuth             auth                     认证/会话
+  rpc             ExportRpc              rpc                      RPC 服务/客户端
+  orm             ExportOrm              orm                      ORM (MongoDB)
+  mongodb         ExportMongo            mongodb                  MongoDB 原生 API
+  db_service      ExportDbService        db_service               DB 服务控制
+  mem             ExportMem              mem                      内存统计 (debug)
+  physics         (physics_bindings)     physics                  物理系统 (optional)
+  profiler         (builtin)             profiler                 Perfetto 追踪 (optional)
+
+
+════════════════════════════════════════════════════════════════════════════════
+                      配置架构 (Configuration Architecture)
+════════════════════════════════════════════════════════════════════════════════
+
+  resources/config/
+  +- runtime/runtime.json     -> RuntimeConfig  { resource_dir, log, frame, scripts_dir, sandbox }
+  +- server/server.json       -> ServerConfig   { http, msgpack, admin_port, mongodb_dev, mongodb_public, db_service }
+  +- client/client.json       -> ClientConfig   { scripts_dir }
+  +- server/db_service.json   -> DbServiceConfig { threads, pool, queue sizes, log, scripts }
+
+  ConfigManager features:
+    - glaze auto-reflection (C++23) for JSON <-> struct mapping
+    - Thread-safe config access (shared_mutex)
+    - Hot-reload with registered callbacks (RegisterReloadCallback)
+    - MongoDB cluster config auto-loading (from paths in server.json)
+    - Config validation on load (preserves old values on failure)
+
+  Config struct hierarchy:
+    RuntimeConfig
+     + LogConfig (dir, level, rotation_size_mb, max_backup_files, format_pattern,
+     │             rotation_frequency, rotation_interval, rotation_time_daily)
+     + FrameConfig (target_fps, interval_ms, slow_threshold_multiplier)
+     + sandbox_level, physics_scene_path
+
+    ServerConfig
+     + HttpConfig (timeout_sec)
+     + MsgpackConfig (max_nesting_depth, max_payload_size)
+     + admin_port, mongodb_dev, mongodb_public, db_service
+
+    MongoDbConfig (full cluster topology)
+     + MongoDbConnectionConfig (uri, hosts, replicaSet, directConnection, options)
+     + MongoDbNodeConfig[] (id, name, host, port, priority, role, config, dbPath, ...)
+     + MongoDbSecurityConfig (authentication, tls, bindIp)
+     + MongoDbStorageConfig (engine, directoryPerDB, compression, journal)
+     + MongoDbScriptsConfig (start, stop, status, init, shell)
+     + MongoDbDriversConfig (cpp, python, nodejs, go, java)
