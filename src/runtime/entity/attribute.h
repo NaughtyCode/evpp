@@ -1,9 +1,11 @@
 #pragma once
 
+#include <algorithm>
 #include <functional>
 #include <string>
 #include <unordered_map>
 #include <variant>
+#include <vector>
 
 #include "entity_id.h"
 
@@ -51,13 +53,30 @@ public:
 		return attrs_.find(key) != attrs_.end();
 	}
 
-	void Remove(const std::string& key) {
-		attrs_.erase(key);
+	bool Remove(const std::string& key) {
+		return attrs_.erase(key) != 0;
 	}
 
 	void Clear() { attrs_.clear(); }
 
 	size_t Count() const { return attrs_.size(); }
+
+	std::vector<std::string> Keys() const {
+		std::vector<std::string> keys;
+		keys.reserve(attrs_.size());
+		for (const auto& pair : attrs_) {
+			keys.push_back(pair.first);
+		}
+		std::sort(keys.begin(), keys.end());
+		return keys;
+	}
+
+	void ForEach(std::function<void(const std::string&, const AttrValue&)> callback) const {
+		if (!callback) return;
+		for (const auto& pair : attrs_) {
+			callback(pair.first, pair.second);
+		}
+	}
 
 private:
 	EntityId owner_id_ = kInvalidEntityId;

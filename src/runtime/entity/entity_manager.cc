@@ -62,15 +62,15 @@ Entity* EntityManager::GetEntity(EntityId id) {
 	return it != entities_.end() ? it->second.get() : nullptr;
 }
 
+bool EntityManager::OwnsEntity(const Entity& entity) const {
+	auto it = entities_.find(entity.GetId());
+	return it != entities_.end() && it->second.get() == &entity;
+}
+
 void EntityManager::DestroyEntity(EntityId id) {
 	ENGINE_PROFILE_ENTITY_DESTROY();
 	auto it = entities_.find(id);
 	if (it == entities_.end()) return;
-	uint32_t body_id = it->second->GetPhysicsBodyId();
-	if (body_id != Entity::kInvalidPhysicsBodyId) {
-		UnregisterPhysicsBodyBinding(body_id);
-	}
-	NotifyEntityDestroying(*it->second);
 	it->second->Destroy();
 	entities_.erase(it);
 }
@@ -93,13 +93,19 @@ void EntityManager::DestroyAll() {
 Entity* EntityManager::FindByConnection(const evpp::TCPConnPtr& conn) {
 	ENGINE_PROFILE_SCOPE("engine.entity", "FindByConnection");
 	if (!conn) return nullptr;
-	auto it = conn_to_entity_.find(conn.get());
+	return FindByConnection(conn.get());
+}
+
+Entity* EntityManager::FindByConnection(const evpp::TCPConn* raw_conn) {
+	ENGINE_PROFILE_SCOPE("engine.entity", "FindByConnectionRaw");
+	if (!raw_conn) return nullptr;
+	auto it = conn_to_entity_.find(raw_conn);
 	if (it == conn_to_entity_.end()) return nullptr;
 	return GetEntity(it->second);
 }
 
-void EntityManager::RegisterConnectionBinding(const evpp::TCPConn* raw_conn, EntityId id) {
-	if (!raw_conn || GetEntity(id) == nullptr) return;
+bool EntityManager::RegisterConnectionBinding(const evpp::TCPConn* raw_conn, EntityId id) {
+	if (!raw_conn || GetEntity(id) == nullptr) return false;
 	auto existing = conn_to_entity_.find(raw_conn);
 	if (existing != conn_to_entity_.end() && existing->second != id) {
 		if (auto* old_entity = GetEntity(existing->second)) {
@@ -107,6 +113,7 @@ void EntityManager::RegisterConnectionBinding(const evpp::TCPConn* raw_conn, Ent
 		}
 	}
 	conn_to_entity_[raw_conn] = id;
+	return true;
 }
 
 void EntityManager::UnregisterConnectionBinding(const evpp::TCPConn* raw_conn) {

@@ -43,9 +43,13 @@ public:
 	// Lifecycle
 	EntityId GetId() const { return id_; }
 	EntityState GetState() const { return state_; }
+	bool IsCreated() const { return state_ == EntityState::Created; }
+	bool IsActive() const { return state_ == EntityState::Active; }
+	bool IsSuspended() const { return state_ == EntityState::Suspended; }
+	bool IsDestroyed() const { return state_ == EntityState::Destroyed; }
 	void Activate();
 	void Suspend();
-	void Destroy();  // cancels timers, unbinds connection, clears components
+	void Destroy();  // cancels timers, unbinds connection, clears attrs/components
 
 	// Attributes
 	AttributeTable& Attrs() { return attrs_; }
@@ -65,6 +69,11 @@ public:
 		auto it = components_.find(std::type_index(typeid(T)));
 		if (it == components_.end()) return nullptr;
 		return static_cast<T*>(it->second.get());
+	}
+
+	template <typename T>
+	bool HasComponent() const {
+		return components_.find(std::type_index(typeid(T))) != components_.end();
 	}
 
 	template <typename T>
@@ -115,6 +124,7 @@ private:
 	EntityState state_ = EntityState::Created;
 	AttributeTable attrs_;
 	evpp::TCPConnPtr connection_;
+	bool connection_registered_ = false;
 	std::vector<TimerId> owned_timers_;
 	TimerManager* timer_mgr_ = nullptr;
 

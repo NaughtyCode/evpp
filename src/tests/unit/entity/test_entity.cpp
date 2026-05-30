@@ -80,8 +80,19 @@ TEST_CASE("AttributeTable remove", "[entity][attribute]") {
 	AttributeTable attrs;
 	attrs.Set("x", AttrValue{int64_t(1)});
 	REQUIRE(attrs.Has("x"));
-	attrs.Remove("x");
+	REQUIRE(attrs.Remove("x"));
 	REQUIRE_FALSE(attrs.Has("x"));
+	REQUIRE_FALSE(attrs.Remove("x"));
+}
+
+TEST_CASE("AttributeTable keys are sorted for deterministic iteration", "[entity][attribute]") {
+	AttributeTable attrs;
+	attrs.Set("z", AttrValue{int64_t(1)});
+	attrs.Set("a", AttrValue{int64_t(2)});
+	attrs.Set("m", AttrValue{int64_t(3)});
+
+	auto keys = attrs.Keys();
+	REQUIRE(keys == std::vector<std::string>{"a", "m", "z"});
 }
 
 TEST_CASE("AttributeTable change callback", "[entity][attribute]") {
@@ -163,6 +174,19 @@ TEST_CASE("Entity attribute access", "[entity][lifecycle]") {
 	REQUIRE(std::get<std::string>(e.Attrs().Get("name")) == "test_entity");
 	REQUIRE(std::get<int64_t>(e.Attrs().Get("level")) == 5);
 }
+
+TEST_CASE("Entity Destroy clears attributes and state helpers reflect lifecycle", "[entity][lifecycle]") {
+	Entity e(1);
+	REQUIRE(e.IsCreated());
+	e.Activate();
+	REQUIRE(e.IsActive());
+	e.Attrs().Set("name", AttrValue{std::string("temporary")});
+	REQUIRE(e.Attrs().Count() == 1);
+
+	e.Destroy();
+	REQUIRE(e.IsDestroyed());
+	REQUIRE(e.Attrs().Count() == 0);
+}
 // Entity Component tests
 
 struct TestComponent {
@@ -180,9 +204,11 @@ TEST_CASE("Entity add, get, and remove typed component", "[entity][component]") 
 	auto* found = e.GetComponent<TestComponent>();
 	REQUIRE(found != nullptr);
 	REQUIRE(found->value == 42);
+	REQUIRE(e.HasComponent<TestComponent>());
 
 	e.RemoveComponent<TestComponent>();
 	REQUIRE(e.GetComponent<TestComponent>() == nullptr);
+	REQUIRE_FALSE(e.HasComponent<TestComponent>());
 }
 
 TEST_CASE("Entity Lua component add and get", "[entity][component]") {
@@ -273,6 +299,42 @@ TEST_CASE("EntityManager creates and retrieves entities", "[entity][manager]") {
 
 	mgr.DestroyAll();
 	REQUIRE(mgr.Count() == 0);
+}
+
+TEST_CASE("EntityManager destroy hook fires once for manager-owned entities only",
+		  "[entity][manager][lifecycle]") {
+	auto& mgr = EntityManager::Instance();
+	mgr.DestroyAll();
+
+	int calls = 0;
+	EntityId last_id = kInvalidEntityId;
+	mgr.SetDestroyHook([&](Entity& e) {
+		++calls;
+		last_id = e.GetId();
+	});
+
+	Entity unmanaged(1000);
+	unmanaged.Destroy();
+	REQUIRE(calls == 0);
+
+	auto* direct = mgr.CreateEntity();
+	REQUIRE(direct != nullptr);
+	EntityId direct_id = direct->GetId();
+	direct->Destroy();
+	REQUIRE(calls == 1);
+	REQUIRE(last_id == direct_id);
+	direct->Destroy();
+	REQUIRE(calls == 1);
+
+	auto* managed = mgr.CreateEntity();
+	REQUIRE(managed != nullptr);
+	EntityId managed_id = managed->GetId();
+	mgr.DestroyEntity(managed_id);
+	REQUIRE(calls == 2);
+	REQUIRE(last_id == managed_id);
+
+	mgr.SetDestroyHook({});
+	mgr.DestroyAll();
 }
 
 TEST_CASE("EntityManager DestroyEntity removes single entity", "[entity][manager]") {
@@ -408,6 +470,28 @@ TEST_CASE("EntityManager connection binding and lookup", "[entity][manager]") {
 	mgr.DestroyAll();
 }
 
+TEST_CASE("Unmanaged entity connection binding does not touch EntityManager index",
+		  "[entity][manager][connection]") {
+	auto& mgr = EntityManager::Instance();
+	mgr.DestroyAll();
+
+	auto conn = std::make_shared<evpp::TCPConn>(nullptr, "entity-test", -1, "local", "remote", 1);
+	Entity unmanaged(5000);
+	unmanaged.BindConnection(conn);
+	REQUIRE(mgr.FindByConnection(conn) == nullptr);
+
+	auto* managed = mgr.CreateEntity();
+	REQUIRE(managed != nullptr);
+	managed->BindConnection(conn);
+	REQUIRE(mgr.FindByConnection(conn) == managed);
+	REQUIRE(mgr.FindByConnection(conn.get()) == managed);
+
+	unmanaged.UnbindConnection();
+	REQUIRE(mgr.FindByConnection(conn) == managed);
+
+	mgr.DestroyAll();
+}
+
 TEST_CASE("EntityManager physics body binding stays one-to-one", "[entity][manager][physics]") {
 	auto& mgr = EntityManager::Instance();
 	mgr.DestroyAll();
@@ -481,6 +565,26 @@ TEST_CASE("Lua entity destroy releases entity and components", "[entity][lua]") 
 				   result));
 	REQUIRE(result.find("true,") == 0);
 	REQUIRE(EntityManager::Instance().Count() == 0);
+
+	engine::script::ShutdownEntityBindings();
+}
+
+TEST_CASE("Lua entity attribute convenience helpers", "[entity][lua]") {
+	EntityManager::Instance().DestroyAll();
+	engine::ScriptVM vm;
+	engine::script::ExportEntity(vm);
+
+	std::string result;
+	REQUIRE(RunLua(vm,
+				   "local e = entity.create()\n"
+				   "e:set_attr('z', 1)\n"
+				   "e:set_attr('a', true)\n"
+				   "local keys = e:list_attrs()\n"
+				   "local removed = e:remove_attr('z')\n"
+				   "return tostring(removed) .. ',' .. tostring(e:attr_count()) .. ',' .. "
+				   "table.concat(keys, '|')",
+				   result));
+	REQUIRE(result == "true,1,a|z");
 
 	engine::script::ShutdownEntityBindings();
 }

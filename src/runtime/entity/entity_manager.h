@@ -34,15 +34,17 @@ public:
 	// Create an entity. id=0 means auto-allocate.
 	Entity* CreateEntity(EntityId id = 0);
 	Entity* GetEntity(EntityId id);
+	bool OwnsEntity(const Entity& entity) const;
 	void DestroyEntity(EntityId id);
 	void DestroyAll();
 
 	// Connection lookup — uses raw pointer since connection lifetime is
 	// managed by the event loop, not by entities.
 	Entity* FindByConnection(const evpp::TCPConnPtr& conn);
+	Entity* FindByConnection(const evpp::TCPConn* raw_conn);
 
 	// Register/unregister a connection→entity binding for O(1) lookup.
-	void RegisterConnectionBinding(const evpp::TCPConn* raw_conn, EntityId id);
+	bool RegisterConnectionBinding(const evpp::TCPConn* raw_conn, EntityId id);
 	void UnregisterConnectionBinding(const evpp::TCPConn* raw_conn);
 
 	// Physics body lookup

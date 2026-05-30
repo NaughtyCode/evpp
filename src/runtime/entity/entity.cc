@@ -44,8 +44,12 @@ void Entity::Suspend() {
 void Entity::Destroy() {
 	ENGINE_PROFILE_ENTITY_DESTROY();
 	if (state_ == EntityState::Destroyed) return;
+	auto& manager = EntityManager::Instance();
+	const bool managed_by_global_manager = manager.OwnsEntity(*this);
 	state_ = EntityState::Destroyed;
-	EntityManager::Instance().NotifyEntityDestroying(*this);
+	if (managed_by_global_manager) {
+		manager.NotifyEntityDestroying(*this);
+	}
 
 	auto timers = std::move(owned_timers_);
 	owned_timers_.clear();
@@ -56,9 +60,10 @@ void Entity::Destroy() {
 	}
 
 	UnbindConnection();
-	if (HasPhysicsBody()) {
-		EntityManager::Instance().UnregisterPhysicsBodyBinding(physics_body_id_);
+	if (managed_by_global_manager && HasPhysicsBody()) {
+		manager.UnregisterPhysicsBodyBinding(physics_body_id_);
 	}
+	attrs_.Clear();
 	components_.clear();
 	ClearLuaComponents();
 	ClearPhysicsBodyId();
@@ -92,21 +97,27 @@ void Entity::BindConnection(const evpp::TCPConnPtr& conn) {
 	UnbindConnection();
 	connection_ = conn;
 	if (conn) {
-		EntityManager::Instance().RegisterConnectionBinding(conn.get(), id_);
+		auto& manager = EntityManager::Instance();
+		connection_registered_ =
+			manager.OwnsEntity(*this) && manager.RegisterConnectionBinding(conn.get(), id_);
 	}
 }
 
 void Entity::UnbindConnection() {
 	ENGINE_PROFILE_SCOPE("engine.entity", "UnbindConnection");
 	if (connection_) {
-		EntityManager::Instance().UnregisterConnectionBinding(connection_.get());
+		if (connection_registered_) {
+			EntityManager::Instance().UnregisterConnectionBinding(connection_.get());
+		}
 	}
+	connection_registered_ = false;
 	connection_.reset();
 }
 
 void Entity::ClearConnectionForManager(const evpp::TCPConn* raw_conn) {
 	if (!raw_conn || connection_.get() == raw_conn) {
 		connection_.reset();
+		connection_registered_ = false;
 	}
 }
 

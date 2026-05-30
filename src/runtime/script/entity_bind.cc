@@ -119,7 +119,11 @@ void OnEntityDestroyFromManager(Entity& entity) {
 int l_entity_create(lua_State* L) {
 	EntityId id = 0;
 	if (lua_gettop(L) >= 1 && !lua_isnil(L, 1)) {
-		id = static_cast<EntityId>(luaL_checkinteger(L, 1));
+		lua_Integer raw_id = luaL_checkinteger(L, 1);
+		if (raw_id < 0) {
+			return luaL_error(L, "entity id must be >= 0");
+		}
+		id = static_cast<EntityId>(raw_id);
 	}
 
 	auto* entity = EntityManager::Instance().CreateEntity(id);
@@ -292,6 +296,17 @@ int l_entity_set_attr(lua_State* L) {
 	return 0;
 }
 
+int l_entity_remove_attr(lua_State* L) {
+	auto* ctx = GetEntityCtx(L, 1);
+	if (!ctx || ctx->disposed) return luaL_error(L, "entity: invalid context");
+	auto* entity = EntityManager::Instance().GetEntity(ctx->id);
+	if (!entity) return luaL_error(L, "entity not found");
+
+	const char* key = luaL_checkstring(L, 2);
+	lua_pushboolean(L, entity->Attrs().Remove(key) ? 1 : 0);
+	return 1;
+}
+
 // ── entity:has_attr(key)  - bool ─────────────────────────────────────
 
 int l_entity_has_attr(lua_State* L) {
@@ -302,6 +317,32 @@ int l_entity_has_attr(lua_State* L) {
 
 	const char* key = luaL_checkstring(L, 2);
 	lua_pushboolean(L, entity->Attrs().Has(key) ? 1 : 0);
+	return 1;
+}
+
+int l_entity_attr_count(lua_State* L) {
+	auto* ctx = GetEntityCtx(L, 1);
+	if (!ctx || ctx->disposed) return luaL_error(L, "entity: invalid context");
+	auto* entity = EntityManager::Instance().GetEntity(ctx->id);
+	if (!entity) return luaL_error(L, "entity not found");
+
+	lua_pushinteger(L, static_cast<lua_Integer>(entity->Attrs().Count()));
+	return 1;
+}
+
+int l_entity_list_attrs(lua_State* L) {
+	auto* ctx = GetEntityCtx(L, 1);
+	if (!ctx || ctx->disposed) return luaL_error(L, "entity: invalid context");
+	auto* entity = EntityManager::Instance().GetEntity(ctx->id);
+	if (!entity) return luaL_error(L, "entity not found");
+
+	auto keys = entity->Attrs().Keys();
+	lua_createtable(L, static_cast<int>(keys.size()), 0);
+	int index = 1;
+	for (const auto& key : keys) {
+		lua_pushlstring(L, key.data(), key.size());
+		lua_rawseti(L, -2, index++);
+	}
 	return 1;
 }
 
@@ -556,7 +597,10 @@ const luaL_Reg kEntityMethods[] = {
 	{"suspend", l_entity_suspend},
 	{"get_attr", l_entity_get_attr},
 	{"set_attr", l_entity_set_attr},
+	{"remove_attr", l_entity_remove_attr},
 	{"has_attr", l_entity_has_attr},
+	{"attr_count", l_entity_attr_count},
+	{"list_attrs", l_entity_list_attrs},
 	{"bind_connection", l_entity_bind_connection},
 	{"get_connection", l_entity_get_connection},
 	{"send", l_entity_send},
