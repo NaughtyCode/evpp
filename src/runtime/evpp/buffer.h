@@ -13,8 +13,8 @@
 namespace evpp {
 class CLOUD_ENGINE_API Buffer {
 	public:
-	inline static constexpr size_t kCheapPrependSize = 8;
-	inline static constexpr size_t kInitialSize = 1024;
+	static const size_t kCheapPrependSize = 8;
+	static const size_t kInitialSize = 1024;
 
 	explicit Buffer(size_t initial_size = kInitialSize,
 					size_t reserved_prepend_size = kCheapPrependSize)
@@ -78,6 +78,7 @@ class CLOUD_ENGINE_API Buffer {
 		std::swap(read_index_, rhs.read_index_);
 		std::swap(write_index_, rhs.write_index_);
 		std::swap(reserved_prepend_size_, rhs.reserved_prepend_size_);
+		std::swap(max_capacity_, rhs.max_capacity_);
 	}
 
 	// Skip advances the reading index of the buffer
@@ -516,7 +517,7 @@ class CLOUD_ENGINE_API Buffer {
 	size_t write_index_;
 	size_t reserved_prepend_size_;
 	size_t max_capacity_;
-	inline static constexpr char kCRLF[] = "\r\n";
+	static const char* const kCRLF;
 };
 
 }

@@ -20,6 +20,22 @@ namespace evpp {
 		if (_l_) ENGINE_LOG_TRACE(_l_, fmt, ##__VA_ARGS__); \
 	} while (0)
 
+namespace {
+void RunFunctorSafely(const EventLoop::Functor& f) {
+	try {
+		f();
+	} catch (const std::exception& e) {
+		if (auto* l = engine::GetLogger()) {
+			ENGINE_LOG_ERROR(l, "EventLoop functor threw exception: {}", e.what());
+		}
+	} catch (...) {
+		if (auto* l = engine::GetLogger()) {
+			ENGINE_LOG_ERROR(l, "EventLoop functor threw unknown exception");
+		}
+	}
+}
+}  // namespace
+
 EventLoop::EventLoop()
 	: evbase_(nullptr), create_evbase_myself_(true), notified_(false), pending_functor_count_(0) {
 	EVPP_TRACE("this={}", (void*) this);
@@ -373,7 +389,7 @@ void EventLoop::DoPendingFunctors() {
 	notified_.store(false);
 	Functor* f = nullptr;
 	while (pending_functors_->pop(f)) {
-		(*f)();
+		RunFunctorSafely(*f);
 		CLOUDENGINE_MEM_DELETE(f);
 		--pending_functor_count_;
 	}
@@ -381,7 +397,7 @@ void EventLoop::DoPendingFunctors() {
 	notified_.store(false);
 	Functor f;
 	while (pending_functors_->try_dequeue(f)) {
-		f();
+		RunFunctorSafely(f);
 		--pending_functor_count_;
 	}
 #else
@@ -402,7 +418,7 @@ void EventLoop::DoPendingFunctors() {
 			   GetPendingQueueSize(),
 			   notified_.load());
 	for (size_t i = 0; i < functors.size(); ++i) {
-		functors[i]();
+		RunFunctorSafely(functors[i]);
 		--pending_functor_count_;
 	}
 	EVPP_TRACE("this={} pending_functor_count_={} PendingQueueSize={} notified_={}",

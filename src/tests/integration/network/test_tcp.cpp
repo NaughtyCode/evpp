@@ -46,6 +46,19 @@ TEST_CASE("TCP echo roundtrip", "[integration][network][tcp]") {
         "127.0.0.1:" + std::to_string(kIntTestPort1), "IntClient");
     client->set_auto_reconnect(false);
 
+    bool stop_requested = false;
+    auto request_shutdown = [&]() {
+        if (stop_requested) {
+            return;
+        }
+        stop_requested = true;
+        client->Disconnect();
+        server->Stop([&]() {
+            server_done = true;
+            loop.Stop();
+        });
+    };
+
     client->SetConnectionCallback([&](const evpp::TCPConnPtr& conn) {
         if (conn->IsConnected()) {
             conn->Send("integration_test");
@@ -55,17 +68,13 @@ TEST_CASE("TCP echo roundtrip", "[integration][network][tcp]") {
     client->SetMessageCallback([&](const evpp::TCPConnPtr&, evpp::Buffer* msg) {
         client_received = std::string(msg->data(), msg->length());
         client_done = true;
-        client->Disconnect();
-        server->Stop();
-        loop.Stop();
+        request_shutdown();
     });
 
     loop.RunAfter(3000.0, [&]() {
         if (!client_done) {
-            client->Disconnect();
-            server->Stop();
+            request_shutdown();
         }
-        loop.Stop();
     });
     client->Connect();
     loop.Run();
@@ -73,6 +82,7 @@ TEST_CASE("TCP echo roundtrip", "[integration][network][tcp]") {
     delete client;
     delete server;
 
+    REQUIRE(server_done);
     REQUIRE(client_done);
     REQUIRE(client_received == "ECHO:integration_test");
 }
@@ -84,6 +94,7 @@ TEST_CASE("TCP echo roundtrip", "[integration][network][tcp]") {
 TEST_CASE("TCP large message echo", "[integration][network][tcp]") {
     evpp::EventLoop loop;
 
+    std::atomic<bool> server_done{false};
     bool client_done = false;
     std::string client_received;
     std::string test_msg(4096, 'X');
@@ -104,6 +115,19 @@ TEST_CASE("TCP large message echo", "[integration][network][tcp]") {
         "127.0.0.1:" + std::to_string(kIntTestPort2), "LargeClient");
     client->set_auto_reconnect(false);
 
+    bool stop_requested = false;
+    auto request_shutdown = [&]() {
+        if (stop_requested) {
+            return;
+        }
+        stop_requested = true;
+        client->Disconnect();
+        server->Stop([&]() {
+            server_done = true;
+            loop.Stop();
+        });
+    };
+
     client->SetConnectionCallback([&](const evpp::TCPConnPtr& conn) {
         if (conn->IsConnected()) {
             conn->Send(test_msg);
@@ -113,15 +137,11 @@ TEST_CASE("TCP large message echo", "[integration][network][tcp]") {
     client->SetMessageCallback([&](const evpp::TCPConnPtr&, evpp::Buffer* msg) {
         client_received = std::string(msg->data(), msg->length());
         client_done = true;
-        client->Disconnect();
-        server->Stop();
-        loop.Stop();
+        request_shutdown();
     });
 
     loop.RunAfter(3000.0, [&]() {
-        client->Disconnect();
-        server->Stop();
-        loop.Stop();
+        request_shutdown();
     });
     client->Connect();
     loop.Run();
@@ -129,6 +149,7 @@ TEST_CASE("TCP large message echo", "[integration][network][tcp]") {
     delete client;
     delete server;
 
+    REQUIRE(server_done);
     REQUIRE(client_done);
     REQUIRE(client_received == "RE:" + test_msg);
 }

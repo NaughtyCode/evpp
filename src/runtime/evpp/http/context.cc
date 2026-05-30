@@ -28,7 +28,8 @@ bool Context::Init() {
 	}
 
 #if LIBEVENT_VERSION_NUMBER >= 0x02001500
-	uri_ = evhttp_uri_get_path(req_->uri_elems);
+	const char* path = evhttp_uri_get_path(req_->uri_elems);
+	uri_ = path ? path : "/";
 #else
 	const char* p = strchr(req_->uri, '?');
 	if (p != nullptr) {
@@ -41,14 +42,14 @@ bool Context::Init() {
 	const char* original_url = original_uri();
 	remote_ip_ = FindClientIPFromURI(original_url, strlen(original_url));
 	if (remote_ip_.empty()) {
-		remote_ip_ = req_->remote_host;
+		remote_ip_ = req_->remote_host ? req_->remote_host : "";
 	}
 
 	return true;
 }
 
 const char* Context::original_uri() const {
-	return req_->uri;
+	return req_->uri ? req_->uri : "";
 }
 
 void Context::AddResponseHeader(const std::string& key, const std::string& value) {

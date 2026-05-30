@@ -17,11 +17,13 @@
 #pragma once
 
 #include <cassert>
+#include <exception>
 #include <functional>
 #include <map>
 #include <mutex>
 #include <vector>
 
+#include "runtime/core/log/log.h"
 #include "runtime/core/timer/timer_core.h"
 #include "runtime/core/timer/timer_queue.h"
 
@@ -139,7 +141,17 @@ class Alarm {
 		if (state_ == kStateCancelled) return;
 		state_ = kStateFiring;
 		if (callback_) {
-			callback_(this, now);
+			try {
+				callback_(this, now);
+			} catch (const std::exception& e) {
+				if (auto* l = GetLogger()) {
+					ENGINE_LOG_ERROR(l, "Alarm callback threw exception: {}", e.what());
+				}
+			} catch (...) {
+				if (auto* l = GetLogger()) {
+					ENGINE_LOG_ERROR(l, "Alarm callback threw unknown exception");
+				}
+			}
 		}
 		if (state_ == kStateFiring) {
 			state_ = kStateInactive;

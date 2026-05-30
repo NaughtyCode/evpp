@@ -13,6 +13,7 @@
 #include "runtime/config/config_validator.h"
 #include "runtime/config/platform_paths.h"
 #include "runtime/core/log/log.h"
+#include "runtime/core/mem/mem.h"
 #include "runtime/database/data_service/db_service_config.h"
 #include "runtime/vm/file_watcher.h"
 
@@ -66,7 +67,7 @@ ConfigManager& ConfigManager::Instance() {
 }
 
 std::unique_ptr<IConfigManager> ConfigManager::Create() {
-	return std::unique_ptr<IConfigManager>(new ConfigManager());
+	return std::unique_ptr<IConfigManager>(CLOUDENGINE_MEM_NEW(ConfigManager));
 }
 
 // From JSON strings (text)

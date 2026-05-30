@@ -18,9 +18,9 @@
 #include "runtime/evpp/sockets.h"
 
 namespace evpp {
-constexpr size_t Buffer::kCheapPrependSize;
-constexpr size_t Buffer::kInitialSize;
-constexpr char Buffer::kCRLF[];
+const size_t Buffer::kCheapPrependSize;
+const size_t Buffer::kInitialSize;
+const char* const Buffer::kCRLF = "\r\n";
 
 ssize_t Buffer::ReadFromFD(evpp_socket_t fd, int* savedErrno) {
 	// saved an ioctl()/FIONREAD call to tell how much to read

@@ -301,7 +301,8 @@ void Server::Dispatch(EventLoop* listening_loop,
 	if (!IsRunning()) {
 		ENGINE_LOG_WARN(engine::GetLogger(),
 						"The listening thread is not running, may be it is stopping now.");
-		// Server is stopping -- reject with 503 Service Unavailable.
+		ctx->set_response_http_code(HTTP_SERVUNAVAIL);
+		response_callback("Service Unavailable");
 		return;
 	}
 
@@ -320,7 +321,8 @@ void Server::Dispatch(EventLoop* listening_loop,
 		if (!IsRunning()) {
 			ENGINE_LOG_WARN(engine::GetLogger(),
 							"The listening thread is not running, may be it is stopping now.");
-			// Server is stopping -- reject with 503 Service Unavailable.
+			ctx->set_response_http_code(HTTP_SERVUNAVAIL);
+			response_callback("Service Unavailable");
 			return;
 		}
 

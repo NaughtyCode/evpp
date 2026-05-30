@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <vector>
 
 #include "runtime/evpp/duration.h"
@@ -35,6 +36,11 @@ class CLOUD_ENGINE_API Connector : public std::enable_shared_from_this<Connector
 	}
 	void SetRetryConfig(const ConnectorConfig& cfg) {
 		retry_cfg_ = cfg;
+		if (retry_cfg_.retry_interval_ms <= 0) retry_cfg_.retry_interval_ms = 1;
+		if (retry_cfg_.max_retry_interval_ms < retry_cfg_.retry_interval_ms) {
+			retry_cfg_.max_retry_interval_ms = retry_cfg_.retry_interval_ms;
+		}
+		if (retry_cfg_.backoff_multiplier < 1.0) retry_cfg_.backoff_multiplier = 1.0;
 	}
 	int retry_count() const { return retry_count_; }
 	bool IsConnecting() const {

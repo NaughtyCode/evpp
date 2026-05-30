@@ -24,11 +24,13 @@
 #include <array>
 #include <atomic>
 #include <cassert>
+#include <exception>
 #include <functional>
 #include <list>
 #include <mutex>
 #include <vector>
 
+#include "runtime/core/log/log.h"
 #include "runtime/core/timer/timer_core.h"
 
 namespace engine {
@@ -146,7 +148,17 @@ class TimerWheelNode {
 		if (state_.load() == TimerState::kCancelled) return;
 		state_ = TimerState::kFiring;
 		if (callback_) {
-			callback_(this);
+			try {
+				callback_(this);
+			} catch (const std::exception& e) {
+				if (auto* l = GetLogger()) {
+					ENGINE_LOG_ERROR(l, "TimerWheel callback threw exception: {}", e.what());
+				}
+			} catch (...) {
+				if (auto* l = GetLogger()) {
+					ENGINE_LOG_ERROR(l, "TimerWheel callback threw unknown exception");
+				}
+			}
 		}
 		if (state_.load() == TimerState::kFiring) {
 			state_ = TimerState::kInactive;

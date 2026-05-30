@@ -17,6 +17,7 @@ TEST_CASE("TCP echo loopback", "[smoke][network]") {
 
     bool server_got_msg = false;
     bool client_got_echo = false;
+    bool server_stopped = false;
     std::string client_received;
 
     // Use a fixed high port unlikely to conflict
@@ -37,6 +38,19 @@ TEST_CASE("TCP echo loopback", "[smoke][network]") {
         "127.0.0.1:" + std::to_string(kTestPort), "SmokeClient");
     client->set_auto_reconnect(false);
 
+    bool stop_requested = false;
+    auto request_shutdown = [&]() {
+        if (stop_requested) {
+            return;
+        }
+        stop_requested = true;
+        client->Disconnect();
+        server->Stop([&]() {
+            server_stopped = true;
+            loop.Stop();
+        });
+    };
+
     client->SetConnectionCallback([&](const evpp::TCPConnPtr& conn) {
         if (conn->IsConnected()) {
             conn->Send("hello");
@@ -46,21 +60,13 @@ TEST_CASE("TCP echo loopback", "[smoke][network]") {
     client->SetMessageCallback([&](const evpp::TCPConnPtr&, evpp::Buffer* msg) {
         client_got_echo = true;
         client_received = std::string(msg->data(), msg->length());
-        // Clean up inside the loop thread before stopping the loop.
-        // Calling Disconnect/Stop after loop.Run() returns would
-        // deadlock because RunInLoop queues on a stopped EventLoop.
-        client->Disconnect();
-        server->Stop();
-        loop.Stop();
+        request_shutdown();
     });
 
     loop.RunAfter(3000.0, [&]() {
-        // Timeout: clean up before stopping, same reason as above.
         if (!client_got_echo) {
-            client->Disconnect();
-            server->Stop();
+            request_shutdown();
         }
-        loop.Stop();
     });
 
     client->Connect();
@@ -69,6 +75,7 @@ TEST_CASE("TCP echo loopback", "[smoke][network]") {
     delete client;
     delete server;
 
+    REQUIRE(server_stopped);
     REQUIRE(server_got_msg);
     REQUIRE(client_got_echo);
     REQUIRE(client_received == "ECHO:hello");

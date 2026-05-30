@@ -1,5 +1,7 @@
 #include "runtime/evpp/connector.h"
 
+#include <limits>
+
 #include "runtime/evpp/dns_resolver.h"
 #include "runtime/evpp/event_loop.h"
 #include "runtime/evpp/fd_channel.h"
@@ -9,6 +11,16 @@
 #include "runtime/evpp/tcp_client.h"
 
 namespace evpp {
+namespace {
+int ToRetryIntervalMilliseconds(Duration d) {
+	const double ms = d.Milliseconds();
+	if (ms <= 0) return 1;
+	const double max_ms = static_cast<double>((std::numeric_limits<int>::max)());
+	if (ms >= max_ms) return (std::numeric_limits<int>::max)();
+	return static_cast<int>(ms);
+}
+}  // namespace
+
 Connector::Connector(EventLoop* l, TCPClient* client)
 	: status_(kDisconnected),
 	  loop_(l),
@@ -16,6 +28,9 @@ Connector::Connector(EventLoop* l, TCPClient* client)
 	  remote_addr_(client->remote_addr()),
 	  timeout_(client->connecting_timeout()) {
 	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} raddr={}", (void*) this, remote_addr_);
+	retry_cfg_.retry_interval_ms = ToRetryIntervalMilliseconds(client->reconnect_interval());
+	retry_cfg_.max_retry_interval_ms =
+		(std::max)(retry_cfg_.retry_interval_ms, retry_cfg_.max_retry_interval_ms);
 	if (sock::SplitHostPort(remote_addr_.data(), remote_host_, remote_port_)) {
 		raddr_ = sock::ParseFromIPPort(remote_addr_.data());
 	}
@@ -231,9 +246,18 @@ void Connector::HandleError() {
 	status_ = kDisconnected;
 
 	if (chan_) {
-		assert(fd_ > 0);
+		assert(fd_ != INVALID_SOCKET);
 		chan_->DisableAllEvent();
 		chan_->Close();
+		chan_.reset();
+	}
+
+	if (own_fd_ && fd_ != INVALID_SOCKET) {
+		ENGINE_LOG_TRACE(
+			engine::GetLogger(), "this={} Connector::HandleError close({})", (void*) this, fd_);
+		EVUTIL_CLOSESOCKET(fd_);
+		fd_ = INVALID_SOCKET;
+		own_fd_ = false;
 	}
 
 	// Avoid DNSResolver callback again when timeout
@@ -256,7 +280,6 @@ void Connector::HandleError() {
 	// delete the TCPClient (owner_tcp_client_), making any subsequent
 	// access to it a use-after-free.
 	bool do_reconnect = owner_tcp_client_->auto_reconnect();
-	Duration reconnect_interval = owner_tcp_client_->reconnect_interval();
 
 	// If the connection is refused or it will not try again,
 	// We need to notify the user layer that the connection established failed.
@@ -287,14 +310,6 @@ void Connector::HandleError() {
 				current_interval_ms_ = (std::min)(
 					static_cast<int>(current_interval_ms_ * retry_cfg_.backoff_multiplier),
 					retry_cfg_.max_retry_interval_ms);
-			}
-
-			if (fd_ > 0) {
-				ENGINE_LOG_TRACE(
-					engine::GetLogger(), "this={} Connector::HandleError close({})", (void*) this, fd_);
-				assert(own_fd_);
-				EVUTIL_CLOSESOCKET(fd_);
-				fd_ = INVALID_SOCKET;
 			}
 
 			ENGINE_LOG_TRACE(engine::GetLogger(),
@@ -347,7 +362,7 @@ void Connector::OnDNSResolved(const std::vector<struct in_addr>& addrs) {
 }
 
 std::string Connector::StatusToString() const {
-	H_CASE_STRING_BIGIN(status_);
+	H_CASE_STRING_BIGIN(status_.load());
 	H_CASE_STRING(kDisconnected);
 	H_CASE_STRING(kDNSResolving);
 	H_CASE_STRING(kDNSResolved);

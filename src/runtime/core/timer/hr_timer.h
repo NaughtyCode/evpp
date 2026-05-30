@@ -17,12 +17,14 @@
 
 #include <atomic>
 #include <cassert>
+#include <exception>
 #include <functional>
 #include <limits>
 #include <map>
 #include <memory>
 #include <mutex>
 
+#include "runtime/core/log/log.h"
 #include "runtime/core/timer/timer_core.h"
 #include "runtime/core/timer/timer_queue.h"
 
@@ -453,7 +455,19 @@ class HrTimerManager {
 			int64_t latency = time_delta_ns(now, timer->expires());
 			stats_.record_expire(latency);
 			lock.unlock();
-			result = callback ? callback(timer) : TimerResult::kNoRestart;
+			try {
+				result = callback ? callback(timer) : TimerResult::kNoRestart;
+			} catch (const std::exception& e) {
+				if (auto* l = GetLogger()) {
+					ENGINE_LOG_ERROR(l, "HrTimer callback threw exception: {}", e.what());
+				}
+				result = TimerResult::kNoRestart;
+			} catch (...) {
+				if (auto* l = GetLogger()) {
+					ENGINE_LOG_ERROR(l, "HrTimer callback threw unknown exception");
+				}
+				result = TimerResult::kNoRestart;
+			}
 			lock.lock();
 
 			processed++;

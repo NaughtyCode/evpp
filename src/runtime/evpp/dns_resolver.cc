@@ -64,7 +64,7 @@ void DNSResolver::SyncDNSResolve() {
 	/* Build the hints to tell getaddrinfo how to act. */
 	struct addrinfo hints;
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC; /* v4 or v6 is fine. */
+	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_protocol = IPPROTO_TCP; /* We want a TCP socket */
 	hints.ai_flags = 0;
@@ -179,7 +179,7 @@ void DNSResolver::AsyncDNSResolve() {
 	/* Build the hints to tell getaddrinfo how to act. */
 	struct addrinfo hints;
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC; /* v4 or v6 is fine. */
+	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_protocol = IPPROTO_TCP; /* We want a TCP socket */
 	hints.ai_flags = 0;
