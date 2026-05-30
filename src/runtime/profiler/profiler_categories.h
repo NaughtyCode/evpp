@@ -13,6 +13,11 @@ PERFETTO_DEFINE_CATEGORIES(
 	perfetto::Category("engine.script").SetDescription("Script system"),
 	perfetto::Category("engine.physics").SetDescription("Physics system"),
 	perfetto::Category("engine.timer").SetDescription("Timer system"),
-	perfetto::Category("engine.vm").SetDescription("VM operations"), );
+	perfetto::Category("engine.vm").SetDescription("VM operations"),
+	perfetto::Category("engine.net").SetDescription("Network encoding and transport"),
+	perfetto::Category("engine.rpc").SetDescription("RPC client/server dispatch"),
+	perfetto::Category("engine.db").SetDescription("Database and ORM operations"),
+	perfetto::Category("engine.monitoring").SetDescription("Metrics, health, and admin HTTP"),
+	perfetto::Category("engine.config").SetDescription("Configuration loading and validation"));
 
-#endif	// ENGINE_PROFILER_ENABLED
+#endif  // ENGINE_PROFILER_ENABLED

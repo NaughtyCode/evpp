@@ -1,8 +1,10 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -32,13 +34,17 @@ class CLOUD_ENGINE_API ProfilerManager {
 	bool StartSession();
 	void StopSession();
 
+	bool IsInitialized() const;
 	bool IsActive() const;
 	static bool IsEnabled();
 
 	void Flush();
 	std::vector<char> ReadTrace();
-	void SaveTrace();
-	void SaveTraceExact(const std::string& path);
+	std::string SaveTrace();
+	bool SaveTraceExact(const std::string& path);
+	std::string LastSavedPath() const;
+	size_t CachedTraceSize() const;
+	void ClearCachedTrace();
 
 	private:
 	ProfilerManager();
@@ -47,10 +53,18 @@ class CLOUD_ENGINE_API ProfilerManager {
 	ProfilerManager(const ProfilerManager&) = delete;
 	ProfilerManager& operator=(const ProfilerManager&) = delete;
 
-	void WriteTraceToFile(const std::string& path, const std::vector<char>& data);
+	static ProfilerConfig NormalizeConfig(ProfilerConfig cfg);
+	std::string BuildTimestampedPathLocked() const;
+	void StopSessionLocked();
+	std::vector<char> ReadTraceLocked();
+	bool WriteTraceToFileLocked(const std::string& path, const std::vector<char>& data);
 
+	mutable std::mutex mutex_;
 	ProfilerConfig config_;
 	std::unique_ptr<perfetto::TracingSession> session_;
+	std::vector<char> cached_trace_;
+	std::string last_saved_path_;
+	bool tracing_runtime_initialized_ = false;
 	std::atomic<bool> initialized_{false};
 	std::atomic<bool> session_active_{false};
 };

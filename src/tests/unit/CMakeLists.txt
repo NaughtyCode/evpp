@@ -126,6 +126,11 @@ add_unit_test(test_health monitoring/test_health.cpp)
 add_test(NAME unit.health COMMAND test_health)
 set_tests_properties(unit.health PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
+# Profiler tests
+add_unit_test(test_profiler profiler/test_profiler.cpp)
+add_test(NAME unit.profiler COMMAND test_profiler)
+set_tests_properties(unit.profiler PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
 # ── AOI tests ────────────────────────────────────────────────────────
 add_unit_test(test_aoi aoi/test_aoi.cpp)
 add_test(NAME unit.aoi COMMAND test_aoi)

@@ -13,9 +13,11 @@ PERFETTO_TRACK_EVENT_STATIC_STORAGE();
 #include <chrono>
 #include <cstdio>
 #include <ctime>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <utility>
 
 #include "runtime/core/log/log.h"
 #include "runtime/core/log/log_macros.h"
@@ -23,7 +25,36 @@ PERFETTO_TRACK_EVENT_STATIC_STORAGE();
 
 namespace engine {
 
-// ── Singleton ───────────────────────────────────────────────────────────
+namespace {
+
+constexpr uint32_t kDefaultBufferSizeKb = 32768;
+constexpr uint32_t kMinBufferSizeKb = 64;
+constexpr const char* kDefaultOutputPath = "trace.perfetto-trace";
+
+std::string TimestampForFilename() {
+	auto now = std::chrono::system_clock::now();
+	auto t = std::chrono::system_clock::to_time_t(now);
+	std::tm tm_buf{};
+#ifdef _WIN32
+	if (localtime_s(&tm_buf, &t) != 0) {
+		return std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+								  now.time_since_epoch())
+								  .count());
+	}
+#else
+	if (!localtime_r(&t, &tm_buf)) {
+		return std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+								  now.time_since_epoch())
+								  .count());
+	}
+#endif
+
+	std::ostringstream oss;
+	oss << std::put_time(&tm_buf, "%Y%m%d_%H%M%S");
+	return oss.str();
+}
+
+}  // namespace
 
 ProfilerManager& ProfilerManager::Get() {
 	static ProfilerManager instance;
@@ -31,99 +62,142 @@ ProfilerManager& ProfilerManager::Get() {
 }
 
 ProfilerManager::ProfilerManager() = default;
-ProfilerManager::~ProfilerManager() = default;
 
-// ── Initialize / Shutdown ───────────────────────────────────────────────
+ProfilerManager::~ProfilerManager() {
+	Shutdown();
+}
 
 bool ProfilerManager::Initialize(const ProfilerConfig& cfg) {
-	if (initialized_.load()) return true;
-
-	config_ = cfg;
-
+	auto normalized = NormalizeConfig(cfg);
 	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger, "ProfilerManager: initializing (before Tracing::Init)");
 
-	perfetto::TracingInitArgs args;
-	args.backends = perfetto::kInProcessBackend;
-	args.shmem_size_hint_kb = cfg.buffer_size_kb;
+	std::lock_guard<std::mutex> lock(mutex_);
+	if (session_) {
+		ENGINE_LOG_WARN(logger, "ProfilerManager: Initialize ignored while session is active");
+		return false;
+	}
 
-	perfetto::Tracing::Initialize(args);
+	config_ = std::move(normalized);
 
-	ENGINE_LOG_INFO(logger, "ProfilerManager: after Tracing::Init, before Register");
+	if (!tracing_runtime_initialized_) {
+		ENGINE_LOG_INFO(logger, "ProfilerManager: initializing Perfetto runtime");
 
-	perfetto::TrackEvent::Register();
+		perfetto::TracingInitArgs args;
+		args.backends = perfetto::kInProcessBackend;
+		args.shmem_size_hint_kb = config_.buffer_size_kb;
+
+		perfetto::Tracing::Initialize(args);
+		perfetto::TrackEvent::Register();
+
+		tracing_runtime_initialized_ = true;
+	} else {
+		ENGINE_LOG_INFO(logger, "ProfilerManager: updating profiler config");
+	}
 
 	initialized_.store(true);
 
-	ENGINE_LOG_INFO(logger, "ProfilerManager: initialized, buffer=[{}KB]", cfg.buffer_size_kb);
+	ENGINE_LOG_INFO(logger,
+					"ProfilerManager: initialized, buffer=[{}KB], output=[{}]",
+					config_.buffer_size_kb,
+					config_.output_path);
 
 	return true;
 }
 
 void ProfilerManager::Shutdown() {
-	if (!initialized_.exchange(false)) return;
-
-	Flush();
-	StopSession();
-
 	auto* logger = GetLogger();
+
+	std::lock_guard<std::mutex> lock(mutex_);
+	if (!initialized_.load() && !session_) return;
+
+	StopSessionLocked();
+	initialized_.store(false);
 	ENGINE_LOG_INFO(logger, "ProfilerManager: shutdown complete");
 }
-
-// ── Session Control ────────────────────────────────────────────────────
 
 static perfetto::TraceConfig MakeTraceConfig(const ProfilerConfig& cfg) {
 	perfetto::TraceConfig tc;
 	auto* buf = tc.add_buffers();
 	buf->set_size_kb(cfg.buffer_size_kb);
 	buf->set_fill_policy(perfetto::TraceConfig::BufferConfig::RING_BUFFER);
+
 	auto* ds = tc.add_data_sources();
 	ds->mutable_config()->set_name("track_event");
+
 	if (cfg.duration_ms > 0) {
 		tc.set_duration_ms(cfg.duration_ms);
 	}
-	tc.set_flush_period_ms(cfg.flush_interval_ms);
+	if (cfg.flush_interval_ms > 0) {
+		tc.set_flush_period_ms(cfg.flush_interval_ms);
+	}
 	return tc;
 }
 
 bool ProfilerManager::StartSession() {
-	if (!initialized_) return false;
+	auto* logger = GetLogger();
+	std::lock_guard<std::mutex> lock(mutex_);
+	if (!initialized_.load()) {
+		ENGINE_LOG_WARN(logger, "ProfilerManager: StartSession called before Initialize");
+		return false;
+	}
 
 	if (session_) {
-		StopSession();
+		StopSessionLocked();
 	}
 
 	auto cfg = MakeTraceConfig(config_);
 	session_ = perfetto::Tracing::NewTrace(perfetto::kInProcessBackend);
 	if (!session_) {
-		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger, "ProfilerManager: NewTrace returned nullptr");
 		return false;
 	}
+
 	session_->Setup(cfg);
 	session_->StartBlocking();
-	session_active_ = true;
+	session_active_.store(true);
+	cached_trace_.clear();
+	last_saved_path_.clear();
 
-	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "ProfilerManager: session started");
 	return true;
 }
 
 void ProfilerManager::StopSession() {
-	if (!session_) return;
-
-	session_->StopBlocking();
-	session_.reset();
-	session_active_ = false;
-
-	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger, "ProfilerManager: session stopped");
+	std::lock_guard<std::mutex> lock(mutex_);
+	StopSessionLocked();
 }
 
-// ── State Queries ──────────────────────────────────────────────────────
+void ProfilerManager::StopSessionLocked() {
+	if (!session_) {
+		session_active_.store(false);
+		return;
+	}
+
+	session_->StopBlocking();
+	cached_trace_ = session_->ReadTraceBlocking();
+	session_.reset();
+	session_active_.store(false);
+
+	auto* logger = GetLogger();
+	ENGINE_LOG_INFO(logger,
+					"ProfilerManager: session stopped, cached trace=[{}] bytes",
+					cached_trace_.size());
+
+	if (config_.write_into_file && !cached_trace_.empty()) {
+		if (!WriteTraceToFileLocked(config_.output_path, cached_trace_)) {
+			ENGINE_LOG_ERROR(logger,
+							 "ProfilerManager: failed to auto-save trace to [{}]",
+							 config_.output_path);
+		}
+	}
+}
+
+bool ProfilerManager::IsInitialized() const {
+	return initialized_.load();
+}
 
 bool ProfilerManager::IsActive() const {
-	return session_active_;
+	return session_active_.load();
 }
 
 bool ProfilerManager::IsEnabled() {
@@ -134,99 +208,170 @@ bool ProfilerManager::IsEnabled() {
 #endif
 }
 
-// ── Flush ───────────────────────────────────────────────────────────────
-
 void ProfilerManager::Flush() {
+	std::lock_guard<std::mutex> lock(mutex_);
 	if (session_) {
 		session_->FlushBlocking();
 	}
 }
 
-// ── ReadTrace ───────────────────────────────────────────────────────────
-
 std::vector<char> ProfilerManager::ReadTrace() {
-	if (!session_) return {};
-	return session_->ReadTraceBlocking();
+	std::lock_guard<std::mutex> lock(mutex_);
+	return ReadTraceLocked();
 }
 
-// ── SaveTrace (with timestamp suffix) ───────────────────────────────────
+std::vector<char> ProfilerManager::ReadTraceLocked() {
+	if (session_) {
+		// Avoid ReadTraceBlocking() while the session is still active: it can
+		// block until the trace is stopped. StopSessionLocked() is the capture
+		// point that materializes cached_trace_ for saving.
+		session_->FlushBlocking();
+	}
+	return cached_trace_;
+}
 
-void ProfilerManager::SaveTrace() {
-	auto data = ReadTrace();
+std::string ProfilerManager::SaveTrace() {
+	std::lock_guard<std::mutex> lock(mutex_);
+	auto data = ReadTraceLocked();
 	if (data.empty()) {
 		auto* logger = GetLogger();
 		ENGINE_LOG_WARN(logger, "ProfilerManager: SaveTrace called but no data available");
-		return;
+		return {};
 	}
 
-	// Generate timestamp suffix: "trace_20260524_143021.perfetto-trace"
-	auto now = std::chrono::system_clock::now();
-	auto t = std::chrono::system_clock::to_time_t(now);
-	std::tm tm_buf{};
-#ifdef _WIN32
-	if (localtime_s(&tm_buf, &t) != 0) {
-		auto* logger = GetLogger();
-		ENGINE_LOG_ERROR(logger, "ProfilerManager: localtime_s failed");
-		return;
-	}
-#else
-	if (!localtime_r(&t, &tm_buf)) {
-		auto* logger = GetLogger();
-		ENGINE_LOG_ERROR(logger, "ProfilerManager: localtime_r failed");
-		return;
-	}
-#endif
-	std::ostringstream oss;
-	oss << std::put_time(&tm_buf, "%Y%m%d_%H%M%S");
-
-	// Insert timestamp before the extension
-	std::string path = config_.output_path;
-	auto dot = path.rfind('.');
-	std::string stamped;
-	if (dot != std::string::npos) {
-		stamped = path.substr(0, dot) + "_" + oss.str() + path.substr(dot);
-	} else {
-		stamped = path + "_" + oss.str();
-	}
-
-	WriteTraceToFile(stamped, data);
+	auto stamped = BuildTimestampedPathLocked();
+	if (!WriteTraceToFileLocked(stamped, data)) return {};
+	return stamped;
 }
 
-void ProfilerManager::SaveTraceExact(const std::string& path) {
-	auto data = ReadTrace();
+bool ProfilerManager::SaveTraceExact(const std::string& path) {
+	std::lock_guard<std::mutex> lock(mutex_);
+	auto data = ReadTraceLocked();
 	if (data.empty()) {
 		auto* logger = GetLogger();
 		ENGINE_LOG_WARN(
 			logger, "ProfilerManager: SaveTraceExact [{}] called but no data available", path);
-		return;
+		return false;
 	}
 
-	WriteTraceToFile(path, data);
+	return WriteTraceToFileLocked(path, data);
 }
 
-void ProfilerManager::WriteTraceToFile(const std::string& path, const std::vector<char>& data) {
-	std::ofstream ofs(path, std::ios::binary);
+std::string ProfilerManager::LastSavedPath() const {
+	std::lock_guard<std::mutex> lock(mutex_);
+	return last_saved_path_;
+}
+
+size_t ProfilerManager::CachedTraceSize() const {
+	std::lock_guard<std::mutex> lock(mutex_);
+	return cached_trace_.size();
+}
+
+void ProfilerManager::ClearCachedTrace() {
+	std::lock_guard<std::mutex> lock(mutex_);
+	if (session_) return;
+	cached_trace_.clear();
+	last_saved_path_.clear();
+}
+
+ProfilerConfig ProfilerManager::NormalizeConfig(ProfilerConfig cfg) {
+	if (cfg.output_path.empty()) {
+		cfg.output_path = kDefaultOutputPath;
+	}
+	if (cfg.buffer_size_kb == 0) {
+		cfg.buffer_size_kb = kDefaultBufferSizeKb;
+	} else if (cfg.buffer_size_kb < kMinBufferSizeKb) {
+		cfg.buffer_size_kb = kMinBufferSizeKb;
+	}
+	return cfg;
+}
+
+std::string ProfilerManager::BuildTimestampedPathLocked() const {
+	std::filesystem::path base(config_.output_path.empty() ? kDefaultOutputPath : config_.output_path);
+	auto parent = base.parent_path();
+	auto stem = base.stem().string();
+	auto extension = base.extension().string();
+	if (stem.empty()) {
+		stem = base.filename().string();
+	}
+	if (stem.empty()) {
+		stem = "trace";
+	}
+
+	auto timestamp = TimestampForFilename();
+	auto make_candidate = [&](int suffix) {
+		std::string filename = stem + "_" + timestamp;
+		if (suffix > 0) filename += "_" + std::to_string(suffix);
+		filename += extension;
+		return parent.empty() ? std::filesystem::path(filename) : parent / filename;
+	};
+
+	for (int i = 0; i < 1000; ++i) {
+		auto candidate = make_candidate(i);
+		std::error_code ec;
+		if (!std::filesystem::exists(candidate, ec)) {
+			return candidate.string();
+		}
+	}
+
+	return make_candidate(1000).string();
+}
+
+bool ProfilerManager::WriteTraceToFileLocked(const std::string& path,
+											 const std::vector<char>& data) {
+	if (path.empty() || data.empty()) return false;
+
+	std::filesystem::path file_path(path);
+	auto parent = file_path.parent_path();
+	if (!parent.empty()) {
+		std::error_code ec;
+		std::filesystem::create_directories(parent, ec);
+		if (ec) {
+			auto* logger = GetLogger();
+			ENGINE_LOG_ERROR(logger,
+							 "ProfilerManager: failed to create trace directory [{}]: {}",
+							 parent.string(),
+							 ec.message());
+			return false;
+		}
+	}
+
+	std::ofstream ofs(file_path, std::ios::binary | std::ios::trunc);
 	if (!ofs) {
 		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger, "ProfilerManager: failed to open trace file [{}]", path);
-		return;
+		return false;
 	}
 
 	ofs.write(data.data(), static_cast<std::streamsize>(data.size()));
+	if (!ofs) {
+		auto* logger = GetLogger();
+		ENGINE_LOG_ERROR(logger, "ProfilerManager: failed to write trace file [{}]", path);
+		return false;
+	}
 	ofs.close();
+	if (!ofs) {
+		auto* logger = GetLogger();
+		ENGINE_LOG_ERROR(logger, "ProfilerManager: failed to close trace file [{}]", path);
+		return false;
+	}
 
+	last_saved_path_ = file_path.string();
 	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger, "ProfilerManager: trace saved to [{}] ([{}] bytes)", path, data.size());
+	ENGINE_LOG_INFO(logger,
+					"ProfilerManager: trace saved to [{}] ([{}] bytes)",
+					last_saved_path_,
+					data.size());
+	return true;
 }
 
 }  // namespace engine
 
 #else  // ENGINE_PROFILER_ENABLED not defined
 
-// Stub implementations — all methods are no-ops.
-// perfetto.h is included here (even though no tracing macros are used)
-// so that std::unique_ptr<perfetto::TracingSession> in the header
-// can be properly compiled and destroyed.
+// Stub implementations: all methods are no-ops.
+// perfetto.h is included here so the unique_ptr<perfetto::TracingSession>
+// member in the header can be properly compiled and destroyed.
 
 #include "runtime/core/log/log.h"
 #include "runtime/core/log/log_macros.h"
@@ -259,6 +404,10 @@ bool ProfilerManager::StartSession() {
 void ProfilerManager::StopSession() {
 }
 
+bool ProfilerManager::IsInitialized() const {
+	return false;
+}
+
 bool ProfilerManager::IsActive() const {
 	return false;
 }
@@ -274,13 +423,48 @@ std::vector<char> ProfilerManager::ReadTrace() {
 	return {};
 }
 
-void ProfilerManager::SaveTrace() {
+std::string ProfilerManager::SaveTrace() {
+	return {};
 }
 
-void ProfilerManager::SaveTraceExact(const std::string& path) {
+bool ProfilerManager::SaveTraceExact(const std::string& path) {
 	(void) path;
+	return false;
+}
+
+std::string ProfilerManager::LastSavedPath() const {
+	return {};
+}
+
+size_t ProfilerManager::CachedTraceSize() const {
+	return 0;
+}
+
+void ProfilerManager::ClearCachedTrace() {
+}
+
+ProfilerConfig ProfilerManager::NormalizeConfig(ProfilerConfig cfg) {
+	return cfg;
+}
+
+std::string ProfilerManager::BuildTimestampedPathLocked() const {
+	return {};
+}
+
+void ProfilerManager::StopSessionLocked() {
+}
+
+std::vector<char> ProfilerManager::ReadTraceLocked() {
+	return {};
+}
+
+bool ProfilerManager::WriteTraceToFileLocked(const std::string& path,
+											 const std::vector<char>& data) {
+	(void) path;
+	(void) data;
+	return false;
 }
 
 }  // namespace engine
 
-#endif	// ENGINE_PROFILER_ENABLED
+#endif  // ENGINE_PROFILER_ENABLED

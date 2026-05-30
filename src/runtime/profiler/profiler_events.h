@@ -40,11 +40,19 @@ inline thread_local uint64_t g_profiler_physics_frame_id = UINT64_MAX;
 		ENGINE_PROFILE_END("engine");                                        \
 	} while (0)
 
-#define ENGINE_PROFILE_SLOW_FRAME(elapsed_ms, threshold_ms) \
-	do {                                                    \
-		if ((elapsed_ms) > (threshold_ms)) {                \
-			ENGINE_PROFILE_INSTANT("engine", "SlowFrame");  \
-		}                                                   \
+#define ENGINE_PROFILE_SLOW_FRAME(elapsed_ms, threshold_ms)                       \
+	do {                                                                         \
+		const auto engine_profile_elapsed_ms__ = (elapsed_ms);                   \
+		const auto engine_profile_threshold_ms__ = (threshold_ms);               \
+		if (engine_profile_elapsed_ms__ > engine_profile_threshold_ms__) {       \
+			ENGINE_PROFILE_INSTANT(                                              \
+				"engine",                                                       \
+				"SlowFrame",                                                    \
+				"elapsed_ms",                                                   \
+				static_cast<int64_t>(engine_profile_elapsed_ms__),               \
+				"threshold_ms",                                                 \
+				static_cast<int64_t>(engine_profile_threshold_ms__));            \
+		}                                                                        \
 	} while (0)
 
 // ── Frame sub-stages ────────────────────────────────────────────────────
