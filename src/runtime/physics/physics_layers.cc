@@ -2,6 +2,7 @@
 
 #include "runtime/physics/physics_layers.h"
 
+#include <algorithm>
 #include <cassert>
 
 namespace engine {
@@ -25,12 +26,14 @@ BPLayerInterfaceImpl::BPLayerInterfaceImpl(const LayerConfig& config) {
 #endif
 	}
 
-	// Count unique broad phase layers
-	std::unordered_map<JPH::BroadPhaseLayer::Type, bool> unique_bp;
+	// Jolt requires returned broad-phase layer values to be in
+	// [0, GetNumBroadPhaseLayers()). Sparse config values therefore need
+	// max + 1, not just the count of unique entries.
+	JPH::BroadPhaseLayer::Type max_bp = 0;
 	for (const auto& [obj, bp] : obj_to_bp_) {
-		unique_bp[bp.GetValue()] = true;
+		max_bp = std::max(max_bp, bp.GetValue());
 	}
-	num_layers_ = static_cast<unsigned int>(unique_bp.size());
+	num_layers_ = obj_to_bp_.empty() ? 1 : static_cast<unsigned int>(max_bp + 1);
 }
 
 unsigned int BPLayerInterfaceImpl::GetNumBroadPhaseLayers() const {

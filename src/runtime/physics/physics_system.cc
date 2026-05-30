@@ -3,6 +3,7 @@
 #define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/physics_system.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 
@@ -141,6 +142,11 @@ bool PhysicsSystem::Start() {
 		return false;
 	}
 
+	// Register before launching PT so the callback is immutable from the
+	// physics thread's point of view.
+	physics_thread_.SetPostStepCallback(
+		[this](const std::vector<CollisionEvent>& events) { this->UpdateScript(events); });
+
 	bool ok = physics_thread_.Start(config_manager_->GetPhysicsConfig(),
 									config_manager_->GetThreadingConfig(),
 									config_manager_->GetThresholdsConfig(),
@@ -151,11 +157,6 @@ bool PhysicsSystem::Start() {
 		ENGINE_LOG_ERROR(GetLogger(), "PhysicsSystem: failed to start physics thread");
 		return false;
 	}
-
-	// Register post-step callback — drives Lua collision callbacks on the
-	// physics thread after each world_.Step().
-	physics_thread_.SetPostStepCallback(
-		[this](const std::vector<CollisionEvent>& events) { this->UpdateScript(events); });
 
 	PHYSICS_LOG_INFO(physics_thread_.GetLogger(), "PhysicsSystem: physics thread started");
 	return true;
@@ -176,6 +177,7 @@ void PhysicsSystem::Shutdown() {
 	}
 
 	config_manager_.reset();
+	pending_results_.clear();
 	is_initialized_ = false;
 
 	ENGINE_LOG_INFO(GetLogger(), "PhysicsSystem: shutdown complete");
@@ -242,6 +244,13 @@ void PhysicsSystem::Tick(uint64_t frame_id, float delta_time) {
 
 std::optional<PhysicsFrameResult> PhysicsSystem::FetchResult(uint64_t frame_id, int timeout_ms) {
 	ENGINE_PROFILE_PHYSICS_FETCH(frame_id);
+	auto cached = pending_results_.find(frame_id);
+	if (cached != pending_results_.end()) {
+		PhysicsFrameResult result = std::move(cached->second);
+		pending_results_.erase(cached);
+		return result;
+	}
+
 	auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
 
 	while (true) {
@@ -250,6 +259,8 @@ std::optional<PhysicsFrameResult> PhysicsSystem::FetchResult(uint64_t frame_id, 
 			if (result->frame_id == frame_id) {
 				return std::move(*result);
 			}
+			StorePendingResult(std::move(*result));
+			continue;
 		}
 
 		auto now = std::chrono::steady_clock::now();
@@ -260,6 +271,26 @@ std::optional<PhysicsFrameResult> PhysicsSystem::FetchResult(uint64_t frame_id, 
 		physics_thread_.WaitForResult(
 			std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now));
 	}
+}
+
+void PhysicsSystem::StorePendingResult(PhysicsFrameResult&& result) {
+	size_t limit = 64;
+	if (config_manager_) {
+		limit = static_cast<size_t>(
+			std::max(1, config_manager_->GetThreadingConfig().result_queue_size));
+	}
+
+	if (pending_results_.size() >= limit) {
+		auto oldest = pending_results_.begin();
+		for (auto it = pending_results_.begin(); it != pending_results_.end(); ++it) {
+			if (it->first < oldest->first) {
+				oldest = it;
+			}
+		}
+		pending_results_.erase(oldest);
+	}
+
+	pending_results_[result.frame_id] = std::move(result);
 }
 
 // IsHealthy
@@ -350,6 +381,11 @@ bool PhysicsSystem::Recover(const std::string& saved_state) {
 		ENGINE_LOG_WARN(GetLogger(), "PhysicsSystem: not initialized, cannot recover");
 		return false;
 	}
+	if (physics_thread_.IsPhysicsThread()) {
+		PHYSICS_LOG_ERROR(physics_thread_.GetLogger(),
+						  "PhysicsSystem: recover cannot be called from physics Lua");
+		return false;
+	}
 	return physics_thread_.Recover(saved_state);
 }
 
@@ -375,14 +411,15 @@ void PhysicsSystem::UpdateScript(const std::vector<CollisionEvent>& collision_ev
 	lua_State* L = script_vm_->GetState();
 	if (!L) return;
 
-	// Look up on_physics_collision in Lua globals
-	lua_getglobal(L, "on_physics_collision");
-	if (!lua_isfunction(L, -1)) {
-		lua_pop(L, 1);
-		return;
-	}
-
 	for (const auto& evt : collision_events) {
+		const int base = lua_gettop(L);
+
+		lua_getglobal(L, "on_physics_collision");
+		if (!lua_isfunction(L, -1)) {
+			lua_settop(L, base);
+			return;
+		}
+
 		// Push event table for each collision
 		lua_newtable(L);
 
@@ -420,14 +457,12 @@ void PhysicsSystem::UpdateScript(const std::vector<CollisionEvent>& collision_ev
 			PHYSICS_LOG_ERROR(physics_thread_.GetLogger(),
 							  "PhysicsSystem: on_physics_collision error: {}",
 							  lua_tostring(L, -1));
-			lua_pop(L, 1);
+			lua_settop(L, base);
+			continue;
 		}
-
-		// Re-fetch function for next call
-		lua_getglobal(L, "on_physics_collision");
+		lua_remove(L, msgh);
+		lua_settop(L, base);
 	}
-
-	lua_pop(L, 1);	// pop the function
 }
 
 }  // namespace engine

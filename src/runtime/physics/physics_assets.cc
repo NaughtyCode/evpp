@@ -2,6 +2,7 @@
 
 #include "runtime/physics/physics_assets.h"
 
+#include <algorithm>
 #include <cmath>
 #include "runtime/core/log/log.h"
 #include <cstdio>
@@ -213,10 +214,31 @@ JPH::RVec3 AssetLoader::ParseVec3(const std::vector<double>& v) {
 
 JPH::Quat AssetLoader::ParseQuat(const std::vector<float>& q) {
 	if (q.size() >= 4) {
-		return JPH::Quat(q[0], q[1], q[2], q[3]);
+		JPH::Quat quat(q[0], q[1], q[2], q[3]);
+		if (quat.LengthSq() > 1.0e-12f) {
+			return quat.Normalized();
+		}
 	}
 	return JPH::Quat::sIdentity();
 }
+
+namespace {
+
+bool IsPositiveFinite(double value) {
+	return std::isfinite(value) && value > 0.0;
+}
+
+bool IsFiniteVec3(const glz::generic& value) {
+	if (!value.is_array() || value.size() < 3) {
+		return false;
+	}
+	return value[0u].is_number() && value[1u].is_number() && value[2u].is_number() &&
+		   std::isfinite(value[0u].template get<double>()) &&
+		   std::isfinite(value[1u].template get<double>()) &&
+		   std::isfinite(value[2u].template get<double>());
+}
+
+}  // namespace
 
 // Shape creation from JSON definition
 
@@ -287,6 +309,10 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(const JsonShapeDef& def,
 			hy = he_arr[1u].template get<double>();
 			hz = he_arr[2u].template get<double>();
 		}
+		if (!IsPositiveFinite(hx) || !IsPositiveFinite(hy) || !IsPositiveFinite(hz)) {
+			result.error = "box half extents must be finite and > 0";
+			return result;
+		}
 		JPH::BoxShapeSettings settings(
 			JPH::Vec3(static_cast<float>(hx), static_cast<float>(hy), static_cast<float>(hz)));
 		auto sr = settings.Create();
@@ -297,6 +323,10 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(const JsonShapeDef& def,
 		}
 	} else if (type == "sphere") {
 		double radius = get_num("radius", 0.5);
+		if (!IsPositiveFinite(radius)) {
+			result.error = "sphere radius must be finite and > 0";
+			return result;
+		}
 		JPH::SphereShapeSettings settings(static_cast<float>(radius));
 		auto sr = settings.Create();
 		if (sr.IsValid()) {
@@ -307,6 +337,10 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(const JsonShapeDef& def,
 	} else if (type == "capsule") {
 		double half_height = get_num("halfHeight", 0.5);
 		double radius = get_num("radius", 0.25);
+		if (!IsPositiveFinite(half_height) || !IsPositiveFinite(radius)) {
+			result.error = "capsule halfHeight and radius must be finite and > 0";
+			return result;
+		}
 		JPH::CapsuleShapeSettings settings(static_cast<float>(half_height),
 										   static_cast<float>(radius));
 		auto sr = settings.Create();
@@ -318,6 +352,10 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(const JsonShapeDef& def,
 	} else if (type == "cylinder") {
 		double half_height = get_num("halfHeight", 0.5);
 		double radius = get_num("radius", 0.25);
+		if (!IsPositiveFinite(half_height) || !IsPositiveFinite(radius)) {
+			result.error = "cylinder halfHeight and radius must be finite and > 0";
+			return result;
+		}
 		JPH::CylinderShapeSettings settings(static_cast<float>(half_height),
 											static_cast<float>(radius));
 		auto sr = settings.Create();
@@ -332,7 +370,7 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(const JsonShapeDef& def,
 		if (pts_arr.is_array()) {
 			for (size_t i = 0; i < pts_arr.size(); ++i) {
 				auto& pt = pts_arr[unsigned(i)];
-				if (pt.is_array() && pt.size() >= 3) {
+				if (IsFiniteVec3(pt)) {
 					points.emplace_back(static_cast<float>(pt[0u].template get<double>()),
 										static_cast<float>(pt[1u].template get<double>()),
 										static_cast<float>(pt[2u].template get<double>()));
@@ -357,6 +395,10 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(const JsonShapeDef& def,
 		if (verts_arr.is_array()) {
 			for (size_t i = 0; i < verts_arr.size(); ++i) {
 				auto& v = verts_arr[unsigned(i)];
+				if (!IsFiniteVec3(v)) {
+					result.error = "mesh vertex must be [x, y, z] finite numbers";
+					return result;
+				}
 				float x = static_cast<float>(v[0u].template get<double>());
 				float y = static_cast<float>(v[1u].template get<double>());
 				float z = static_cast<float>(v[2u].template get<double>());
@@ -367,9 +409,19 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(const JsonShapeDef& def,
 		if (tris_arr.is_array()) {
 			for (size_t i = 0; i < tris_arr.size(); ++i) {
 				auto& t = tris_arr[unsigned(i)];
-				triangles.emplace_back(static_cast<uint32_t>(t[0u].template get<double>()),
-									   static_cast<uint32_t>(t[1u].template get<double>()),
-									   static_cast<uint32_t>(t[2u].template get<double>()));
+				if (!t.is_array() || t.size() < 3 || !t[0u].is_number() || !t[1u].is_number() ||
+					!t[2u].is_number()) {
+					result.error = "mesh triangle must be [i0, i1, i2] numbers";
+					return result;
+				}
+				uint32_t i0 = static_cast<uint32_t>(t[0u].template get<double>());
+				uint32_t i1 = static_cast<uint32_t>(t[1u].template get<double>());
+				uint32_t i2 = static_cast<uint32_t>(t[2u].template get<double>());
+				if (i0 >= vertices.size() || i1 >= vertices.size() || i2 >= vertices.size()) {
+					result.error = "mesh triangle index out of range";
+					return result;
+				}
+				triangles.emplace_back(i0, i1, i2);
 			}
 		}
 		if (vertices.empty() || triangles.empty()) {
@@ -384,6 +436,10 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(const JsonShapeDef& def,
 		if (mats_arr.is_array()) {
 			std::vector<std::string> mat_names;
 			for (size_t i = 0; i < mats_arr.size(); ++i) {
+				if (!mats_arr[unsigned(i)].is_string()) {
+					result.error = "mesh materials entries must be strings";
+					return result;
+				}
 				mat_names.push_back(mats_arr[unsigned(i)].template get<std::string>());
 			}
 			settings.mMaterials = material_table.CreateList(mat_names);
@@ -397,10 +453,18 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(const JsonShapeDef& def,
 		}
 	} else if (type == "height_field" || type == "heightField") {
 		JPH::HeightFieldShapeSettings settings;
-		auto& df_arr = get_arr("dataFile");
-		if (df_arr.is_array() && df_arr.size() > 0) {
+		bool has_height_samples = false;
+		std::string data_path;
+		if (p.contains("dataFile") && p["dataFile"].is_string()) {
+			data_path = p["dataFile"].template get<std::string>();
+		} else {
+			auto& df_arr = get_arr("dataFile");
+			if (df_arr.is_array() && df_arr.size() > 0 && df_arr[0u].is_string()) {
+				data_path = df_arr[0u].template get<std::string>();
+			}
+		}
+		if (!data_path.empty()) {
 			// Resolve dataFile path relative to assets_dir, or use absolute
-			std::string data_path = std::string(df_arr[0u].template get<std::string>());
 			if (!assets_dir.empty() && !data_path.empty() && data_path[0] != '/' &&
 				!(data_path.size() >= 2 && data_path[1] == ':')) {
 				data_path = assets_dir + "/" + data_path;
@@ -429,6 +493,10 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(const JsonShapeDef& def,
 					return result;
 				}
 			}
+			if (static_cast<size_t>(sample_count) * sample_count != sample_count_file) {
+				result.error = "height_field: sampleCount does not match data file sample count";
+				return result;
+			}
 			JPH::Array<float> samples;
 			samples.resize(sample_count_file);
 			bf.read(reinterpret_cast<char*>(samples.data()),
@@ -439,6 +507,7 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(const JsonShapeDef& def,
 			}
 			settings.mHeightSamples = std::move(samples);
 			settings.mSampleCount = sample_count;
+			has_height_samples = true;
 		}
 		// Fallback: parse inline samples
 		auto& samples_arr = get_arr("samples");
@@ -464,6 +533,11 @@ AssetLoader::ShapeCreateResult AssetLoader::CreateShape(const JsonShapeDef& def,
 			}
 			settings.mHeightSamples = std::move(samples);
 			settings.mSampleCount = sample_count;
+			has_height_samples = true;
+		}
+		if (!has_height_samples) {
+			result.error = "height_field requires dataFile or samples";
+			return result;
 		}
 		// Offset and scale
 		auto& off_arr = get_arr("offset");
@@ -570,6 +644,14 @@ AssetLoadResult AssetLoader::LoadScene(const std::string& json_path,
 		// First pass: create bodies and collect BodyIDs for batch addition
 		std::vector<JPH::BodyID> body_ids;
 		body_ids.reserve(asset.static_bodies->size());
+		auto destroy_created_static_bodies = [&]() {
+			for (JPH::BodyID id : body_ids) {
+				body_interface.DestroyBody(id);
+			}
+			body_ids.clear();
+			static_body_ids_.clear();
+			result.static_bodies_loaded = 0;
+		};
 
 		for (const auto& sbody : *asset.static_bodies) {
 			// Resolve object layer
@@ -582,6 +664,7 @@ AssetLoadResult AssetLoader::LoadScene(const std::string& json_path,
 			auto shape_result = CreateShape(sbody.shape, combined_materials, assets_dir);
 			if (!shape_result.shape) {
 				result.error = "static body '" + sbody.id + "': " + shape_result.error;
+				destroy_created_static_bodies();
 				return result;
 			}
 
@@ -596,6 +679,7 @@ AssetLoadResult AssetLoader::LoadScene(const std::string& json_path,
 			JPH::Body* body = body_interface.CreateBody(settings);
 			if (!body) {
 				result.error = "static body '" + sbody.id + "': creation failed";
+				destroy_created_static_bodies();
 				return result;
 			}
 
@@ -621,6 +705,10 @@ AssetLoadResult AssetLoader::LoadScene(const std::string& json_path,
 	// ── Load dynamic prototypes ────────────────────────────────────────
 	if (asset.dynamic_prototypes.has_value()) {
 		for (const auto& proto : *asset.dynamic_prototypes) {
+			if (!std::isfinite(proto.mass) || proto.mass <= 0.0f) {
+				result.error = "prototype '" + proto.proto_id + "': mass must be finite and > 0";
+				return result;
+			}
 			auto shape_result = CreateShape(proto.shape, combined_materials, assets_dir);
 			if (!shape_result.shape) {
 				result.error = "prototype '" + proto.proto_id + "': " + shape_result.error;

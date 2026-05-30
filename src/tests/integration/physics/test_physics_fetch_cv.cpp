@@ -12,6 +12,11 @@
 
 using namespace std::chrono_literals;
 
+namespace {
+constexpr const char* kPhysicsConfigDir = "resources/physics/config";
+constexpr const char* kPhysicsScriptsDir = "";
+}
+
 /* ============================================================================
  * Integration: PhysicsSystem::FetchResult CV-based waiting (P2-13)
  * ============================================================================ */
@@ -22,7 +27,7 @@ TEST_CASE("FetchResult returns within timeout when no data", "[integration][phys
 	auto& bridge = engine::PhysicsEngineBridge::Instance();
 
 	if (!bridge.IsInitialized()) {
-		bridge.Initialize("resources/config", "resources/script/physics");
+		bridge.Initialize(kPhysicsConfigDir, kPhysicsScriptsDir);
 	}
 	if (!bridge.IsRunning()) {
 		bridge.Start();
@@ -44,7 +49,7 @@ TEST_CASE("FetchResult timeout returns nullopt", "[integration][physics][cv]") {
 	auto& bridge = engine::PhysicsEngineBridge::Instance();
 
 	if (!bridge.IsInitialized()) {
-		bridge.Initialize("resources/config", "resources/script/physics");
+		bridge.Initialize(kPhysicsConfigDir, kPhysicsScriptsDir);
 	}
 	if (!bridge.IsRunning()) {
 		bridge.Start();
@@ -66,7 +71,7 @@ TEST_CASE("FetchResult receives result from physics thread without busy-wait", "
 	auto& bridge = engine::PhysicsEngineBridge::Instance();
 
 	if (!bridge.IsInitialized()) {
-		bridge.Initialize("resources/config", "resources/script/physics");
+		bridge.Initialize(kPhysicsConfigDir, kPhysicsScriptsDir);
 	}
 	if (!bridge.IsRunning()) {
 		bridge.Start();
@@ -90,7 +95,7 @@ TEST_CASE("Multiple FetchResult calls without new data wait on CV", "[integratio
 	auto& bridge = engine::PhysicsEngineBridge::Instance();
 
 	if (!bridge.IsInitialized()) {
-		bridge.Initialize("resources/config", "resources/script/physics");
+		bridge.Initialize(kPhysicsConfigDir, kPhysicsScriptsDir);
 	}
 	if (!bridge.IsRunning()) {
 		bridge.Start();

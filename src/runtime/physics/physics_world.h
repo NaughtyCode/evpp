@@ -71,6 +71,7 @@ class ContactListenerImpl final : public JPH::ContactListener {
 		CollisionEvent::Type type;
 		JPH::RVec3 contact_point_1;
 		JPH::RVec3 contact_point_2;
+		bool has_contact_points = false;
 	};
 
 	void OnContactAdded(const JPH::Body& inBody1,
@@ -99,7 +100,8 @@ class ContactListenerImpl final : public JPH::ContactListener {
 					uint32_t body_b,
 					CollisionEvent::Type type,
 					JPH::RVec3Arg cp1 = JPH::RVec3::sZero(),
-					JPH::RVec3Arg cp2 = JPH::RVec3::sZero());
+					JPH::RVec3Arg cp2 = JPH::RVec3::sZero(),
+					bool has_contact_points = false);
 
 	std::mutex mutex_;
 	std::vector<ContactRecord> records_;
@@ -302,6 +304,7 @@ class PhysicsWorld {
 
 	// Thresholds (set at init, hot-reloaded via SetThresholds)
 	ThresholdsConfig thresholds_;
+	mutable std::mutex thresholds_mutex_;
 
 	// Per-frame stats tracking (updated in Step, returned by GetStats)
 	std::atomic<int> last_body_pairs_{0};

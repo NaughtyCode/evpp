@@ -8,6 +8,11 @@
 #include <runtime/physics/physics_engine_bridge.h>
 #endif
 
+namespace {
+constexpr const char* kPhysicsConfigDir = "resources/physics/config";
+constexpr const char* kPhysicsScriptsDir = "";
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Integration: Physics engine bridge lifecycle
 // ═══════════════════════════════════════════════════════════════════════════
@@ -19,7 +24,7 @@ TEST_CASE("Physics bridge initialize and shutdown", "[integration][physics]") {
     auto& bridge = engine::PhysicsEngineBridge::Instance();
 
     // Initialize with a simple config
-    REQUIRE_NOTHROW(bridge.Initialize("resources/config", "resources/script/physics"));
+    REQUIRE_NOTHROW(bridge.Initialize(kPhysicsConfigDir, kPhysicsScriptsDir));
 
     REQUIRE(bridge.IsInitialized());
 
@@ -37,7 +42,7 @@ TEST_CASE("Physics bridge Tick completes without error", "[integration][physics]
     auto& bridge = engine::PhysicsEngineBridge::Instance();
 
     if (!bridge.IsInitialized()) {
-        bridge.Initialize("resources/config", "resources/script/physics");
+        bridge.Initialize(kPhysicsConfigDir, kPhysicsScriptsDir);
     }
     if (!bridge.IsRunning()) {
         bridge.Start();

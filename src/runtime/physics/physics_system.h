@@ -25,6 +25,7 @@ before including this header."
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "runtime/physics/physics_commands.h"
@@ -234,6 +235,8 @@ class PhysicsSystem {
 	PhysicsSystem() = default;
 	~PhysicsSystem() = default;
 
+	void StorePendingResult(PhysicsFrameResult&& result);
+
 	// Friends — granted access to private members
 	//
 	// PhysicsEngineBridge: sole external API entry point.
@@ -256,6 +259,7 @@ class PhysicsSystem {
 	// [PT] Lua state PT-exclusive
 	PhysicsThread physics_thread_;	// [MT->] start/stop on MT;
 	// [PT] EventLoop runs on PT
+	std::unordered_map<uint64_t, PhysicsFrameResult> pending_results_;  // [MT] out-of-order fetch cache
 
 	std::string config_dir_;  // [MT] config path
 	std::string assets_path_;  // [MT->] asset path passed to PT

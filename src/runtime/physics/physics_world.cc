@@ -5,8 +5,10 @@
 
 #include "runtime/core/mem/mem.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 
 #include <Jolt/Core/Factory.h>
 #include <Jolt/Core/JobSystemSingleThreaded.h>
@@ -41,12 +43,13 @@ void ContactListenerImpl::PushRecord(uint32_t body_a,
 									 uint32_t body_b,
 									 CollisionEvent::Type type,
 									 JPH::RVec3Arg cp1,
-									 JPH::RVec3Arg cp2) {
+									 JPH::RVec3Arg cp2,
+									 bool has_contact_points) {
 	// Lock: serializes concurrent appends from multiple JT workers during
 	// system_.Update(). Drain() is called after all JT workers finish, so
 	// this lock never serializes JT against PT.
 	std::lock_guard<std::mutex> lock(mutex_);
-	records_.push_back({body_a, body_b, type, cp1, cp2});
+	records_.push_back({body_a, body_b, type, cp1, cp2, has_contact_points});
 }
 
 void ContactListenerImpl::OnContactAdded(const JPH::Body& inBody1,
@@ -59,7 +62,8 @@ void ContactListenerImpl::OnContactAdded(const JPH::Body& inBody1,
 			   inBody2.GetID().GetIndexAndSequenceNumber(),
 			   CollisionEvent::Type::Start,
 			   cp1,
-			   cp2);
+			   cp2,
+			   true);
 }
 
 void ContactListenerImpl::OnContactPersisted(const JPH::Body& inBody1,
@@ -80,7 +84,8 @@ void ContactListenerImpl::OnContactPersisted(const JPH::Body& inBody1,
 				   inBody2.GetID().GetIndexAndSequenceNumber(),
 				   CollisionEvent::Type::Persist,
 				   cp1_sum * inv,
-				   cp2_sum * inv);
+				   cp2_sum * inv,
+				   true);
 	}
 }
 
@@ -173,7 +178,10 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 							  const std::string& assets_path) {
 	logger_ = logger;
 	config_ = config;
-	thresholds_ = thresholds;
+	{
+		std::lock_guard<std::mutex> lock(thresholds_mutex_);
+		thresholds_ = thresholds;
+	}
 
 	// ── Step 1-3: One-time Jolt registration (program-global) ──────────
 	if (!s_jolt_registered_.exchange(true)) {
@@ -204,7 +212,10 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 	}
 
 	// ── Step 5: Create TempAllocator ──────────────────────────────────
-	unsigned int temp_size = config.max_body_pairs * 256;
+	uint64_t requested_temp_size = static_cast<uint64_t>(config.max_body_pairs) * 256ULL;
+	unsigned int temp_size = static_cast<unsigned int>(
+		(std::min)(requested_temp_size,
+				   static_cast<uint64_t>((std::numeric_limits<unsigned int>::max)())));
 	if (temp_size > 256 * 1024 * 1024) {
 		// Use malloc fallback for very large configs
 		unsigned int clamped = (temp_size > 0x7FFFFFFF) ? 0x7FFFFFFF : temp_size;
@@ -323,6 +334,9 @@ uint32_t PhysicsWorld::CreateBody(const std::string& proto_id,
 
 	JPH::BodyCreationSettings settings(
 		proto.shape, position, rotation, proto.motion_type, proto.object_layer);
+	if (proto.motion_type != JPH::EMotionType::Static && proto.mass > 0.0f) {
+		settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+	}
 	settings.mMassPropertiesOverride.mMass = proto.mass;
 	settings.mFriction = proto.friction;
 	settings.mRestitution = proto.restitution;
@@ -527,11 +541,10 @@ void PhysicsWorld::CollectCollisionEvents(PhysicsFrameResult& result) {
 			// Update type if a later event is more significant (e.g. Persist after Start)
 			evt.type = rec.type;
 		}
-		// Collect both contact points
-		if (rec.contact_point_1 != JPH::RVec3::sZero()) {
+		// Collect both contact points. A real contact can be exactly at the
+		// world origin, so validity must not be inferred from non-zero values.
+		if (rec.has_contact_points) {
 			evt.contact_points.push_back(rec.contact_point_1);
-		}
-		if (rec.contact_point_2 != JPH::RVec3::sZero()) {
 			evt.contact_points.push_back(rec.contact_point_2);
 		}
 	}
@@ -545,16 +558,15 @@ void PhysicsWorld::CollectCollisionEvents(PhysicsFrameResult& result) {
 
 void PhysicsWorld::GenerateDiffs(PhysicsFrameResult& result) {
 	JPH::BodyInterface& bi = system_.GetBodyInterfaceNoLock();
-	ThresholdsConfig thresholds = thresholds_;
+	ThresholdsConfig thresholds;
+	{
+		std::lock_guard<std::mutex> lock(thresholds_mutex_);
+		thresholds = thresholds_;
+	}
 
 	for (auto& [body_id, previous] : state_snapshots_) {
 		JPH::BodyID jid(body_id);
 		if (!bi.IsAdded(jid)) {
-			continue;
-		}
-
-		// Only generate diffs for active dynamic bodies
-		if (!activation_listener_.IsActive(jid)) {
 			continue;
 		}
 
@@ -601,30 +613,37 @@ bool PhysicsWorld::IsActive(uint32_t body_id) const {
 
 PhysicsWorld::Stats PhysicsWorld::GetStats() const {
 	Stats s;
-	s.total_bodies = static_cast<uint32_t>(state_snapshots_.size());
-	for (const auto& [id, _] : state_snapshots_) {
-		if (activation_listener_.IsActive(JPH::BodyID(id))) {
-			++s.active_bodies;
-		}
-	}
+	auto body_stats = system_.GetBodyStats();
+	s.total_bodies = static_cast<uint32_t>(body_stats.mNumBodies);
+	s.active_bodies = static_cast<uint32_t>(body_stats.mNumActiveBodiesDynamic +
+											body_stats.mNumActiveBodiesKinematic +
+											body_stats.mNumActiveSoftBodies);
 	s.body_pairs = last_body_pairs_;
 	s.contact_constraints = last_contact_constraints_;
 	return s;
 }
 
 void PhysicsWorld::SetThresholds(const ThresholdsConfig& thresholds) {
+	std::lock_guard<std::mutex> lock(thresholds_mutex_);
 	thresholds_ = thresholds;
 }
 
 std::optional<PhysicsWorld::RayCastHit> PhysicsWorld::RayCast(const JPH::RVec3& origin,
 															  const JPH::Vec3& direction,
 															  float max_distance) const {
-	JPH::RRayCast ray(origin, direction);
+	const float direction_len_sq = direction.LengthSq();
+	if (!std::isfinite(max_distance) || max_distance <= 0.0f ||
+		!std::isfinite(direction_len_sq) || direction_len_sq <= 1.0e-12f) {
+		return std::nullopt;
+	}
+
+	JPH::Vec3 ray_delta = direction.Normalized() * max_distance;
+	JPH::RRayCast ray(origin, ray_delta);
 	JPH::RayCastResult hit;
 	if (!system_.GetNarrowPhaseQuery().CastRay(ray, hit)) {
 		return std::nullopt;
 	}
-	if (hit.mFraction > max_distance) {
+	if (hit.mFraction < 0.0f || hit.mFraction > 1.0f) {
 		return std::nullopt;
 	}
 	JPH::RVec3 point = ray.GetPointOnRay(hit.mFraction);

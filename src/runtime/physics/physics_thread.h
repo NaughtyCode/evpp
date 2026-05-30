@@ -131,6 +131,10 @@ class PhysicsThread {
 	bool IsRunning() const {
 		return running_.load(std::memory_order_acquire);
 	}
+	bool IsPhysicsThread() const {
+		return physics_thread_id_ != std::thread::id{} &&
+			   physics_thread_id_ == std::this_thread::get_id();
+	}
 
 	// ── Thread verification ─────────────────────────────────────────
 	//

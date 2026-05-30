@@ -166,8 +166,16 @@ bool PhysicsConfigManager::ValidateConfigs(std::string& error_out) const {
 		error_out = "maxBodyPairs must be > 0";
 		return false;
 	}
+	if (physics_config_.max_body_pairs > 1'000'000) {
+		error_out = "maxBodyPairs must be <= 1000000";
+		return false;
+	}
 	if (physics_config_.max_contact_points < 1) {
 		error_out = "maxContactPoints must be > 0";
+		return false;
+	}
+	if (physics_config_.max_contact_points > 1'000'000) {
+		error_out = "maxContactPoints must be <= 1000000";
 		return false;
 	}
 	if (physics_config_.num_body_mutexes != 0) {
@@ -186,6 +194,14 @@ bool PhysicsConfigManager::ValidateConfigs(std::string& error_out) const {
 	}
 	if (threading_config_.result_queue_size < 1) {
 		error_out = "resultQueueSize must be > 0";
+		return false;
+	}
+	if (threading_config_.job_system_thread_count < -1) {
+		error_out = "jobSystemThreadCount must be -1 (auto) or >= 0";
+		return false;
+	}
+	if (threading_config_.job_system_max_jobs < 1) {
+		error_out = "jobSystemMaxJobs must be > 0";
 		return false;
 	}
 	if (threading_config_.job_system_max_barriers < 1 ||
@@ -224,6 +240,50 @@ bool PhysicsConfigManager::ValidateConfigs(std::string& error_out) const {
 	if (log_config_.max_backup_files < 0) {
 		error_out = "maxBackupFiles must be >= 0";
 		return false;
+	}
+
+	if (physics_config_.layer_config.object_layers.empty()) {
+		error_out = "layerConfig.objectLayers must not be empty";
+		return false;
+	}
+	if (physics_config_.layer_config.broad_phase_layers.empty()) {
+		error_out = "layerConfig.broadPhaseLayers must not be empty";
+		return false;
+	}
+	for (const auto& [name, value] : physics_config_.layer_config.broad_phase_layers) {
+		(void) name;
+		if (value > 63) {
+			error_out = "broadPhaseLayers values must be <= 63";
+			return false;
+		}
+	}
+	for (const auto& [object_name, broad_phase_name] : physics_config_.layer_config.layer_mapping) {
+		if (physics_config_.layer_config.object_layers.find(object_name) ==
+			physics_config_.layer_config.object_layers.end()) {
+			error_out = "layerMapping references unknown object layer: " + object_name;
+			return false;
+		}
+		if (physics_config_.layer_config.broad_phase_layers.find(broad_phase_name) ==
+			physics_config_.layer_config.broad_phase_layers.end()) {
+			error_out = "layerMapping references unknown broad phase layer: " + broad_phase_name;
+			return false;
+		}
+	}
+	for (const auto& [object_name, _] : physics_config_.layer_config.object_layers) {
+		if (physics_config_.layer_config.layer_mapping.find(object_name) ==
+			physics_config_.layer_config.layer_mapping.end()) {
+			error_out = "layerMapping missing object layer: " + object_name;
+			return false;
+		}
+	}
+	for (const auto& rule : physics_config_.layer_config.collision_matrix) {
+		if (physics_config_.layer_config.object_layers.find(rule.layer_a) ==
+				physics_config_.layer_config.object_layers.end() ||
+			physics_config_.layer_config.object_layers.find(rule.layer_b) ==
+				physics_config_.layer_config.object_layers.end()) {
+			error_out = "collisionMatrix references unknown object layer";
+			return false;
+		}
 	}
 
 	return true;

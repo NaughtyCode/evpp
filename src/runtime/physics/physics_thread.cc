@@ -66,12 +66,16 @@ bool PhysicsThread::Start(const PhysicsConfig& config,
 	if (running_.load(std::memory_order_acquire)) {
 		return false;
 	}
+	if (thread_ && thread_->joinable()) {
+		Stop();
+	}
 
 	physics_config_ = config;
 	threading_config_ = threading;
 	thresholds_config_ = thresholds;
 	log_config_ = log_config;
 	assets_path_ = assets_path;
+	healthy_.store(false, std::memory_order_release);
 
 	// Create independent logger
 	logger_ = CreatePhysicsLogger(log_config);
@@ -89,7 +93,13 @@ bool PhysicsThread::Start(const PhysicsConfig& config,
 
 	// Start the physics thread
 	running_.store(true, std::memory_order_release);
-	thread_ = std::make_unique<std::thread>([this]() { EventLoop(); });
+	try {
+		thread_ = std::make_unique<std::thread>([this]() { EventLoop(); });
+	} catch (const std::exception& e) {
+		running_.store(false, std::memory_order_release);
+		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: failed to create thread: {}", e.what());
+		return false;
+	}
 
 	// Set thread priority
 	if (threading.thread_priority == "high") {
@@ -115,13 +125,31 @@ bool PhysicsThread::Start(const PhysicsConfig& config,
 #endif
 	}
 
+	{
+		std::unique_lock<std::mutex> lock(health_cv_mutex_);
+		bool startup_finished = health_cv_.wait_for(
+			lock, std::chrono::milliseconds(5000), [this]() {
+				return healthy_.load(std::memory_order_acquire) ||
+					   !running_.load(std::memory_order_acquire);
+			});
+		if (!startup_finished || !healthy_.load(std::memory_order_acquire)) {
+			PHYSICS_LOG_ERROR(logger_,
+							  "PhysicsThread: startup failed or timed out "
+							  "(healthy=[{}], running=[{}])",
+							  healthy_.load(std::memory_order_acquire),
+							  running_.load(std::memory_order_acquire));
+			Stop();
+			return false;
+		}
+	}
+
 	return true;
 }
 
 // Stop
 
 void PhysicsThread::Stop() {
-	if (!running_.load(std::memory_order_acquire)) {
+	if (!running_.load(std::memory_order_acquire) && !thread_) {
 		return;
 	}
 
@@ -130,12 +158,20 @@ void PhysicsThread::Stop() {
 	// Signal thread to exit
 	running_.store(false, std::memory_order_release);
 	cv_.notify_one();  // wake EventLoop from wait (no fake tick needed)
+	result_cv_.notify_all();
+	health_cv_.notify_all();
 
 	// Join thread
 	if (thread_ && thread_->joinable()) {
+		if (thread_->get_id() == std::this_thread::get_id()) {
+			PHYSICS_LOG_ERROR(logger_, "PhysicsThread: Stop called from physics thread");
+			return;
+		}
 		thread_->join();
 	}
 	thread_.reset();
+	physics_thread_id_ = std::thread::id{};
+	healthy_.store(false, std::memory_order_release);
 
 	PHYSICS_LOG_INFO(logger_, "PhysicsThread: stopped");
 }
@@ -143,6 +179,11 @@ void PhysicsThread::Stop() {
 // Recover - restart physics thread after a crash [D21]
 
 bool PhysicsThread::Recover(const std::string& saved_state) {
+	if (IsPhysicsThread()) {
+		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: recovery cannot run on the physics thread");
+		return false;
+	}
+
 	PHYSICS_LOG_WARN(logger_, "PhysicsThread: attempting recovery...");
 	PHYSICS_LOG_WARN(
 		logger_, "PhysicsThread: was healthy=[{}], running=[{}]", healthy_.load(), running_.load());
@@ -198,14 +239,16 @@ bool PhysicsThread::EnqueueCommand(PhysicsCommand cmd) {
 		return false;
 	}
 
-	// Frame pile-up protection [D23]: check queue size
+	// Queue backpressure: commandQueueSize controls command capacity.
+	// Dropping non-Tick commands because maxPendingFrames is low can lose
+	// gameplay-critical operations such as Destroy or SetVelocity.
 	size_t approx_size = command_queue_.size_approx();
-	if (static_cast<int>(approx_size) >= threading_config_.max_pending_frames) {
+	if (static_cast<int>(approx_size) >= threading_config_.command_queue_size) {
 		PHYSICS_LOG_WARN(logger_,
 						 "PhysicsThread: command queue full "
 						 "(approx=[{}], max=[{}]), dropping command",
 						 approx_size,
-						 threading_config_.max_pending_frames);
+						 threading_config_.command_queue_size);
 		return false;
 	}
 
@@ -261,10 +304,12 @@ void PhysicsThread::EventLoop() {
 	if (!ok) {
 		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: world initialization failed");
 		healthy_.store(false, std::memory_order_release);
+		running_.store(false, std::memory_order_release);
+		health_cv_.notify_all();
 		return;
 	}
 	healthy_.store(true, std::memory_order_release);
-	health_cv_.notify_one();  // wake Recover() waiter
+	health_cv_.notify_all();  // wake Start()/Recover() waiter
 	PHYSICS_LOG_INFO(logger_, "PhysicsThread: world initialized, entering event loop");
 
 	// ── Main event loop ──────────────────────────────────────────────
@@ -326,18 +371,18 @@ void PhysicsThread::EventLoop() {
 						{
 							ENGINE_PROFILE_PHYSICS_RESULT_ENQUEUE();
 							result_queue_.enqueue(std::move(result));
-							result_cv_.notify_one();
 						}  // ResultEnqueue slice ends
 
-						// Frame pile-up protection [D23]: drop oldest if over limit
+						// Result pile-up protection [D23]: drop oldest if over limit.
 						while (result_queue_.size_approx() >
-							   static_cast<size_t>(threading_config_.max_pending_frames)) {
+							   static_cast<size_t>(threading_config_.result_queue_size)) {
 							PhysicsFrameResult dropped;
 							result_queue_.try_dequeue(dropped);
 							PHYSICS_LOG_WARN(logger_,
 											 "PhysicsThread: frame pile-up, dropped frame [{}]",
 											 dropped.frame_id);
 						}
+						result_cv_.notify_one();
 					}
 					break;
 				}
@@ -348,11 +393,15 @@ void PhysicsThread::EventLoop() {
 				PHYSICS_LOG_ERROR(logger_, "PhysicsThread: exception in event loop: {}", e.what());
 				healthy_.store(false, std::memory_order_release);
 				running_.store(false, std::memory_order_release);
+				health_cv_.notify_all();
+				result_cv_.notify_all();
 				break;	// exit event loop - world may be in corrupted state
 			} catch (...) {
 				PHYSICS_LOG_ERROR(logger_, "PhysicsThread: unknown exception in event loop");
 				healthy_.store(false, std::memory_order_release);
 				running_.store(false, std::memory_order_release);
+				health_cv_.notify_all();
+				result_cv_.notify_all();
 				break;
 			}
 		}  // CmdDequeue slice ends
