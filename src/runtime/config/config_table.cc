@@ -4,9 +4,11 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 
+#include "runtime/config/path_resolver.h"
 #include "runtime/core/log/log.h"
 
 namespace engine {
@@ -33,6 +35,47 @@ bool IsFloat(const std::string& s) {
 
 bool IsBool(const std::string& s) {
     return s == "true" || s == "false" || s == "TRUE" || s == "FALSE";
+}
+
+bool ReadCompositeJsonValue(const std::string& json, size_t& pos, std::string& value) {
+    const size_t start = pos;
+    int depth = 0;
+    bool in_string = false;
+    bool escaped = false;
+
+    while (pos < json.size()) {
+        const char c = json[pos++];
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+        if (in_string) {
+            if (c == '\\') {
+                escaped = true;
+            } else if (c == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+
+        if (c == '"') {
+            in_string = true;
+            continue;
+        }
+        if (c == '{' || c == '[') {
+            ++depth;
+            continue;
+        }
+        if (c == '}' || c == ']') {
+            --depth;
+            if (depth == 0) {
+                value = json.substr(start, pos - start);
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 }  // namespace
@@ -82,7 +125,8 @@ void ConfigTable::InferColumnTypes() {
 // ── JSON loading ────────────────────────────────────────────────────────
 
 bool ConfigTable::LoadFromJson(const std::string& path) {
-    std::ifstream ifs(path);
+    const auto resolved_path = config::ResolvePathFromWorkingTree(path);
+    std::ifstream ifs(resolved_path);
     if (!ifs.is_open()) {
         if (auto* l = GetLogger())
             ENGINE_LOG_ERROR(l, "ConfigTable: cannot open JSON file [{}]", path);
@@ -203,6 +247,13 @@ bool ConfigTable::LoadFromJson(const std::string& path) {
                 value = "false"; pos += 5;
             } else if (json.compare(pos, 4, "null") == 0) {
                 value = ""; pos += 4;
+            } else if (json[pos] == '{' || json[pos] == '[') {
+                if (!ReadCompositeJsonValue(json, pos, value)) {
+                    if (auto* l = GetLogger())
+                        ENGINE_LOG_ERROR(l, "ConfigTable: [{}] unterminated nested JSON value at pos {}",
+                                         path, pos);
+                    return false;
+                }
             } else {
                 if (auto* l = GetLogger())
                     ENGINE_LOG_ERROR(l, "ConfigTable: [{}] unexpected char '{}' at pos {}",
@@ -239,7 +290,8 @@ bool ConfigTable::LoadFromJson(const std::string& path) {
 // ── CSV loading ─────────────────────────────────────────────────────────
 
 bool ConfigTable::LoadFromCsv(const std::string& path) {
-    std::ifstream ifs(path);
+    const auto resolved_path = config::ResolvePathFromWorkingTree(path);
+    std::ifstream ifs(resolved_path);
     if (!ifs.is_open()) {
         if (auto* l = GetLogger())
             ENGINE_LOG_ERROR(l, "ConfigTable: cannot open CSV file [{}]", path);

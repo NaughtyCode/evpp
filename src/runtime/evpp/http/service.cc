@@ -1,5 +1,8 @@
 #include "runtime/evpp/http/service.h"
 
+#include <condition_variable>
+#include <mutex>
+
 #include "runtime/evpp/event_loop.h"
 #include "runtime/evpp/event_watcher.h"
 #include "runtime/evpp/libevent.h"
@@ -70,8 +73,9 @@ Service::Service(EventLoop* l) : evhttp_(nullptr), evhttp_bound_socket_(nullptr)
 }
 
 Service::~Service() {
-	assert(!evhttp_);
-	assert(!evhttp_bound_socket_);
+	if (evhttp_ || evhttp_bound_socket_) {
+		Stop();
+	}
 #if defined(EVPP_HTTP_SERVER_SUPPORTS_SSL)
 	if (ssl_ctx_) {
 		SSL_CTX_free(ssl_ctx_);
@@ -175,6 +179,10 @@ bool Service::initSSL(bool force_enable) {
 #endif
 
 bool Service::Listen(int listen_port) {
+	return Listen("0.0.0.0", listen_port);
+}
+
+bool Service::Listen(const std::string& bind_address, int listen_port) {
 	assert(evhttp_);
 	assert(listen_loop_->IsInLoopThread());
 	port_ = listen_port;
@@ -188,12 +196,12 @@ bool Service::Listen(int listen_port) {
 #endif
 
 #if LIBEVENT_VERSION_NUMBER >= 0x02001500
-	evhttp_bound_socket_ = evhttp_bind_socket_with_handle(evhttp_, "0.0.0.0", listen_port);
+	evhttp_bound_socket_ = evhttp_bind_socket_with_handle(evhttp_, bind_address.c_str(), listen_port);
 	if (!evhttp_bound_socket_) {
 		return false;
 	}
 #else
-	if (evhttp_bind_socket(evhttp_, "0.0.0.0", listen_port) != 0) {
+	if (evhttp_bind_socket(evhttp_, bind_address.c_str(), listen_port) != 0) {
 		return false;
 	}
 #endif
@@ -204,8 +212,30 @@ bool Service::Listen(int listen_port) {
 
 void Service::Stop() {
 	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http service is stopping", (void*) this);
-	assert(listen_loop_->IsInLoopThread());
 
+	if (!listen_loop_->IsRunning() || listen_loop_->IsInLoopThread()) {
+		StopInLoop();
+		return;
+	}
+
+	std::mutex stop_mutex;
+	std::condition_variable stop_cv;
+	bool stopped = false;
+
+	listen_loop_->RunInLoop([this, &stop_mutex, &stop_cv, &stopped]() {
+		StopInLoop();
+		{
+			std::lock_guard<std::mutex> lock(stop_mutex);
+			stopped = true;
+		}
+		stop_cv.notify_one();
+	});
+
+	std::unique_lock<std::mutex> lock(stop_mutex);
+	stop_cv.wait(lock, [&stopped]() { return stopped; });
+}
+
+void Service::StopInLoop() {
 	if (evhttp_) {
 		evhttp_free(evhttp_);
 		evhttp_ = nullptr;
@@ -216,7 +246,6 @@ void Service::Stop() {
 	default_callback_ = HTTPRequestCallback();
 	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} http service stopped", (void*) this);
 }
-
 
 void Service::Pause() {
 	assert(listen_loop_->IsInLoopThread());

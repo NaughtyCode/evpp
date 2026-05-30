@@ -260,9 +260,10 @@ bool AdminHttpServer::Start(evpp::EventLoop* loop, int port,
 	bind_address_ = bind_address;
 
 	service_ = std::make_unique<evpp::http::Service>(loop);
-	if (!service_->Listen(port)) {
+	if (!service_->Listen(bind_address_, port)) {
 		auto* logger = engine::GetLogger();
 		ENGINE_LOG_ERROR(logger, "AdminHttpServer: failed to listen on {}:{}", bind_address_, port);
+		service_->Stop();
 		service_.reset();
 		return false;
 	}

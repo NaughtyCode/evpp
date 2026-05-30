@@ -782,8 +782,7 @@ TEST_CASE("3-layer merge: user settings override factory settings", "[config][cl
     REQUIRE(cc.render.max_fps == 30);
 
     // Layer 3: user override (only some fields)
-    REQUIRE(cfg.LoadClientFromString(R"({
-        "scripts_dir": "factory_scripts",
+    REQUIRE(cfg.ApplyClientOverridesFromString(R"({
         "render": { "backend": "opengl", "max_fps": 60 }
     })"));
     cc = cfg.GetClientConfig();

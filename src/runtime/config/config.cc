@@ -73,6 +73,14 @@ std::unique_ptr<IConfigManager> ConfigManager::Create() {
 
 bool ConfigManager::LoadRuntimeFromString(const std::string& json) {
 	RuntimeConfig temp;
+	RuntimeConfig old_runtime;
+	ServerConfig old_server;
+	RuntimeConfig new_runtime;
+	{
+		std::shared_lock<std::shared_mutex> lock(config_mutex_);
+		old_runtime = runtime_config_;
+		old_server = server_config_;
+	}
 	auto ec = glz::read_json(temp, json);
 	if (ec) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to parse runtime config: {}", glz::format_error(ec, json));
@@ -86,10 +94,12 @@ bool ConfigManager::LoadRuntimeFromString(const std::string& json) {
 	}
 	{
 		std::lock_guard<std::shared_mutex> lock(config_mutex_);
-		previous_runtime_config_ = std::move(runtime_config_);
+		previous_runtime_config_ = runtime_config_;
 		runtime_config_ = std::move(temp);
 		has_previous_ = true;
+		new_runtime = runtime_config_;
 	}
+	NotifyReloadCallbacks(Diff(old_runtime, new_runtime, old_server, old_server));
 	return true;
 }
 
@@ -114,8 +124,43 @@ bool ConfigManager::LoadClientFromString(const std::string& json) {
 	return true;
 }
 
+bool ConfigManager::ApplyClientOverridesFromString(const std::string& json) {
+	ClientConfig merged;
+	{
+		std::shared_lock<std::shared_mutex> lock(config_mutex_);
+		merged = client_config_;
+	}
+
+	auto ec = glz::read_json(merged, json);
+	if (ec) {
+		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to parse client override config: {}", glz::format_error(ec, json));
+		return false;
+	}
+	InterpolateConfigStrings(merged);
+	auto vr = ConfigValidator::ValidateClient(merged);
+	if (!vr.valid) {
+		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: client override config validation failed: {}", vr.errors);
+		return false;
+	}
+	{
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		previous_client_config_ = client_config_;
+		client_config_ = std::move(merged);
+		has_previous_ = true;
+	}
+	return true;
+}
+
 bool ConfigManager::LoadServerFromString(const std::string& json) {
 	ServerConfig temp;
+	RuntimeConfig old_runtime;
+	ServerConfig old_server;
+	ServerConfig new_server;
+	{
+		std::shared_lock<std::shared_mutex> lock(config_mutex_);
+		old_runtime = runtime_config_;
+		old_server = server_config_;
+	}
 	auto ec = glz::read_json(temp, json);
 	if (ec) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to parse server config: {}", glz::format_error(ec, json));
@@ -129,58 +174,83 @@ bool ConfigManager::LoadServerFromString(const std::string& json) {
 	}
 	{
 		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		previous_server_config_ = server_config_;
 		server_config_ = std::move(temp);
+		has_previous_ = true;
+		new_server = server_config_;
 	}
 	LoadMongoDbConfigsFromServer();
+	NotifyReloadCallbacks(Diff(old_runtime, old_runtime, old_server, new_server));
 	return true;
 }
 
 // From files
 
 bool ConfigManager::LoadRuntimeFromFile(const std::string& path) {
+	RuntimeConfig temp;
 	std::string buf;
-	auto ec = glz::read_file_json(runtime_config_, path, buf);
+	auto ec = glz::read_file_json(temp, path, buf);
 	if (ec) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to load [{}]: {}", path, glz::format_error(ec, buf));
 		return false;
 	}
-	InterpolateConfigStrings(runtime_config_);
-	auto vr = ConfigValidator::Validate(runtime_config_);
+	InterpolateConfigStrings(temp);
+	auto vr = ConfigValidator::Validate(temp);
 	if (!vr.valid) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: runtime config validation failed [{}]: {}", path, vr.errors);
 		return false;
+	}
+	{
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		previous_runtime_config_ = runtime_config_;
+		runtime_config_ = std::move(temp);
+		has_previous_ = true;
 	}
 	return true;
 }
 
 bool ConfigManager::LoadClientFromFile(const std::string& path) {
+	ClientConfig temp;
 	std::string buf;
-	auto ec = glz::read_file_json(client_config_, path, buf);
+	auto ec = glz::read_file_json(temp, path, buf);
 	if (ec) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to load [{}]: {}", path, glz::format_error(ec, buf));
 		return false;
 	}
-	InterpolateConfigStrings(client_config_);
-	auto vr = ConfigValidator::ValidateClient(client_config_);
+	InterpolateConfigStrings(temp);
+	auto vr = ConfigValidator::ValidateClient(temp);
 	if (!vr.valid) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: client config validation failed [{}]: {}", path, vr.errors);
 		return false;
+	}
+	{
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		previous_client_config_ = client_config_;
+		client_config_ = std::move(temp);
+		has_previous_ = true;
 	}
 	return true;
 }
 
 bool ConfigManager::LoadServerFromFile(const std::string& path) {
+	ServerConfig temp;
 	std::string buf;
-	auto ec = glz::read_file_json(server_config_, path, buf);
+	auto ec = glz::read_file_json(temp, path, buf);
 	if (ec) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to load [{}]: {}", path, glz::format_error(ec, buf));
 		return false;
 	}
-	InterpolateConfigStrings(server_config_);
-	auto vr = ConfigValidator::ValidateServer(server_config_);
+	InterpolateConfigStrings(temp);
+	auto vr = ConfigValidator::ValidateServer(temp);
 	if (!vr.valid) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: server config validation failed [{}]: {}", path, vr.errors);
 		return false;
+	}
+	{
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		previous_server_config_ = server_config_;
+		server_config_ = std::move(temp);
+		has_previous_ = true;
 	}
 	LoadMongoDbConfigsFromServer();
 	return true;
@@ -232,14 +302,16 @@ bool ConfigManager::LoadClientUserSettings(const std::string& user_settings_path
 
 bool ConfigManager::SaveClientUserSettings(const std::string& user_settings_path) const {
 	std::filesystem::path file_path(user_settings_path);
-	std::error_code ec;
-	std::filesystem::create_directories(file_path.parent_path(), ec);
-	if (ec) {
-		if (auto* l = GetLogger())
-			ENGINE_LOG_ERROR(l,
-				"ConfigManager: failed to create user settings directory [{}]: {}",
-				file_path.parent_path().string(), ec.message());
-		return false;
+	if (!file_path.parent_path().empty()) {
+		std::error_code ec;
+		std::filesystem::create_directories(file_path.parent_path(), ec);
+		if (ec) {
+			if (auto* l = GetLogger())
+				ENGINE_LOG_ERROR(l,
+					"ConfigManager: failed to create user settings directory [{}]: {}",
+					file_path.parent_path().string(), ec.message());
+			return false;
+		}
 	}
 
 	ClientConfig current;
@@ -278,6 +350,8 @@ bool ConfigManager::SaveClientUserSettings(const std::string& user_settings_path
 		}
 	}
 	std::error_code rename_ec;
+	std::filesystem::remove(user_settings_path, rename_ec);
+	rename_ec.clear();
 	std::filesystem::rename(tmp_path, user_settings_path, rename_ec);
 	if (rename_ec) {
 		std::filesystem::remove(tmp_path);

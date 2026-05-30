@@ -26,6 +26,7 @@
 #include "runtime/core/timer/timer_manager.h"
 #include "runtime/engine/engine.h"
 #include "runtime/entity/entity_manager.h"
+#include "runtime/monitoring/metrics.h"
 #if defined(ENGINE_MONGODB_ENABLED)
 #include "runtime/database/data_service/database_service.h"
 #include "runtime/database/data_service/db_service_config.h"
@@ -594,12 +595,23 @@ void Engine::Cleanup() {
 	// accepted.  Give in-flight work a grace window to complete before we
 	// tear down the network layer.
 	{
-		auto drain_deadline = std::chrono::steady_clock::now()
-			+ std::chrono::seconds(drain_timeout > 0 ? drain_timeout : 5);
-		ENGINE_LOG_INFO(logger, "Cleanup: draining connections ({}s timeout)...", drain_timeout);
+		const int64_t active_connections =
+			monitoring::MetricsRegistry::Instance().connections_active().Value();
+		if (drain_timeout > 0 && active_connections > 0) {
+			auto drain_deadline = std::chrono::steady_clock::now()
+				+ std::chrono::seconds(drain_timeout);
+			ENGINE_LOG_INFO(logger,
+							"Cleanup: draining [{}] active connection(s) ({}s timeout)...",
+							active_connections, drain_timeout);
 
-		while (std::chrono::steady_clock::now() < drain_deadline) {
-			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+			while (std::chrono::steady_clock::now() < drain_deadline) {
+				if (monitoring::MetricsRegistry::Instance().connections_active().Value() <= 0) {
+					break;
+				}
+				std::this_thread::sleep_for(std::chrono::milliseconds(50));
+			}
+		} else {
+			ENGINE_LOG_INFO(logger, "Cleanup: no active connections to drain");
 		}
 		ENGINE_LOG_INFO(logger, "Cleanup: drain phase complete, proceeding to network shutdown");
 	}

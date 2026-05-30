@@ -233,13 +233,13 @@ class PHYSICS_API PhysicsEngineBridge {
 	}
 
 	bool Initialize(const std::string&, const std::string&) {
-		return false;
+		return true;
 	}
 	bool Start() {
-		return false;
+		return true;
 	}
 	bool Tick(uint64_t, float) {
-		return false;
+		return true;
 	}
 	bool EnqueueSpawn(const std::string&,
 					  double,
@@ -270,10 +270,10 @@ class PHYSICS_API PhysicsEngineBridge {
 		return false;
 	}
 	bool IsHealthy() const {
-		return false;
+		return true;
 	}
 	bool IsInitialized() const {
-		return false;
+		return true;
 	}
 	struct Vec3 {
 		float x = 0.0f;

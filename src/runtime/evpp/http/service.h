@@ -29,6 +29,7 @@ class CLOUD_ENGINE_API Service {
 	~Service();
 
 	bool Listen(int port);
+	bool Listen(const std::string& bind_address, int port);
 	void Stop();
 	void Pause();
 	void Continue();
@@ -73,6 +74,7 @@ class CLOUD_ENGINE_API Service {
 	void HandleRequest(struct evhttp_request* req);
 	void DefaultHandleRequest(const ContextPtr& ctx);
 	void SendReply(const ContextPtr& ctx, const std::string& response);
+	void StopInLoop();
 
 	private:
 	int port_ = 0;

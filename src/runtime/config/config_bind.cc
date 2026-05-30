@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "runtime/config/config.h"
+#include "runtime/config/path_resolver.h"
 #include "runtime/core/log/log.h"
 #include "runtime/vm/vm.h"
 
@@ -112,6 +113,33 @@ int l_config_get(lua_State* L) {
 // field if present.
 
 void PushJsonValue(lua_State* L, const std::string& json, size_t& pos);
+
+void BuildModuleIdIndex(lua_State* L) {
+    if (!lua_istable(L, -1)) {
+        return;
+    }
+
+    const lua_Integer row_count = luaL_len(L, -1);
+    for (lua_Integer i = 1; i <= row_count; ++i) {
+        lua_rawgeti(L, -1, static_cast<int>(i));
+        if (!lua_istable(L, -1)) {
+            lua_pop(L, 1);
+            continue;
+        }
+
+        lua_getfield(L, -1, "id");
+        if (lua_isinteger(L, -1)) {
+            const lua_Integer id = lua_tointeger(L, -1);
+            lua_pop(L, 1);
+            lua_pushvalue(L, -1);
+            lua_rawseti(L, -3, static_cast<int>(id));
+        } else {
+            lua_pop(L, 1);
+        }
+
+        lua_pop(L, 1);
+    }
+}
 
 void SkipWhitespace(const std::string& json, size_t& pos) {
     while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t' ||
@@ -232,12 +260,14 @@ int l_config_get_module(lua_State* L) {
     auto& cfg = ConfigManager::Instance();
     auto rt = cfg.GetRuntimeConfig();
 
-    std::string path = rt.resource_dir + "/script/data/" + name + ".json";
+    const auto path = config::ResolvePathFromWorkingTree(
+        std::filesystem::path(rt.resource_dir) / "script" / "data" / (std::string(name) + ".json"));
 
     std::ifstream ifs(path);
     if (!ifs.is_open()) {
         lua_pushnil(L);
-        lua_pushfstring(L, "module '%s' not found at %s", name, path.c_str());
+        const auto path_string = path.string();
+        lua_pushfstring(L, "module '%s' not found at %s", name, path_string.c_str());
         return 2;
     }
 
@@ -254,67 +284,8 @@ int l_config_get_module(lua_State* L) {
         return 2;
     }
 
-    ++pos;  // skip '['
-    lua_newtable(L);
-    int row_idx = 1;
-
-    while (pos < json.size()) {
-        SkipWhitespace(json, pos);
-        if (json[pos] == ']') break;
-        if (json[pos] != '{') {
-            // Skip unexpected token
-            lua_pushnil(L);
-            lua_pushfstring(L, "expected object in array at position %zu", pos);
-            return 2;
-        }
-
-        ++pos;  // skip '{'
-        lua_newtable(L);
-        bool has_id = false;
-        lua_Integer id_val = 0;
-
-        while (pos < json.size()) {
-            SkipWhitespace(json, pos);
-            if (json[pos] == '}') break;
-            std::string key = ReadJsonString(json, pos);
-            SkipWhitespace(json, pos);
-            if (json[pos] == ':') ++pos;
-            PushJsonValue(L, json, pos);
-            lua_setfield(L, -2, key.c_str());
-
-            // Track the "id" field for indexing
-            if (key == "id" && lua_isinteger(L, -1)) {
-                has_id = true;
-                id_val = lua_tointeger(L, -1);
-            }
-            // Actually track id by checking after setfield
-            lua_getfield(L, -1, "id");
-            if (!lua_isnil(L, -1) && !has_id) {
-                if (lua_isinteger(L, -1)) {
-                    has_id = true;
-                    id_val = lua_tointeger(L, -1);
-                }
-            }
-            lua_pop(L, 1);
-
-            SkipWhitespace(json, pos);
-            if (json[pos] == ',') ++pos;
-        }
-        if (pos < json.size()) ++pos;  // skip '}'
-
-        // Row index (1-based)
-        lua_pushvalue(L, -1);  // duplicate the row table
-        lua_rawseti(L, -3, row_idx++);
-
-        // ID index if present
-        if (has_id) {
-            lua_pushvalue(L, -1);
-            lua_rawseti(L, -3, static_cast<int>(id_val));
-        }
-
-        SkipWhitespace(json, pos);
-        if (json[pos] == ',') ++pos;
-    }
+    PushJsonValue(L, json, pos);
+    BuildModuleIdIndex(L);
 
     return 1;
 }

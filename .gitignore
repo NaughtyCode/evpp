@@ -130,3 +130,5 @@ build_*/*
 */CMakeFiles/*
 artifacts/build2/*
 
+build-vs/*
+

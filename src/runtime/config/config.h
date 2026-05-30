@@ -450,8 +450,12 @@ class CLOUD_ENGINE_API ConfigManager : public IConfigManager {
 
 	// ── From JSON strings (text) ─────────────────────────────────────
 
+	// Replaces the in-memory config with the parsed JSON plus C++ defaults.
 	bool LoadRuntimeFromString(const std::string& json);
+	// Replaces the in-memory client config with the parsed JSON plus C++ defaults.
 	bool LoadClientFromString(const std::string& json);
+	// Applies only the provided client fields on top of the current client config.
+	bool ApplyClientOverridesFromString(const std::string& json);
 	bool LoadServerFromString(const std::string& json);
 
 	// ── From files ───────────────────────────────────────────────────
