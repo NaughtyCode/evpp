@@ -1,7 +1,7 @@
 /*
  * client.cpp — Engine lifecycle, script execution, and utility functions.
  *
- * Links against CloudEngine.dll and wraps its C++ classes:
+ * Compiles the runtime sources into GameClient and wraps its C++ classes:
  *   engine::Engine   — singleton lifecycle (Init/Tick/Cleanup)
  *   engine::ScriptVM — Lua VM (DoString/DoFile/RegisterFunction)
  */

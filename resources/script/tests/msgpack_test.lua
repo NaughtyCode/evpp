@@ -380,16 +380,15 @@ eq(c2, 3)
 -- ════════════════════════════════════════════════════════════════════════════
 
 start("cmsgpack_safe pack success")
-local ok_s, data_s = mps.pack(1, "hello")
-eq(ok_s, nil)     -- no error wrapper on success in safe mode? Actually:
 -- safe returns ALL results from the wrapped function on success.
 -- pack returns 1 result (the packed string).
 -- So safe returns that 1 result directly (no nil prefix).
+local data_s = mps.pack(1, "hello")
 eq(type(data_s), "string")
 
 start("cmsgpack_safe unpack success")
-local ok_s, v_s = mps.unpack(mp.pack(42))
 -- unpack returns 1 value (42). Safe returns it directly.
+local v_s = mps.unpack(mp.pack(42))
 eq(v_s, 42)
 
 -- ════════════════════════════════════════════════════════════════════════════

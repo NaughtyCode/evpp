@@ -111,6 +111,15 @@ set (EXECUTABLE_OUTPUT_PATH ${ENGINE_ROOT}/../artifacts/bin)
 set (LIBRARY_OUTPUT_PATH ${ENGINE_ROOT}/../artifacts/lib)
 set (CMAKE_MACOSX_RPATH 0)
 
+if(NOT TARGET copy_resources)
+    add_custom_target(copy_resources ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${ENGINE_ROOT}/../resources"
+        "${EXECUTABLE_OUTPUT_PATH}/$<CONFIG>/resources"
+        COMMENT "Copying resources/ to bin/$<CONFIG>/"
+    )
+endif()
+
 # ── Status ────────────────────────────────────────────────────────────
 message (STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})
 message (STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
@@ -121,6 +130,10 @@ message (STATUS "LIBRARY_OUTPUT_PATH " ${LIBRARY_OUTPUT_PATH})
 # ── Runtime source-file organization ──────────────────────────────────
 # Provides SERVERENGINE_SOURCES and per-module source lists.
 include(${ENGINE_ROOT}/runtime/CMakeLists.txt)
+
+if(NOT TARGET engine_lua_static)
+    add_subdirectory(${ENGINE_ROOT}/thirdparty/lua ${CMAKE_BINARY_DIR}/lua)
+endif()
 
 # ═══════════════════════════════════════════════════════════════════════
 # Third-party dependencies
@@ -297,7 +310,7 @@ if(HTTPS)
 endif()
 
 target_link_directories(GameClient PRIVATE "${CMAKE_BINARY_DIR}/libevent/lib/$<CONFIG>")
-target_link_libraries(GameClient PRIVATE ${LIBRARIES})
+target_link_libraries(GameClient PRIVATE engine_lua_static ${LIBRARIES})
 
 if(ENGINE_PHYSICS_ENABLED)
     target_link_libraries(GameClient PRIVATE Jolt)

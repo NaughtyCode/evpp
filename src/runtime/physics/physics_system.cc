@@ -25,8 +25,12 @@ namespace engine {
 // Singleton
 
 PhysicsSystem& PhysicsSystem::Instance() {
-	static PhysicsSystem instance;
-	return instance;
+	// Jolt owns process-global registries and allocator hooks. The engine
+	// performs explicit PhysicsSystem::Shutdown() during Engine::Cleanup();
+	// letting the C++ static-destruction phase tear down the wrapper after
+	// those globals have started unwinding can jump through stale Jolt state.
+	static PhysicsSystem* instance = new PhysicsSystem();
+	return *instance;
 }
 
 // Initialize — load configs + create ScriptVM + load scripts [D22]

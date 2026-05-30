@@ -111,6 +111,16 @@ ScriptVM& Engine::GetScriptVM() {
 void Engine::Init(const RuntimeConfig& runtime_cfg,
 				  const std::string& entry_scripts_dir,
 				  evpp::EventLoop* external_loop) {
+	if (initialized_.load(std::memory_order_acquire) &&
+		!cleaned_up_.load(std::memory_order_acquire)) {
+		Cleanup();
+	}
+	cleaned_up_.store(false, std::memory_order_release);
+	cleanup_phase_.store(CleanupPhase::NotStarted, std::memory_order_release);
+	running_.store(false, std::memory_order_release);
+	initialized_.store(false, std::memory_order_release);
+	frame_count_.store(0, std::memory_order_release);
+
 	std::fprintf(stderr, "[engine] Init() begin\n");
 	std::fprintf(stderr, "[engine] InitLogger...\n");
 	InitLogger(runtime_cfg.log);
@@ -519,9 +529,8 @@ void Engine::ApplyConfigChanges() {
 // Cleanup -- release all resources
 
 void Engine::Cleanup() {
-	ENGINE_PROFILE_SCOPE("engine", "Cleanup");
-
 	if (cleaned_up_.exchange(true)) return;
+	running_.store(false, std::memory_order_release);
 
 	auto cleanup_start = std::chrono::steady_clock::now();
 	auto server_cfg = ConfigManager::Instance().GetServerConfig();
@@ -551,6 +560,7 @@ void Engine::Cleanup() {
 	// Stop hot-reload before any VM teardown to prevent watcher thread from accessing Lua state.
 	if (script_reloader_) {
 		script_reloader_->Stop();
+		script_reloader_.reset();
 	}
 	check_timeout("PhysicsShutdown");
 
@@ -607,9 +617,12 @@ void Engine::Cleanup() {
 		int mem_kb = lua_gc(script_vm_->GetState(), LUA_GCCOUNT, 0);
 		ENGINE_LOG_INFO(logger, "ScriptVM: final memory [{} KB], exiting", mem_kb);
 	}
+	CoroutineScheduler::Instance().CancelAll();
 	script_vm_.reset();
 
 	if (timer_mgr_) {
+		entity::EntityManager::Instance().DestroyAll();
+		entity::EntityManager::Instance().SetTimerManager(nullptr);
 		timer_mgr_->shutdown();
 		timer_mgr_.reset();
 	}
@@ -636,6 +649,7 @@ void Engine::Cleanup() {
 	ENGINE_LOG_INFO(logger, "Cleanup: complete, total_time={}s", total_elapsed);
 
 	cleanup_phase_.store(CleanupPhase::Complete, std::memory_order_release);
+	initialized_.store(false, std::memory_order_release);
 	ShutdownLogger();
 
 	loop_ = nullptr;
@@ -724,4 +738,3 @@ void Engine::SetPhysicsResultHandler(PhysicsResultHandler handler) {
 }
 
 }  // namespace engine
-

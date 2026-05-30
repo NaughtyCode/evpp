@@ -4,10 +4,8 @@ project(GameServer C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-# ENGINE_ROOT always points to the shared src/ directory.
 get_filename_component(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}" DIRECTORY)
 
 option(ENGINE_PROFILER_ENABLED "Enable perfetto profiler" ON)
@@ -18,56 +16,54 @@ option(HTTPS "Enable HTTPS/SSL support" OFF)
 option(CMAKE_BENCHMARK_TESTING "Enable benchmark testing" OFF)
 option(ENGINE_WERROR "Treat compiler warnings as errors" OFF)
 
-# ── Platform settings ────────────────────────────────────────────────
-if (UNIX)
+if(UNIX)
     if(NOT CMAKE_BUILD_TYPE)
         set(CMAKE_BUILD_TYPE "Release")
     endif()
-    set (CXX_FLAGS
-         -g
-         -fPIC
-         -Wall
-         -D__STDC_FORMAT_MACROS
-         -Wno-unused-parameter
-         -Wno-unused-function
-         -Wunused-variable
-         -Wunused-value
-         -Wshadow
-         -Wcast-qual
-         -Wcast-align
-         -Wwrite-strings
-         -Wsign-compare
-         -Winvalid-pch
-         -fms-extensions
-         -Wfloat-equal
-         -Wextra
+    set(CXX_FLAGS
+        -g
+        -fPIC
+        -Wall
+        -D__STDC_FORMAT_MACROS
+        -Wno-unused-parameter
+        -Wno-unused-function
+        -Wunused-variable
+        -Wunused-value
+        -Wshadow
+        -Wcast-qual
+        -Wcast-align
+        -Wwrite-strings
+        -Wsign-compare
+        -Winvalid-pch
+        -fms-extensions
+        -Wfloat-equal
+        -Wextra
     )
-else (UNIX)
-    set (CXX_FLAGS -DWIN32 -D_WIN32 -EHsc /utf-8 -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
-endif (UNIX)
+else()
+    set(CXX_FLAGS -DWIN32 -D_WIN32 -EHsc /utf-8 -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+endif()
 
-string (REPLACE ";" " " CMAKE_CXX_FLAGS "${CXX_FLAGS}")
+string(REPLACE ";" " " CMAKE_CXX_FLAGS "${CXX_FLAGS}")
 
-if (UNIX)
-    SET(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g -ggdb -D_DEBUG")
-    SET(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -ggdb -DNDEBUG")
-endif (UNIX)
+if(UNIX)
+    set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -ggdb -D_DEBUG")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -ggdb -DNDEBUG")
+endif()
 
 if(ENGINE_WERROR)
     if(MSVC)
         message(STATUS "ENGINE_WERROR=ON: /WX enabled")
     else()
-        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
         message(STATUS "ENGINE_WERROR=ON: -Werror enabled")
     endif()
 endif()
 
-if (HTTPS)
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEVPP_HTTP_CLIENT_SUPPORTS_SSL")
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEVPP_HTTP_SERVER_SUPPORTS_SSL")
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEVPP_OPENSSL_ENABLED")
+if(HTTPS)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEVPP_HTTP_CLIENT_SUPPORTS_SSL")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEVPP_HTTP_SERVER_SUPPORTS_SSL")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEVPP_OPENSSL_ENABLED")
 
-    # ── BoringSSL (bundled) ──────────────────────────────────────────
     if(NOT TARGET ssl)
         set(OPENSSL_NO_ASM ON CACHE BOOL "Disable assembly when NASM not available")
         add_subdirectory(${ENGINE_ROOT}/thirdparty/boringssl
@@ -75,25 +71,15 @@ if (HTTPS)
         set_property(TARGET crypto PROPERTY FOLDER "thirdparty")
         set_property(TARGET ssl PROPERTY FOLDER "thirdparty")
     endif()
-endif (HTTPS)
+endif()
 
-if (CMAKE_BENCHMARK_TESTING)
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DH_BENCHMARK_TESTING=1")
-endif (CMAKE_BENCHMARK_TESTING)
+if(CMAKE_BENCHMARK_TESTING)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DH_BENCHMARK_TESTING=1")
+endif()
 
-# ── MSVC compile options ────────────────────────────────────────────────
 if(MSVC)
     add_definitions(-D_WIN32_WINNT=0x0A00 -D_CRT_SECURE_NO_WARNINGS)
-    add_compile_options(/bigobj /Zc:preprocessor /utf-8)
-
-    # Enable warning level 4 (equivalent to -Wall -Wextra)
-    add_compile_options(/W4)
-
-    # Minimal warning suppressions — only noise that cannot be fixed in code:
-    # C4100: unreferenced formal parameter (common in callback stubs / virtual overrides)
-    # C4127: conditional expression is constant (common in template instantiations)
-    # C4201: nonstandard extension: nameless struct/union (used in evpp net layer)
-    # C4503: decorated name length exceeded (compiler limitation for template-heavy code)
+    add_compile_options(/bigobj /Zc:preprocessor /utf-8 /W4)
     add_compile_options(/wd4100 /wd4127 /wd4201 /wd4251 /wd4503)
 
     if(ENGINE_WERROR)
@@ -103,35 +89,38 @@ if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 
-# ── Platform libraries (from runtime) ─────────────────────────────────
 if(UNIX)
-    set(LIBRARIES event pthread)
+    set(ENGINE_PLATFORM_LIBS event pthread)
 else()
-    set(LIBRARIES event_core_static event_extra_static)
+    set(ENGINE_PLATFORM_LIBS event_core_static event_extra_static)
 endif()
 
-# ── Output paths ──────────────────────────────────────────────────────
-set (EXECUTABLE_OUTPUT_PATH ${ENGINE_ROOT}/../artifacts/bin)
-set (LIBRARY_OUTPUT_PATH ${ENGINE_ROOT}/../artifacts/lib)
-set (CMAKE_MACOSX_RPATH 0)
+set(EXECUTABLE_OUTPUT_PATH ${ENGINE_ROOT}/../artifacts/bin)
+set(LIBRARY_OUTPUT_PATH ${ENGINE_ROOT}/../artifacts/lib)
+set(CMAKE_MACOSX_RPATH 0)
 
-# ── Status ────────────────────────────────────────────────────────────
-message (STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})
-message (STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
-message (STATUS "CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS})
-message (STATUS "EXECUTABLE_OUTPUT_PATH " ${EXECUTABLE_OUTPUT_PATH})
-message (STATUS "LIBRARY_OUTPUT_PATH " ${LIBRARY_OUTPUT_PATH})
+if(NOT TARGET copy_resources)
+    add_custom_target(copy_resources ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${ENGINE_ROOT}/../resources"
+        "${EXECUTABLE_OUTPUT_PATH}/$<CONFIG>/resources"
+        COMMENT "Copying resources/ to bin/$<CONFIG>/"
+    )
+endif()
 
-# ── Runtime source-file organization ──────────────────────────────────
-# Provides SERVERENGINE_SOURCES and per-module source lists.
+message(STATUS "This is BINARY dir ${PROJECT_BINARY_DIR}")
+message(STATUS "This is SOURCE dir ${PROJECT_SOURCE_DIR}")
+message(STATUS "CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
+message(STATUS "EXECUTABLE_OUTPUT_PATH ${EXECUTABLE_OUTPUT_PATH}")
+message(STATUS "LIBRARY_OUTPUT_PATH ${LIBRARY_OUTPUT_PATH}")
+
 include(${ENGINE_ROOT}/runtime/CMakeLists.txt)
 
-# ═══════════════════════════════════════════════════════════════════════
-# CloudEngine library (from runtime sources)
-# ═══════════════════════════════════════════════════════════════════════
+if(NOT TARGET engine_lua_static)
+    add_subdirectory(${ENGINE_ROOT}/thirdparty/lua ${CMAKE_BINARY_DIR}/lua)
+endif()
 
-if(NOT TARGET CloudEngine)
-    # ── libevent (built from source) ──────────────────────────────────
+if(NOT TARGET event_core_static)
     set(EVENT__DISABLE_TESTS ON CACHE BOOL "Disable libevent tests")
     set(EVENT__DISABLE_REGRESS ON CACHE BOOL "Disable libevent regression tests")
     set(EVENT__DISABLE_SAMPLES ON CACHE BOOL "Disable libevent samples")
@@ -141,252 +130,166 @@ if(NOT TARGET CloudEngine)
     set(EVENT__LIBRARY_TYPE STATIC CACHE STRING "Build libevent as static library")
     set(EVENT__HAVE_WEPOLL OFF CACHE BOOL "Disable wepoll backend")
     add_subdirectory(${ENGINE_ROOT}/thirdparty/libevent ${CMAKE_BINARY_DIR}/libevent)
-    include_directories(${CMAKE_BINARY_DIR}/libevent/include)
     set_property(TARGET event_core_static event_extra_static event_static PROPERTY FOLDER "thirdparty")
     set_property(TARGET event_core event_extra event PROPERTY FOLDER "thirdparty")
+endif()
 
-    # ── mongo-c-driver (static, bundled deps) ─────────────────────────
-    if(ENGINE_MONGODB_ENABLED)
-        set(ENABLE_MONGOC ON CACHE BOOL "" FORCE)
-        set(ENABLE_STATIC ON CACHE BOOL "" FORCE)
-        set(ENABLE_SHARED OFF CACHE BOOL "" FORCE)
-        set(ENABLE_ZLIB BUNDLED CACHE STRING "" FORCE)
-        set(ENABLE_ZSTD OFF CACHE STRING "" FORCE)
-        set(ENABLE_SNAPPY OFF CACHE STRING "" FORCE)
-        set(ENABLE_SRV ON CACHE BOOL "" FORCE)
-        set(ENABLE_TESTS OFF CACHE BOOL "" FORCE)
-        set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
-        set(ENABLE_CLIENT_SIDE_ENCRYPTION OFF CACHE BOOL "" FORCE)
-        set(ENABLE_MONGODB_AWS_AUTH OFF CACHE BOOL "" FORCE)
-        set(ENABLE_UNINSTALL OFF CACHE BOOL "" FORCE)
-        set(ENABLE_MAN_PAGES OFF CACHE BOOL "" FORCE)
-        set(ENABLE_HTML_DOCS OFF CACHE BOOL "" FORCE)
-        set(ENABLE_TRACING OFF CACHE BOOL "" FORCE)
-        if (WIN32)
-            set(ENABLE_SSL WINDOWS CACHE STRING "" FORCE)
-            set(ENABLE_SASL SSPI CACHE STRING "" FORCE)
-        else ()
-            set(ENABLE_SSL AUTO CACHE STRING "" FORCE)
-            set(ENABLE_SASL AUTO CACHE STRING "" FORCE)
-        endif ()
-        add_subdirectory(${ENGINE_ROOT}/thirdparty/mongo-c-driver
-                         ${CMAKE_BINARY_DIR}/mongo-c-driver)
-        if(MSVC)
-            target_compile_options(bson_static PRIVATE /utf-8)
-            if(TARGET zlib_obj)
-                target_compile_options(zlib_obj PRIVATE /utf-8)
-            endif()
-            if(TARGET utf8proc_obj)
-                target_compile_options(utf8proc_obj PRIVATE /utf-8)
-            endif()
-            if(TARGET mongoc_static)
-                target_compile_options(mongoc_static PRIVATE /utf-8)
-            endif()
-        endif()
-        set_property(TARGET bson_static PROPERTY FOLDER "thirdparty")
+if(ENGINE_MONGODB_ENABLED AND NOT TARGET bson_static)
+    set(ENABLE_MONGOC ON CACHE BOOL "" FORCE)
+    set(ENABLE_STATIC ON CACHE BOOL "" FORCE)
+    set(ENABLE_SHARED OFF CACHE BOOL "" FORCE)
+    set(ENABLE_ZLIB BUNDLED CACHE STRING "" FORCE)
+    set(ENABLE_ZSTD OFF CACHE STRING "" FORCE)
+    set(ENABLE_SNAPPY OFF CACHE STRING "" FORCE)
+    set(ENABLE_SRV ON CACHE BOOL "" FORCE)
+    set(ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+    set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(ENABLE_CLIENT_SIDE_ENCRYPTION OFF CACHE BOOL "" FORCE)
+    set(ENABLE_MONGODB_AWS_AUTH OFF CACHE BOOL "" FORCE)
+    set(ENABLE_UNINSTALL OFF CACHE BOOL "" FORCE)
+    set(ENABLE_MAN_PAGES OFF CACHE BOOL "" FORCE)
+    set(ENABLE_HTML_DOCS OFF CACHE BOOL "" FORCE)
+    set(ENABLE_TRACING OFF CACHE BOOL "" FORCE)
+    if(WIN32)
+        set(ENABLE_SSL WINDOWS CACHE STRING "" FORCE)
+        set(ENABLE_SASL SSPI CACHE STRING "" FORCE)
+    else()
+        set(ENABLE_SSL AUTO CACHE STRING "" FORCE)
+        set(ENABLE_SASL AUTO CACHE STRING "" FORCE)
+    endif()
+    add_subdirectory(${ENGINE_ROOT}/thirdparty/mongo-c-driver
+                     ${CMAKE_BINARY_DIR}/mongo-c-driver)
+    if(MSVC)
+        target_compile_options(bson_static PRIVATE /utf-8)
         if(TARGET zlib_obj)
-            set_property(TARGET zlib_obj PROPERTY FOLDER "thirdparty")
+            target_compile_options(zlib_obj PRIVATE /utf-8)
         endif()
         if(TARGET utf8proc_obj)
-            set_property(TARGET utf8proc_obj PROPERTY FOLDER "thirdparty")
+            target_compile_options(utf8proc_obj PRIVATE /utf-8)
         endif()
         if(TARGET mongoc_static)
-            set_property(TARGET mongoc_static PROPERTY FOLDER "thirdparty")
-        endif()
-        if(TARGET kms_message_static)
-            set_property(TARGET kms_message_static PROPERTY FOLDER "thirdparty")
-        endif()
-        if(TARGET public-header-warnings)
-            set_property(TARGET public-header-warnings PROPERTY FOLDER "thirdparty")
-        endif()
-        if(TARGET mcd_rpc)
-            set_property(TARGET mcd_rpc PROPERTY FOLDER "thirdparty")
-        endif()
-        if(TARGET mlib-ckdint-test)
-            set_property(TARGET mlib-ckdint-test PROPERTY FOLDER "thirdparty")
-        endif()
-        if(TARGET mongo_c_driver_examples)
-            set_property(TARGET mongo_c_driver_examples PROPERTY FOLDER "thirdparty")
-        endif()
-        if(TARGET mongo_c_driver_tests)
-            set_property(TARGET mongo_c_driver_tests PROPERTY FOLDER "thirdparty")
-        endif()
-        if(TARGET mongoc-cxx-check)
-            set_property(TARGET mongoc-cxx-check PROPERTY FOLDER "thirdparty")
+            target_compile_options(mongoc_static PRIVATE /utf-8)
         endif()
     endif()
-
-    # ── Global include directories ───────────────────────────────────
-    include_directories(${ENGINE_ROOT})
-    include_directories(${ENGINE_ROOT}/thirdparty/libevent/include)
-    include_directories(${ENGINE_ROOT}/thirdparty/quill/quill/include)
-    include_directories(${ENGINE_ROOT}/thirdparty/lua/src)
-    include_directories(${ENGINE_ROOT}/thirdparty/glaze/glaze/include)
-    include_directories(${ENGINE_ROOT}/thirdparty/concurrentqueue/concurrentqueue)
-    if(TARGET bson_static)
-        include_directories(${ENGINE_ROOT}/thirdparty/mongo-c-driver/src/libbson/src)
-        include_directories(${CMAKE_BINARY_DIR}/mongo-c-driver/src/libbson/src)
+    set_property(TARGET bson_static PROPERTY FOLDER "thirdparty")
+    if(TARGET zlib_obj)
+        set_property(TARGET zlib_obj PROPERTY FOLDER "thirdparty")
+    endif()
+    if(TARGET utf8proc_obj)
+        set_property(TARGET utf8proc_obj PROPERTY FOLDER "thirdparty")
     endif()
     if(TARGET mongoc_static)
-        include_directories(${ENGINE_ROOT}/thirdparty/mongo-c-driver/src/libmongoc/src)
-        include_directories(${CMAKE_BINARY_DIR}/mongo-c-driver/src/libmongoc/src)
+        set_property(TARGET mongoc_static PROPERTY FOLDER "thirdparty")
     endif()
+    if(TARGET kms_message_static)
+        set_property(TARGET kms_message_static PROPERTY FOLDER "thirdparty")
+    endif()
+    if(TARGET public-header-warnings)
+        set_property(TARGET public-header-warnings PROPERTY FOLDER "thirdparty")
+    endif()
+    if(TARGET mcd_rpc)
+        set_property(TARGET mcd_rpc PROPERTY FOLDER "thirdparty")
+    endif()
+    if(TARGET mlib-ckdint-test)
+        set_property(TARGET mlib-ckdint-test PROPERTY FOLDER "thirdparty")
+    endif()
+    if(TARGET mongo_c_driver_examples)
+        set_property(TARGET mongo_c_driver_examples PROPERTY FOLDER "thirdparty")
+    endif()
+    if(TARGET mongo_c_driver_tests)
+        set_property(TARGET mongo_c_driver_tests PROPERTY FOLDER "thirdparty")
+    endif()
+    if(TARGET mongoc-cxx-check)
+        set_property(TARGET mongoc-cxx-check PROPERTY FOLDER "thirdparty")
+    endif()
+endif()
 
-    # ── CloudEngine library target ───────────────────────────────────
-    add_library(CloudEngine SHARED ${SERVERENGINE_SOURCES})
-    add_dependencies(CloudEngine copy_resources)
-    set_target_properties(CloudEngine PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+if(ENGINE_PHYSICS_ENABLED AND NOT TARGET Jolt)
+    add_subdirectory(${ENGINE_ROOT}/thirdparty/JoltPhysics/JoltPhysics/Build jolt)
+    set_target_properties(Jolt PROPERTIES FOLDER "thirdparty")
+endif()
 
-    target_include_directories(CloudEngine PUBLIC
-        ${ENGINE_ROOT}
-        ${ENGINE_ROOT}/runtime
-        ${ENGINE_ROOT}/thirdparty/libevent/include
-        ${CMAKE_BINARY_DIR}/libevent/include
-        ${ENGINE_ROOT}/thirdparty/quill/quill/include
-        ${ENGINE_ROOT}/thirdparty/lua/src
-        ${ENGINE_ROOT}/thirdparty/glaze/glaze/include
-        ${ENGINE_ROOT}/thirdparty/concurrentqueue/concurrentqueue
+set(ENGINE_RUNTIME_INCLUDE_DIRS
+    ${ENGINE_ROOT}
+    ${ENGINE_ROOT}/runtime
+    ${ENGINE_ROOT}/thirdparty/libevent/include
+    ${CMAKE_BINARY_DIR}/libevent/include
+    ${ENGINE_ROOT}/thirdparty/quill/quill/include
+    ${ENGINE_ROOT}/thirdparty/lua/src
+    ${ENGINE_ROOT}/thirdparty/glaze/glaze/include
+    ${ENGINE_ROOT}/thirdparty/concurrentqueue/concurrentqueue
+)
+
+if(TARGET bson_static)
+    list(APPEND ENGINE_RUNTIME_INCLUDE_DIRS
+        ${ENGINE_ROOT}/thirdparty/mongo-c-driver/src/libbson/src
+        ${CMAKE_BINARY_DIR}/mongo-c-driver/src/libbson/src
     )
+endif()
+if(TARGET mongoc_static)
+    list(APPEND ENGINE_RUNTIME_INCLUDE_DIRS
+        ${ENGINE_ROOT}/thirdparty/mongo-c-driver/src/libmongoc/src
+        ${CMAKE_BINARY_DIR}/mongo-c-driver/src/libmongoc/src
+    )
+endif()
+if(ENGINE_PHYSICS_ENABLED)
+    list(APPEND ENGINE_RUNTIME_INCLUDE_DIRS
+        ${ENGINE_ROOT}/thirdparty/JoltPhysics/JoltPhysics
+    )
+endif()
+if(HTTPS)
+    list(APPEND ENGINE_RUNTIME_INCLUDE_DIRS
+        ${ENGINE_ROOT}/thirdparty/boringssl/include
+    )
+endif()
 
-    target_compile_definitions(CloudEngine PRIVATE ENGINE_BUILD LUA_BUILD_AS_DLL)
+set(ENGINE_RUNTIME_LINK_LIBS
+    engine_lua_static
+    ${ENGINE_PLATFORM_LIBS}
+)
 
-# CLOUD_ENGINE_API — platform-differentiated DLL export/import
+if(ENGINE_PHYSICS_ENABLED)
+    list(APPEND ENGINE_RUNTIME_LINK_LIBS Jolt)
+endif()
+if(TARGET bson_static)
+    list(APPEND ENGINE_RUNTIME_LINK_LIBS bson_static)
+endif()
+if(TARGET mongoc_static)
+    list(APPEND ENGINE_RUNTIME_LINK_LIBS mongoc_static)
+    if(WIN32)
+        list(APPEND ENGINE_RUNTIME_LINK_LIBS secur32 crypt32 Bcrypt ncrypt Dnsapi)
+    endif()
+endif()
+if(HTTPS)
+    list(APPEND ENGINE_RUNTIME_LINK_LIBS ssl crypto)
+endif()
 if(WIN32)
-    target_compile_definitions(CloudEngine PRIVATE "CLOUD_ENGINE_API=__declspec(dllexport)")
-else()
-    target_compile_definitions(CloudEngine PRIVATE "CLOUD_ENGINE_API=__attribute__((visibility(\"default\")))")
+    list(APPEND ENGINE_RUNTIME_LINK_LIBS ws2_32)
 endif()
-
-    if(ENGINE_PHYSICS_ENABLED)
-        target_compile_definitions(CloudEngine PUBLIC ENGINE_PHYSICS_ENABLED)
-    endif()
-
-    if(ENGINE_PROFILER_ENABLED)
-        target_compile_definitions(CloudEngine PUBLIC ENGINE_PROFILER_ENABLED)
-    endif()
-
-    if(ENGINE_MONGODB_ENABLED)
-        target_compile_definitions(CloudEngine PUBLIC ENGINE_MONGODB_ENABLED)
-    endif()
-
-    if(ENGINE_MEM_STATS_ENABLED)
-        target_compile_definitions(CloudEngine PUBLIC ENGINE_MEM_STATS_ENABLED)
-    endif()
-
-    # ── JoltPhysics ───────────────────────────────────────────────────
-    if(ENGINE_PHYSICS_ENABLED)
-        add_subdirectory(${ENGINE_ROOT}/thirdparty/JoltPhysics/JoltPhysics/Build jolt)
-        set_target_properties(Jolt PROPERTIES FOLDER "thirdparty")
-        set(CMAKE_CXX_STANDARD 23)
-        set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-        target_include_directories(CloudEngine PUBLIC
-            ${ENGINE_ROOT}/thirdparty/JoltPhysics/JoltPhysics
-        )
-        target_link_libraries(CloudEngine PUBLIC Jolt)
-    endif()
-
-    # ── Link mongo-c-driver ──────────────────────────────────────────
-    if(TARGET bson_static)
-        target_link_libraries(CloudEngine PUBLIC bson_static)
-    endif()
-    if(TARGET mongoc_static)
-        target_link_libraries(CloudEngine PUBLIC mongoc_static)
-        if(WIN32)
-            target_link_libraries(CloudEngine PUBLIC secur32 crypt32 Bcrypt ncrypt Dnsapi)
-        endif()
-    endif()
-
-    # ── Link BoringSSL ────────────────────────────────────────────────
-    if(HTTPS)
-        target_include_directories(CloudEngine PUBLIC
-            ${ENGINE_ROOT}/thirdparty/boringssl/include)
-        target_link_libraries(CloudEngine PUBLIC ssl crypto)
-    endif()
-
-    # ── Link system libraries ────────────────────────────────────────
-    target_link_directories(CloudEngine PUBLIC "${CMAKE_BINARY_DIR}/libevent/lib/$<CONFIG>")
-    target_link_libraries(CloudEngine PUBLIC ${LIBRARIES})
-
-    # ── Post-build: copy DLL to bin/ ──────────────────────────────────
-    add_custom_command(TARGET CloudEngine POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "$<TARGET_FILE:CloudEngine>"
-        "${ENGINE_ROOT}/../artifacts/bin/$<CONFIG>/$<TARGET_FILE_NAME:CloudEngine>"
-        COMMENT "Copying CloudEngine.dll to bin/"
-    )
-endif()
-
-# ═══════════════════════════════════════════════════════════════════════
-# GameServer executable
-# ═══════════════════════════════════════════════════════════════════════
-
-# ── Lua 5.5.0 (source-form integration) ─────────────────────────────
-# Core VM
-set(GAMESERVER_LUA_CORE
-    ${ENGINE_ROOT}/thirdparty/lua/src/lapi.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lcode.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lctype.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/ldebug.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/ldo.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/ldump.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lfunc.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lgc.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/llex.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lmem.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lobject.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lopcodes.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lparser.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lstate.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lstring.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/ltable.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/ltm.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lundump.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lvm.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lzio.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lstate_custom_ptr.c
-)
-# Standard libraries
-set(GAMESERVER_LUA_LIB
-    ${ENGINE_ROOT}/thirdparty/lua/src/lauxlib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lbaselib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lcorolib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/ldblib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/liolib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lmathlib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/loadlib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/loslib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lstrlib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/ltablib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lutf8lib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/linit.c
-)
 
 add_executable(GameServer
     server.cc
-    ${GAMESERVER_LUA_CORE}
-    ${GAMESERVER_LUA_LIB}
+    ${SERVERENGINE_SOURCES}
 )
 
 add_dependencies(GameServer copy_resources)
-
 set_target_properties(GameServer PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
 
-target_include_directories(GameServer
-    PRIVATE
-        "${ENGINE_ROOT}"
-        "${ENGINE_ROOT}/thirdparty/lua/src"
-)
+target_include_directories(GameServer PRIVATE ${ENGINE_RUNTIME_INCLUDE_DIRS})
+target_compile_definitions(GameServer PRIVATE ENGINE_BUILD "CLOUD_ENGINE_API=")
 
-target_link_libraries(GameServer CloudEngine)
-
-# CLOUD_ENGINE_API — import from CloudEngine.dll
-if(WIN32)
-    target_compile_definitions(GameServer PRIVATE "CLOUD_ENGINE_API=__declspec(dllimport)")
-else()
-    target_compile_definitions(GameServer PRIVATE "CLOUD_ENGINE_API=__attribute__((visibility(\"default\")))")
+if(ENGINE_PHYSICS_ENABLED)
+    target_compile_definitions(GameServer PRIVATE ENGINE_PHYSICS_ENABLED)
+endif()
+if(ENGINE_PROFILER_ENABLED)
+    target_compile_definitions(GameServer PRIVATE ENGINE_PROFILER_ENABLED)
+endif()
+if(ENGINE_MONGODB_ENABLED)
+    target_compile_definitions(GameServer PRIVATE ENGINE_MONGODB_ENABLED)
+endif()
+if(ENGINE_MEM_STATS_ENABLED)
+    target_compile_definitions(GameServer PRIVATE ENGINE_MEM_STATS_ENABLED)
 endif()
 
-if(WIN32)
-    target_link_libraries(GameServer ws2_32)
-endif()
+target_link_directories(GameServer PRIVATE "${CMAKE_BINARY_DIR}/libevent/lib/$<CONFIG>")
+target_link_libraries(GameServer PRIVATE ${ENGINE_RUNTIME_LINK_LIBS})

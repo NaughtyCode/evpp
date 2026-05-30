@@ -266,24 +266,28 @@ class CLOUD_ENGINE_API Buffer {
 	public:
 	// Peek int64_t/int32_t/int16_t/int8_t with network endian
 	int64_t ReadInt64() {
+		if (length() < sizeof(int64_t)) return 0;
 		int64_t result = PeekInt64();
 		Skip(sizeof result);
 		return result;
 	}
 
 	int32_t ReadInt32() {
+		if (length() < sizeof(int32_t)) return 0;
 		int32_t result = PeekInt32();
 		Skip(sizeof result);
 		return result;
 	}
 
 	int16_t ReadInt16() {
+		if (length() < sizeof(int16_t)) return 0;
 		int16_t result = PeekInt16();
 		Skip(sizeof result);
 		return result;
 	}
 
 	int8_t ReadInt8() {
+		if (length() < sizeof(int8_t)) return 0;
 		int8_t result = PeekInt8();
 		Skip(sizeof result);
 		return result;

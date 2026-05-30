@@ -2,12 +2,11 @@
 # Integration tests — multi-component, real socket I/O
 # ═══════════════════════════════════════════════════════════════════════════
 
-set(INTEG_LIBS Catch2::Catch2WithMain CloudEngine)
+set(INTEG_LIBS Catch2::Catch2WithMain)
 
 macro(add_integ_test name)
     add_executable(${name} ${ARGN})
-    target_include_directories(${name} PRIVATE ${TEST_COMMON_INCLUDES})
-    target_compile_definitions(${name} PRIVATE "CLOUD_ENGINE_API=")
+    configure_embedded_runtime_test_target(${name} ENGINE_TEST_SUITE_INTEGRATION)
     target_link_libraries(${name} PRIVATE ${INTEG_LIBS})
     set_target_properties(${name} PROPERTIES FOLDER "tests/integration")
 endmacro()
@@ -81,11 +80,8 @@ set_tests_properties(integration.space.entity PROPERTIES
     WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
 # ── Client API (only if GameClient target exists) ────────────────────
-if(TARGET GameClient)
-    add_executable(test_integ_client_tcp client_api/test_client_tcp.cpp)
-    target_include_directories(test_integ_client_tcp PRIVATE ${TEST_COMMON_INCLUDES})
-    target_compile_definitions(test_integ_client_tcp PRIVATE "CLOUD_ENGINE_API=")
-    target_link_libraries(test_integ_client_tcp PRIVATE Catch2::Catch2WithMain GameClient)
-    set_target_properties(test_integ_client_tcp PROPERTIES FOLDER "tests/integration")
-    add_test(NAME integration.client_api.tcp COMMAND test_integ_client_tcp)
-endif()
+add_executable(test_integ_client_tcp client_api/test_client_tcp.cpp)
+configure_embedded_client_api_test_target(test_integ_client_tcp ENGINE_TEST_SUITE_INTEGRATION)
+target_link_libraries(test_integ_client_tcp PRIVATE Catch2::Catch2WithMain)
+set_target_properties(test_integ_client_tcp PROPERTIES FOLDER "tests/integration")
+add_test(NAME integration.client_api.tcp COMMAND test_integ_client_tcp)

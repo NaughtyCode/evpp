@@ -43,11 +43,10 @@
 #endif
 #endif
 
-// DLL export/import fallback
+// Runtime API decoration fallback
 // CLOUD_ENGINE_API is normally set by per-target CMake compile definitions:
-//   __declspec(dllexport) for CloudEngine.dll
-//   __declspec(dllimport) for consumers (GameServer, etc.)
-//   empty for static linkage (GameClient, tests)
+//   empty for source/static integration targets (GameServer, GameClient, tests)
+//   platform visibility attributes only for externally exported targets
 // When not defined (e.g. test targets, IDE intellisense), default to empty.
 
 #ifndef CLOUD_ENGINE_API

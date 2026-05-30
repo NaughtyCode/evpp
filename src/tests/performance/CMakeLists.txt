@@ -2,12 +2,11 @@
 # Performance benchmarks — Google Benchmark
 # ═══════════════════════════════════════════════════════════════════════════
 
-set(BENCH_LIBS benchmark::benchmark CloudEngine)
+set(BENCH_LIBS benchmark::benchmark)
 
 macro(add_bench name)
     add_executable(${name} ${ARGN})
-    target_include_directories(${name} PRIVATE ${TEST_COMMON_INCLUDES})
-    target_compile_definitions(${name} PRIVATE "CLOUD_ENGINE_API=")
+    configure_embedded_runtime_test_target(${name} ENGINE_TEST_SUITE_PERFORMANCE)
     target_link_libraries(${name} PRIVATE ${BENCH_LIBS})
     set_target_properties(${name} PROPERTIES FOLDER "tests/performance")
 endmacro()

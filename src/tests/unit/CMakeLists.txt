@@ -2,13 +2,12 @@
 # Unit tests — component isolation, no real I/O
 # ═══════════════════════════════════════════════════════════════════════════
 
-set(UNIT_LIBS Catch2::Catch2WithMain CloudEngine)
+set(UNIT_LIBS Catch2::Catch2WithMain)
 
 # ── Macro to simplify test target creation ──────────────────────────
 macro(add_unit_test name)
     add_executable(${name} ${ARGN})
-    target_include_directories(${name} PRIVATE ${TEST_COMMON_INCLUDES})
-    target_compile_definitions(${name} PRIVATE "CLOUD_ENGINE_API=")
+    configure_embedded_runtime_test_target(${name} ENGINE_TEST_SUITE_UNIT)
     target_link_libraries(${name} PRIVATE ${UNIT_LIBS})
     set_target_properties(${name} PROPERTIES FOLDER "tests/unit")
 endmacro()
@@ -105,7 +104,6 @@ set_tests_properties(unit.hotreload PROPERTIES LABELS "unit" WORKING_DIRECTORY "
 # ── Database ORM tests (only if MongoDB is enabled) ─────────────────
 if(ENGINE_MONGODB_ENABLED)
     add_unit_test(test_data_service database/test_data_service.cpp)
-    target_sources(test_data_service PRIVATE ${ENGINE_ROOT}/runtime/database/data_service/db_script_vm.cc)
     add_test(NAME unit.database.data_service COMMAND test_data_service)
     set_tests_properties(unit.database.data_service PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
@@ -144,13 +142,9 @@ add_test(NAME unit.coroutine COMMAND test_coroutine)
 set_tests_properties(unit.coroutine PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
 # ── Client API tests ────────────────────────────────────────────────
-# Only if GameClient target exists
-if(TARGET GameClient)
-    add_executable(test_client_api client_api/test_client_api.cpp)
-    target_include_directories(test_client_api PRIVATE ${TEST_COMMON_INCLUDES})
-    target_compile_definitions(test_client_api PRIVATE "CLOUD_ENGINE_API=")
-    target_link_libraries(test_client_api PRIVATE Catch2::Catch2WithMain GameClient)
-    set_target_properties(test_client_api PROPERTIES FOLDER "tests/unit")
-    add_test(NAME unit.client_api COMMAND test_client_api)
-    set_tests_properties(unit.client_api PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
-endif()
+add_executable(test_client_api client_api/test_client_api.cpp)
+configure_embedded_client_api_test_target(test_client_api ENGINE_TEST_SUITE_UNIT)
+target_link_libraries(test_client_api PRIVATE Catch2::Catch2WithMain)
+set_target_properties(test_client_api PROPERTIES FOLDER "tests/unit")
+add_test(NAME unit.client_api COMMAND test_client_api)
+set_tests_properties(unit.client_api PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")

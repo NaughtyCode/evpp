@@ -1,7 +1,7 @@
 /*
  * client_internal.h — internal types and helpers
  *
- * Maps the opaque C handles to the underlying C++ objects from CloudEngine.
+ * Maps the opaque C handles to the embedded runtime C++ objects.
  * Not part of the public API — do not include from client code.
  */
 

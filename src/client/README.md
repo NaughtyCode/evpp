@@ -12,7 +12,7 @@
 │            (Lua — 服务器 & 客户端共享)               │
 ├──────────────────────┬───────────────────────────┤
 │     CloudEngine     │      GameClient            │
-│   (C++ 动态库)        │   (纯 C API 动态库)          │
+│   (源码内嵌运行时)     │   (纯 C API 动态库)          │
 │   • 完整功能          │   • extern "C" 导出         │
 │   • Lua bindings    │   • 不透明句柄               │
 │   • libevent        │   • ABI 稳定                │
@@ -22,7 +22,7 @@
 └──────────────────────┴───────────────────────────┘
 ```
 
-- **服务器侧**：直接使用 `CloudEngine.dll`，拥有全部功能（物理、Lua 热更、完整配置）。
+- **服务器侧**：`GameServer` 直接以内嵌源码方式集成 runtime，拥有全部功能（物理、Lua 热更、完整配置）。
 - **客户端侧**：使用 `GameClient.dll`，通过纯 C API 获取核心功能（Lua VM、网络、定时器、日志），可集成到任何引擎。
 
 客户端和服务器可以共享完全相同的 Lua 业务代码——网络协议处理、战斗逻辑校验、数据校验规则等。
@@ -826,7 +826,7 @@ void on_message(game_net_client_t* conn, const char* data, int len, void* ud)
 `client` 是 `CloudEngine` 的瘦封装层：
 
 ```
-GameClient.dll ──(link)──► CloudEngine.dll
+GameClient.dll ──(embed)─► runtime sources
                               │
                               ├─ engine::Engine (单例)
                               ├─ engine::ScriptVM (Lua VM)

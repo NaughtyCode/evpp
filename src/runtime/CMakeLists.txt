@@ -3,7 +3,7 @@
 # definitions for everything under src/runtime/.
 #
 # Provides:
-#   SERVERENGINE_SOURCES  — combined source list for the CloudEngine library
+#   SERVERENGINE_SOURCES  — combined source list for runtime targets
 #   Individual lists: LUA_SOURCES, LOG_SOURCES, TIMER_SOURCES, etc.
 
 # ENGINE_ROOT always points to the shared src/ directory.
@@ -17,46 +17,10 @@ set(RUNTIME_DIR "${CMAKE_CURRENT_LIST_DIR}")
 # ═══════════════════════════════════════════════════════════════════════
 
 # ── Lua 5.5.0 (source-form integration) ─────────────────────────────
-set(LUA_CORE_SOURCES
-    ${ENGINE_ROOT}/thirdparty/lua/src/lapi.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lcode.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lctype.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/ldebug.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/ldo.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/ldump.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lfunc.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lgc.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/llex.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lmem.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lobject.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lopcodes.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lparser.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lstate.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lstring.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/ltable.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/ltm.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lundump.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lvm.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lzio.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lstate_custom_ptr.c
-)
-
-set(LUA_LIB_SOURCES
-    ${ENGINE_ROOT}/thirdparty/lua/src/lauxlib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lbaselib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lcorolib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/ldblib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/liolib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lmathlib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/loadlib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/loslib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lstrlib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/ltablib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/lutf8lib.c
-    ${ENGINE_ROOT}/thirdparty/lua/src/linit.c
-)
-
-set(LUA_SOURCES ${LUA_CORE_SOURCES} ${LUA_LIB_SOURCES})
+include(${ENGINE_ROOT}/thirdparty/lua/lua_sources.cmake)
+set(LUA_CORE_SOURCES ${ENGINE_LUA_CORE_SOURCES})
+set(LUA_LIB_SOURCES ${ENGINE_LUA_LIB_SOURCES})
+set(LUA_SOURCES ${ENGINE_LUA_SOURCES})
 source_group("thirdparty\\lua" FILES ${LUA_SOURCES})
 
 # ── Perfetto ───────────────────────────────────────────────────────
@@ -363,7 +327,6 @@ source_group("database\\data_service" FILES ${DB_SERVICE_SOURCES})
 # ═══════════════════════════════════════════════════════════════════════
 
 set(SERVERENGINE_SOURCES
-    ${LUA_SOURCES}
     ${PERFETTO_SOURCES}
     ${KCP_SOURCES}
     ${EXPORT_HEADER}

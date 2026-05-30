@@ -1,5 +1,6 @@
 #include "runtime/core/log/log.h"
 
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <ctime>
@@ -18,6 +19,9 @@
 namespace engine {
 
 namespace {
+
+std::atomic<bool> g_backend_started{false};
+std::atomic<bool> g_logger_active{false};
 
 quill::BackendOptions GetBackendOptions() {
 	constexpr auto kSleepDuration = std::chrono::microseconds{500};
@@ -132,12 +136,14 @@ void apply_log_level(quill::Logger* logger, const std::string& level) {
 }  // namespace
 
 quill::Logger* GetLogger(const std::string& name) {
+	if (!g_logger_active.load(std::memory_order_acquire)) {
+		return nullptr;
+	}
 	return quill::Frontend::get_logger(name);
 }
 
 quill::Logger* CreateLogger(const LogConfig& config) {
-	static std::atomic<bool> backend_started{false};
-	if (!backend_started.exchange(true, std::memory_order_acq_rel)) {
+	if (!g_backend_started.exchange(true, std::memory_order_acq_rel)) {
 		quill::Backend::start(GetBackendOptions());
 	}
 
@@ -156,6 +162,7 @@ quill::Logger* CreateLogger(const LogConfig& config) {
 		quill::PatternFormatterOptions{config.format_pattern});
 
 	apply_log_level(logger, config.level);
+	g_logger_active.store(true, std::memory_order_release);
 
 	ENGINE_LOG_INFO(logger, "log file: {}", full_path);
 	return logger;
@@ -168,7 +175,10 @@ void InitLogger(const LogConfig& config) {
 }
 
 void ShutdownLogger() {
-	quill::Backend::stop();
+	g_logger_active.store(false, std::memory_order_release);
+	if (g_backend_started.exchange(false, std::memory_order_acq_rel)) {
+		quill::Backend::stop();
+	}
 }
 
 }  // namespace engine

@@ -36,6 +36,7 @@ add_custom_target(copy_resources ALL
 # sub-project.  This file is a thin wrapper for building all projects
 # together in a single build tree.
 
+add_subdirectory(thirdparty/lua)
 add_subdirectory(server)
 add_subdirectory(client)
 
