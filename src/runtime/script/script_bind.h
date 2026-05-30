@@ -2,6 +2,8 @@
 
 #include "runtime/core/engine_api.h"
 
+struct lua_State;
+
 namespace engine {
 
 class ScriptVM;
@@ -30,6 +32,8 @@ CLOUD_ENGINE_API void ExportDbService(ScriptVM& vm);
 // Call before destroying the ScriptVM.
 CLOUD_ENGINE_API void ShutdownTimerBindings(ScriptVM& vm);
 CLOUD_ENGINE_API void ShutdownNetBindings();
+CLOUD_ENGINE_API void ShutdownConfigBindings(ScriptVM& vm);
+CLOUD_ENGINE_API int FlushConfigCallbacks(::lua_State* L);
 
 CLOUD_ENGINE_API void ExportEntity(ScriptVM& vm);
 CLOUD_ENGINE_API void ShutdownEntityBindings();

@@ -619,6 +619,7 @@ void Engine::Cleanup() {
 	cleanup_phase_.store(CleanupPhase::NetworkShutdown, std::memory_order_release);
 	if (script_vm_) {
 		script::ShutdownRpcBindings(*script_vm_);
+		script::ShutdownConfigBindings(*script_vm_);
 		script::ShutdownNetBindings();
 	}
 	check_timeout("NetworkShutdown");
@@ -711,6 +712,8 @@ void Engine::FrameLoop() {
 	{
 		ENGINE_PROFILE_SCRIPT_UPDATE();
 		if (script_vm_) {
+			// Deliver configuration change callbacks bound via config.on_change().
+			script::FlushConfigCallbacks(script_vm_->GetState());
 			script_vm_->UpdateScript();
 			script::UpdateRpcBindings(*script_vm_);
 		}

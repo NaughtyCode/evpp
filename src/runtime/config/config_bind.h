@@ -20,7 +20,13 @@ CLOUD_ENGINE_API void ExportConfigBindings(ScriptVM& vm);
 // (including the FileWatcher thread); this function dispatches them to the
 // registered Lua on_change handlers.
 // Returns the number of callbacks invoked.
-CLOUD_ENGINE_API int FlushConfigCallbacks(lua_State* L);
+CLOUD_ENGINE_API int FlushConfigCallbacks(::lua_State* L);
+
+// Shut down config bindings for the given Lua state.
+// - Unregisters all config.on_change callbacks from ConfigManager.
+// - Releases Lua function registry references.
+// - Drops any pending config-change events buffered for this state.
+CLOUD_ENGINE_API void ShutdownConfigBindings(::lua_State* L);
 
 }  // namespace script
 }  // namespace engine

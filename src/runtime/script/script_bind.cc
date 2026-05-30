@@ -102,5 +102,9 @@ void ExportAll(ScriptVM& vm, TimerManager& tm) {
 	ENGINE_LOG_INFO(logger, "ScriptBind: all APIs exported");
 }
 
+void ShutdownConfigBindings(ScriptVM& vm) {
+	ShutdownConfigBindings(vm.GetState());
+}
+
 }  // namespace script
 }  // namespace engine

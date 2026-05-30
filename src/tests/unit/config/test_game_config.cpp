@@ -591,7 +591,8 @@ TEST_CASE("Lua config.on_change returns callback ID", "[game_config][lua]") {
 
     std::string result;
     REQUIRE(vm.DoString(
-        "local id = config.on_change('monster', function(changes) end); "
+        "local id = config.on_change('frame', function(changes) end); "
+        "config.unregister(id); "
         "return tostring(id > 0)",
         "test", nullptr, &result));
     REQUIRE(result == "true");
@@ -620,7 +621,7 @@ TEST_CASE("Lua config.on_change callback fires after flush", "[game_config][lua]
     std::string result;
     REQUIRE(vm.DoString(
         "callback_fired = false; "
-        "config.on_change('test', function(changes) callback_fired = true end); "
+        "config.on_change('frame', function(changes) callback_fired = true end); "
         "return 'ok'",
         "test", nullptr, &result));
 
@@ -639,6 +640,69 @@ TEST_CASE("Lua config.on_change callback fires after flush", "[game_config][lua]
     // Check that the callback was invoked after flushing.
     REQUIRE(vm.DoString("return tostring(callback_fired)", "test", nullptr, &result));
     REQUIRE(result == "true");
+    script::ShutdownConfigBindings(vm);
+}
+
+TEST_CASE("Lua config.on_change ignores unmatched modules", "[game_config][lua]") {
+    ConfigFixture f;
+    f.LoadFromStrings();
+
+    ScriptVM vm;
+    script::ExportConfigBindings(vm);
+
+    std::string result;
+    REQUIRE(vm.DoString(
+        "callback_fired = false; "
+        "config.on_change('server', function(changes) callback_fired = true end); "
+        "return 'ok'",
+        "test", nullptr, &result));
+
+    // Change only frame-related config.
+    auto& cfg = ConfigManager::Instance();
+    cfg.LoadRuntimeFromString(R"({
+        "resource_dir": ".",
+        "log": { "dir": "." },
+        "frame": { "target_fps": 60 },
+        "scripts_dir": "."
+    })");
+
+    REQUIRE(vm.DoString("config.flush_changes()", "test", nullptr, &result));
+    REQUIRE(vm.DoString("return tostring(callback_fired)", "test", nullptr, &result));
+    REQUIRE(result == "false");
+    script::ShutdownConfigBindings(vm);
+}
+
+TEST_CASE("Lua config.unregister removes queued pending callbacks", "[game_config][lua]") {
+    ConfigFixture f;
+    f.LoadFromStrings();
+
+    ScriptVM vm;
+    script::ExportConfigBindings(vm);
+
+    std::string result;
+    REQUIRE(vm.DoString(
+        "callback_fired = false; "
+        "local id = config.on_change('frame', function(changes) callback_fired = true end); "
+        "callback_id = id; "
+        "return 'ok'",
+        "test", nullptr, &result));
+
+    auto& cfg = ConfigManager::Instance();
+    cfg.LoadRuntimeFromString(R"({
+        "resource_dir": ".",
+        "log": { "dir": "." },
+        "frame": { "target_fps": 60 },
+        "scripts_dir": "."
+    })");
+
+    // Unregister before flushing; if pending event cleanup is broken,
+    // callback_fired would still become true.
+    REQUIRE(vm.DoString("config.unregister(callback_id)", "test", nullptr, &result));
+    REQUIRE(vm.DoString("config.flush_changes()", "test", nullptr, &result));
+
+    REQUIRE(vm.DoString("return tostring(callback_fired)", "test", nullptr, &result));
+    REQUIRE(result == "false");
+    script::ShutdownConfigBindings(vm);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
