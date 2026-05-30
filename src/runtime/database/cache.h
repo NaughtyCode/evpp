@@ -38,6 +38,8 @@ public:
 	// Insert or update an entity.
 	void Put(const std::string& key, const T& value) {
 		std::lock_guard<std::mutex> lock(mutex_);
+		if (max_entries_ == 0) return;
+
 		auto it = index_.find(key);
 		if (it != index_.end()) {
 			it->second->second = value;
@@ -46,7 +48,7 @@ public:
 		}
 
 		// Evict oldest if at capacity
-		while (lru_list_.size() >= max_entries_) {
+		while (!lru_list_.empty() && lru_list_.size() >= max_entries_) {
 			const auto& back = lru_list_.back();
 			index_.erase(back.first);
 			lru_list_.pop_back();
@@ -74,16 +76,46 @@ public:
 	}
 
 	// Statistics
-	size_t HitCount() const { return hit_count_; }
-	size_t MissCount() const { return miss_count_; }
-	size_t EvictCount() const { return evict_count_; }
+	size_t HitCount() const {
+		std::lock_guard<std::mutex> lock(mutex_);
+		return hit_count_;
+	}
+	size_t MissCount() const {
+		std::lock_guard<std::mutex> lock(mutex_);
+		return miss_count_;
+	}
+	size_t EvictCount() const {
+		std::lock_guard<std::mutex> lock(mutex_);
+		return evict_count_;
+	}
+	size_t Capacity() const {
+		std::lock_guard<std::mutex> lock(mutex_);
+		return max_entries_;
+	}
 	size_t Size() const {
 		std::lock_guard<std::mutex> lock(mutex_);
 		return lru_list_.size();
 	}
 	double HitRate() const {
+		std::lock_guard<std::mutex> lock(mutex_);
 		size_t total = hit_count_ + miss_count_;
 		return total > 0 ? static_cast<double>(hit_count_) / static_cast<double>(total) : 0.0;
+	}
+	void SetCapacity(size_t max_entries) {
+		std::lock_guard<std::mutex> lock(mutex_);
+		max_entries_ = max_entries;
+		while (lru_list_.size() > max_entries_) {
+			const auto& back = lru_list_.back();
+			index_.erase(back.first);
+			lru_list_.pop_back();
+			++evict_count_;
+		}
+	}
+	void ResetStats() {
+		std::lock_guard<std::mutex> lock(mutex_);
+		hit_count_ = 0;
+		miss_count_ = 0;
+		evict_count_ = 0;
 	}
 
 private:

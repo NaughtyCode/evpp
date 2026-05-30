@@ -42,6 +42,22 @@ Returns the number of database worker threads.
 |---------|------|-------------|
 | `count` | `integer` | Number of DBThread workers (0 if not initialized) |
 
+### `db_next_request_id()`
+
+Returns a monotonically increasing request id that can be used as `req.request_id`.
+
+| Returns | Type | Description |
+|---------|------|-------------|
+| `request_id` | `integer` | Next request id |
+
+### `db_metrics()`
+
+Returns current DatabaseService counters.
+
+| Returns | Type | Description |
+|---------|------|-------------|
+| `metrics` | `table` | `{enqueued, dropped, completed, errors}` |
+
 ### `db_send_request(req)`
 
 Sends an asynchronous database operation request. The request is routed to a DBThread via round-robin.
@@ -53,6 +69,7 @@ Sends an asynchronous database operation request. The request is routed to a DBT
 | Returns | Type | Description |
 |---------|------|-------------|
 | `ok` | `boolean` | `true` if the request was enqueued |
+| `request_id_or_error` | `integer` or `string` | Request id on success, error message on failure |
 
 Returns `false` + error message if the service is not running, the operation is unknown, or the queue is full.
 
@@ -68,7 +85,7 @@ Polls for completed database operation responses (non-blocking).
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `request_id` | `integer` | No | Echoed in response (default: 0) |
+| `request_id` | `integer` | No | Echoed in response; auto-assigned when 0 or absent |
 | `operation` | `string` or `integer` | **Yes** | Operation name or enum value |
 | `database` | `string` | CRUD only | Target database name |
 | `collection` | `string` | CRUD only | Target collection name |
@@ -77,6 +94,8 @@ Polls for completed database operation responses (non-blocking).
 | `script` | `string` | kExecuteScript | Lua script to execute on DB thread |
 | `limit` | `integer` | No | Max documents (kFind), 0 = unlimited |
 | `skip` | `integer` | No | Documents to skip (kFind) |
+| `max_result_documents` | `integer` | No | Safety cap for serialized cursor results, default 1000, 0 = no extra cap |
+| `allow_empty_filter` | `boolean` | No | Required for empty update/delete filters |
 
 ## Operation Names
 
@@ -94,7 +113,7 @@ Polls for completed database operation responses (non-blocking).
 | `"aggregate"` | Run aggregation pipeline |
 | `"command"` | Run a database command |
 | `"execute_script"` | Execute Lua script on DB thread |
-| `"noop"` | No-op (for testing) |
+| `"noop"` | Internal sentinel; rejected by `db_send_request` |
 
 Operation names are case-insensitive.
 
@@ -103,6 +122,7 @@ Operation names are case-insensitive.
 | Field | Type | Description |
 |-------|------|-------------|
 | `request_id` | `integer` | Echoed from the request |
+| `status` | `integer` | Request lifecycle status enum |
 | `success` | `boolean` | Whether the operation succeeded |
 | `error_code` | `integer` | MongoDB wire-protocol error code |
 | `error_message` | `string` | Human-readable error description |
@@ -140,16 +160,17 @@ if not db_is_healthy() then
 end
 
 -- Send a find request
-local ok = db_send_request({
+local ok, request_id = db_send_request({
     request_id = 1001,
     operation = "find",
     database = "game_db",
     collection = "players",
     bson_data = '{"score": {"$gt": 100}}',
     limit = 10,
+    max_result_documents = 1000,
 })
 if not ok then
-    log_warn("db_send_request failed: queue full or service stopped")
+    log_warn("db_send_request failed: " .. tostring(request_id))
 end
 
 -- Send an insert

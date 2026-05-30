@@ -11,6 +11,7 @@
 #include "runtime/core/log/log_macros.h"
 #include "runtime/database/data_service/db_thread.h"
 #include "runtime/database/mongo/mongo_client_pool.h"
+#include "runtime/database/mongo/mongo_error.h"
 #include "runtime/database/mongo/mongo_uri.h"
 
 namespace engine {
@@ -83,7 +84,9 @@ DatabaseService& DatabaseService::Instance() {
 	return instance;
 }
 
-DatabaseService::~DatabaseService() = default;
+DatabaseService::~DatabaseService() {
+	Shutdown();
+}
 
 // Initialize (MT exclusive, design §4)
 //
@@ -127,6 +130,11 @@ bool DatabaseService::Initialize(const DbServiceConfig& config, const mongo::Mon
 	// Must be done BEFORE pool creation because SetOptionAsInt32 has no
 	// effect once the pool's internal client_initialized flag is set.
 	auto pooled_uri = uri.Copy();
+	if (!pooled_uri.RawUri()) {
+		ENGINE_LOG_ERROR(GetLogger(), "DatabaseService: invalid MongoDB URI");
+		return false;
+	}
+
 	if (config_.connection_pool.wait_queue_timeout_ms > 0) {
 		pooled_uri.SetOptionAsInt32(
 			"waitQueueTimeoutMS",
@@ -137,9 +145,12 @@ bool DatabaseService::Initialize(const DbServiceConfig& config, const mongo::Mon
 	// pool_ uses unique_ptr; explicit Destroy() before reset() in Shutdown
 	// ensures mongoc_client_pool_destroy() runs before the C++ wrapper is freed.
 	// SetMaxSize must be called BEFORE any Pop() — design §3.5 constraint.
-	pool_.reset(mongo::MongoClientPool::New(pooled_uri));
+	mongo::MongoError pool_error;
+	pool_.reset(mongo::MongoClientPool::New(pooled_uri, &pool_error));
 	if (!pool_) {
-		ENGINE_LOG_ERROR(GetLogger(), "DatabaseService: failed to create MongoClientPool");
+		ENGINE_LOG_ERROR(GetLogger(),
+						 "DatabaseService: failed to create MongoClientPool: {}",
+						 pool_error.Message());
 		return false;
 	}
 	pool_->SetMaxSize(static_cast<uint32_t>(config_.connection_pool.max_pool_size));
@@ -228,16 +239,26 @@ int DatabaseService::NextThreadIndex() {
 							static_cast<uint64_t>(n));
 }
 
+uint64_t DatabaseService::NextRequestId() {
+	return next_request_id_.fetch_add(1, std::memory_order_relaxed);
+}
+
 bool DatabaseService::SendRequest(DbRequest&& request) {
 	if (request.operation == DbOperation::kNoOp) {
 		RecordDropped();
 		return false;
 	}
 
+	if (request.request_id == 0) {
+		request.request_id = NextRequestId();
+	}
+
 	std::shared_lock<std::shared_mutex> lock(state_mutex_);
 
-	if (!running_.load(std::memory_order_acquire)) return false;
-	if (threads_.empty()) return false;
+	if (!running_.load(std::memory_order_acquire) || threads_.empty()) {
+		RecordDropped();
+		return false;
+	}
 
 	int idx = NextThreadIndex();
 	bool ok = threads_[idx]->EnqueueRequest(std::move(request));

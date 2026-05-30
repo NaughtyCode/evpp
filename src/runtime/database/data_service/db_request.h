@@ -75,6 +75,7 @@ struct DbRequest {
 	std::string script;	 // Lua source for kExecuteScript
 	int32_t limit = 0;	// kFind: max documents (0 = unlimited)
 	int32_t skip = 0;  // kFind: skip first N documents
+	uint32_t max_result_documents = 1000;  // server-side result safety cap (0 = no extra cap)
 
 	// Safety: kDeleteMany/kDeleteOne with empty filter {} requires
 	// explicit confirmation to prevent accidental full-collection deletion.

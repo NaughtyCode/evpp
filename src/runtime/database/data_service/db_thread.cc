@@ -48,7 +48,7 @@ bool SerializeCursor(mongo::MongoCursor* cursor,
 	bool first = true;
 	uint32_t count = 0;
 	while (true) {
-		if (count >= max_documents) {
+		if (max_documents > 0 && count >= max_documents) {
 			ENGINE_LOG_WARN(engine::GetLogger(),
 							"SerializeCursor: reached limit of {} documents, results truncated",
 							max_documents);
@@ -612,11 +612,10 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 
 		// Validate bson_data (filter) for operations that require it
 		bool need_filter =
-			(req.operation == DbOperation::kFind || req.operation == DbOperation::kFindOne ||
-			 req.operation == DbOperation::kUpdateOne ||
+			(req.operation == DbOperation::kUpdateOne ||
 			 req.operation == DbOperation::kUpdateMany ||
 			 req.operation == DbOperation::kDeleteOne ||
-			 req.operation == DbOperation::kDeleteMany || req.operation == DbOperation::kCount);
+			 req.operation == DbOperation::kDeleteMany);
 		if (need_filter && req.bson_data.empty()) {
 			resp.success = false;
 			resp.error_message = "bson_data (filter) required for this operation";
@@ -668,7 +667,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 				break;
 			}
 			try {
-				SerializeCursor(cursor, 0, &resp);
+				SerializeCursor(cursor, 0, &resp, req.max_result_documents);
 			} catch (...) {
 				cursor->Destroy();
 				throw;
@@ -786,6 +785,12 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 		case DbOperation::kUpdateOne: {
 			mongo::BsonDocument filter;
 			if (!ParseJsonDoc(req.bson_data, "bson_data", &filter, &resp)) break;
+			if (filter.Empty() && !req.allow_empty_filter) {
+				resp.success = false;
+				resp.error_message =
+					"Empty filter rejected: set allow_empty_filter=true to confirm";
+				break;
+			}
 			mongo::BsonDocument update;
 			if (!ParseJsonDoc(req.bson_data2, "bson_data2", &update, &resp)) break;
 			mongo::BsonDocument reply;
@@ -807,6 +812,13 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 		case DbOperation::kUpdateMany: {
 			mongo::BsonDocument filter;
 			if (!ParseJsonDoc(req.bson_data, "bson_data", &filter, &resp)) break;
+			if (filter.Empty() && !req.allow_empty_filter) {
+				resp.success = false;
+				resp.error_message =
+					"Empty filter rejected: set allow_empty_filter=true to confirm "
+					"intentional full-collection update";
+				break;
+			}
 			mongo::BsonDocument update;
 			if (!ParseJsonDoc(req.bson_data2, "bson_data2", &update, &resp)) break;
 			mongo::BsonDocument reply;
@@ -919,7 +931,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 				break;
 			}
 			try {
-				SerializeCursor(cursor, 0, &resp);
+				SerializeCursor(cursor, 0, &resp, req.max_result_documents);
 			} catch (...) {
 				cursor->Destroy();
 				throw;

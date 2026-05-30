@@ -72,6 +72,25 @@ int l_db_get_thread_count(lua_State* L) {
 	return 1;
 }
 
+int l_db_next_request_id(lua_State* L) {
+	lua_pushinteger(L, static_cast<lua_Integer>(DatabaseService::Instance().NextRequestId()));
+	return 1;
+}
+
+int l_db_metrics(lua_State* L) {
+	auto& service = DatabaseService::Instance();
+	lua_newtable(L);
+	lua_pushinteger(L, static_cast<lua_Integer>(service.GetTotalEnqueued()));
+	lua_setfield(L, -2, "enqueued");
+	lua_pushinteger(L, static_cast<lua_Integer>(service.GetTotalDropped()));
+	lua_setfield(L, -2, "dropped");
+	lua_pushinteger(L, static_cast<lua_Integer>(service.GetTotalCompleted()));
+	lua_setfield(L, -2, "completed");
+	lua_pushinteger(L, static_cast<lua_Integer>(service.GetTotalErrors()));
+	lua_setfield(L, -2, "errors");
+	return 1;
+}
+
 // ── l_db_send_request — parse Lua table → DbRequest → SendRequest ─────────
 //
 // Reads the table at stack index 1, extracts known fields, and routes the
@@ -210,6 +229,25 @@ int l_db_send_request(lua_State* L) {
 	}
 	lua_pop(L, 1);
 
+	// max_result_documents
+	lua_getfield(L, 1, "max_result_documents");
+	if (lua_isinteger(L, -1)) {
+		lua_Integer v = lua_tointeger(L, -1);
+		if (v < 0 || v > std::numeric_limits<uint32_t>::max()) {
+			lua_pop(L, 1);
+			lua_pushboolean(L, 0);
+			lua_pushstring(L, "db_send_request: max_result_documents must be in [0, 4294967295]");
+			return 2;
+		}
+		req.max_result_documents = static_cast<uint32_t>(v);
+	} else if (lua_isnumber(L, -1)) {
+		lua_pop(L, 1);
+		lua_pushboolean(L, 0);
+		lua_pushstring(L, "db_send_request: max_result_documents must be an integer");
+		return 2;
+	}
+	lua_pop(L, 1);
+
 	// allow_empty_filter
 	lua_getfield(L, 1, "allow_empty_filter");
 	if (lua_isboolean(L, -1)) {
@@ -222,9 +260,18 @@ int l_db_send_request(lua_State* L) {
 	}
 	lua_pop(L, 1);
 
+	if (req.request_id == 0) {
+		req.request_id = DatabaseService::Instance().NextRequestId();
+	}
+	const uint64_t request_id = req.request_id;
 	bool ok = DatabaseService::Instance().SendRequest(std::move(req));
 	lua_pushboolean(L, ok ? 1 : 0);
-	return 1;
+	if (ok) {
+		lua_pushinteger(L, static_cast<lua_Integer>(request_id));
+	} else {
+		lua_pushstring(L, "database service is not running or request queue is full");
+	}
+	return 2;
 }
 
 // ── l_db_poll_response — PollResponse → Lua table ────────────────────────
@@ -242,6 +289,8 @@ int l_db_poll_response(lua_State* L) {
 	lua_newtable(L);
 	lua_pushinteger(L, static_cast<lua_Integer>(resp->request_id));
 	lua_setfield(L, -2, "request_id");
+	lua_pushinteger(L, static_cast<lua_Integer>(resp->status));
+	lua_setfield(L, -2, "status");
 	lua_pushboolean(L, resp->success ? 1 : 0);
 	lua_setfield(L, -2, "success");
 	lua_pushinteger(L, static_cast<lua_Integer>(resp->error_code));
@@ -259,6 +308,8 @@ const luaL_Reg kDbServiceFunctions[] = {
 	{"db_is_running", l_db_is_running},
 	{"db_is_healthy", l_db_is_healthy},
 	{"db_get_thread_count", l_db_get_thread_count},
+	{"db_next_request_id", l_db_next_request_id},
+	{"db_metrics", l_db_metrics},
 	{"db_send_request", l_db_send_request},
 	{"db_poll_response", l_db_poll_response},
 	{nullptr, nullptr},

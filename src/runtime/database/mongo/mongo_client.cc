@@ -51,6 +51,7 @@ MongoClient* MongoClient::New(const char* uri_string) {
 }
 
 MongoClient* MongoClient::New(const MongoUri& uri) {
+	if (!uri.RawUri()) return nullptr;
 	auto* c = CLOUDENGINE_MEM_NEW(MongoClient);
 	c->impl_->client = mongoc_client_new_from_uri(static_cast<const mongoc_uri_t*>(uri.RawUri()));
 	if (!c->impl_->client) {
@@ -61,6 +62,7 @@ MongoClient* MongoClient::New(const MongoUri& uri) {
 }
 
 MongoClient* MongoClient::New(const MongoUri& uri, MongoError* error) {
+	if (!uri.RawUri()) return nullptr;
 	auto* c = CLOUDENGINE_MEM_NEW(MongoClient);
 	c->impl_->client = mongoc_client_new_from_uri_with_error(
 		static_cast<const mongoc_uri_t*>(uri.RawUri()),
@@ -129,6 +131,7 @@ void MongoClient::SetSslOpts(const void* ssl_opts) {
 MongoDatabase* MongoClient::GetDatabase(const char* name) {
 	if (!impl_ || !impl_->client) return nullptr;
 	mongoc_database_t* db = mongoc_client_get_database(impl_->client, name);
+	if (!db) return nullptr;
 	auto* result = CLOUDENGINE_MEM_NEW(MongoDatabase);
 	result->impl_ = std::make_unique<MongoDatabase::Impl>();
 	result->impl_->db = db;
@@ -148,6 +151,7 @@ MongoDatabase* MongoClient::GetDefaultDatabase() {
 MongoCollection* MongoClient::GetCollection(const char* db_name, const char* coll_name) {
 	if (!impl_ || !impl_->client) return nullptr;
 	mongoc_collection_t* coll = mongoc_client_get_collection(impl_->client, db_name, coll_name);
+	if (!coll) return nullptr;
 	auto* result = CLOUDENGINE_MEM_NEW(MongoCollection);
 	result->impl_ = std::make_unique<MongoCollection::Impl>();
 	result->impl_->coll = coll;
@@ -475,6 +479,7 @@ MongoDatabase* MongoDatabase::Copy() const {
 MongoCollection* MongoDatabase::GetCollection(const char* name) {
 	if (!impl_ || !impl_->db) return nullptr;
 	mongoc_collection_t* coll = mongoc_database_get_collection(impl_->db, name);
+	if (!coll) return nullptr;
 	auto* result = CLOUDENGINE_MEM_NEW(MongoCollection);
 	result->impl_ = std::make_unique<MongoCollection::Impl>();
 	result->impl_->coll = coll;

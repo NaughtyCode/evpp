@@ -1,5 +1,7 @@
 #include "runtime/script/orm_bind.h"
 
+#include <cstdint>
+
 #include "runtime/core/log/log.h"
 #include "runtime/database/orm.h"
 #include "runtime/vm/vm.h"
@@ -86,6 +88,7 @@ int l_orm_define(lua_State* L) {
 int l_orm_find(lua_State* L) {
 	const char* collection = luaL_checkstring(L, 1);
 	database::Query query;
+	database::FindOptions options;
 
 	if (lua_istable(L, 2)) {
 		lua_pushnil(L);
@@ -97,7 +100,23 @@ int l_orm_find(lua_State* L) {
 		}
 	}
 
-	auto results = database::OrmSession::Instance().Find(collection, query);
+	if (lua_istable(L, 3)) {
+		lua_getfield(L, 3, "limit");
+		if (lua_isinteger(L, -1)) {
+			options.limit = static_cast<int32_t>(lua_tointeger(L, -1));
+			if (options.limit < 0) options.limit = 0;
+		}
+		lua_pop(L, 1);
+
+		lua_getfield(L, 3, "skip");
+		if (lua_isinteger(L, -1)) {
+			options.skip = static_cast<int32_t>(lua_tointeger(L, -1));
+			if (options.skip < 0) options.skip = 0;
+		}
+		lua_pop(L, 1);
+	}
+
+	auto results = database::OrmSession::Instance().Find(collection, query, options);
 
 	lua_newtable(L);
 	for (size_t i = 0; i < results.size(); ++i) {
@@ -166,14 +185,36 @@ int l_orm_cache_stats(lua_State* L) {
 	return 1;
 }
 
+int l_orm_clear_cache(lua_State* L) {
+	database::OrmSession::Instance().ClearAllCaches();
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+int l_orm_set_database(lua_State* L) {
+	const char* database = luaL_checkstring(L, 1);
+	database::OrmSession::Instance().SetDefaultDatabase(database);
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+int l_orm_get_database(lua_State* L) {
+	auto database = database::OrmSession::Instance().GetDefaultDatabase();
+	lua_pushstring(L, database.c_str());
+	return 1;
+}
+
 static const luaL_Reg kOrmFuncs[] = {
-	{"define",      l_orm_define},
-	{"find",        l_orm_find},
-	{"find_by_id",  l_orm_find_by_id},
-	{"insert",      l_orm_insert},
-	{"update",      l_orm_update},
-	{"delete",      l_orm_delete},
-	{"cache_stats", l_orm_cache_stats},
+	{"define",       l_orm_define},
+	{"find",         l_orm_find},
+	{"find_by_id",   l_orm_find_by_id},
+	{"insert",       l_orm_insert},
+	{"update",       l_orm_update},
+	{"delete",       l_orm_delete},
+	{"cache_stats",  l_orm_cache_stats},
+	{"clear_cache",  l_orm_clear_cache},
+	{"set_database", l_orm_set_database},
+	{"get_database", l_orm_get_database},
 	{nullptr, nullptr}
 };
 

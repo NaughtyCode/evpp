@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -65,6 +66,11 @@ public:
 
 	// Retrieve a schema by collection name.
 	const CollectionSchema* GetSchema(const std::string& collection) const;
+	bool IsCollectionRegistered(const std::string& collection) const;
+
+	// Database name used by generated DbRequest objects.
+	void SetDefaultDatabase(std::string database);
+	std::string GetDefaultDatabase() const;
 
 	// Find a single document by string ID.
 	// Returns nullopt if not found.
@@ -105,9 +111,14 @@ private:
 	OrmSession& operator=(OrmSession&&) = delete;
 
 	CollectionSchema* GetMutableSchema(const std::string& collection);
+	uint64_t NextRequestId();
 
+	mutable std::mutex mutex_;
+	std::string default_database_ = "game";
 	std::unordered_map<std::string, CollectionSchema> schemas_;
 	std::unordered_map<std::string, std::unique_ptr<EntityCache<std::string>>> caches_;
+	std::unordered_map<std::string, std::unordered_map<std::string, std::string>> local_store_;
+	uint64_t next_request_id_ = 1;
 };
 
 }  // namespace database

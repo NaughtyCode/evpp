@@ -20,6 +20,7 @@ struct MongoClientPool::Impl {
 };
 
 MongoClientPool* MongoClientPool::New(const MongoUri& uri) {
+	if (!uri.RawUri()) return nullptr;
 	auto* pool = CLOUDENGINE_MEM_NEW(MongoClientPool);
 	pool->impl_->pool = mongoc_client_pool_new(static_cast<const mongoc_uri_t*>(uri.RawUri()));
 	if (!pool->impl_->pool) {
@@ -30,6 +31,7 @@ MongoClientPool* MongoClientPool::New(const MongoUri& uri) {
 }
 
 MongoClientPool* MongoClientPool::New(const MongoUri& uri, MongoError* error) {
+	if (!uri.RawUri()) return nullptr;
 	auto* pool = CLOUDENGINE_MEM_NEW(MongoClientPool);
 	pool->impl_->pool = mongoc_client_pool_new_with_error(
 		static_cast<const mongoc_uri_t*>(uri.RawUri()),
@@ -64,10 +66,16 @@ MongoClient* MongoClientPool::Pop() {
 }
 
 void MongoClientPool::Push(MongoClient* client) {
-	if (impl_ && impl_->pool && client) {
-		mongoc_client_pool_push(impl_->pool, static_cast<mongoc_client_t*>(client->RawClient()));
+	if (!client) return;
+
+	if (impl_ && impl_->pool && client->RawClient()) {
+		mongoc_client_pool_push(impl_->pool,
+								static_cast<mongoc_client_t*>(client->RawClient()));
 		client->ReleaseFromPool();
+	} else {
+		client->Destroy();
 	}
+	CLOUDENGINE_MEM_DELETE(client);
 }
 
 MongoClient* MongoClientPool::TryPop() {

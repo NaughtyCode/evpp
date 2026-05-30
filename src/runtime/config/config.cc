@@ -695,6 +695,7 @@ bool ConfigManager::LoadMongoDbConfigFromFile(const std::string& path, MongoDbCo
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to load mongodb config [{}]: {}", path, glz::format_error(ec, buf));
 		return false;
 	}
+	InterpolateConfigStrings(out);
 	return true;
 }
 
@@ -705,6 +706,7 @@ bool ConfigManager::LoadDbServiceConfigFromFile(const std::string& path, DbServi
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: failed to load db_service config [{}]: {}", path, glz::format_error(ec, buf));
 		return false;
 	}
+	InterpolateConfigStrings(out);
 	return true;
 }
 

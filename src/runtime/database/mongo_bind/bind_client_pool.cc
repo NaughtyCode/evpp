@@ -27,11 +27,12 @@ int l_pool_gc(lua_State* L) {
 
 int l_pool_new(lua_State* L) {
 	const char* uri_str = luaL_checkstring(L, 1);
-	auto uri = mongo::MongoUri::New(uri_str);
-	auto* pool = mongo::MongoClientPool::New(uri);
+	mongo::MongoError error;
+	auto uri = mongo::MongoUri::NewWithError(uri_str, &error);
+	auto* pool = mongo::MongoClientPool::New(uri, &error);
 	if (!pool) {
 		lua_pushnil(L);
-		lua_pushstring(L, "failed to create client pool");
+		lua_pushstring(L, error.Message());
 		lua_pushnil(L);
 		return 3;
 	}
@@ -42,8 +43,8 @@ int l_pool_new(lua_State* L) {
 
 int l_pool_new_with_error(lua_State* L) {
 	const char* uri_str = luaL_checkstring(L, 1);
-	auto uri = mongo::MongoUri::New(uri_str);
 	mongo::MongoError error;
+	auto uri = mongo::MongoUri::NewWithError(uri_str, &error);
 	auto* pool = mongo::MongoClientPool::New(uri, &error);
 	if (!pool) {
 		lua_pushnil(L);
@@ -81,8 +82,12 @@ int l_pool_pop(lua_State* L) {
 
 int l_pool_push(lua_State* L) {
 	auto* pool = GetUserdata<mongo::MongoClientPool>(L, 1, kMetaName);
-	auto* client = GetUserdata<mongo::MongoClient>(L, 2, "mongoc.client");
-	if (pool && client) pool->Push(client);
+	auto** client_ud = CheckUserdata<mongo::MongoClient>(L, 2, "mongoc.client");
+	auto* client = client_ud ? *client_ud : nullptr;
+	if (pool && client) {
+		pool->Push(client);
+		*client_ud = nullptr;
+	}
 	return 0;
 }
 

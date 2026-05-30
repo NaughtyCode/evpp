@@ -27,8 +27,8 @@ class CLOUD_ENGINE_API MongoClientPool {
 	MongoClientPool& operator=(MongoClientPool&&) = delete;
 
 	// ── Pool operations ──────────────────────────────────────────────
-	MongoClient* Pop();	 // borrow a client; caller MUST Push() or destroy
-	void Push(MongoClient* client);	 // return client to pool
+	MongoClient* Pop();	 // borrow a client; caller MUST Push() it back
+	void Push(MongoClient* client);	 // return client to pool and consume wrapper
 	MongoClient* TryPop();	// non-blocking pop; returns nullptr if none available
 	void SetMaxSize(uint32_t max_pool_size);
 

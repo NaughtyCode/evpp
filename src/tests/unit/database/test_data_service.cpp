@@ -69,3 +69,36 @@ TEST_CASE("db_send_request validates allow_empty_filter type", "[database][data_
 
     REQUIRE(result == "false|db_send_request: allow_empty_filter must be boolean");
 }
+
+TEST_CASE("db_send_request validates max_result_documents type", "[database][data_service]") {
+    ScriptVM vm;
+    script::ExportDbService(vm);
+
+    std::string error;
+    std::string result;
+    REQUIRE(vm.DoString(
+        "local ok, err = db_send_request({ operation = 'find', max_result_documents = 1.5 })\n"
+        "return tostring(ok) .. '|' .. tostring(err)",
+        "=data_service_max_result_test",
+        &error,
+        &result));
+
+    REQUIRE(result == "false|db_send_request: max_result_documents must be an integer");
+}
+
+TEST_CASE("db_next_request_id returns increasing ids", "[database][data_service]") {
+    ScriptVM vm;
+    script::ExportDbService(vm);
+
+    std::string error;
+    std::string result;
+    REQUIRE(vm.DoString(
+        "local a = db_next_request_id()\n"
+        "local b = db_next_request_id()\n"
+        "return tostring(b > a)",
+        "=data_service_request_id_test",
+        &error,
+        &result));
+
+    REQUIRE(result == "true");
+}

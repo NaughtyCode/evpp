@@ -110,6 +110,7 @@ class CLOUD_ENGINE_API DatabaseService {
 
 	bool SendRequest(DbRequest&& request);
 	std::unique_ptr<DbResponse> PollResponse();
+	uint64_t NextRequestId();
 
 	// ── Status queries (thread-safe) ───────────────────────────────────
 
@@ -161,6 +162,7 @@ class CLOUD_ENGINE_API DatabaseService {
 
 	mutable std::shared_mutex state_mutex_;
 	std::atomic<uint64_t> next_thread_{0};
+	std::atomic<uint64_t> next_request_id_{1};
 
 	// pool_ MUST be declared BEFORE threads_ (LIFO destruction order:
 	// threads destroyed first → each ~DBThread calls Stop() → client

@@ -29,6 +29,7 @@
 #if defined(ENGINE_MONGODB_ENABLED)
 #include "runtime/database/data_service/database_service.h"
 #include "runtime/database/data_service/db_service_config.h"
+#include "runtime/database/mongo/mongo_error.h"
 #include "runtime/database/mongo/mongo_system.h"
 #include "runtime/database/mongo/mongo_uri.h"
 #endif
@@ -214,16 +215,16 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		if (mongo_cfg.connection.uri.empty()) {
 			ENGINE_LOG_INFO(logger, "database service skipped: no MongoDB URI configured");
 		} else {
-			auto uri = mongo::MongoUri::New(mongo_cfg.connection.uri.c_str());
-
-			if (db_svc_config.connection_pool.wait_queue_timeout_ms > 0) {
-				uri.SetOptionAsInt32(
-					"waitQueueTimeoutMS",
-					static_cast<int32_t>(db_svc_config.connection_pool.wait_queue_timeout_ms));
+			mongo::MongoError uri_error;
+			auto uri = mongo::MongoUri::NewWithError(mongo_cfg.connection.uri.c_str(), &uri_error);
+			if (!uri.RawUri()) {
+				ENGINE_LOG_ERROR(logger,
+								 "database service skipped: invalid MongoDB URI: {}",
+								 uri_error.Message());
+			} else {
+				bool ok = DatabaseService::Instance().Initialize(db_svc_config, uri);
+				ENGINE_LOG_INFO(logger, "database service initialized, ok=[{}]", ok);
 			}
-
-			bool ok = DatabaseService::Instance().Initialize(db_svc_config, uri);
-			ENGINE_LOG_INFO(logger, "database service initialized, ok=[{}]", ok);
 		}
 	}
 #endif
