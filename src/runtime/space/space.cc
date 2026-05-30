@@ -1,26 +1,52 @@
 #include "runtime/space/space.h"
 
+#include <atomic>
+
 #include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
+#include "runtime/script/space_bind.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {
 namespace space {
 
+namespace {
+
+std::atomic<entity::EntityId> g_next_space_entity_id{1};
+
+entity::EntityId AllocateSpaceEntityId() {
+	for (;;) {
+		auto id = g_next_space_entity_id.fetch_add(1, std::memory_order_relaxed);
+		if (id != entity::kInvalidEntityId) {
+			return id;
+		}
+	}
+}
+
+}  // namespace
+
 Space::Space(SpaceId id, const SpaceConfig& config)
 	: id_(id)
-	, config_(config)
-	, id_allocator_(std::make_unique<entity::SequentialIdAllocator>()) {
+	, config_(config) {
 	vm_ = std::make_unique<ScriptVM>();
+	script::ExportSpace(*vm_, this);
 	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger, "Space [{}]: created, name=[{}], max_entities=[{}]",
-					id_, config_.name, config_.max_entities);
+	if (logger) {
+		ENGINE_LOG_INFO(logger, "Space [{}]: created, name=[{}], max_entities=[{}]",
+						id_, config_.name, config_.max_entities);
+	}
 }
 
 Space::~Space() {
 	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger, "Space [{}]: destroying, entity_count=[{}]",
-					id_, entities_.size());
+	if (logger) {
+		ENGINE_LOG_INFO(logger, "Space [{}]: destroying, entity_count=[{}]",
+						id_, entities_.size());
+	}
+
+	if (vm_) {
+		vm_->DestroyScript();
+	}
 
 	// Suspend all player entities before teardown
 	for (auto& [eid, conn] : player_connections_) {
@@ -32,7 +58,9 @@ Space::~Space() {
 	player_connections_.clear();
 	entities_.clear();
 
-	ENGINE_LOG_INFO(logger, "Space [{}]: destroyed", id_);
+	if (logger) {
+		ENGINE_LOG_INFO(logger, "Space [{}]: destroyed", id_);
+	}
 }
 
 lua_State* Space::GetLuaState() {
@@ -43,23 +71,43 @@ entity::Entity* Space::CreateEntity(entity::EntityId id) {
 	ENGINE_PROFILE_ENTITY_CREATE();
 	if (entities_.size() >= config_.max_entities) {
 		auto* logger = GetLogger();
-		ENGINE_LOG_ERROR(logger, "Space [{}]: entity limit reached [{}]", id_, config_.max_entities);
+		if (logger) {
+			ENGINE_LOG_ERROR(logger, "Space [{}]: entity limit reached [{}]",
+							 id_, config_.max_entities);
+		}
 		return nullptr;
 	}
 
 	if (id == entity::kInvalidEntityId) {
-		id = id_allocator_->Allocate();
+		size_t attempts = 0;
+		const size_t max_attempts = entities_.size() + 1;
+		do {
+			id = AllocateSpaceEntityId();
+			if (id != entity::kInvalidEntityId && entities_.find(id) == entities_.end()) {
+				break;
+			}
+			++attempts;
+		} while (attempts <= max_attempts);
+
+		if (id == entity::kInvalidEntityId || entities_.find(id) != entities_.end()) {
+			auto* logger = GetLogger();
+			if (logger) {
+				ENGINE_LOG_ERROR(logger, "Space [{}]: failed to allocate a free entity id", id_);
+			}
+			return nullptr;
+		}
 	}
 
 	if (entities_.find(id) != entities_.end()) {
 		auto* logger = GetLogger();
-		ENGINE_LOG_ERROR(logger, "Space [{}]: entity [{}] already exists", id_, id);
+		if (logger) {
+			ENGINE_LOG_ERROR(logger, "Space [{}]: entity [{}] already exists", id_, id);
+		}
 		return nullptr;
 	}
 
 	auto entity = std::make_unique<entity::Entity>(id);
 	auto* raw = entity.get();
-	raw->Activate();
 	entities_[id] = std::move(entity);
 	return raw;
 }
@@ -80,24 +128,40 @@ void Space::DestroyEntity(entity::EntityId id) {
 	entities_.erase(it);
 }
 
-void Space::OnPlayerJoin(entity::EntityId player_id, evpp::TCPConnPtr conn) {
+bool Space::OnPlayerJoin(entity::EntityId player_id, evpp::TCPConnPtr conn) {
 	ENGINE_PROFILE_SPACE_JOIN();
 	auto* entity = GetEntity(player_id);
 	if (!entity) {
 		auto* logger = GetLogger();
-		ENGINE_LOG_ERROR(logger, "Space [{}]: player join failed, entity [{}] not found",
-						 id_, player_id);
-		return;
+		if (logger) {
+			ENGINE_LOG_ERROR(logger, "Space [{}]: player join failed, entity [{}] not found",
+							 id_, player_id);
+		}
+		return false;
 	}
+
+	if (player_connections_.find(player_id) == player_connections_.end() &&
+		player_connections_.size() >= config_.max_players) {
+		auto* logger = GetLogger();
+		if (logger) {
+			ENGINE_LOG_ERROR(logger, "Space [{}]: player limit reached [{}]", id_,
+							 config_.max_players);
+		}
+		return false;
+	}
+
 	entity->BindConnection(conn);
+	entity->Activate();
 	player_connections_[player_id] = std::move(conn);
+	return true;
 }
 
 void Space::OnPlayerLeave(entity::EntityId player_id) {
 	ENGINE_PROFILE_SPACE_LEAVE();
 	auto* entity = GetEntity(player_id);
 	if (entity) {
-		entity->Suspend();  // suspend, not destroy — enables reconnect
+		entity->UnbindConnection();
+		entity->Suspend();  // suspend, not destroy: enables reconnect
 	}
 	player_connections_.erase(player_id);
 }
@@ -114,26 +178,47 @@ void Space::Update(int64_t delta_ms) {
 	vm_->UpdateScript();
 }
 
-bool Space::LoadScripts(const std::vector<std::string>& script_paths) {
+bool Space::LoadScripts(const std::vector<std::string>& script_paths, std::string* error_out) {
 	ENGINE_PROFILE_SPACE_LOAD_SCRIPTS();
-	if (!vm_) return false;
+	if (!vm_) {
+		if (error_out) *error_out = "ScriptVM not initialized";
+		return false;
+	}
 
 	auto* logger = GetLogger();
 	for (const auto& path : script_paths) {
-		if (!vm_->DoFile(path)) {
-			ENGINE_LOG_ERROR(logger, "Space [{}]: failed to load script [{}]", id_, path);
+		std::string error;
+		if (!vm_->DoFile(path, &error)) {
+			if (logger) {
+				ENGINE_LOG_ERROR(logger, "Space [{}]: failed to load script [{}]", id_, path);
+			}
+			if (error_out) {
+				*error_out = error.empty() ? "failed to load script: " + path
+										   : "failed to load script " + path + ": " + error;
+			}
 			return false;
 		}
 	}
 
 	vm_->InitScript();
-	ENGINE_LOG_INFO(logger, "Space [{}]: loaded [{}] scripts", id_, script_paths.size());
+	if (logger) {
+		ENGINE_LOG_INFO(logger, "Space [{}]: loaded [{}] scripts", id_, script_paths.size());
+	}
 	return true;
 }
 
 void Space::ForEachEntity(std::function<void(entity::Entity&)> callback) {
-	for (auto& [id, entity] : entities_) {
-		callback(*entity);
+	std::vector<entity::EntityId> ids;
+	ids.reserve(entities_.size());
+	for (const auto& [id, entity] : entities_) {
+		ids.push_back(id);
+	}
+
+	for (auto id : ids) {
+		auto it = entities_.find(id);
+		if (it != entities_.end()) {
+			callback(*it->second);
+		}
 	}
 }
 

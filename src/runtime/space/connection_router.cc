@@ -17,24 +17,39 @@ ConnectionRouter& ConnectionRouter::Instance() {
 entity::EntityId ConnectionRouter::RouteNewConnection(SpaceId space_id,
                                                        evpp::TCPConnPtr conn) {
 	ENGINE_PROFILE_SPACE_ROUTE_CONN();
+	if (!conn) {
+		auto* logger = GetLogger();
+		if (logger) {
+			ENGINE_LOG_ERROR(logger, "ConnectionRouter: cannot route null connection");
+		}
+		return entity::kInvalidEntityId;
+	}
+
 	auto& manager = SpaceManager::Instance();
 	auto* space = manager.GetSpace(space_id);
 	if (!space) {
 		auto* logger = GetLogger();
-		ENGINE_LOG_ERROR(logger, "ConnectionRouter: space [{}] not found", space_id);
+		if (logger) {
+			ENGINE_LOG_ERROR(logger, "ConnectionRouter: space [{}] not found", space_id);
+		}
 		return entity::kInvalidEntityId;
 	}
 
 	auto* entity = space->CreateEntity();
 	if (!entity) {
 		auto* logger = GetLogger();
-		ENGINE_LOG_ERROR(logger, "ConnectionRouter: failed to create entity in space [{}]",
-						 space_id);
+		if (logger) {
+			ENGINE_LOG_ERROR(logger, "ConnectionRouter: failed to create entity in space [{}]",
+							 space_id);
+		}
 		return entity::kInvalidEntityId;
 	}
 
 	entity::EntityId eid = entity->GetId();
-	space->OnPlayerJoin(eid, conn);
+	if (!space->OnPlayerJoin(eid, conn)) {
+		space->DestroyEntity(eid);
+		return entity::kInvalidEntityId;
+	}
 
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
@@ -43,13 +58,17 @@ entity::EntityId ConnectionRouter::RouteNewConnection(SpaceId space_id,
 	}
 
 	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger, "ConnectionRouter: connection routed to space [{}], entity [{}]",
-					space_id, eid);
+	if (logger) {
+		ENGINE_LOG_INFO(logger, "ConnectionRouter: connection routed to space [{}], entity [{}]",
+						space_id, eid);
+	}
 	return eid;
 }
 
 void ConnectionRouter::RouteMessage(evpp::TCPConnPtr conn, const std::string& data) {
 	ENGINE_PROFILE_SPACE_ROUTE_MSG();
+	if (!conn) return;
+
 	SpaceId space_id;
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
@@ -59,7 +78,12 @@ void ConnectionRouter::RouteMessage(evpp::TCPConnPtr conn, const std::string& da
 	}
 
 	auto* space = SpaceManager::Instance().GetSpace(space_id);
-	if (!space) return;
+	if (!space) {
+		std::lock_guard<std::mutex> lock(mutex_);
+		conn_to_space_.erase(conn.get());
+		conn_to_entity_.erase(conn.get());
+		return;
+	}
 
 	auto* L = space->GetLuaState();
 	if (!L) return;
@@ -84,19 +108,24 @@ void ConnectionRouter::RouteMessage(evpp::TCPConnPtr conn, const std::string& da
 	int msgh = PushLuaErrorHandlerForCall(L, 2);
 	if (lua_pcall(L, 2, 0, msgh) != LUA_OK) {
 		auto* logger = GetLogger();
-		ENGINE_LOG_ERROR(logger,
-						 "ConnectionRouter: message delivery error: {}",
-						 lua_tostring(L, -1));
+		if (logger) {
+			ENGINE_LOG_ERROR(logger,
+							 "ConnectionRouter: message delivery error: {}",
+							 lua_tostring(L, -1));
+		}
 		lua_pop(L, 1);
 	}
+	lua_remove(L, msgh);
 
 	lua_pop(L, 1);  // space table
 }
 
 void ConnectionRouter::RouteDisconnection(evpp::TCPConnPtr conn) {
 	ENGINE_PROFILE_SPACE_ROUTE_DISCONN();
+	if (!conn) return;
+
 	SpaceId space_id;
-	entity::EntityId eid;
+	entity::EntityId eid = entity::kInvalidEntityId;
 
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
@@ -119,7 +148,10 @@ void ConnectionRouter::RouteDisconnection(evpp::TCPConnPtr conn) {
 	}
 
 	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger, "ConnectionRouter: connection disconnected from space [{}]", space_id);
+	if (logger) {
+		ENGINE_LOG_INFO(logger, "ConnectionRouter: connection disconnected from space [{}]",
+						space_id);
+	}
 }
 
 SpaceId ConnectionRouter::FindSpaceByConnection(const evpp::TCPConn* raw_conn) const {

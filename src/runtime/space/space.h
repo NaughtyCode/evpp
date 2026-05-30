@@ -56,15 +56,17 @@ public:
 	size_t EntityCount() const { return entities_.size(); }
 
 	// Player join/leave — connection → entity lifecycle
-	void OnPlayerJoin(entity::EntityId player_id, evpp::TCPConnPtr conn);
+	bool OnPlayerJoin(entity::EntityId player_id, evpp::TCPConnPtr conn);
 	void OnPlayerLeave(entity::EntityId player_id);
 	evpp::TCPConnPtr GetPlayerConnection(entity::EntityId player_id) const;
+	size_t PlayerCount() const { return player_connections_.size(); }
 
 	// Per-frame update
 	void Update(int64_t delta_ms);
 
 	// Script loading
-	bool LoadScripts(const std::vector<std::string>& script_paths);
+	bool LoadScripts(const std::vector<std::string>& script_paths,
+					 std::string* error_out = nullptr);
 
 	// Iteration
 	void ForEachEntity(std::function<void(entity::Entity&)> callback);
@@ -73,7 +75,6 @@ private:
 	SpaceId id_;
 	SpaceConfig config_;
 	std::unique_ptr<ScriptVM> vm_;
-	std::unique_ptr<entity::SequentialIdAllocator> id_allocator_;
 	std::unordered_map<entity::EntityId, std::unique_ptr<entity::Entity>> entities_;
 	std::unordered_map<entity::EntityId, evpp::TCPConnPtr> player_connections_;
 };

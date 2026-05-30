@@ -7,6 +7,10 @@ namespace engine {
 class ScriptVM;
 class TimerManager;
 
+namespace space {
+class Space;
+}  // namespace space
+
 namespace script {
 
 // Main entry point — call once after VM is created to export all C++ APIs
@@ -30,7 +34,7 @@ CLOUD_ENGINE_API void ShutdownNetBindings();
 CLOUD_ENGINE_API void ExportEntity(ScriptVM& vm);
 CLOUD_ENGINE_API void ShutdownEntityBindings();
 
-CLOUD_ENGINE_API void ExportSpace(ScriptVM& vm);
+CLOUD_ENGINE_API void ExportSpace(ScriptVM& vm, space::Space* current_space);
 
 CLOUD_ENGINE_API void ExportAOI(ScriptVM& vm);
 #if defined(ENGINE_MONGODB_ENABLED)

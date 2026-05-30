@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -29,7 +30,7 @@ public:
 
 	Space* GetSpace(SpaceId id);
 	void DestroySpace(SpaceId id);
-	size_t SpaceCount() const { return spaces_.size(); }
+	size_t SpaceCount() const;
 
 	// Iteration
 	void ForEachSpace(std::function<void(Space&)> callback);

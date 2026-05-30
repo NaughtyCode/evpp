@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include "log_init.h"
 #include "runtime/entity/entity.h"
+#include "runtime/script/space_bind.h"
 #include "runtime/space/connection_router.h"
 #include "runtime/space/space.h"
 #include "runtime/space/space_manager.h"
@@ -73,6 +75,21 @@ TEST_CASE("Space script VM is created during construction", "[space][vm]") {
     REQUIRE(space.GetScriptVM().GetState() == space.GetLuaState());
 }
 
+TEST_CASE("Space script VM has current space binding", "[space][vm][binding]") {
+    SpaceConfig cfg;
+    cfg.name = "BoundSpace";
+    Space space(123, cfg);
+
+    std::string error;
+    std::string result;
+    REQUIRE(space.GetScriptVM().DoString(
+        "local current = space.current(); return tostring(current.id) .. ':' .. current.name",
+        "string",
+        &error,
+        &result));
+    REQUIRE(result == "123:BoundSpace");
+}
+
 TEST_CASE("Space is not copyable", "[space][traits]") {
     SpaceConfig cfg;
     Space space(1, cfg);
@@ -106,6 +123,15 @@ TEST_CASE("Space CreateEntity with explicit ID", "[space][entity]") {
     REQUIRE(e != nullptr);
     REQUIRE(e->GetId() == 100);
     REQUIRE(space.EntityCount() == 1);
+}
+
+TEST_CASE("Space CreateEntity leaves entity in Created state", "[space][entity]") {
+    SpaceConfig cfg;
+    Space space(1, cfg);
+
+    auto* e = space.CreateEntity();
+    REQUIRE(e != nullptr);
+    REQUIRE(e->GetState() == EntityState::Created);
 }
 
 TEST_CASE("Space GetEntity returns entity by id", "[space][entity]") {
@@ -469,4 +495,27 @@ TEST_CASE("SpaceMessageRouter multiple messages", "[space_msg][send]") {
 
     router.ProcessPending();
     REQUIRE(router.PendingCount() == 0);
+}
+
+TEST_CASE("Space Lua binding delivers and polls messages FIFO", "[space_bind][message]") {
+    engine::ScriptVM vm;
+    engine::script::ExportSpace(vm);
+
+    std::string error;
+    std::string result;
+    REQUIRE(vm.DoString(
+        "space._deliver_message(7, 8, 9, 'first')\n"
+        "space._deliver_message(7, 8, 9, 'second')\n"
+        "local a = space.poll()\n"
+        "local b = space.poll()\n"
+        "local c = space.poll()\n"
+        "assert(a.payload == 'first')\n"
+        "assert(b.payload == 'second')\n"
+        "assert(c == nil)\n"
+        "return tostring(a.source_space) .. ':' .. tostring(a.source_entity) .. ':' .. "
+        "tostring(a.target_entity) .. ':' .. a.payload",
+        "string",
+        &error,
+        &result));
+    REQUIRE(result == "7:8:9:first");
 }

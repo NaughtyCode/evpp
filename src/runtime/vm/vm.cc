@@ -64,6 +64,7 @@ ScriptVM& ScriptVM::operator=(ScriptVM&& other) noexcept {
 void ScriptVM::CallGlobalFunction(std::string_view name) {
 	if (!L_) return;
 
+	int base_top = lua_gettop(L_);
 	lua_getglobal(L_, std::string(name).c_str());
 	if (lua_type(L_, -1) != LUA_TFUNCTION) {
 		lua_pop(L_, 1);
@@ -86,8 +87,11 @@ void ScriptVM::CallGlobalFunction(std::string_view name) {
 		} else {
 			ENGINE_LOG_ERROR(logger, "ScriptVM: [{}] error: [{}]", name, lua_tostring(L_, -1));
 		}
-		lua_pop(L_, 1);
+		lua_settop(L_, base_top);
+		return;
 	}
+	lua_remove(L_, f_idx);
+	lua_settop(L_, base_top);
 }
 
 void ScriptVM::InitScript() {
@@ -136,6 +140,7 @@ bool ScriptVM::DoString(std::string_view script,
 		return false;
 	}
 
+	int base_top = lua_gettop(L_);
 	if (script.size() > kMaxDoStringSize) {
 		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger, "ScriptVM::DoString rejected: script size [{}] exceeds limit [{}]",
@@ -158,17 +163,15 @@ bool ScriptVM::DoString(std::string_view script,
 	int nresults = result_out ? 1 : 0;
 	int msgh = PushLuaErrorHandlerForCall(L_, 0);
 	rc = lua_pcall(L_, 0, nresults, msgh);
-	if (rc == LUA_OK && nresults > 0) {
-		lua_remove(L_, msgh);  // remove error handler below result
-	}
 	if (rc != LUA_OK) {
 		const char* msg = lua_tostring(L_, -1);
 		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger, "ScriptVM::DoString run error: [{}]", msg);
 		if (error_out) *error_out = msg;
-		lua_pop(L_, 1);
+		lua_settop(L_, base_top);
 		return false;
 	}
+	lua_remove(L_, msgh);
 
 	if (result_out) {
 		if (lua_gettop(L_) > 0) {
@@ -179,8 +182,8 @@ bool ScriptVM::DoString(std::string_view script,
 				lua_pop(L_, 1);
 			}
 		}
-		lua_settop(L_, 0);
 	}
+	lua_settop(L_, base_top);
 
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "ScriptVM::DoString [{}]: [{} bytes] OK", chunk_name, script.size());
@@ -195,6 +198,7 @@ bool ScriptVM::DoFile(const std::string& filename, std::string* error_out) {
 		return false;
 	}
 
+	int base_top = lua_gettop(L_);
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "ScriptVM::DoFile loading [{}]...", filename);
 
@@ -213,9 +217,10 @@ bool ScriptVM::DoFile(const std::string& filename, std::string* error_out) {
 		const char* msg = lua_tostring(L_, -1);
 		ENGINE_LOG_ERROR(logger, "ScriptVM::DoFile run error [{}]: [{}]", filename, msg);
 		if (error_out) *error_out = msg;
-		lua_pop(L_, 1);
+		lua_settop(L_, base_top);
 		return false;
 	}
+	lua_remove(L_, msgh);
 
 	ENGINE_LOG_INFO(logger, "ScriptVM::DoFile [{}] OK", filename);
 	return true;

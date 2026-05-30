@@ -48,8 +48,8 @@ inline int PushLuaErrorHandler(lua_State* L) {
 // After:   ... [err_handler] [function] [arg1] ... [argN]
 //
 // The caller then calls lua_pcall(L, nargs, nresults, msgh) with the
-// returned value as msgh. After pcall the caller must NOT try to remove
-// the error handler — lua_pcall with msgh handles that automatically.
+// returned value as msgh. lua_pcall leaves the message handler on the stack;
+// callers must remove it on success or restore the previous stack on failure.
 inline int PushLuaErrorHandlerForCall(lua_State* L, int nargs) {
 	int f_idx = lua_gettop(L) - nargs;
 	int err_idx = PushLuaErrorHandler(L);

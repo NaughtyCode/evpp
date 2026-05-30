@@ -1,5 +1,7 @@
 #include "runtime/space/space_manager.h"
 
+#include <vector>
+
 #include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
 
@@ -13,15 +15,30 @@ SpaceManager& SpaceManager::Instance() {
 
 Space* SpaceManager::CreateSpace(const SpaceConfig& config) {
 	ENGINE_PROFILE_SPACE_CREATE();
-	SpaceId id = next_space_id_.fetch_add(1, std::memory_order_relaxed);
-	return CreateSpaceWithId(id, config);
+	for (;;) {
+		SpaceId id = next_space_id_.fetch_add(1, std::memory_order_relaxed);
+		if (id == kInvalidSpaceId || spaces_.find(id) != spaces_.end()) {
+			continue;
+		}
+		return CreateSpaceWithId(id, config);
+	}
 }
 
 Space* SpaceManager::CreateSpaceWithId(SpaceId id, const SpaceConfig& config) {
 	ENGINE_PROFILE_SPACE_CREATE();
+	if (id == kInvalidSpaceId) {
+		auto* logger = GetLogger();
+		if (logger) {
+			ENGINE_LOG_ERROR(logger, "SpaceManager: invalid space id [{}]", id);
+		}
+		return nullptr;
+	}
+
 	if (spaces_.find(id) != spaces_.end()) {
 		auto* logger = GetLogger();
-		ENGINE_LOG_ERROR(logger, "SpaceManager: space [{}] already exists", id);
+		if (logger) {
+			ENGINE_LOG_ERROR(logger, "SpaceManager: space [{}] already exists", id);
+		}
 		return nullptr;
 	}
 
@@ -30,8 +47,18 @@ Space* SpaceManager::CreateSpaceWithId(SpaceId id, const SpaceConfig& config) {
 	spaces_[id] = std::move(space);
 
 	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger, "SpaceManager: created space [{}] name=[{}], total=[{}]",
-					id, config.name, spaces_.size());
+	if (logger) {
+		ENGINE_LOG_INFO(logger, "SpaceManager: created space [{}] name=[{}], total=[{}]",
+						id, config.name, spaces_.size());
+	}
+
+	SpaceId expected = next_space_id_.load(std::memory_order_relaxed);
+	while (expected <= id &&
+		   !next_space_id_.compare_exchange_weak(expected,
+												 id + 1,
+												 std::memory_order_relaxed,
+												 std::memory_order_relaxed)) {
+	}
 	return raw;
 }
 
@@ -45,18 +72,43 @@ Space* SpaceManager::GetSpace(SpaceId id) {
 void SpaceManager::DestroySpace(SpaceId id) {
 	ENGINE_PROFILE_SPACE_DESTROY();
 	auto* logger = GetLogger();
+	auto it = spaces_.find(id);
+	if (it == spaces_.end()) {
+		if (logger) {
+			ENGINE_LOG_DEBUG(logger, "SpaceManager: destroy ignored, space [{}] not found", id);
+		}
+		return;
+	}
+
 	if (id == default_space_id_) {
-		ENGINE_LOG_INFO(logger, "SpaceManager: destroying default space [{}]", id);
+		if (logger) {
+			ENGINE_LOG_INFO(logger, "SpaceManager: destroying default space [{}]", id);
+		}
 		default_space_id_ = kInvalidSpaceId;
 	}
-	spaces_.erase(id);
-	ENGINE_LOG_INFO(logger, "SpaceManager: destroyed space [{}], remaining=[{}]",
-					id, spaces_.size());
+	spaces_.erase(it);
+	if (logger) {
+		ENGINE_LOG_INFO(logger, "SpaceManager: destroyed space [{}], remaining=[{}]",
+						id, spaces_.size());
+	}
+}
+
+size_t SpaceManager::SpaceCount() const {
+	return spaces_.size();
 }
 
 void SpaceManager::ForEachSpace(std::function<void(Space&)> callback) {
-	for (auto& [id, space] : spaces_) {
-		callback(*space);
+	std::vector<SpaceId> ids;
+	ids.reserve(spaces_.size());
+	for (const auto& [id, space] : spaces_) {
+		ids.push_back(id);
+	}
+
+	for (auto id : ids) {
+		auto it = spaces_.find(id);
+		if (it != spaces_.end()) {
+			callback(*it->second);
+		}
 	}
 }
 

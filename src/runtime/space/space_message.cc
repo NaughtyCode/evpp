@@ -29,10 +29,12 @@ void SpaceMessageRouter::ProcessPending() {
 		auto* target = manager.GetSpace(msg.target_space);
 		if (!target) {
 			auto* logger = GetLogger();
-			ENGINE_LOG_WARN(logger,
-							"SpaceMessageRouter: target space [{}] not found, "
-							"dropping message from [{}]",
-							msg.target_space, msg.source_space);
+			if (logger) {
+				ENGINE_LOG_WARN(logger,
+								"SpaceMessageRouter: target space [{}] not found, "
+								"dropping message from [{}]",
+								msg.target_space, msg.source_space);
+			}
 			++processed;
 			continue;
 		}
@@ -67,11 +69,14 @@ void SpaceMessageRouter::ProcessPending() {
 		int msgh = PushLuaErrorHandlerForCall(L, 4);
 		if (lua_pcall(L, 4, 0, msgh) != LUA_OK) {
 			auto* logger = GetLogger();
-			ENGINE_LOG_ERROR(logger,
-							 "SpaceMessageRouter: delivery error: {}",
-							 lua_tostring(L, -1));
+			if (logger) {
+				ENGINE_LOG_ERROR(logger,
+								 "SpaceMessageRouter: delivery error: {}",
+								 lua_tostring(L, -1));
+			}
 			lua_pop(L, 1);
 		}
+		lua_remove(L, msgh);
 
 		lua_pop(L, 1);  // space table
 		++processed;
