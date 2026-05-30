@@ -6,6 +6,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "runtime/aoi/spatial_index.h"
 #include "runtime/core/engine_api.h"
@@ -51,15 +52,29 @@ public:
 	size_t EntityCount() const { return aoi_radii_.size(); }
 
 private:
-	void RecomputeVisibility(entity::EntityId id);
+	struct Position {
+		float x = 0.0f;
+		float y = 0.0f;
+	};
+
+	struct AOIEvent {
+		entity::EntityId observer = entity::kInvalidEntityId;
+		entity::EntityId target = entity::kInvalidEntityId;
+		bool entered = false;
+	};
+
+	std::vector<AOIEvent> RecomputeVisibility(entity::EntityId id);
+	void DispatchEvents(const std::vector<AOIEvent>& events);
+	void RecomputeMaxAOIRadius();
+	void AddObserversNear(float x, float y, std::unordered_set<entity::EntityId>& observers) const;
 
 	std::unique_ptr<SpatialGrid> grid_;
 	AOIEventCallback event_callback_;
 
 	std::unordered_map<entity::EntityId, float> aoi_radii_;
-	std::unordered_map<entity::EntityId, float> entity_x_;
-	std::unordered_map<entity::EntityId, float> entity_y_;
+	std::unordered_map<entity::EntityId, Position> positions_;
 	std::unordered_map<entity::EntityId, std::unordered_set<entity::EntityId>> visible_;
+	float max_aoi_radius_ = 0.0f;
 };
 
 }  // namespace aoi

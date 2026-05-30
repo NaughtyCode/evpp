@@ -2,7 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <unordered_set>
+#include <limits>
+#include <stdexcept>
 
 #include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
@@ -10,16 +11,55 @@
 namespace engine {
 namespace aoi {
 
+namespace {
+
+constexpr size_t kMaxGridCellCount = 10'000'000;
+
+bool IsFinite(float value) {
+	return std::isfinite(value);
+}
+
+float ValidateCellSize(float cell_size) {
+	if (!IsFinite(cell_size) || cell_size <= 0.0f) {
+		throw std::invalid_argument("SpatialGrid cell size must be finite and positive");
+	}
+	return cell_size;
+}
+
+int ComputeAxisCells(float world_extent, float cell_size) {
+	if (!IsFinite(world_extent) || world_extent <= 0.0f) {
+		throw std::invalid_argument("SpatialGrid world dimensions must be finite and positive");
+	}
+
+	const double cells = std::ceil(static_cast<double>(world_extent) /
+								   static_cast<double>(cell_size));
+	if (cells > static_cast<double>(std::numeric_limits<int>::max())) {
+		throw std::length_error("SpatialGrid axis cell count exceeds int range");
+	}
+	return std::max(1, static_cast<int>(cells));
+}
+
+void ValidatePosition(float x, float y) {
+	if (!IsFinite(x) || !IsFinite(y)) {
+		throw std::invalid_argument("SpatialGrid positions must be finite");
+	}
+}
+
+}  // namespace
+
 SpatialGrid::SpatialGrid(float world_width, float world_height, float cell_size)
-	: cell_size_(cell_size)
-	, inv_cell_size_(1.0f / cell_size)
+	: cell_size_(ValidateCellSize(cell_size))
+	, inv_cell_size_(1.0f / cell_size_)
 	, world_width_(world_width)
 	, world_height_(world_height) {
-	cols_ = static_cast<int>(std::ceil(world_width * inv_cell_size_));
-	rows_ = static_cast<int>(std::ceil(world_height * inv_cell_size_));
-	if (cols_ < 1) cols_ = 1;
-	if (rows_ < 1) rows_ = 1;
-	grid_.resize(cols_ * rows_);
+	cols_ = ComputeAxisCells(world_width, cell_size);
+	rows_ = ComputeAxisCells(world_height, cell_size);
+
+	const size_t cell_count = static_cast<size_t>(cols_) * static_cast<size_t>(rows_);
+	if (cell_count > kMaxGridCellCount) {
+		throw std::length_error("SpatialGrid cell count exceeds safety limit");
+	}
+	grid_.resize(cell_count);
 
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "SpatialGrid: [{}]x[{}] cells, cell_size=[{}]",
@@ -30,49 +70,73 @@ int SpatialGrid::CellIndex(int col, int row) const {
 	return row * cols_ + col;
 }
 
+int SpatialGrid::CellIndexForPosition(float x, float y) const {
+	const auto clamp_axis = [this](float value, int limit) {
+		const double scaled = std::floor(static_cast<double>(value) *
+										 static_cast<double>(inv_cell_size_));
+		if (scaled <= 0.0) return 0;
+		if (scaled >= static_cast<double>(limit - 1)) return limit - 1;
+		return static_cast<int>(scaled);
+	};
+
+	const int col = clamp_axis(x, cols_);
+	const int row = clamp_axis(y, rows_);
+	return CellIndex(col, row);
+}
+
 void SpatialGrid::CellIndices(float x, float y, float radius,
 							   int& min_col, int& min_row,
 							   int& max_col, int& max_row) const {
-	min_col = std::max(0, static_cast<int>((x - radius) * inv_cell_size_));
-	min_row = std::max(0, static_cast<int>((y - radius) * inv_cell_size_));
-	max_col = std::min(cols_ - 1, static_cast<int>((x + radius) * inv_cell_size_));
-	max_row = std::min(rows_ - 1, static_cast<int>((y + radius) * inv_cell_size_));
+	const auto clamp_axis = [this](double value, int limit) {
+		const double scaled = std::floor(value * static_cast<double>(inv_cell_size_));
+		if (scaled <= 0.0) return 0;
+		if (scaled >= static_cast<double>(limit - 1)) return limit - 1;
+		return static_cast<int>(scaled);
+	};
+
+	min_col = clamp_axis(static_cast<double>(x) - static_cast<double>(radius), cols_);
+	min_row = clamp_axis(static_cast<double>(y) - static_cast<double>(radius), rows_);
+	max_col = clamp_axis(static_cast<double>(x) + static_cast<double>(radius), cols_);
+	max_row = clamp_axis(static_cast<double>(y) + static_cast<double>(radius), rows_);
 }
 
-void SpatialGrid::GetPosition(entity::EntityId id, float& x, float& y) const {
-	auto xit = entity_x_.find(id);
-	auto yit = entity_y_.find(id);
-	x = (xit != entity_x_.end()) ? xit->second : 0.0f;
-	y = (yit != entity_y_.end()) ? yit->second : 0.0f;
+bool SpatialGrid::TryGetPosition(entity::EntityId id, Position& position) const {
+	auto it = positions_.find(id);
+	if (it == positions_.end()) return false;
+	position = it->second;
+	return true;
 }
 
 void SpatialGrid::Insert(entity::EntityId id, float x, float y) {
 	ENGINE_PROFILE_AOI_GRID_INSERT();
-	int col = std::clamp(static_cast<int>(x * inv_cell_size_), 0, cols_ - 1);
-	int row = std::clamp(static_cast<int>(y * inv_cell_size_), 0, rows_ - 1);
-	int idx = CellIndex(col, row);
+	ValidatePosition(x, y);
+
+	if (entity_cell_.find(id) != entity_cell_.end()) {
+		Update(id, x, y);
+		return;
+	}
+
+	int idx = CellIndexForPosition(x, y);
 
 	grid_[idx].push_back(id);
 	entity_cell_[id] = idx;
-	entity_x_[id] = x;
-	entity_y_[id] = y;
+	positions_[id] = Position{x, y};
 }
 
 void SpatialGrid::Update(entity::EntityId id, float x, float y) {
 	ENGINE_PROFILE_AOI_GRID_UPDATE();
+	ValidatePosition(x, y);
+
 	auto it = entity_cell_.find(id);
 	if (it == entity_cell_.end()) {
 		Insert(id, x, y);
 		return;
 	}
 
-	int col = std::clamp(static_cast<int>(x * inv_cell_size_), 0, cols_ - 1);
-	int row = std::clamp(static_cast<int>(y * inv_cell_size_), 0, rows_ - 1);
-	int new_idx = CellIndex(col, row);
+	int new_idx = CellIndexForPosition(x, y);
 	int old_idx = it->second;
 
-	entity_x_[id] = x;
-	entity_y_[id] = y;
+	positions_[id] = Position{x, y};
 
 	if (new_idx == old_idx) return;
 
@@ -95,12 +159,15 @@ void SpatialGrid::Remove(entity::EntityId id) {
 	cell.erase(std::remove(cell.begin(), cell.end(), id), cell.end());
 
 	entity_cell_.erase(it);
-	entity_x_.erase(id);
-	entity_y_.erase(id);
+	positions_.erase(id);
 }
 
 std::vector<entity::EntityId> SpatialGrid::QueryRadius(float x, float y, float radius) const {
 	ENGINE_PROFILE_AOI_QUERY();
+	if (!IsFinite(x) || !IsFinite(y) || !IsFinite(radius) || radius < 0.0f) {
+		return {};
+	}
+
 	int min_col, min_row, max_col, max_row;
 	CellIndices(x, y, radius, min_col, min_row, max_col, max_row);
 
@@ -110,10 +177,10 @@ std::vector<entity::EntityId> SpatialGrid::QueryRadius(float x, float y, float r
 	for (int row = min_row; row <= max_row; ++row) {
 		for (int col = min_col; col <= max_col; ++col) {
 			for (auto id : grid_[CellIndex(col, row)]) {
-				float ex, ey;
-				GetPosition(id, ex, ey);
-				float dx = ex - x;
-				float dy = ey - y;
+				Position position;
+				if (!TryGetPosition(id, position)) continue;
+				float dx = position.x - x;
+				float dy = position.y - y;
 				if (dx * dx + dy * dy <= r2) {
 					result.push_back(id);
 				}
@@ -126,15 +193,18 @@ std::vector<entity::EntityId> SpatialGrid::QueryRadius(float x, float y, float r
 
 std::vector<entity::EntityId> SpatialGrid::QueryAOI(entity::EntityId id) const {
 	ENGINE_PROFILE_SCOPE("engine.aoi", "GridQueryAOI");
-	float x, y;
-	GetPosition(id, x, y);
-	return QueryAOIAt(x, y);
+	Position position;
+	if (!TryGetPosition(id, position)) return {};
+	return QueryAOIAt(position.x, position.y);
 }
 
 std::vector<entity::EntityId> SpatialGrid::QueryAOIAt(float x, float y) const {
 	ENGINE_PROFILE_SCOPE("engine.aoi", "GridQueryAOIAt");
-	int col = std::clamp(static_cast<int>(x * inv_cell_size_), 0, cols_ - 1);
-	int row = std::clamp(static_cast<int>(y * inv_cell_size_), 0, rows_ - 1);
+	if (!IsFinite(x) || !IsFinite(y)) return {};
+
+	int idx = CellIndexForPosition(x, y);
+	int col = idx % cols_;
+	int row = idx / cols_;
 
 	std::vector<entity::EntityId> result;
 	for (int dr = -1; dr <= 1; ++dr) {
@@ -154,8 +224,7 @@ void SpatialGrid::Clear() {
 		cell.clear();
 	}
 	entity_cell_.clear();
-	entity_x_.clear();
-	entity_y_.clear();
+	positions_.clear();
 }
 
 }  // namespace aoi

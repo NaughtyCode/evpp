@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 #include <unordered_map>
 #include <vector>
 
@@ -38,11 +39,17 @@ public:
 	void Clear();
 
 private:
+	struct Position {
+		float x = 0.0f;
+		float y = 0.0f;
+	};
+
 	int CellIndex(int col, int row) const;
+	int CellIndexForPosition(float x, float y) const;
 	void CellIndices(float x, float y, float radius,
 					 int& min_col, int& min_row,
 					 int& max_col, int& max_row) const;
-	void GetPosition(entity::EntityId id, float& x, float& y) const;
+	bool TryGetPosition(entity::EntityId id, Position& position) const;
 
 	float cell_size_;
 	float inv_cell_size_;
@@ -53,8 +60,7 @@ private:
 
 	std::vector<std::vector<entity::EntityId>> grid_;
 	std::unordered_map<entity::EntityId, int> entity_cell_;
-	std::unordered_map<entity::EntityId, float> entity_x_;
-	std::unordered_map<entity::EntityId, float> entity_y_;
+	std::unordered_map<entity::EntityId, Position> positions_;
 };
 
 }  // namespace aoi

@@ -1,5 +1,12 @@
 #include "runtime/script/aoi_bind.h"
 
+#include <cmath>
+#include <exception>
+#include <limits>
+#include <memory>
+#include <new>
+#include <vector>
+
 #include "runtime/aoi/aoi_manager.h"
 #include "runtime/aoi/spatial_index.h"
 #include "runtime/core/log/log.h"
@@ -16,57 +23,200 @@ namespace script {
 
 namespace {
 
-std::unique_ptr<aoi::AOIManager> g_aoi_manager;
-int g_aoi_callback_ref = LUA_NOREF;
+struct AOIBindState {
+	lua_State* L = nullptr;
+	std::unique_ptr<aoi::AOIManager> manager;
+	int callback_ref = LUA_NOREF;
+	int callback_depth = 0;
+};
+
+char kAOIStateRegistryKey;
+constexpr const char* kAOIStateMeta = "engine.aoi.state";
+
+float CheckFiniteFloat(lua_State* L, int index, const char* what) {
+	const auto value = static_cast<double>(luaL_checknumber(L, index));
+	const double max_float = static_cast<double>(std::numeric_limits<float>::max());
+	if (!std::isfinite(value) || value < -max_float || value > max_float) {
+		luaL_argerror(L, index, what);
+	}
+	return static_cast<float>(value);
+}
+
+float CheckPositiveFloat(lua_State* L, int index, const char* what) {
+	const float value = CheckFiniteFloat(L, index, what);
+	if (value <= 0.0f) {
+		luaL_argerror(L, index, what);
+	}
+	return value;
+}
+
+float CheckNonNegativeFloat(lua_State* L, int index, const char* what) {
+	const float value = CheckFiniteFloat(L, index, what);
+	if (value < 0.0f) {
+		luaL_argerror(L, index, what);
+	}
+	return value;
+}
+
+float OptPositiveFloat(lua_State* L, int index, float default_value, const char* what) {
+	if (lua_isnoneornil(L, index)) return default_value;
+	return CheckPositiveFloat(L, index, what);
+}
+
+float OptNonNegativeFloat(lua_State* L, int index, float default_value, const char* what) {
+	if (lua_isnoneornil(L, index)) return default_value;
+	return CheckNonNegativeFloat(L, index, what);
+}
+
+entity::EntityId CheckEntityId(lua_State* L, int index) {
+	const lua_Integer raw = luaL_checkinteger(L, index);
+	if (raw <= 0) {
+		luaL_argerror(L, index, "entity_id must be a positive integer");
+	}
+	return static_cast<entity::EntityId>(raw);
+}
+
+AOIBindState* StateFromUpvalue(lua_State* L) {
+	return static_cast<AOIBindState*>(lua_touserdata(L, lua_upvalueindex(1)));
+}
+
+int PushNotInitialized(lua_State* L) {
+	lua_pushnil(L);
+	lua_pushstring(L, "AOI not initialized");
+	return 2;
+}
+
+int PushCallbackMutationError(lua_State* L) {
+	lua_pushnil(L);
+	lua_pushstring(L, "AOI mutation is not allowed from AOI callback");
+	return 2;
+}
+
+bool IsInCallback(const AOIBindState* state) {
+	return state && state->callback_depth > 0;
+}
+
+void ClearCallback(lua_State* L, AOIBindState& state) {
+	if (state.manager) {
+		state.manager->SetEventCallback(nullptr);
+	}
+	if (state.callback_ref != LUA_NOREF) {
+		luaL_unref(L, LUA_REGISTRYINDEX, state.callback_ref);
+		state.callback_ref = LUA_NOREF;
+	}
+}
+
+void ShutdownState(lua_State* L, AOIBindState& state) {
+	ClearCallback(L, state);
+	state.manager.reset();
+}
+
+int l_aoi_state_gc(lua_State* L) {
+	auto* state = static_cast<AOIBindState*>(lua_touserdata(L, 1));
+	if (!state) return 0;
+
+	ShutdownState(L, *state);
+	state->~AOIBindState();
+	return 0;
+}
+
+AOIBindState* GetOrCreateState(lua_State* L) {
+	lua_rawgetp(L, LUA_REGISTRYINDEX, &kAOIStateRegistryKey);
+	auto* state = static_cast<AOIBindState*>(lua_touserdata(L, -1));
+	lua_pop(L, 1);
+	if (state) return state;
+
+	void* storage = lua_newuserdata(L, sizeof(AOIBindState));
+	state = new (storage) AOIBindState{};
+	state->L = L;
+
+	if (luaL_newmetatable(L, kAOIStateMeta)) {
+		lua_pushcfunction(L, l_aoi_state_gc);
+		lua_setfield(L, -2, "__gc");
+	}
+	lua_setmetatable(L, -2);
+	lua_rawsetp(L, LUA_REGISTRYINDEX, &kAOIStateRegistryKey);
+	return state;
+}
+
+void PushEntityList(lua_State* L, const std::vector<entity::EntityId>& entities) {
+	lua_newtable(L);
+	for (size_t i = 0; i < entities.size(); ++i) {
+		lua_pushinteger(L, static_cast<lua_Integer>(entities[i]));
+		lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+	}
+}
+
+int PushException(lua_State* L, const char* prefix, const std::exception& ex) {
+	lua_pushnil(L);
+	lua_pushfstring(L, "%s: %s", prefix, ex.what());
+	return 2;
+}
 
 // aoi.init(world_width, world_height, cell_size)
 int l_aoi_init(lua_State* L) {
-	float world_width = static_cast<float>(luaL_checknumber(L, 1));
-	float world_height = static_cast<float>(luaL_checknumber(L, 2));
-	float cell_size = static_cast<float>(luaL_optnumber(L, 3, 50.0));
+	auto* state = StateFromUpvalue(L);
+	if (!state) return PushNotInitialized(L);
+	if (IsInCallback(state)) return PushCallbackMutationError(L);
 
-	auto grid = std::make_unique<aoi::SpatialGrid>(world_width, world_height, cell_size);
-	g_aoi_manager = std::make_unique<aoi::AOIManager>(std::move(grid));
+	const float world_width = CheckPositiveFloat(L, 1, "world_width must be finite and positive");
+	const float world_height = CheckPositiveFloat(L, 2, "world_height must be finite and positive");
+	const float cell_size = OptPositiveFloat(L, 3, 50.0f,
+											 "cell_size must be finite and positive");
+
+	try {
+		auto grid = std::make_unique<aoi::SpatialGrid>(world_width, world_height, cell_size);
+		auto manager = std::make_unique<aoi::AOIManager>(std::move(grid));
+		ShutdownState(L, *state);
+		state->manager = std::move(manager);
+	} catch (const std::exception& ex) {
+		return PushException(L, "AOI init failed", ex);
+	}
 
 	lua_pushboolean(L, 1);
 	return 1;
 }
 
-// aoi.set_event_callback(function)
-// Registers a Lua function to receive AOI enter/leave events.
-// The callback receives: function(observer_id, target_id, entered)
+// aoi.set_event_callback(function | nil)
 int l_aoi_set_event_callback(lua_State* L) {
-	if (!g_aoi_manager) {
-		lua_pushnil(L);
-		lua_pushstring(L, "AOI not initialized");
-		return 2;
+	auto* state = StateFromUpvalue(L);
+	if (!state || !state->manager) return PushNotInitialized(L);
+	if (IsInCallback(state)) return PushCallbackMutationError(L);
+
+	if (lua_isnoneornil(L, 1)) {
+		ClearCallback(L, *state);
+		lua_pushboolean(L, 1);
+		return 1;
 	}
 
 	luaL_checktype(L, 1, LUA_TFUNCTION);
+	ClearCallback(L, *state);
 
-	// Release previous callback reference
-	if (g_aoi_callback_ref != LUA_NOREF) {
-		luaL_unref(L, LUA_REGISTRYINDEX, g_aoi_callback_ref);
-	}
-
-	// Store new callback reference
 	lua_pushvalue(L, 1);
-	g_aoi_callback_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	state->callback_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-	// Register C++ callback that invokes the Lua function
-	g_aoi_manager->SetEventCallback([L](entity::EntityId observer,
-	                                     entity::EntityId target, bool entered) {
-		if (g_aoi_callback_ref == LUA_NOREF) return;
-		lua_rawgeti(L, LUA_REGISTRYINDEX, g_aoi_callback_ref);
+	state->manager->SetEventCallback([state](entity::EntityId observer,
+											 entity::EntityId target,
+											 bool entered) {
+		if (!state || !state->L || state->callback_ref == LUA_NOREF) return;
+
+		lua_State* L = state->L;
+		const int base_top = lua_gettop(L);
+		lua_rawgeti(L, LUA_REGISTRYINDEX, state->callback_ref);
 		lua_pushinteger(L, static_cast<lua_Integer>(observer));
 		lua_pushinteger(L, static_cast<lua_Integer>(target));
 		lua_pushboolean(L, entered ? 1 : 0);
-		int msgh = PushLuaErrorHandlerForCall(L, 3);
-		if (lua_pcall(L, 3, 0, msgh) != LUA_OK) {
+
+		++state->callback_depth;
+		const int msgh = PushLuaErrorHandlerForCall(L, 3);
+		const int rc = lua_pcall(L, 3, 0, msgh);
+		--state->callback_depth;
+
+		if (rc != LUA_OK) {
 			auto* logger = GetLogger();
 			ENGINE_LOG_ERROR(logger, "AOI callback error: {}", lua_tostring(L, -1));
-			lua_pop(L, 1);
 		}
+		lua_settop(L, base_top);
 	});
 
 	lua_pushboolean(L, 1);
@@ -75,112 +225,111 @@ int l_aoi_set_event_callback(lua_State* L) {
 
 // aoi.register_entity(entity_id, x, y, aoi_radius)
 int l_aoi_register_entity(lua_State* L) {
-	if (!g_aoi_manager) {
-		lua_pushnil(L);
-		lua_pushstring(L, "AOI not initialized");
-		return 2;
+	auto* state = StateFromUpvalue(L);
+	if (!state || !state->manager) return PushNotInitialized(L);
+	if (IsInCallback(state)) return PushCallbackMutationError(L);
+
+	const entity::EntityId id = CheckEntityId(L, 1);
+	const float x = CheckFiniteFloat(L, 2, "x must be finite");
+	const float y = CheckFiniteFloat(L, 3, "y must be finite");
+	const float radius = OptNonNegativeFloat(L, 4, 100.0f,
+											 "aoi_radius must be finite and non-negative");
+
+	try {
+		state->manager->RegisterEntity(id, radius);
+		state->manager->OnEntityMove(id, x, y);
+	} catch (const std::exception& ex) {
+		return PushException(L, "AOI register_entity failed", ex);
 	}
-
-	entity::EntityId id = static_cast<entity::EntityId>(luaL_checkinteger(L, 1));
-	float x = static_cast<float>(luaL_checknumber(L, 2));
-	float y = static_cast<float>(luaL_checknumber(L, 3));
-	float radius = static_cast<float>(luaL_optnumber(L, 4, 100.0f));
-
-	g_aoi_manager->RegisterEntity(id, radius);
-	g_aoi_manager->OnEntityMove(id, x, y);
 	return 0;
 }
 
 // aoi.update_entity(entity_id, x, y)
 int l_aoi_update_entity(lua_State* L) {
-	if (!g_aoi_manager) return 0;
+	auto* state = StateFromUpvalue(L);
+	if (!state || !state->manager) return PushNotInitialized(L);
+	if (IsInCallback(state)) return PushCallbackMutationError(L);
 
-	entity::EntityId id = static_cast<entity::EntityId>(luaL_checkinteger(L, 1));
-	float x = static_cast<float>(luaL_checknumber(L, 2));
-	float y = static_cast<float>(luaL_checknumber(L, 3));
+	const entity::EntityId id = CheckEntityId(L, 1);
+	const float x = CheckFiniteFloat(L, 2, "x must be finite");
+	const float y = CheckFiniteFloat(L, 3, "y must be finite");
 
-	g_aoi_manager->OnEntityMove(id, x, y);
+	try {
+		state->manager->OnEntityMove(id, x, y);
+	} catch (const std::exception& ex) {
+		return PushException(L, "AOI update_entity failed", ex);
+	}
 	return 0;
 }
 
 // aoi.unregister_entity(entity_id)
 int l_aoi_unregister_entity(lua_State* L) {
-	if (!g_aoi_manager) return 0;
+	auto* state = StateFromUpvalue(L);
+	if (!state || !state->manager) return PushNotInitialized(L);
+	if (IsInCallback(state)) return PushCallbackMutationError(L);
 
-	entity::EntityId id = static_cast<entity::EntityId>(luaL_checkinteger(L, 1));
-	g_aoi_manager->UnregisterEntity(id);
+	const entity::EntityId id = CheckEntityId(L, 1);
+	state->manager->UnregisterEntity(id);
 	return 0;
 }
 
-// aoi.get_visible(entity_id) → {entity_id, ...}
+// aoi.get_visible(entity_id) -> {entity_id, ...}
 int l_aoi_get_visible(lua_State* L) {
-	if (!g_aoi_manager) {
+	auto* state = StateFromUpvalue(L);
+	if (!state || !state->manager) {
 		lua_newtable(L);
 		return 1;
 	}
 
-	entity::EntityId id = static_cast<entity::EntityId>(luaL_checkinteger(L, 1));
-	auto visible = g_aoi_manager->GetVisibleEntities(id);
-
-	lua_newtable(L);
-	for (size_t i = 0; i < visible.size(); ++i) {
-		lua_pushinteger(L, static_cast<lua_Integer>(visible[i]));
-		lua_rawseti(L, -2, static_cast<int>(i + 1));
-	}
+	const entity::EntityId id = CheckEntityId(L, 1);
+	PushEntityList(L, state->manager->GetVisibleEntities(id));
 	return 1;
 }
 
-// aoi.query_radius(x, y, radius) → {entity_id, ...}
+// aoi.query_radius(x, y, radius) -> {entity_id, ...}
 int l_aoi_query_radius(lua_State* L) {
-	if (!g_aoi_manager) {
+	auto* state = StateFromUpvalue(L);
+	if (!state || !state->manager) {
 		lua_newtable(L);
 		return 1;
 	}
 
-	float x = static_cast<float>(luaL_checknumber(L, 1));
-	float y = static_cast<float>(luaL_checknumber(L, 2));
-	float radius = static_cast<float>(luaL_checknumber(L, 3));
+	const float x = CheckFiniteFloat(L, 1, "x must be finite");
+	const float y = CheckFiniteFloat(L, 2, "y must be finite");
+	const float radius = CheckNonNegativeFloat(L, 3, "radius must be finite and non-negative");
 
-	auto results = g_aoi_manager->QueryRadius(x, y, radius);
-
-	lua_newtable(L);
-	for (size_t i = 0; i < results.size(); ++i) {
-		lua_pushinteger(L, static_cast<lua_Integer>(results[i]));
-		lua_rawseti(L, -2, static_cast<int>(i + 1));
-	}
+	PushEntityList(L, state->manager->QueryRadius(x, y, radius));
 	return 1;
 }
 
-// aoi.count() → number of registered entities
+// aoi.count() -> number of registered entities
 int l_aoi_count(lua_State* L) {
-	if (!g_aoi_manager) {
-		lua_pushinteger(L, 0);
-		return 1;
-	}
-	lua_pushinteger(L, static_cast<lua_Integer>(g_aoi_manager->EntityCount()));
+	auto* state = StateFromUpvalue(L);
+	const size_t count = (state && state->manager) ? state->manager->EntityCount() : 0;
+	lua_pushinteger(L, static_cast<lua_Integer>(count));
 	return 1;
 }
 
 // aoi.shutdown()
 int l_aoi_shutdown(lua_State* L) {
-	if (g_aoi_callback_ref != LUA_NOREF) {
-		luaL_unref(L, LUA_REGISTRYINDEX, g_aoi_callback_ref);
-		g_aoi_callback_ref = LUA_NOREF;
-	}
-	g_aoi_manager.reset();
+	auto* state = StateFromUpvalue(L);
+	if (!state) return 0;
+	if (IsInCallback(state)) return PushCallbackMutationError(L);
+
+	ShutdownState(L, *state);
 	return 0;
 }
 
 static const luaL_Reg kAOIFuncs[] = {
-	{"init",                l_aoi_init},
-	{"set_event_callback",  l_aoi_set_event_callback},
-	{"register_entity",     l_aoi_register_entity},
-	{"update_entity",       l_aoi_update_entity},
-	{"unregister_entity",   l_aoi_unregister_entity},
-	{"get_visible",         l_aoi_get_visible},
-	{"query_radius",        l_aoi_query_radius},
-	{"count",               l_aoi_count},
-	{"shutdown",            l_aoi_shutdown},
+	{"init",               l_aoi_init},
+	{"set_event_callback", l_aoi_set_event_callback},
+	{"register_entity",    l_aoi_register_entity},
+	{"update_entity",      l_aoi_update_entity},
+	{"unregister_entity",  l_aoi_unregister_entity},
+	{"get_visible",        l_aoi_get_visible},
+	{"query_radius",       l_aoi_query_radius},
+	{"count",              l_aoi_count},
+	{"shutdown",           l_aoi_shutdown},
 	{nullptr, nullptr}
 };
 
@@ -190,9 +339,12 @@ void ExportAOI(ScriptVM& vm) {
 	auto* L = vm.GetState();
 	if (!L) return;
 
+	auto* state = GetOrCreateState(L);
+
 	lua_newtable(L);
 	for (const luaL_Reg* r = kAOIFuncs; r->name; ++r) {
-		lua_pushcfunction(L, r->func);
+		lua_pushlightuserdata(L, state);
+		lua_pushcclosure(L, r->func, 1);
 		lua_setfield(L, -2, r->name);
 	}
 	lua_setglobal(L, "aoi");

@@ -1,15 +1,44 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+#include <limits>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "log_init.h"
 #include "runtime/aoi/aoi_manager.h"
 #include "runtime/aoi/spatial_index.h"
 #include "runtime/entity/entity_id.h"
+#include "runtime/script/aoi_bind.h"
+#include "runtime/vm/vm.h"
 
 using namespace engine::aoi;
 using engine::entity::EntityId;
+
+namespace {
+
+bool Contains(const std::vector<EntityId>& values, EntityId id) {
+	return std::find(values.begin(), values.end(), id) != values.end();
+}
+
+struct AOIBindFixture {
+	engine::ScriptVM vm;
+
+	AOIBindFixture() {
+		engine::script::ExportAOI(vm);
+	}
+
+	bool RunLua(const std::string& code, std::string* err = nullptr) {
+		return vm.DoString(code, "test_aoi_bind", err);
+	}
+
+	bool RunLuaResult(const std::string& code, std::string& result) {
+		return vm.DoString(code, "test_aoi_bind", nullptr, &result);
+	}
+};
+
+}  // namespace
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SpatialGrid — construction
@@ -31,6 +60,12 @@ TEST_CASE("SpatialGrid construction with cell size larger than world", "[aoi][sp
     SpatialGrid grid(100.0f, 100.0f, 200.0f);
     // ceil(100/200) = 1, minimum 1x1 grid
     REQUIRE(grid.Size() == 0);
+}
+
+TEST_CASE("SpatialGrid rejects invalid dimensions", "[aoi][spatial_grid]") {
+    REQUIRE_THROWS(SpatialGrid(0.0f, 100.0f, 10.0f));
+    REQUIRE_THROWS(SpatialGrid(100.0f, -1.0f, 10.0f));
+    REQUIRE_THROWS(SpatialGrid(100.0f, 100.0f, 0.0f));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -62,6 +97,20 @@ TEST_CASE("SpatialGrid::Insert at world boundaries", "[aoi][spatial_grid]") {
     // Insert outside world bounds (should clamp)
     grid.Insert(3, 1500.0f, 1500.0f);
     REQUIRE(grid.Size() == 3);
+}
+
+TEST_CASE("SpatialGrid::Insert updates duplicate entity instead of duplicating", "[aoi][spatial_grid]") {
+    SpatialGrid grid(1000.0f, 1000.0f, 100.0f);
+
+    grid.Insert(1, 100.0f, 100.0f);
+    grid.Insert(1, 900.0f, 900.0f);
+
+    REQUIRE(grid.Size() == 1);
+    REQUIRE(grid.QueryRadius(100.0f, 100.0f, 1.0f).empty());
+
+    auto result = grid.QueryRadius(900.0f, 900.0f, 1.0f);
+    REQUIRE(result.size() == 1);
+    REQUIRE(result[0] == 1);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -165,6 +214,23 @@ TEST_CASE("SpatialGrid::QueryRadius finds multiple entities in range", "[aoi][sp
     REQUIRE(result.size() == 3);
 }
 
+TEST_CASE("SpatialGrid::QueryRadius supports entities outside world bounds", "[aoi][spatial_grid]") {
+    SpatialGrid grid(1000.0f, 1000.0f, 100.0f);
+
+    grid.Insert(1, 1500.0f, 1500.0f);
+
+    auto result = grid.QueryRadius(1500.0f, 1500.0f, 1.0f);
+    REQUIRE(result.size() == 1);
+    REQUIRE(result[0] == 1);
+}
+
+TEST_CASE("SpatialGrid::QueryRadius rejects invalid radius safely", "[aoi][spatial_grid]") {
+    SpatialGrid grid(1000.0f, 1000.0f, 100.0f);
+    grid.Insert(1, 100.0f, 100.0f);
+
+    REQUIRE(grid.QueryRadius(100.0f, 100.0f, -1.0f).empty());
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // SpatialGrid — query AOI
 // ═══════════════════════════════════════════════════════════════════════════
@@ -199,6 +265,14 @@ TEST_CASE("SpatialGrid::QueryAOI on empty grid returns empty", "[aoi][spatial_gr
     SpatialGrid grid(1000.0f, 1000.0f, 100.0f);
 
     auto result = grid.QueryAOIAt(500.0f, 500.0f);
+    REQUIRE(result.empty());
+}
+
+TEST_CASE("SpatialGrid::QueryAOI for unknown entity returns empty", "[aoi][spatial_grid]") {
+    SpatialGrid grid(1000.0f, 1000.0f, 100.0f);
+    grid.Insert(1, 50.0f, 50.0f);
+
+    auto result = grid.QueryAOI(404);
     REQUIRE(result.empty());
 }
 
@@ -262,6 +336,16 @@ TEST_CASE("AOIManager::UnregisterEntity for non-registered entity is safe", "[ao
     REQUIRE(mgr.EntityCount() == 0);
 }
 
+TEST_CASE("AOIManager rejects invalid radius and positions", "[aoi][aoi_manager]") {
+    auto grid = std::make_unique<SpatialGrid>(1000.0f, 1000.0f, 100.0f);
+    AOIManager mgr(std::move(grid));
+
+    REQUIRE_THROWS(mgr.RegisterEntity(1, -1.0f));
+
+    mgr.RegisterEntity(1, 50.0f);
+    REQUIRE_THROWS(mgr.OnEntityMove(1, std::numeric_limits<float>::quiet_NaN(), 10.0f));
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // AOIManager — visibility
 // ═══════════════════════════════════════════════════════════════════════════
@@ -282,18 +366,35 @@ TEST_CASE("AOIManager entities become visible after moving into range", "[aoi][a
     mgr.RegisterEntity(1, 50.0f);
     mgr.RegisterEntity(2, 50.0f);
 
-    // Entity 1 moves into the grid first -- no one else is present yet.
     mgr.OnEntityMove(1, 100.0f, 100.0f);
-
-    // Entity 2 moves near entity 1 -- entity 2's visibility is recomputed
-    // and it discovers entity 1. Entity 1's visibility set is NOT updated
-    // because RecomputeVisibility only fires for the entity that moved.
     mgr.OnEntityMove(2, 110.0f, 110.0f);
 
-    // Entity 2 sees entity 1 because entity 2 was the last to move.
+    auto visible1 = mgr.GetVisibleEntities(1);
     auto visible2 = mgr.GetVisibleEntities(2);
+
+    REQUIRE(visible1.size() == 1);
+    REQUIRE(visible1[0] == 2);
     REQUIRE(visible2.size() == 1);
     REQUIRE(visible2[0] == 1);
+}
+
+TEST_CASE("AOIManager updates stationary observers when a target moves", "[aoi][aoi_manager]") {
+    auto grid = std::make_unique<SpatialGrid>(1000.0f, 1000.0f, 100.0f);
+    AOIManager mgr(std::move(grid));
+
+    mgr.RegisterEntity(1, 100.0f);
+    mgr.RegisterEntity(2, 5.0f);
+
+    mgr.OnEntityMove(1, 100.0f, 100.0f);
+    mgr.OnEntityMove(2, 500.0f, 500.0f);
+    REQUIRE(mgr.GetVisibleEntities(1).empty());
+
+    mgr.OnEntityMove(2, 150.0f, 100.0f);
+
+    auto visible1 = mgr.GetVisibleEntities(1);
+    auto visible2 = mgr.GetVisibleEntities(2);
+    REQUIRE(Contains(visible1, 2));
+    REQUIRE_FALSE(Contains(visible2, 1));
 }
 
 TEST_CASE("AOIManager entities out of range are not visible", "[aoi][aoi_manager]") {
@@ -378,10 +479,10 @@ TEST_CASE("AOIManager fires enter event when entities come into range", "[aoi][a
     // Entity 2 moves into entity 1's AOI range
     mgr.OnEntityMove(2, 110.0f, 110.0f);
 
-    REQUIRE(enter_count >= 1);
-    // The observer should be entity 1 (already in grid), seeing entity 2 enter
-    // or entity 2 seeing entity 1 enter (bidirectional visibility)
-    REQUIRE(enter_count >= 1);
+    REQUIRE(enter_count == 2);
+    REQUIRE(leave_count == 0);
+    REQUIRE((last_observer == 1 || last_observer == 2));
+    REQUIRE((last_target == 1 || last_target == 2));
 }
 
 TEST_CASE("AOIManager fires leave event when entities move out of range", "[aoi][aoi_manager]") {
@@ -411,7 +512,31 @@ TEST_CASE("AOIManager fires leave event when entities move out of range", "[aoi]
     // Move entity 2 far away
     mgr.OnEntityMove(2, 900.0f, 900.0f);
 
-    REQUIRE(leave_count >= 1);
+    REQUIRE(enter_after_approach == 2);
+    REQUIRE(leave_count == 2);
+}
+
+TEST_CASE("AOIManager unregister fires leave events for observer-owned visibility", "[aoi][aoi_manager]") {
+    auto grid = std::make_unique<SpatialGrid>(1000.0f, 1000.0f, 100.0f);
+    AOIManager mgr(std::move(grid));
+
+    mgr.RegisterEntity(1, 100.0f);
+    mgr.RegisterEntity(2, 5.0f);
+
+    mgr.OnEntityMove(1, 100.0f, 100.0f);
+    mgr.OnEntityMove(2, 150.0f, 100.0f);
+    REQUIRE(Contains(mgr.GetVisibleEntities(1), 2));
+    REQUIRE_FALSE(Contains(mgr.GetVisibleEntities(2), 1));
+
+    int leave_for_1 = 0;
+    mgr.SetEventCallback([&](EntityId observer, EntityId target, bool entered) {
+        if (!entered && observer == 1 && target == 2) {
+            ++leave_for_1;
+        }
+    });
+
+    mgr.UnregisterEntity(1);
+    REQUIRE(leave_for_1 == 1);
 }
 
 TEST_CASE("AOIManager does not fire events when no callback is set", "[aoi][aoi_manager]") {
@@ -448,16 +573,8 @@ TEST_CASE("AOIManager visibility becomes symmetric after both entities move", "[
     mgr.RegisterEntity(1, 50.0f);
     mgr.RegisterEntity(2, 50.0f);
 
-    // Step 1: Entity 1 moves first -- no one else in grid
     mgr.OnEntityMove(1, 200.0f, 200.0f);
-
-    // Step 2: Entity 2 moves near entity 1 -- entity 2's visibility is computed,
-    // entity 2 now sees entity 1, but entity 1's visibility is stale.
     mgr.OnEntityMove(2, 210.0f, 210.0f);
-
-    // Step 3: Move entity 1 again so its visibility is recomputed --
-    // now entity 1 sees entity 2 as well.
-    mgr.OnEntityMove(1, 200.0f, 200.0f);
 
     auto visible1 = mgr.GetVisibleEntities(1);
     auto visible2 = mgr.GetVisibleEntities(2);
@@ -477,4 +594,86 @@ TEST_CASE("AOIManager::GetVisibleEntities for unknown entity returns empty", "[a
 
     auto visible = mgr.GetVisibleEntities(404);
     REQUIRE(visible.empty());
+}
+
+TEST_CASE("Lua AOI binding exports module and symmetric callbacks", "[aoi][bind]") {
+    AOIBindFixture f;
+    std::string result;
+
+    REQUIRE(f.RunLuaResult(
+        "aoi.init(1000, 1000, 100)\n"
+        "events = {}\n"
+        "aoi.set_event_callback(function(observer, target, entered)\n"
+        "  events[#events + 1] = observer .. ':' .. target .. ':' .. tostring(entered)\n"
+        "end)\n"
+        "aoi.register_entity(1, 100, 100, 50)\n"
+        "aoi.register_entity(2, 110, 110, 50)\n"
+        "return #events .. ',' .. #aoi.get_visible(1) .. ',' .. #aoi.get_visible(2)",
+        result));
+
+    REQUIRE(result == "2,1,1");
+}
+
+TEST_CASE("Lua AOI binding isolates state per ScriptVM", "[aoi][bind]") {
+    AOIBindFixture f1;
+    AOIBindFixture f2;
+    std::string result1;
+    std::string result2;
+
+    REQUIRE(f1.RunLuaResult(
+        "aoi.init(1000, 1000, 100)\n"
+        "aoi.register_entity(1, 100, 100, 50)\n"
+        "return aoi.count()",
+        result1));
+    REQUIRE(f2.RunLuaResult("return aoi.count()", result2));
+
+    REQUIRE(result1 == "1");
+    REQUIRE(result2 == "0");
+}
+
+TEST_CASE("Lua AOI binding catches callback errors and restores stack", "[aoi][bind]") {
+    AOIBindFixture f;
+    std::string result;
+
+    REQUIRE(f.RunLuaResult(
+        "aoi.init(1000, 1000, 100)\n"
+        "aoi.set_event_callback(function() error('intentional AOI callback error') end)\n"
+        "aoi.register_entity(1, 100, 100, 50)\n"
+        "aoi.register_entity(2, 110, 110, 50)\n"
+        "aoi.set_event_callback(nil)\n"
+        "return aoi.count()",
+        result));
+
+    REQUIRE(result == "2");
+}
+
+TEST_CASE("Lua AOI binding rejects mutation from callbacks", "[aoi][bind]") {
+    AOIBindFixture f;
+    std::string result;
+
+    REQUIRE(f.RunLuaResult(
+        "aoi.init(1000, 1000, 100)\n"
+        "blocked = false\n"
+        "aoi.set_event_callback(function()\n"
+        "  local ok, err = aoi.shutdown()\n"
+        "  blocked = ok == nil and string.find(err, 'mutation') ~= nil\n"
+        "end)\n"
+        "aoi.register_entity(1, 100, 100, 50)\n"
+        "aoi.register_entity(2, 110, 110, 50)\n"
+        "return tostring(blocked) .. ',' .. aoi.count()",
+        result));
+
+    REQUIRE(result == "true,2");
+}
+
+TEST_CASE("Lua AOI binding rejects invalid init parameters", "[aoi][bind]") {
+    AOIBindFixture f;
+    std::string result;
+
+    REQUIRE(f.RunLuaResult(
+        "local ok, err = pcall(function() aoi.init(100, 100, 0) end)\n"
+        "return tostring(ok) .. ',' .. tostring(string.find(err, 'cell_size') ~= nil)",
+        result));
+
+    REQUIRE(result == "false,true");
 }
