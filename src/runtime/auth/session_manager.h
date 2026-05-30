@@ -25,6 +25,12 @@ public:
 	// Set the active auth backend.
 	void SetBackend(std::unique_ptr<AuthBackend> backend);
 
+	// Return the active backend, or nullptr when none is configured.
+	AuthBackend* GetBackend() const;
+
+	// Return a stable backend snapshot for callers that use it outside the lock.
+	std::shared_ptr<AuthBackend> GetBackendSnapshot() const;
+
 	// Create a session for an authenticated connection.
 	SessionInfo CreateSession(const std::string& entity_id, evpp::TCPConnPtr conn);
 
@@ -47,17 +53,19 @@ public:
 	void CleanupExpired();
 
 	// Max sessions per account.
-	void SetMaxSessionsPerAccount(size_t max) { max_sessions_ = max; }
+	void SetMaxSessionsPerAccount(size_t max);
 
 private:
 	SessionManager() = default;
 
 	std::string GenerateSessionId();
+	void RemoveSessionLocked(const std::string& session_id, bool revoke_backend);
 
-	std::unique_ptr<AuthBackend> backend_;
+	std::shared_ptr<AuthBackend> backend_;
 	mutable std::mutex mutex_;
 	std::unordered_map<std::string, SessionInfo> sessions_;
 	std::unordered_map<const evpp::TCPConn*, std::string> conn_to_session_;
+	std::unordered_map<const evpp::TCPConn*, std::weak_ptr<evpp::TCPConn>> conn_refs_;
 	size_t max_sessions_ = 5;
 };
 

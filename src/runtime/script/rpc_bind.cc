@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <future>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -56,6 +57,7 @@ struct RpcServerCtx {
 	std::mutex queue_mutex;
 	std::vector<std::unique_ptr<PendingRpcCall>> pending;
 	std::atomic<bool> alive{true};
+	std::atomic<int> active_dispatches{0};
 	bool disposed = false;
 };
 
@@ -131,6 +133,14 @@ static void DrainPendingQueue(RpcServerCtx* ctx, const char* error_msg) {
 	}
 }
 
+static void StopRpcServerObject(RpcServerCtx* ctx) {
+	if (!ctx->server) return;
+	ctx->server->Clear();
+	if (ctx->active_dispatches.load(std::memory_order_acquire) == 0) {
+		ctx->server.reset();
+	}
+}
+
 // Drain the client deferred response queue, releasing all callback refs.
 // Called during stop/gc/shutdown  - no Lua callbacks are invoked since the
 // client is being torn down.
@@ -143,6 +153,30 @@ static void DrainResponseQueue(RpcClientCtx* ctx, lua_State* L) {
 	for (auto& [cb_ref, resp] : batch) {
 		if (cb_ref != LUA_NOREF) luaL_unref(L, LUA_REGISTRYINDEX, cb_ref);
 	}
+}
+
+static std::vector<std::shared_ptr<RpcClientCtx>> SnapshotClients(RpcBindState* state) {
+	std::vector<std::shared_ptr<RpcClientCtx>> clients;
+	clients.reserve(state->clients.size());
+	for (auto* ctx : state->clients) {
+		auto it = state->client_shared.find(ctx);
+		if (it != state->client_shared.end()) {
+			clients.push_back(it->second);
+		}
+	}
+	return clients;
+}
+
+static std::vector<std::shared_ptr<RpcServerCtx>> SnapshotServers(RpcBindState* state) {
+	std::vector<std::shared_ptr<RpcServerCtx>> servers;
+	servers.reserve(state->servers.size());
+	for (auto* ctx : state->servers) {
+		auto it = state->server_shared.find(ctx);
+		if (it != state->server_shared.end()) {
+			servers.push_back(it->second);
+		}
+	}
+	return servers;
 }
 // Server methods (called as server:method())
 
@@ -181,6 +215,15 @@ int l_server_register_service(lua_State* L) {
 			auto captured = weak_ctx.lock();
 			if (!captured || !captured->alive.load(std::memory_order_acquire))
 				return R"({"error":"server stopped"})";
+
+			struct DispatchGuard {
+				RpcServerCtx* ctx;
+				~DispatchGuard() {
+					ctx->active_dispatches.fetch_sub(1, std::memory_order_acq_rel);
+				}
+			};
+			captured->active_dispatches.fetch_add(1, std::memory_order_acq_rel);
+			DispatchGuard guard{captured.get()};
 
 			auto req = std::make_unique<PendingRpcCall>();
 			req->service = svc;
@@ -245,7 +288,7 @@ int l_server_stop(lua_State* L) {
 	ctx->service_callbacks.clear();
 
 	DrainPendingQueue(ctx, R"({"error":"server stopped"})");
-	ctx->server.reset();
+	StopRpcServerObject(ctx);
 
 	lua_pushnil(L);
 	lua_setfield(L, 1, "_ctx");
@@ -283,7 +326,7 @@ int l_server_gc(lua_State* L) {
 	ctx->service_callbacks.clear();
 
 	DrainPendingQueue(ctx, R"({"error":"gc"})");
-	ctx->server.reset();
+	StopRpcServerObject(ctx);
 
 	lua_pushnil(L);
 	lua_setfield(L, 1, "_ctx");
@@ -314,7 +357,11 @@ int l_client_call(lua_State* L) {
 	const char* service = luaL_checkstring(L, 2);
 	const char* method = luaL_checkstring(L, 3);
 	const char* args = luaL_optstring(L, 4, "{}");
-	int timeout_ms = static_cast<int>(luaL_optinteger(L, 5, 5000));
+	lua_Integer timeout_arg = luaL_optinteger(L, 5, 5000);
+	if (timeout_arg < 0 || timeout_arg > std::numeric_limits<int>::max()) {
+		return PushRpcError(L, "timeout_ms out of range");
+	}
+	int timeout_ms = static_cast<int>(timeout_arg);
 
 	auto resp = ctx->client->CallSync(service, method, args, timeout_ms);
 
@@ -397,6 +444,7 @@ int l_client_set_send_callback(lua_State* L) {
 	// together with RpcClient  - no dangling L.
 	lua_State* captured_L = L;
 	ctx->client->SetSendCallback([captured_L, cb_ref](rpc::RpcRequest req) {
+		const int base_top = lua_gettop(captured_L);
 		lua_rawgeti(captured_L, LUA_REGISTRYINDEX, cb_ref);                      // cb
 		lua_pushinteger(captured_L, static_cast<lua_Integer>(req.header.msgid));  // cb, msgid
 		lua_pushlstring(captured_L, req.header.service.data(), req.header.service.size());  // cb, msgid, svc
@@ -409,9 +457,9 @@ int l_client_set_send_callback(lua_State* L) {
 				auto* logger = GetLogger();
 				ENGINE_LOG_ERROR(logger, "RpcClient: send callback error: {}",
 							 lua_tostring(captured_L, -1));
-			lua_pop(captured_L, 1);
+			}
 		}
-		}
+		lua_settop(captured_L, base_top);
 	});
 
 	lua_pushboolean(L, 1);
@@ -577,6 +625,10 @@ void ExportRpc(ScriptVM& vm) {
 	auto* L = vm.GetState();
 	if (!L) return;
 
+	if (GetRpcState(L)) {
+		ShutdownRpcBindings(vm);
+	}
+
 	// Per-VM state
 	auto* state = CLOUDENGINE_MEM_NEW(RpcBindState);
 	lua_pushlightuserdata(L, state);
@@ -603,14 +655,18 @@ void UpdateRpcBindings(ScriptVM& vm) {
 	// Process client timeouts FIRST (cheap map scan, guarantees
 	// they run every frame regardless of server load)
 
-	for (auto* ctx : state->clients) {
+	auto clients = SnapshotClients(state);
+	for (const auto& ctx_sp : clients) {
+		auto* ctx = ctx_sp.get();
 		if (ctx->disposed) continue;
 		ctx->client->ProcessTimeouts();
 	}
 
 	// Drain client deferred response queues (call_async responses)
 
-	for (auto* ctx : state->clients) {
+	clients = SnapshotClients(state);
+	for (const auto& ctx_sp : clients) {
+		auto* ctx = ctx_sp.get();
 		if (ctx->disposed) continue;
 
 		std::vector<std::pair<int, rpc::RpcResponse>> batch;
@@ -622,6 +678,7 @@ void UpdateRpcBindings(ScriptVM& vm) {
 		for (auto& [cb_ref, resp] : batch) {
 			if (cb_ref == LUA_NOREF) continue;
 
+			const int base_top = lua_gettop(L);
 			lua_rawgeti(L, LUA_REGISTRYINDEX, cb_ref);  // cb
 			if (resp.success) {
 				lua_pushlstring(L, resp.body.data(), resp.body.size());  // cb, body
@@ -637,8 +694,8 @@ void UpdateRpcBindings(ScriptVM& vm) {
 				auto* logger = GetLogger();
 				ENGINE_LOG_ERROR(logger, "RpcClient: call_async callback error: {}",
 								 lua_tostring(L, -1));
-				lua_pop(L, 1);
 			}
+			lua_settop(L, base_top);
 
 			luaL_unref(L, LUA_REGISTRYINDEX, cb_ref);
 		}
@@ -649,7 +706,9 @@ void UpdateRpcBindings(ScriptVM& vm) {
 	auto budget_start = std::chrono::steady_clock::now();
 	constexpr auto kMaxBudget = std::chrono::milliseconds(5);
 
-	for (auto* ctx : state->servers) {
+	auto servers = SnapshotServers(state);
+	for (const auto& ctx_sp : servers) {
+		auto* ctx = ctx_sp.get();
 		if (ctx->disposed) continue;
 
 		std::vector<std::unique_ptr<PendingRpcCall>> batch;
@@ -680,16 +739,21 @@ void UpdateRpcBindings(ScriptVM& vm) {
 
 			auto it = ctx->service_callbacks.find(req->service);
 			if (it != ctx->service_callbacks.end() && it->second != LUA_NOREF) {
+				const int base_top = lua_gettop(L);
 				lua_rawgeti(L, LUA_REGISTRYINDEX, it->second);                  // cb
 				lua_pushlstring(L, req->service.data(), req->service.size());   // cb, svc
 				lua_pushlstring(L, req->method.data(), req->method.size());     // cb, svc, method
 				lua_pushlstring(L, req->body.data(), req->body.size());         // cb, svc, method, body
 
-				if (lua_pcall(L, 3, 1, 0) == LUA_OK) {
-					if (lua_isstring(L, -1))
-						result = lua_tostring(L, -1);
-					else
+				int msgh = PushLuaErrorHandlerForCall(L, 3);
+				if (lua_pcall(L, 3, 1, msgh) == LUA_OK) {
+					if (lua_isstring(L, -1)) {
+						size_t len = 0;
+						const char* s = lua_tolstring(L, -1, &len);
+						result.assign(s, len);
+					} else {
 						result = "{}";
+					}
 				} else {
 					const char* err = lua_tostring(L, -1);
 					result = std::string(R"({"error":")") + (err ? err : "lua error") + R"("})";
@@ -698,7 +762,7 @@ void UpdateRpcBindings(ScriptVM& vm) {
 						"RPC handler error in service [{}]: {}",
 						req->service, err ? err : "unknown");
 				}
-				lua_pop(L, 1);
+				lua_settop(L, base_top);
 			}
 
 			try { req->promise.set_value(result); } catch (...) {}
@@ -730,7 +794,7 @@ void ShutdownRpcBindings(ScriptVM& vm) {
 		ctx->service_callbacks.clear();
 
 		DrainPendingQueue(ctx, R"({"error":"shutdown"})");
-		ctx->server.reset();
+		StopRpcServerObject(ctx);
 
 		if (ctx->instance_ref != LUA_NOREF) {
 			luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);

@@ -96,8 +96,15 @@ inline LuaCallResult SafeCallLua(lua_State* L, LuaCallOptions opts) {
 		return LuaCallResult::NotFound;
 	}
 
-	int err_idx = PushLuaErrorHandler(L);
-	(void) err_idx;
+	if (opts.error_handler_ref != 0 && opts.error_handler_ref != LUA_NOREF) {
+		lua_rawgeti(L, LUA_REGISTRYINDEX, opts.error_handler_ref);
+		if (!lua_isfunction(L, -1)) {
+			lua_pop(L, 1);
+			PushLuaErrorHandler(L);
+		}
+	} else {
+		PushLuaErrorHandler(L);
+	}
 	lua_insert(L, func_idx);  // move error handler below function
 
 	int rc = lua_pcall(L, opts.nargs, opts.nresults, func_idx);

@@ -1,6 +1,7 @@
 #include "runtime/auth/session_manager.h"
 
 #include <chrono>
+#include <limits>
 #include <random>
 #include <sstream>
 
@@ -17,7 +18,18 @@ SessionManager& SessionManager::Instance() {
 }
 
 void SessionManager::SetBackend(std::unique_ptr<AuthBackend> backend) {
-	backend_ = std::move(backend);
+	std::lock_guard<std::mutex> lock(mutex_);
+	backend_ = std::shared_ptr<AuthBackend>(std::move(backend));
+}
+
+AuthBackend* SessionManager::GetBackend() const {
+	std::lock_guard<std::mutex> lock(mutex_);
+	return backend_.get();
+}
+
+std::shared_ptr<AuthBackend> SessionManager::GetBackendSnapshot() const {
+	std::lock_guard<std::mutex> lock(mutex_);
+	return backend_;
 }
 
 std::string SessionManager::GenerateSessionId() {
@@ -35,18 +47,39 @@ SessionInfo SessionManager::CreateSession(const std::string& entity_id,
 	ENGINE_PROFILE_AUTH_CREATE_SESSION();
 	std::lock_guard<std::mutex> lock(mutex_);
 
-	// Enforce max sessions per account
-	size_t account_sessions = 0;
-	for (const auto& [sid, info] : sessions_) {
-		if (info.entity_id == entity_id) ++account_sessions;
-	}
-	if (account_sessions >= max_sessions_) {
-		// Revoke oldest session for this account
-		for (auto it = sessions_.begin(); it != sessions_.end(); ++it) {
-			if (it->second.entity_id == entity_id) {
-				sessions_.erase(it);
-				break;
+	if (conn) {
+		auto old = conn_to_session_.find(conn.get());
+		if (old != conn_to_session_.end()) {
+			auto ref = conn_refs_.find(conn.get());
+			if (ref == conn_refs_.end() || ref->second.expired()) {
+				conn_refs_.erase(conn.get());
+				conn_to_session_.erase(old);
+			} else {
+				RemoveSessionLocked(old->second, true);
 			}
+		}
+	}
+
+	// Enforce max sessions per account
+	if (max_sessions_ > 0) {
+		size_t account_sessions = 0;
+		for (const auto& [sid, info] : sessions_) {
+			if (info.entity_id == entity_id) ++account_sessions;
+		}
+
+		while (account_sessions >= max_sessions_) {
+			std::string oldest_sid;
+			int64_t oldest_created = std::numeric_limits<int64_t>::max();
+			for (const auto& [sid, info] : sessions_) {
+				if (info.entity_id == entity_id && info.created_at < oldest_created) {
+					oldest_sid = sid;
+					oldest_created = info.created_at;
+				}
+			}
+			if (oldest_sid.empty()) break;
+
+			RemoveSessionLocked(oldest_sid, true);
+			--account_sessions;
 		}
 	}
 
@@ -65,6 +98,7 @@ SessionInfo SessionManager::CreateSession(const std::string& entity_id,
 	sessions_[sid] = info;
 	if (conn) {
 		conn_to_session_[conn.get()] = sid;
+		conn_refs_[conn.get()] = conn;
 	}
 
 	auto* logger = GetLogger();
@@ -89,10 +123,6 @@ bool SessionManager::IsSessionValid(const std::string& session_id) const {
 		return false;
 	}
 
-	if (backend_) {
-		return backend_->ValidateSession(session_id);
-	}
-
 	return true;
 }
 
@@ -102,6 +132,9 @@ std::optional<SessionInfo> SessionManager::GetSession(evpp::TCPConnPtr conn) con
 
 	auto it = conn_to_session_.find(conn.get());
 	if (it == conn_to_session_.end()) return std::nullopt;
+
+	auto ref = conn_refs_.find(conn.get());
+	if (ref == conn_refs_.end() || ref->second.expired()) return std::nullopt;
 
 	auto sit = sessions_.find(it->second);
 	if (sit == sessions_.end()) return std::nullopt;
@@ -123,27 +156,28 @@ void SessionManager::RevokeSession(const std::string& session_id) {
 	ENGINE_PROFILE_AUTH_REVOKE();
 	std::lock_guard<std::mutex> lock(mutex_);
 
-	if (backend_) {
-		backend_->RevokeSession(session_id);
-	}
-	sessions_.erase(session_id);
-
-	// Clean up conn mapping
-	for (auto it = conn_to_session_.begin(); it != conn_to_session_.end(); ++it) {
-		if (it->second == session_id) {
-			conn_to_session_.erase(it);
-			break;
-		}
-	}
+	RemoveSessionLocked(session_id, true);
 }
 
 void SessionManager::RevokeSession(evpp::TCPConnPtr conn) {
-	std::lock_guard<std::mutex> lock(mutex_);
+	std::string session_id;
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
 
-	auto it = conn_to_session_.find(conn.get());
-	if (it == conn_to_session_.end()) return;
+		auto it = conn_to_session_.find(conn.get());
+		if (it == conn_to_session_.end()) return;
 
-	RevokeSession(it->second);
+		auto ref = conn_refs_.find(conn.get());
+		if (ref == conn_refs_.end() || ref->second.expired()) {
+			conn_refs_.erase(conn.get());
+			conn_to_session_.erase(it);
+			return;
+		}
+
+		session_id = it->second;
+	}
+
+	RevokeSession(session_id);
 }
 
 void SessionManager::CleanupExpired() {
@@ -156,19 +190,32 @@ void SessionManager::CleanupExpired() {
 
 	for (auto it = sessions_.begin(); it != sessions_.end(); ) {
 		if (it->second.expires_at > 0 && now_ts > it->second.expires_at) {
-			if (backend_) {
-				backend_->RevokeSession(it->first);
-			}
+			const std::string session_id = it->first;
+			++it;
+			RemoveSessionLocked(session_id, true);
+		} else {
+			++it;
+		}
+	}
+}
 
-			// Clean conn mapping
-			for (auto cit = conn_to_session_.begin(); cit != conn_to_session_.end(); ++cit) {
-				if (cit->second == it->first) {
-					conn_to_session_.erase(cit);
-					break;
-				}
-			}
+void SessionManager::SetMaxSessionsPerAccount(size_t max) {
+	std::lock_guard<std::mutex> lock(mutex_);
+	max_sessions_ = max;
+}
 
-			it = sessions_.erase(it);
+void SessionManager::RemoveSessionLocked(const std::string& session_id,
+										 bool revoke_backend) {
+	if (revoke_backend && backend_) {
+		backend_->RevokeSession(session_id);
+	}
+
+	sessions_.erase(session_id);
+
+	for (auto it = conn_to_session_.begin(); it != conn_to_session_.end(); ) {
+		if (it->second == session_id) {
+			conn_refs_.erase(it->first);
+			it = conn_to_session_.erase(it);
 		} else {
 			++it;
 		}

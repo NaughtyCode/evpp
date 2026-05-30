@@ -3,6 +3,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -24,6 +25,7 @@ extern "C" {
 #include "runtime/vm/script_importer.h"
 #include "runtime/vm/script_reloader.h"
 #include "runtime/vm/vm.h"
+#include "runtime/script/auth_bind.h"
 #include "runtime/script/bind_util.h"
 #include "runtime/script/import_bind.h"
 
@@ -593,10 +595,19 @@ TEST_CASE("CallInstMethod calls method on Lua instance by registry ref", "[bindu
         end
     )", &err));
 
-    // Get obj's value via raw Lua
+    lua_State* L = f.vm.GetState();
+    lua_getglobal(L, "obj");
+    int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+    int top = lua_gettop(L);
+    script::CallInstMethod(L, ref, "increment");
+    REQUIRE(lua_gettop(L) == top);
+
     std::string result;
-    REQUIRE(f.RunLuaCapture("obj:increment(); return obj:get()", result));
+    REQUIRE(f.RunLuaCapture("return obj:get()", result));
     REQUIRE(result == "1");
+
+    luaL_unref(L, LUA_REGISTRYINDEX, ref);
 }
 
 TEST_CASE("CallInstMethodStr calls method with string argument", "[bindutil][callback]") {
@@ -613,10 +624,19 @@ TEST_CASE("CallInstMethodStr calls method with string argument", "[bindutil][cal
         end
     )", &err));
 
-    // Call on_message with a string
+    lua_State* L = f.vm.GetState();
+    lua_getglobal(L, "handler");
+    int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+    int top = lua_gettop(L);
+    script::CallInstMethodStr(L, ref, "on_message", "hello world");
+    REQUIRE(lua_gettop(L) == top);
+
     std::string result;
-    REQUIRE(f.RunLuaCapture("handler:on_message('hello world'); return handler:last()", result));
+    REQUIRE(f.RunLuaCapture("return handler:last()", result));
     REQUIRE(result == "hello world");
+
+    luaL_unref(L, LUA_REGISTRYINDEX, ref);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -627,6 +647,10 @@ struct TestSharedCtx {
     int value = 0;
     bool deleted = false;
     ~TestSharedCtx() { deleted = true; }
+};
+
+struct OtherSharedCtx {
+    int value = 0;
 };
 
 TEST_CASE("PushInstanceTableShared stores shared_ptr and accessible via _ctx", "[bindutil][shared]") {
@@ -666,6 +690,38 @@ TEST_CASE("PushInstanceTableShared: shared_ptr survives beyond local scope", "[b
     REQUIRE(retrieved->value == 100);
 
     lua_pop(f.vm.GetState(), 1);
+}
+
+TEST_CASE("PushInstanceTableShared uses type-specific GC metatables", "[bindutil][shared]") {
+    ScriptVMFixture f;
+    lua_State* L = f.vm.GetState();
+
+    luaL_newmetatable(L, "test.shared.type_a");
+    lua_pop(L, 1);
+    luaL_newmetatable(L, "test.shared.type_b");
+    lua_pop(L, 1);
+
+    std::weak_ptr<TestSharedCtx> weak_a;
+    std::weak_ptr<OtherSharedCtx> weak_b;
+
+    {
+        auto a = std::make_shared<TestSharedCtx>();
+        auto b = std::make_shared<OtherSharedCtx>();
+        weak_a = a;
+        weak_b = b;
+
+        script::PushInstanceTableShared(L, a, "test.shared.type_a");
+        lua_setglobal(L, "shared_a");
+        script::PushInstanceTableShared(L, b, "test.shared.type_b");
+        lua_setglobal(L, "shared_b");
+    }
+
+    REQUIRE_FALSE(weak_a.expired());
+    REQUIRE_FALSE(weak_b.expired());
+
+    REQUIRE(f.RunLua("shared_a = nil; shared_b = nil; collectgarbage(); collectgarbage()"));
+    REQUIRE(weak_a.expired());
+    REQUIRE(weak_b.expired());
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -796,9 +852,46 @@ TEST_CASE("SafeCallLua with custom error handler ref", "[luaerr]") {
 
     LuaCallResult result = SafeCallLua(L, opts);
     REQUIRE(result == LuaCallResult::LuaError);
+    REQUIRE(lua_gettop(L) == 0);
 
     luaL_unref(L, LUA_REGISTRYINDEX, handler_ref);
     lua_close(L);
+}
+
+TEST_CASE("auth binding authenticates through configured token backend", "[auth_bind]") {
+    ScriptVMFixture f;
+    script::ExportAuth(f.vm);
+
+    std::string result;
+    REQUIRE(f.RunLuaCapture(R"(
+        auth.set_token_backend()
+        auth.add_token('token-a', 'entity-a')
+        local ok, entity_id, session_id = auth.authenticate('token', { token = 'token-a' })
+        assert(ok == true)
+        assert(entity_id == 'entity-a')
+        local valid_before = auth.validate_session(session_id)
+        auth.revoke_session(session_id)
+        local valid_after = auth.validate_session(session_id)
+        return tostring(valid_before) .. ',' .. tostring(valid_after)
+    )", result));
+    REQUIRE(result == "true,false");
+}
+
+TEST_CASE("auth binding switches backend without stale raw pointers", "[auth_bind]") {
+    ScriptVMFixture f;
+    script::ExportAuth(f.vm);
+
+    std::string result;
+    REQUIRE(f.RunLuaCapture(R"(
+        auth.set_token_backend()
+        auth.add_token('old-token', 'old-entity')
+        auth.set_jwt_backend('secret')
+        auth.set_token_backend()
+        auth.add_token('new-token', 'new-entity')
+        local ok, entity_id = auth.authenticate('token', { token = 'new-token' })
+        return tostring(ok) .. ',' .. tostring(entity_id)
+    )", result));
+    REQUIRE(result == "true,new-entity");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

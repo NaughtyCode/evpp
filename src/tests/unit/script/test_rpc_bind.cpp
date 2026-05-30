@@ -125,7 +125,8 @@ TEST_CASE("server:register_service after stop returns error", "[rpc_bind][server
 		"s:stop()\n"
 		"local ok, err = s:register_service('x', function() end)\n"
 		"return tostring(ok) .. ',' .. tostring(err)", result));
-	REQUIRE(result.find("false") != std::string::npos);
+	REQUIRE(result.find("nil") != std::string::npos);
+	REQUIRE(result.find("closed") != std::string::npos);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -321,7 +322,7 @@ TEST_CASE("client table has call and stop methods", "[rpc_bind][client]") {
 	REQUIRE(result == "function,function");
 }
 
-TEST_CASE("client:call returns nil+timeout when no transport", "[rpc_bind][client]") {
+TEST_CASE("client:call returns nil+transport error when no transport", "[rpc_bind][client]") {
 	RpcBindFixture f;
 	std::string result;
 	REQUIRE(f.RunLuaResult(
@@ -329,7 +330,7 @@ TEST_CASE("client:call returns nil+timeout when no transport", "[rpc_bind][clien
 		"local resp, err = c:call('svc', 'method', '{}', 10)\n"
 		"return tostring(resp) .. ',' .. tostring(err)", result));
 	REQUIRE(result.find("nil") != std::string::npos);
-	REQUIRE(result.find("timeout") != std::string::npos);
+	REQUIRE(result.find("no transport") != std::string::npos);
 }
 
 TEST_CASE("client:stop returns true", "[rpc_bind][client]") {
@@ -567,12 +568,14 @@ TEST_CASE("client call_async with no transport returns error", "[rpc_bind][clien
 		"c = rpc.new_client()\n"
 		"async_body = 'init'\n"
 		"async_err = 'init'\n"
-		"c:call_async('Svc', 'Method', '{}', function(body, err)\n"
+		"local ok, err = c:call_async('Svc', 'Method', '{}', function(body, err)\n"
 		"  async_body = tostring(body)\n"
 		"  async_err = tostring(err)\n"
 		"end)\n"
-		"return async_err", result));
+		"return tostring(ok) .. ',' .. tostring(err) .. ',' .. async_err", result));
+	REQUIRE(result.find("nil") != std::string::npos);
 	REQUIRE(result.find("no transport") != std::string::npos);
+	REQUIRE(result.find("init") != std::string::npos);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -671,7 +674,60 @@ TEST_CASE("client call_async Lua callback error does not crash", "[rpc_bind][cli
 	REQUIRE(client != nullptr);
 
 	client->OnResponse(RpcResponse::Ok(1, "data"));
+	int top = lua_gettop(L);
 	REQUIRE_NOTHROW(script::UpdateRpcBindings(f.vm));
+	REQUIRE(lua_gettop(L) == top);
+}
+
+TEST_CASE("client call_async callback may stop client during update", "[rpc_bind][client]") {
+	RpcBindFixture f;
+
+	REQUIRE(f.RunLua(
+		"c = rpc.new_client()\n"
+		"c:set_send_callback(function(msgid, svc, mtd, body) end)\n"
+		"callback_seen = false\n"
+		"c:call_async('Svc', 'Method', '{}', function(body, err)\n"
+		"  callback_seen = true\n"
+		"  c:stop()\n"
+		"end)\n"));
+
+	auto* L = f.vm.GetState();
+	lua_getglobal(L, "c");
+	auto* client = script::RpcBind_GetClient(L, -1);
+	lua_pop(L, 1);
+	REQUIRE(client != nullptr);
+
+	client->OnResponse(RpcResponse::Ok(1, "data"));
+	int top = lua_gettop(L);
+	REQUIRE_NOTHROW(script::UpdateRpcBindings(f.vm));
+	REQUIRE(lua_gettop(L) == top);
+
+	std::string result;
+	REQUIRE(f.RunLuaResult("return tostring(callback_seen)", result));
+	REQUIRE(result == "true");
+}
+
+TEST_CASE("server service callback may stop server during dispatch", "[rpc_bind][server]") {
+	RpcBindFixture f;
+
+	REQUIRE(f.RunLua(
+		"s = rpc.new_server()\n"
+		"s:register_service('StopSvc', function(svc, m, b)\n"
+		"  s:stop()\n"
+		"  return 'stopped'\n"
+		"end)\n"));
+
+	auto* L = f.vm.GetState();
+	lua_getglobal(L, "s");
+	auto* server = GetServer(L);
+	lua_pop(L, 1);
+	REQUIRE(server != nullptr);
+
+	int top = lua_gettop(L);
+	auto resp = SimulateRequest(f, server, "StopSvc", "Now");
+	REQUIRE(lua_gettop(L) == top);
+	REQUIRE(resp.success == true);
+	REQUIRE(resp.body == "stopped");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

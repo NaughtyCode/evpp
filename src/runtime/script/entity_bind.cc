@@ -293,6 +293,7 @@ int l_entity_send(lua_State* L) {
 	const char* data = luaL_checklstring(L, 2, &len);
 
 	// conn:send(data)
+	const int base_top = lua_gettop(L);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, ctx->conn_ref);
 	lua_getfield(L, -1, "send");
 	lua_insert(L, -2);
@@ -301,8 +302,8 @@ int l_entity_send(lua_State* L) {
 	if (lua_pcall(L, 2, 0, msgh) != LUA_OK) {
 		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger, "[entity] send error: {}", lua_tostring(L, -1));
-		lua_pop(L, 1);
 	}
+	lua_settop(L, base_top);
 
 	return 0;
 }
@@ -331,14 +332,15 @@ int l_entity_add_timer(lua_State* L) {
 			luaL_unref(L, LUA_REGISTRYINDEX, cb_ref);
 			return;
 		}
+		const int base_top = lua_gettop(L);
 		lua_rawgeti(L, LUA_REGISTRYINDEX, cb_ref);
 		int msgh = PushLuaErrorHandlerForCall(L, 0);
-			if (lua_pcall(L, 0, 0, msgh) != LUA_OK) {
-				auto* logger = GetLogger();
-				ENGINE_LOG_ERROR(logger, "[entity] timer callback error: {}",
+		if (lua_pcall(L, 0, 0, msgh) != LUA_OK) {
+			auto* logger = GetLogger();
+			ENGINE_LOG_ERROR(logger, "[entity] timer callback error: {}",
 							 lua_tostring(L, -1));
-			lua_pop(L, 1);
 		}
+		lua_settop(L, base_top);
 		if (!repeat) {
 			luaL_unref(L, LUA_REGISTRYINDEX, cb_ref);
 		}

@@ -61,20 +61,18 @@ constexpr int64_t kMaxTimerMs = INT64_MAX / kNsPerMs;
 void call_lua_callback(lua_State* L, int ref) {
 	if (!L) return;
 	if (ref == LUA_NOREF) return;  // timer was already cancelled
+	const int base_top = lua_gettop(L);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
 	if (!lua_isfunction(L, -1)) {
-		lua_pop(L, 1);
+		lua_settop(L, base_top);
 		return;
 	}
-	// nargs=0, function at top
-	int f_idx = lua_gettop(L);
-	int err_idx = PushLuaErrorHandler(L);
-	lua_insert(L, f_idx);
-	if (lua_pcall(L, 0, 0, f_idx) != LUA_OK) {
+	int msgh = PushLuaErrorHandlerForCall(L, 0);
+	if (lua_pcall(L, 0, 0, msgh) != LUA_OK) {
 		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger, "[lua timer] callback error: {}", lua_tostring(L, -1));
-		lua_pop(L, 1);
 	}
+	lua_settop(L, base_top);
 }
 
 //-----------------------------------------------------------------
@@ -248,6 +246,10 @@ const luaL_Reg kTimerFunctions[] = {
 void ExportTimer(ScriptVM& vm, TimerManager& tm) {
 	lua_State* L = vm.GetState();
 	if (!L) return;
+
+	if (GetTimerState(L)) {
+		ShutdownTimerBindings(vm);
+	}
 
 	// Create per-VM timer state and store in the Lua registry.
 	auto* state = CLOUDENGINE_MEM_NEW(TimerBindState);

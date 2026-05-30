@@ -44,6 +44,13 @@ void NetAliveGuard::WaitDrain() {
     cv_.wait(lock, [this] { return pending_count_ == 0; });
 }
 
+void NetAliveGuard::Reset() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (pending_count_ == 0) {
+        alive_.store(true, std::memory_order_release);
+    }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
  * PendingRefTracker
  * ═══════════════════════════════════════════════════════════════════════════ */

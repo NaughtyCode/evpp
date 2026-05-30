@@ -71,9 +71,10 @@ void BindKcpMessageHandler(KcpServerCtx* ctx) {
 				g_kcp_alive.Release();
 				return;
 			}
+			const int base_top = lua_gettop(L_ptr);
 			lua_rawgeti(L_ptr, LUA_REGISTRYINDEX, msg_ref);
 			if (lua_isnil(L_ptr, -1)) {
-				lua_pop(L_ptr, 1);
+				lua_settop(L_ptr, base_top);
 				g_kcp_alive.Release();
 				return;
 			}
@@ -85,8 +86,8 @@ void BindKcpMessageHandler(KcpServerCtx* ctx) {
 				auto* logger = GetLogger();
 				ENGINE_LOG_ERROR(
 					logger, "[net.kcp_server] on_message error: {}", lua_tostring(L_ptr, -1));
-				lua_pop(L_ptr, 1);
 			}
+			lua_settop(L_ptr, base_top);
 			g_kcp_alive.Release();
 		});
 	});
@@ -139,6 +140,9 @@ int l_kcp_server_listen(lua_State* L) {
 	if (arg1_type != LUA_TNUMBER && arg1_type != LUA_TSTRING) {
 		return luaL_error(L, "expected number or string for port");
 	}
+	if (lua_gettop(L) >= 2 && !lua_isnil(L, 2) && !lua_isfunction(L, 2)) {
+		return luaL_error(L, "expected function or nil for on_message");
+	}
 
 	auto* ctx = CLOUDENGINE_MEM_NEW(KcpServerCtx);
 	ctx->L = L;
@@ -164,6 +168,13 @@ int l_kcp_server_listen(lua_State* L) {
 		ok = ctx->server->Init(port);
 	} else {
 		const char* ports_str = luaL_checkstring(L, 1);
+		if (!*ports_str) {
+			if (ctx->on_message_ref != LUA_NOREF) {
+				luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
+			}
+			CLOUDENGINE_MEM_DELETE(ctx);
+			return luaL_error(L, "port string must not be empty");
+		}
 		ok = ctx->server->Init(ports_str);
 	}
 
@@ -260,6 +271,9 @@ int l_kcp_server_set_on_message(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_server: closed");
+	if (lua_gettop(L) >= 2 && !lua_isnil(L, 2) && !lua_isfunction(L, 2)) {
+		return luaL_error(L, "expected function or nil");
+	}
 
 	int old_ref = ctx->on_message_ref.exchange(LUA_NOREF);
 
@@ -371,6 +385,7 @@ const luaL_Reg kKcpServerFunctions[] = {
 void RegisterKcpServerMetaTable(lua_State* L) {
 	if (!L) return;
 
+	g_kcp_alive.Reset();
 	RegisterInstanceMeta(L, kKcpServerMetaName, kKcpServerMethods, l_kcp_server_gc);
 }
 

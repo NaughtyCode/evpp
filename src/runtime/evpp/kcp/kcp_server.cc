@@ -1,5 +1,6 @@
 #include "runtime/evpp/kcp/kcp_server.h"
 
+#include <atomic>
 #include <condition_variable>
 #include <unordered_map>
 
@@ -27,6 +28,7 @@ static inline IINT32 kcp_timediff(IUINT32 later, IUINT32 earlier) {
 }
 
 enum Status {
+	kStarting = 0,
 	kRunning = 1,
 	kPaused = 2,
 	kStopping = 3,
@@ -179,8 +181,7 @@ class Server::RecvThread {
 	}
 
 	~RecvThread() {
-		status_.store(kStopping);
-		cv_.notify_all();
+		Stop();
 		if (thread_ && thread_->joinable()) {
 			try {
 				thread_->join();
@@ -188,35 +189,42 @@ class Server::RecvThread {
 				ENGINE_LOG_ERROR(engine::GetLogger(), "Caught a system_error:{}", e.what());
 			}
 		}
-		EVUTIL_CLOSESOCKET(fd_);
-		fd_ = INVALID_SOCKET;
+		CloseSocket();
 	}
 
 	bool Listen(int p) {
 		port_ = p;
-		fd_ = sock::CreateUDPServer(p);
-		if (fd_ < 0) {
+		evpp_socket_t fd = sock::CreateUDPServer(p);
+		if (fd < 0) {
 			ENGINE_LOG_ERROR(engine::GetLogger(), "kcp listen error on port {}", p);
 			return false;
 		}
+		fd_.store(fd, std::memory_order_release);
 		// Use a short timeout so the loop can drive ikcp_update regularly.
-		sock::SetTimeout(fd_, 10);
+		sock::SetTimeout(fd, 10);
 		return true;
 	}
 
 	bool Run() {
+		status_.store(kStarting, std::memory_order_release);
 		thread_.reset(CLOUDENGINE_MEM_NEW(std::thread, std::bind(&Server::RecvingLoop, server_, this)));
 		std::unique_lock<std::mutex> lock(mutex_);
 		cv_.wait(lock, [this]() {
 			Status s = status_.load();
-			return s == kRunning || s == kStopped;
+			return s != kStarting;
 		});
 		return status_.load() == kRunning;
 	}
 
 	void Stop() {
-		assert(IsRunning() || IsPaused());
+		Status s = status_.load(std::memory_order_acquire);
+		if (s == kStopping || s == kStopped) {
+			CloseSocket();
+			cv_.notify_all();
+			return;
+		}
 		status_.store(kStopping);
+		CloseSocket();
 		cv_.notify_all();
 	}
 	void WaitUntilStopped() {
@@ -250,7 +258,7 @@ class Server::RecvThread {
 	}
 
 	evpp_socket_t fd() const {
-		return fd_;
+		return fd_.load(std::memory_order_acquire);
 	}
 	int port() const {
 		return port_;
@@ -272,7 +280,14 @@ class Server::RecvThread {
 	std::unordered_map<IUINT32, std::shared_ptr<KcpSession>> sessions_;
 
 	private:
-	evpp_socket_t fd_;
+	void CloseSocket() {
+		evpp_socket_t fd = fd_.exchange(INVALID_SOCKET, std::memory_order_acq_rel);
+		if (fd != INVALID_SOCKET) {
+			EVUTIL_CLOSESOCKET(fd);
+		}
+	}
+
+	std::atomic<evpp_socket_t> fd_;
 	Server* server_;
 	int port_;
 	std::shared_ptr<std::thread> thread_;
@@ -432,10 +447,15 @@ void Server::RecvingLoop(RecvThread* th) {
 		}
 
 		// --- Try to receive a raw UDP packet --------------------------------
+		evpp_socket_t fd = th->fd();
+		if (fd == INVALID_SOCKET) {
+			break;
+		}
+
 		struct sockaddr_storage from_addr = {};
 		socklen_t addr_len = sizeof(from_addr);
 		int readn = ::recvfrom(
-			th->fd(), raw_buf, sizeof(raw_buf), 0, sock::sockaddr_cast(&from_addr), &addr_len);
+			fd, raw_buf, sizeof(raw_buf), 0, sock::sockaddr_cast(&from_addr), &addr_len);
 
 		if (readn >= kKcpOverhead) {
 			IUINT32 conv = ikcp_getconv(raw_buf);
@@ -456,7 +476,7 @@ void Server::RecvingLoop(RecvThread* th) {
 				session = std::make_shared<KcpSession>(conv,
 													   from_addr,
 													   addr_len,
-													   th->fd(),
+													   fd,
 													   kcp_sndwnd_,
 													   kcp_rcvwnd_,
 													   kcp_mtu_,

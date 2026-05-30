@@ -53,6 +53,10 @@ public:
         alive_.store(false, std::memory_order_release);
     }
 
+    /* Re-enable the guard after a previous shutdown/re-export cycle.
+     * Call only after WaitDrain() has observed zero pending callbacks. */
+    void Reset();
+
     /* Try to acquire a "running" slot. Returns true if the guard is still
      * alive and the slot was acquired. Must be paired with Release().
      *

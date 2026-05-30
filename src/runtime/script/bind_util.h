@@ -104,14 +104,15 @@ inline void RegisterInstanceMeta(lua_State* L, const char* name,
 
 inline void CallInstMethod(lua_State* L, int inst_ref, const char* method) {
 	if (!L || inst_ref == LUA_NOREF) return;
+	int base_top = lua_gettop(L);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, inst_ref);
 	if (lua_isnil(L, -1)) {
-		lua_pop(L, 1);
+		lua_settop(L, base_top);
 		return;
 	}
 	lua_getfield(L, -1, method);
 	if (!lua_isfunction(L, -1)) {
-		lua_pop(L, 2);
+		lua_settop(L, base_top);
 		return;
 	}
 	lua_insert(L, -2);
@@ -124,7 +125,7 @@ inline void CallInstMethod(lua_State* L, int inst_ref, const char* method) {
 	if (lua_pcall(L, 1, 0, f_idx) != LUA_OK) {
 		lua_pop(L, 1);  // pop error message
 	}
-	// On success: err_handler at f_idx removed by lua_pcall (msgh consumed)
+	lua_settop(L, base_top);
 }
 
 //------------------------------------------------------------------------------
@@ -134,14 +135,15 @@ inline void CallInstMethod(lua_State* L, int inst_ref, const char* method) {
 inline void CallInstMethodStr(lua_State* L, int inst_ref, const char* method,
                                const std::string& arg) {
 	if (!L || inst_ref == LUA_NOREF) return;
+	int base_top = lua_gettop(L);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, inst_ref);
 	if (lua_isnil(L, -1)) {
-		lua_pop(L, 1);
+		lua_settop(L, base_top);
 		return;
 	}
 	lua_getfield(L, -1, method);
 	if (!lua_isfunction(L, -1)) {
-		lua_pop(L, 2);
+		lua_settop(L, base_top);
 		return;
 	}
 	lua_insert(L, -2);
@@ -155,6 +157,7 @@ inline void CallInstMethodStr(lua_State* L, int inst_ref, const char* method,
 	if (lua_pcall(L, 2, 0, f_idx) != LUA_OK) {
 		lua_pop(L, 1);  // pop error message
 	}
+	lua_settop(L, base_top);
 }
 
 //------------------------------------------------------------------------------
@@ -166,14 +169,15 @@ inline void CallInstMethodStr(lua_State* L, int inst_ref, const char* method,
 inline void CallInstMethodTableStr(lua_State* L, int inst_ref, const char* method,
                                     int table_ref, const std::string& arg) {
 	if (!L || inst_ref == LUA_NOREF) return;
+	int base_top = lua_gettop(L);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, inst_ref);
 	if (lua_isnil(L, -1)) {
-		lua_pop(L, 1);
+		lua_settop(L, base_top);
 		return;
 	}
 	lua_getfield(L, -1, method);
 	if (!lua_isfunction(L, -1)) {
-		lua_pop(L, 2);
+		lua_settop(L, base_top);
 		return;
 	}
 	lua_insert(L, -2);
@@ -188,6 +192,7 @@ inline void CallInstMethodTableStr(lua_State* L, int inst_ref, const char* metho
 	if (lua_pcall(L, 3, 0, f_idx) != LUA_OK) {
 		lua_pop(L, 1);  // pop error message
 	}
+	lua_settop(L, base_top);
 }
 
 //------------------------------------------------------------------------------
@@ -220,7 +225,7 @@ struct SharedCtx {
 template <typename T>
 int SharedCtxGC(lua_State* L) {
 	auto* sc = static_cast<SharedCtx<T>*>(lua_touserdata(L, 1));
-	sc->ptr.reset();
+	sc->~SharedCtx<T>();
 	return 0;
 }
 
@@ -230,10 +235,18 @@ void PushInstanceTableShared(lua_State* L, std::shared_ptr<T> ctx, const char* m
 	auto* sc = static_cast<SharedCtx<T>*>(lua_newuserdata(L, sizeof(SharedCtx<T>)));
 	new (sc) SharedCtx<T>{std::move(ctx)};
 
-	// Attach a metatable with __gc to the userdata so Lua GC releases the shared_ptr.
-	if (luaL_newmetatable(L, "__SharedCtx_gc")) {
+	// Attach a per-T metatable so __gc casts the userdata to the matching
+	// SharedCtx<T>. Reusing one metatable across T would invoke the wrong
+	// shared_ptr<T> destructor on the userdata storage.
+	static char shared_ctx_meta_key;
+	lua_rawgetp(L, LUA_REGISTRYINDEX, &shared_ctx_meta_key);
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 1);
+		lua_newtable(L);
 		lua_pushcfunction(L, SharedCtxGC<T>);
 		lua_setfield(L, -2, "__gc");
+		lua_pushvalue(L, -1);
+		lua_rawsetp(L, LUA_REGISTRYINDEX, &shared_ctx_meta_key);
 	}
 	lua_setmetatable(L, -2);
 

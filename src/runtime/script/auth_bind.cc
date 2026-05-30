@@ -1,6 +1,8 @@
 ﻿#include "runtime/script/auth_bind.h"
 
+#include <map>
 #include <memory>
+#include <string>
 
 #include "runtime/auth/auth_backend.h"
 #include "runtime/auth/session_manager.h"
@@ -19,6 +21,27 @@ namespace {
 
 // Token auth helpers
 
+std::shared_ptr<auth::TokenAuthBackend> EnsureTokenBackend() {
+	auto& manager = auth::SessionManager::Instance();
+	if (auto token = std::dynamic_pointer_cast<auth::TokenAuthBackend>(
+			manager.GetBackendSnapshot())) {
+		return token;
+	}
+
+	auto backend = std::make_unique<auth::TokenAuthBackend>();
+	manager.SetBackend(std::move(backend));
+	return std::dynamic_pointer_cast<auth::TokenAuthBackend>(
+		manager.GetBackendSnapshot());
+}
+
+std::shared_ptr<auth::AuthBackend> EnsureAuthBackend() {
+	auto& manager = auth::SessionManager::Instance();
+	if (auto backend = manager.GetBackendSnapshot()) {
+		return backend;
+	}
+	return EnsureTokenBackend();
+}
+
 // auth.set_token_backend()
 int l_auth_set_token_backend(lua_State* L) {
 	auto backend = std::make_unique<auth::TokenAuthBackend>();
@@ -32,21 +55,14 @@ int l_auth_add_token(lua_State* L) {
 	const char* token = luaL_checkstring(L, 1);
 	const char* entity_id = luaL_checkstring(L, 2);
 
-	static auto* g_token_backend = []() -> auth::TokenAuthBackend* {
-		auto b = std::make_unique<auth::TokenAuthBackend>();
-		auto* ptr = b.get();
-		auth::SessionManager::Instance().SetBackend(std::move(b));
-		return ptr;
-	}();
-
-	g_token_backend->AddToken(token, entity_id);
+	auto backend = EnsureTokenBackend();
+	if (!backend) return luaL_error(L, "failed to initialize token auth backend");
+	backend->AddToken(token, entity_id);
 	lua_pushboolean(L, 1);
 	return 1;
 }
 
 // JWT auth
-
-static auth::JwtAuthBackend* g_jwt_backend = nullptr;
 
 // auth.set_jwt_backend(secret)
 int l_auth_set_jwt_backend(lua_State* L) {
@@ -54,7 +70,6 @@ int l_auth_set_jwt_backend(lua_State* L) {
 
 	auto backend = std::make_unique<auth::JwtAuthBackend>();
 	backend->SetSecret(secret);
-	g_jwt_backend = backend.get();
 	auth::SessionManager::Instance().SetBackend(std::move(backend));
 
 	lua_pushboolean(L, 1);
@@ -63,25 +78,13 @@ int l_auth_set_jwt_backend(lua_State* L) {
 
 // Permission management
 
-// Helper to get the current backend as AuthBackend*
-static auth::AuthBackend* GetBackend() {
-	static auth::TokenAuthBackend* token = nullptr;
-	if (!token) {
-		auto b = std::make_unique<auth::TokenAuthBackend>();
-		token = b.get();
-		auth::SessionManager::Instance().SetBackend(std::move(b));
-	}
-	return token;
-}
-
 // auth.grant_permission(entity_id, permission)
 int l_auth_grant_permission(lua_State* L) {
 	const char* entity_id = luaL_checkstring(L, 1);
 	const char* permission = luaL_checkstring(L, 2);
 
-	auto* backend = g_jwt_backend
-		? static_cast<auth::AuthBackend*>(g_jwt_backend)
-		: GetBackend();
+	auto backend = EnsureAuthBackend();
+	if (!backend) return luaL_error(L, "failed to initialize auth backend");
 	backend->GrantPermission(entity_id, permission);
 
 	lua_pushboolean(L, 1);
@@ -93,9 +96,8 @@ int l_auth_revoke_permission(lua_State* L) {
 	const char* entity_id = luaL_checkstring(L, 1);
 	const char* permission = luaL_checkstring(L, 2);
 
-	auto* backend = g_jwt_backend
-		? static_cast<auth::AuthBackend*>(g_jwt_backend)
-		: GetBackend();
+	auto backend = EnsureAuthBackend();
+	if (!backend) return luaL_error(L, "failed to initialize auth backend");
 	backend->RevokePermission(entity_id, permission);
 
 	lua_pushboolean(L, 1);
@@ -107,9 +109,8 @@ int l_auth_has_permission(lua_State* L) {
 	const char* entity_id = luaL_checkstring(L, 1);
 	const char* permission = luaL_checkstring(L, 2);
 
-	auto* backend = g_jwt_backend
-		? static_cast<auth::AuthBackend*>(g_jwt_backend)
-		: GetBackend();
+	auto backend = EnsureAuthBackend();
+	if (!backend) return luaL_error(L, "failed to initialize auth backend");
 	bool has = backend->HasPermission(entity_id, permission);
 
 	lua_pushboolean(L, has ? 1 : 0);
@@ -124,8 +125,9 @@ int l_auth_authenticate(lua_State* L) {
 	std::map<std::string, std::string> params;
 
 	if (lua_istable(L, 2)) {
+		int table_index = lua_absindex(L, 2);
 		lua_pushnil(L);
-		while (lua_next(L, 2) != 0) {
+		while (lua_next(L, table_index) != 0) {
 			if (lua_isstring(L, -2) && lua_isstring(L, -1)) {
 				params[lua_tostring(L, -2)] = lua_tostring(L, -1);
 			}
@@ -133,20 +135,18 @@ int l_auth_authenticate(lua_State* L) {
 		}
 	}
 
-	// Directly use the backend for authentication
-	auto& mgr = auth::SessionManager::Instance();
-	auto info = mgr.CreateSession(
-		params.count("entity_id") ? params["entity_id"] : "", nullptr);
-
-	if (!info.session_id.empty()) {
+	auto backend = EnsureAuthBackend();
+	if (!backend) return luaL_error(L, "failed to initialize auth backend");
+	auto result = backend->Authenticate(method, params);
+	if (result.success) {
 		lua_pushboolean(L, 1);
-		lua_pushstring(L, info.entity_id.c_str());
-		lua_pushstring(L, info.session_id.c_str());
+		lua_pushstring(L, result.entity_id.c_str());
+		lua_pushstring(L, result.session_id.c_str());
 		return 3;
 	}
 
-	lua_pushboolean(L, 0);
-	lua_pushstring(L, "authentication failed");
+	lua_pushnil(L);
+	lua_pushstring(L, result.reason.empty() ? "authentication failed" : result.reason.c_str());
 	return 2;
 }
 
@@ -166,7 +166,10 @@ int l_auth_create_session(lua_State* L) {
 // auth.validate_session(session_id) → bool
 int l_auth_validate_session(lua_State* L) {
 	const char* session_id = luaL_checkstring(L, 1);
-	bool valid = auth::SessionManager::Instance().IsSessionValid(session_id);
+	auto& manager = auth::SessionManager::Instance();
+	auto backend = manager.GetBackendSnapshot();
+	bool valid = (backend && backend->ValidateSession(session_id)) ||
+				 manager.IsSessionValid(session_id);
 	lua_pushboolean(L, valid ? 1 : 0);
 	return 1;
 }
