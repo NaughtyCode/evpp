@@ -1,8 +1,15 @@
 #include "runtime/evpp/kcp/kcp_server.h"
 
+#include <array>
 #include <atomic>
+#include <cerrno>
 #include <condition_variable>
+#include <cstdlib>
+#include <cstring>
+#include <limits>
+#include <mutex>
 #include <unordered_map>
+#include <vector>
 
 #include "runtime/evpp/event_loop.h"
 #include "runtime/evpp/event_loop_thread_pool.h"
@@ -35,6 +42,63 @@ enum Status {
 	kStopped = 4,
 };
 
+struct SessionKey {
+	IUINT32 conv = 0;
+	int family = AF_UNSPEC;
+	uint16_t port = 0;
+	uint32_t scope_id = 0;
+	std::array<uint8_t, 16> addr{};
+
+	bool operator==(const SessionKey& rhs) const {
+		return conv == rhs.conv && family == rhs.family && port == rhs.port &&
+			   scope_id == rhs.scope_id && addr == rhs.addr;
+	}
+};
+
+struct SessionKeyHash {
+	size_t operator()(const SessionKey& key) const {
+		size_t h = 1469598103934665603ull;
+		auto mix = [&h](uint64_t v) {
+			for (int i = 0; i < 8; ++i) {
+				h ^= static_cast<uint8_t>(v & 0xff);
+				h *= 1099511628211ull;
+				v >>= 8;
+			}
+		};
+		mix(key.conv);
+		mix(static_cast<uint64_t>(key.family));
+		mix(key.port);
+		mix(key.scope_id);
+		for (uint8_t b : key.addr) {
+			h ^= b;
+			h *= 1099511628211ull;
+		}
+		return h;
+	}
+};
+
+SessionKey MakeSessionKey(IUINT32 conv, const struct sockaddr_storage& addr) {
+	SessionKey key;
+	key.conv = conv;
+	key.family = addr.ss_family;
+	if (addr.ss_family == AF_INET) {
+		const auto* sin = sock::sockaddr_in_cast(&addr);
+		key.port = sin->sin_port;
+		std::memcpy(key.addr.data(), &sin->sin_addr, sizeof(sin->sin_addr));
+	} else if (addr.ss_family == AF_INET6) {
+		const auto* sin6 = sock::sockaddr_in6_cast(&addr);
+		key.port = sin6->sin6_port;
+		key.scope_id = sin6->sin6_scope_id;
+		std::memcpy(key.addr.data(), &sin6->sin6_addr, sizeof(sin6->sin6_addr));
+	}
+	return key;
+}
+
+struct OutgoingMessage {
+	SessionKey key;
+	std::string data;
+};
+
 // ---------------------------------------------------------------------------
 // KCP clock — returns a 32‑bit millisecond counter.  KCP handles wrap‑around
 // via _itimediff internally.
@@ -46,7 +110,8 @@ static inline IUINT32 kcp_clock() {
 // KcpSession — wraps a single ikcpcb instance pinned to one remote address.
 class Server::KcpSession {
 	public:
-	KcpSession(IUINT32 conv,
+	KcpSession(const SessionKey& key,
+			   IUINT32 conv,
 			   const struct sockaddr_storage& remote_addr,
 			   socklen_t addrlen,
 			   evpp_socket_t fd,
@@ -57,7 +122,8 @@ class Server::KcpSession {
 			   int interval,
 			   int resend,
 			   int nc)
-		: conv_(conv),
+		: key_(key),
+		  conv_(conv),
 		  remote_addr_(remote_addr),
 		  fd_(fd),
 		  addrlen_(addrlen),
@@ -87,6 +153,9 @@ class Server::KcpSession {
 	}
 	const struct sockaddr_storage& remote_addr() const {
 		return remote_addr_;
+	}
+	const SessionKey& key() const {
+		return key_;
 	}
 	bool alive() const {
 		return alive_;
@@ -127,6 +196,9 @@ class Server::KcpSession {
 		last_active_ = kcp_clock();
 		return ikcp_send(kcp_, buffer, len);
 	}
+	void MarkDead() {
+		alive_ = false;
+	}
 
 	// Call ikcp_update if it is time to do so; returns the new deadline.
 	IUINT32 Update(IUINT32 now) {
@@ -164,6 +236,7 @@ class Server::KcpSession {
 	}
 
 	ikcpcb* kcp_ = nullptr;
+	SessionKey key_;
 	IUINT32 conv_;
 	struct sockaddr_storage remote_addr_;
 	evpp_socket_t fd_;
@@ -174,7 +247,7 @@ class Server::KcpSession {
 };
 
 // RecvThread — owns the UDP socket, the session map, and the I/O loop.
-class Server::RecvThread {
+class Server::RecvThread : public std::enable_shared_from_this<RecvThread> {
 	public:
 	explicit RecvThread(Server* srv)
 		: fd_(INVALID_SOCKET), server_(srv), port_(-1), status_(kStopped) {
@@ -232,12 +305,12 @@ class Server::RecvThread {
 		cv_.wait(lock, [this]() { return status_.load() == kStopped; });
 	}
 	void Pause() {
-		assert(IsRunning());
+		if (!IsRunning()) return;
 		status_.store(kPaused);
 		cv_.notify_all();
 	}
 	void Continue() {
-		assert(IsPaused());
+		if (!IsPaused()) return;
 		status_.store(kRunning);
 		cv_.notify_all();
 	}
@@ -266,6 +339,25 @@ class Server::RecvThread {
 	Server* server() const {
 		return server_;
 	}
+	bool QueueSend(const SessionKey& key, const char* data, size_t len) {
+		if (!data && len > 0) return false;
+		if (len == 0 || len > static_cast<size_t>((std::numeric_limits<int>::max)())) {
+			return false;
+		}
+		Status s = status_.load(std::memory_order_acquire);
+		if (s == kStopping || s == kStopped) {
+			return false;
+		}
+		std::lock_guard<std::mutex> lock(outgoing_mutex_);
+		outgoing_.push_back(OutgoingMessage{key, std::string(data, len)});
+		return true;
+	}
+	std::vector<OutgoingMessage> TakeOutgoing() {
+		std::vector<OutgoingMessage> out;
+		std::lock_guard<std::mutex> lock(outgoing_mutex_);
+		out.swap(outgoing_);
+		return out;
+	}
 
 	// Wait on the condition variable while paused (returns false if interrupted).
 	bool WaitWhilePaused() {
@@ -277,7 +369,7 @@ class Server::RecvThread {
 	}
 
 	// Session map (only accessed from the recv thread).
-	std::unordered_map<IUINT32, std::shared_ptr<KcpSession>> sessions_;
+	std::unordered_map<SessionKey, std::shared_ptr<KcpSession>, SessionKeyHash> sessions_;
 
 	private:
 	void CloseSocket() {
@@ -294,15 +386,22 @@ class Server::RecvThread {
 	std::atomic<Status> status_;
 	mutable std::mutex mutex_;
 	std::condition_variable cv_;
+	std::mutex outgoing_mutex_;
+	std::vector<OutgoingMessage> outgoing_;
 };
 
 // Server
 Server::Server() {
 }
 Server::~Server() {
+	Stop(true);
 }
 
 bool Server::Init(int port) {
+	if (port <= 0 || port > 65535) {
+		ENGINE_LOG_ERROR(engine::GetLogger(), "KCP listen port out of range: {}", port);
+		return false;
+	}
 	RecvThreadPtr t(CLOUDENGINE_MEM_NEW(RecvThread, this));
 	if (!t->Listen(port)) {
 		return false;
@@ -312,8 +411,18 @@ bool Server::Init(int port) {
 }
 
 bool Server::Init(const std::vector<int>& ports) {
+	if (ports.empty()) {
+		ENGINE_LOG_ERROR(engine::GetLogger(), "KCP listen ports must not be empty");
+		return false;
+	}
+	std::vector<RecvThreadPtr> old_threads = recv_threads_;
 	for (int p : ports) {
 		if (!Init(p)) {
+			for (auto& t : recv_threads_) {
+				t->Stop();
+				t->WaitUntilStopped();
+			}
+			recv_threads_ = old_threads;
 			return false;
 		}
 	}
@@ -326,14 +435,16 @@ bool Server::Init(const std::string& listen_ports) {
 
 	std::vector<int> v;
 	for (auto& s : vec) {
-		int i = std::atoi(s.c_str());
-		if (i <= 0) {
+		char* end = nullptr;
+		errno = 0;
+		long i = std::strtol(s.c_str(), &end, 10);
+		if (errno != 0 || end == s.c_str() || *end != '\0' || i <= 0 || i > 65535) {
 			ENGINE_LOG_ERROR(engine::GetLogger(),
 							 "Cannot convert [{}] to an integer. 'listen_ports' format wrong.",
 							 s);
 			return false;
 		}
-		v.push_back(i);
+		v.push_back(static_cast<int>(i));
 	}
 	return Init(v);
 }
@@ -343,6 +454,10 @@ void Server::AfterFork() {
 }
 
 bool Server::Start() {
+	if (recv_threads_.empty()) {
+		ENGINE_LOG_ERROR(engine::GetLogger(), "KCPServer has no listen ports");
+		return false;
+	}
 	if (!message_handler_) {
 		ENGINE_LOG_ERROR(engine::GetLogger(), "MessageHandler DO NOT set!");
 		return false;
@@ -350,6 +465,7 @@ bool Server::Start() {
 
 	for (auto& rt : recv_threads_) {
 		if (!rt->Run()) {
+			Stop(true);
 			return false;
 		}
 	}
@@ -370,7 +486,7 @@ void Server::Stop(bool wait_thread_exit) {
 
 void Server::Pause() {
 	for (auto& it : recv_threads_) {
-		it->Pause();
+		if (it->IsRunning()) it->Pause();
 	}
 }
 
@@ -381,6 +497,7 @@ void Server::Continue() {
 }
 
 bool Server::IsRunning() const {
+	if (recv_threads_.empty()) return false;
 	for (auto& it : recv_threads_) {
 		if (!it->IsRunning()) return false;
 	}
@@ -388,6 +505,7 @@ bool Server::IsRunning() const {
 }
 
 bool Server::IsStopped() const {
+	if (recv_threads_.empty()) return true;
 	for (auto& it : recv_threads_) {
 		if (!it->IsStopped()) return false;
 	}
@@ -411,13 +529,40 @@ void Server::SetKcpWndSize(int sndwnd, int rcvwnd) {
 }
 
 void Server::SetKcpMtu(int mtu) {
-	if (mtu > kKcpOverhead && mtu <= 65535) {
+	if (mtu > kKcpOverhead && mtu <= 65507) {
 		kcp_mtu_ = mtu;
 	}
 }
 
 void Server::SetSessionTimeoutMs(uint32_t timeout_ms) {
 	session_timeout_ms_ = timeout_ms;
+}
+
+void Server::SetMaxMessageSize(size_t max_bytes) {
+	max_message_size_ = max_bytes == 0 ? 1024 * 1024 : max_bytes;
+}
+
+void Server::DrainOutgoing(RecvThread* th, uint32_t now_ms) {
+	IUINT32 now = static_cast<IUINT32>(now_ms);
+	auto outgoing = th->TakeOutgoing();
+	for (auto& item : outgoing) {
+		auto it = th->sessions_.find(item.key);
+		if (it == th->sessions_.end()) {
+			continue;
+		}
+		auto& session = it->second;
+		int ret = session->Send(item.data.data(), static_cast<int>(item.data.size()));
+		if (ret < 0) {
+			ENGINE_LOG_WARN(engine::GetLogger(),
+							"KCP send failed conv={} remote={} ret={}",
+							session->conv(),
+							sock::ToIPPort(&session->remote_addr()),
+							ret);
+			session->MarkDead();
+			continue;
+		}
+		session->Update(now);
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -430,8 +575,6 @@ void Server::RecvingLoop(RecvThread* th) {
 
 	// Stack buffer for raw UDP reads.
 	char raw_buf[65536];
-	// Stack buffer for KCP reassembled messages.
-	char kcp_buf[65536];
 
 	IUINT32 now = kcp_clock();
 	IUINT32 last_cleanup = now;
@@ -451,6 +594,7 @@ void Server::RecvingLoop(RecvThread* th) {
 		if (fd == INVALID_SOCKET) {
 			break;
 		}
+		DrainOutgoing(th, now);
 
 		struct sockaddr_storage from_addr = {};
 		socklen_t addr_len = sizeof(from_addr);
@@ -459,21 +603,16 @@ void Server::RecvingLoop(RecvThread* th) {
 
 		if (readn >= kKcpOverhead) {
 			IUINT32 conv = ikcp_getconv(raw_buf);
+			SessionKey key = MakeSessionKey(conv, from_addr);
 
 			// Look up or create the session for this conversation.
 			KcpSessionPtr session;
-			auto it = th->sessions_.find(conv);
+			auto it = th->sessions_.find(key);
 			if (it != th->sessions_.end()) {
 				session = it->second;
-				// Verify the remote address matches — otherwise ignore.
-				if (memcmp(&session->remote_addr(), &from_addr, addr_len) != 0) {
-					ENGINE_LOG_WARN(engine::GetLogger(),
-									"KCP conv {} remote addr mismatch, ignoring packet",
-									conv);
-					continue;
-				}
 			} else {
-				session = std::make_shared<KcpSession>(conv,
+				session = std::make_shared<KcpSession>(key,
+													   conv,
 													   from_addr,
 													   addr_len,
 													   fd,
@@ -491,7 +630,7 @@ void Server::RecvingLoop(RecvThread* th) {
 									 sock::ToIPPort(&from_addr));
 					continue;
 				}
-				th->sessions_[conv] = session;
+				th->sessions_[key] = session;
 				ENGINE_LOG_INFO(engine::GetLogger(),
 								"KCP session created conv={} remote={}",
 								conv,
@@ -506,12 +645,31 @@ void Server::RecvingLoop(RecvThread* th) {
 
 			// Drain any complete application messages from this session.
 			for (;;) {
-				int n = session->Recv(kcp_buf, sizeof(kcp_buf));
-				if (n < 0) break;  // no more complete messages
+				int peek_size = session->PeekSize();
+				if (peek_size < 0) break;  // no more complete messages
+				if (static_cast<size_t>(peek_size) > max_message_size_) {
+					ENGINE_LOG_WARN(engine::GetLogger(),
+									"KCP message too large conv={} remote={} size={} max={}",
+									conv,
+									sock::ToIPPort(&from_addr),
+									peek_size,
+									max_message_size_);
+					session->MarkDead();
+					break;
+				}
+				std::vector<char> kcp_buf(static_cast<size_t>(peek_size));
+				int n = session->Recv(kcp_buf.data(), peek_size);
+				if (n < 0) break;
 
 				MessagePtr msg(CLOUDENGINE_MEM_NEW(Message, session->conv(), n));
-				msg->Write(kcp_buf, n);
+				msg->Write(kcp_buf.data(), n);
 				msg->set_remote_addr(*sock::sockaddr_cast(&from_addr));
+				std::weak_ptr<RecvThread> weak_thread = th->shared_from_this();
+				SessionKey reply_key = session->key();
+				msg->set_reply_callback([weak_thread, reply_key](const char* data, size_t len) {
+					auto thread = weak_thread.lock();
+					return thread ? thread->QueueSend(reply_key, data, len) : false;
+				});
 
 				if (tpool_) {
 					EventLoop* loop = nullptr;
@@ -536,6 +694,7 @@ void Server::RecvingLoop(RecvThread* th) {
 					message_handler_(nullptr, msg);
 				}
 			}
+			DrainOutgoing(th, kcp_clock());
 		} else if (readn >= 0) {
 			// Packet too small to be a valid KCP segment.
 			// Ignore silently.
@@ -551,6 +710,7 @@ void Server::RecvingLoop(RecvThread* th) {
 
 		// --- Drive ikcp_update on all sessions ------------------------------
 		now = kcp_clock();
+		DrainOutgoing(th, now);
 		for (auto& kv : th->sessions_) {
 			kv.second->Update(now);
 		}

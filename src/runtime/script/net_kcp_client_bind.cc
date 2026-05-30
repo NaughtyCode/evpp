@@ -12,14 +12,14 @@
 
 #include <runtime/evpp/kcp/sync_kcp_client.h>
 
+#include "runtime/config/config.h"
+#include "runtime/config/limits.h"
 #include "runtime/core/log/log.h"
 #include "runtime/engine/engine.h"
 #include "runtime/script/bind_util.h"
 
 extern "C" {
 #include "lauxlib.h"
-#include "runtime/config/config.h"
-#include "runtime/config/limits.h"
 }
 
 namespace engine {
@@ -181,6 +181,10 @@ int l_kcp_client_do_request(lua_State* L) {
 
 	size_t len = 0;
 	const char* data = luaL_checklstring(L, 2, &len);
+	uint32_t limit = ConfigManager::Instance().GetServerConfig().resource_limits.max_message_size;
+	if (len > limit) {
+		return luaL_error(L, "message size %zu exceeds limit %u", len, limit);
+	}
 	lua_Integer t = luaL_optinteger(L, 3, 3000);
 	if (t < 0) {
 		return luaL_error(L, "timeout must be >= 0");
@@ -304,6 +308,10 @@ int l_kcp_client_do_request_static(lua_State* L) {
 	int port = static_cast<int>(port64);
 	size_t len = 0;
 	const char* data = luaL_checklstring(L, 3, &len);
+	uint32_t limit = ConfigManager::Instance().GetServerConfig().resource_limits.max_message_size;
+	if (len > limit) {
+		return luaL_error(L, "message size %zu exceeds limit %u", len, limit);
+	}
 	lua_Integer t = luaL_optinteger(L, 4, 3000);
 	if (t < 0) {
 		return luaL_error(L, "timeout must be >= 0");

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <string>
 
 #include "runtime/evpp/buffer.h"
 #include "runtime/evpp/sockets.h"
@@ -29,9 +31,20 @@ class CLOUD_ENGINE_API Message : public Buffer {
 		conv_ = c;
 	}
 
+	void set_reply_callback(std::function<bool(const char*, size_t)> cb) {
+		reply_fn_ = std::move(cb);
+	}
+	bool Reply(const char* data, size_t len) {
+		return reply_fn_ ? reply_fn_(data, len) : false;
+	}
+	bool Reply(const std::string& data) {
+		return Reply(data.data(), data.size());
+	}
+
 	private:
 	struct sockaddr_storage remote_addr_;
 	uint32_t conv_;
+	std::function<bool(const char*, size_t)> reply_fn_;
 };
 
 typedef std::shared_ptr<Message> MessagePtr;

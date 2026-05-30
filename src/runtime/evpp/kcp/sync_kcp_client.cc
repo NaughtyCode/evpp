@@ -5,7 +5,10 @@
 #include "runtime/evpp/libevent.h"
 #include "runtime/evpp/sockets.h"
 
+#include <algorithm>
+#include <limits>
 #include <string>
+#include <vector>
 
 extern "C" {
 #include "thirdparty/kcp/ikcp.h"
@@ -62,7 +65,7 @@ void Client::SetKcpWndSize(int sndwnd, int rcvwnd) {
 }
 
 void Client::SetKcpMtu(int mtu) {
-	if (mtu > 24 && mtu <= 65535) {
+	if (mtu > 24 && mtu <= 65507) {
 		kcp_mtu_ = mtu;
 	}
 }
@@ -153,7 +156,9 @@ void Client::Close() {
 		ikcp_release(kcp_);
 		kcp_ = nullptr;
 	}
-	EVUTIL_CLOSESOCKET(sockfd_);
+	if (sockfd_ != INVALID_SOCKET) {
+		EVUTIL_CLOSESOCKET(sockfd_);
+	}
 	sockfd_ = INVALID_SOCKET;
 	connected_ = false;
 }
@@ -163,7 +168,8 @@ bool Client::Send(const std::string& msg) {
 }
 
 bool Client::Send(const char* msg, size_t len) {
-	if (!kcp_ || len > 0x7fffffff) {
+	if (!connected_ || !kcp_ || (!msg && len > 0) || len == 0 ||
+		len > static_cast<size_t>((std::numeric_limits<int>::max)())) {
 		return false;
 	}
 	int ret = ikcp_send(kcp_, msg, static_cast<int>(len));
@@ -189,13 +195,11 @@ std::string Client::DoRequest(const std::string& data, uint32_t timeout_ms) {
 
 	IUINT32 start = kcp_clock();
 	char raw_buf[65536];
-	char kcp_buf[65536];
-
-	sock::SetTimeout(sockfd_, timeout_ms);
+	sock::SetTimeout(sockfd_, timeout_ms == 0 ? 10 : (std::min)(timeout_ms, 10u));
 
 	while (true) {
 		IUINT32 now = kcp_clock();
-		if (kcp_timediff(now, start) > static_cast<IINT32>(timeout_ms)) {
+		if (timeout_ms > 0 && kcp_timediff(now, start) >= static_cast<IINT32>(timeout_ms)) {
 			ENGINE_LOG_ERROR(
 				engine::GetLogger(), "KCP client DoRequest timeout after {}ms", timeout_ms);
 			return "";
@@ -205,7 +209,10 @@ std::string Client::DoRequest(const std::string& data, uint32_t timeout_ms) {
 		for (;;) {
 			int n = ::recv(sockfd_, raw_buf, sizeof(raw_buf), 0);
 			if (n > 0) {
-				ikcp_input(kcp_, raw_buf, n);
+				int ret = ikcp_input(kcp_, raw_buf, n);
+				if (ret < 0) {
+					ENGINE_LOG_WARN(engine::GetLogger(), "KCP client ikcp_input failed ret={}", ret);
+				}
 			} else if (n == 0) {
 				break;	// graceful shutdown on connected UDP socket
 			} else {
@@ -224,14 +231,21 @@ std::string Client::DoRequest(const std::string& data, uint32_t timeout_ms) {
 
 		// Check for a complete application‑level response first — if the
 		// response arrived just before the connection died, return it.
-		int hr = ikcp_recv(kcp_, kcp_buf, sizeof(kcp_buf));
-		if (hr > 0) {
-			return std::string(kcp_buf, static_cast<size_t>(hr));
+		int peek_size = ikcp_peeksize(kcp_);
+		if (peek_size > 0) {
+			std::vector<char> kcp_buf(static_cast<size_t>(peek_size));
+			int hr = ikcp_recv(kcp_, kcp_buf.data(), peek_size);
+			if (hr > 0) {
+				return std::string(kcp_buf.data(), static_cast<size_t>(hr));
+			}
+			if (hr < -1) {
+				ENGINE_LOG_ERROR(engine::GetLogger(), "KCP client DoRequest recv fatal hr={}", hr);
+				return "";
+			}
 		}
-		// ikcp_recv returns -2 (internal error) or -3 (buffer too small)
-		// without consuming the message — these are unrecoverable.
-		if (hr < -1) {
-			ENGINE_LOG_ERROR(engine::GetLogger(), "KCP client DoRequest recv fatal hr={}", hr);
+		if (peek_size < -1) {
+			ENGINE_LOG_ERROR(
+				engine::GetLogger(), "KCP client DoRequest peek fatal size={}", peek_size);
 			return "";
 		}
 

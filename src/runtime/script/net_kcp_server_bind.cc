@@ -65,7 +65,7 @@ void BindKcpMessageHandler(KcpServerCtx* ctx) {
 		uint32_t conv = msg->conv();
 		lua_State* L_ptr = ctx->L;
 
-		main_loop->RunInLoop([L_ptr, msg_ref, data, remote_ip, conv]() {
+		main_loop->RunInLoop([L_ptr, msg_ref, data, remote_ip, conv, msg]() {
 			if (!g_kcp_alive.TryAcquire()) return;
 			if (msg_ref == LUA_NOREF) {
 				g_kcp_alive.Release();
@@ -82,10 +82,24 @@ void BindKcpMessageHandler(KcpServerCtx* ctx) {
 			lua_pushlstring(L_ptr, remote_ip.data(), remote_ip.size());
 			lua_pushinteger(L_ptr, conv);
 			int msgh = PushLuaErrorHandlerForCall(L_ptr, 3);
-			if (lua_pcall(L_ptr, 3, 0, msgh) != LUA_OK) {
+			if (lua_pcall(L_ptr, 3, 1, msgh) != LUA_OK) {
 				auto* logger = GetLogger();
 				ENGINE_LOG_ERROR(
 					logger, "[net.kcp_server] on_message error: {}", lua_tostring(L_ptr, -1));
+			} else if (lua_isstring(L_ptr, -1)) {
+				size_t reply_len = 0;
+				const char* reply = lua_tolstring(L_ptr, -1, &reply_len);
+				if (reply_len > 0 && !msg->Reply(reply, reply_len)) {
+					auto* logger = GetLogger();
+					ENGINE_LOG_WARN(logger,
+									"[net.kcp_server] failed to queue reply conv={} remote={}",
+									conv,
+									remote_ip);
+				}
+			} else if (!lua_isnil(L_ptr, -1)) {
+				auto* logger = GetLogger();
+				ENGINE_LOG_WARN(logger,
+								"[net.kcp_server] on_message return ignored: expected string or nil");
 			}
 			lua_settop(L_ptr, base_top);
 			g_kcp_alive.Release();
@@ -348,6 +362,18 @@ int l_kcp_server_set_session_timeout(lua_State* L) {
 	return 0;
 }
 
+int l_kcp_server_set_max_message_size(lua_State* L) {
+	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
+	if (!ctx) return luaL_error(L, "kcp_server: invalid context");
+	if (ctx->disposed) return luaL_error(L, "kcp_server: closed");
+	lua_Integer max_bytes = luaL_checkinteger(L, 2);
+	if (max_bytes <= 0) {
+		return luaL_error(L, "max_bytes must be > 0");
+	}
+	ctx->server->SetMaxMessageSize(static_cast<size_t>(max_bytes));
+	return 0;
+}
+
 // ── __gc metamethod ────────────────────────────────────────────────
 int l_kcp_server_gc(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
@@ -363,12 +389,14 @@ const luaL_Reg kKcpServerMethods[] = {
 	{"stop", l_kcp_server_stop},
 	{"pause", l_kcp_server_pause},
 	{"continue", l_kcp_server_continue},
+	{"resume", l_kcp_server_continue},
 	{"is_running", l_kcp_server_is_running},
 	{"set_on_message", l_kcp_server_set_on_message},
 	{"set_kcp_nodelay", l_kcp_server_set_kcp_nodelay},
 	{"set_kcp_wnd_size", l_kcp_server_set_kcp_wnd_size},
 	{"set_kcp_mtu", l_kcp_server_set_kcp_mtu},
 	{"set_session_timeout", l_kcp_server_set_session_timeout},
+	{"set_max_message_size", l_kcp_server_set_max_message_size},
 	{nullptr, nullptr},
 };
 

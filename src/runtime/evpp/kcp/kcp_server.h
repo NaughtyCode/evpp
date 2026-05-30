@@ -63,6 +63,9 @@ class CLOUD_ENGINE_API Server : public ThreadDispatchPolicy {
 	// @param timeout_ms max idle time before a session is cleaned up, default 30000ms
 	void SetSessionTimeoutMs(uint32_t timeout_ms);
 
+	// @param max_bytes maximum reassembled application message size, default 1 MiB
+	void SetMaxMessageSize(size_t max_bytes);
+
 	private:
 	class KcpSession;
 	class RecvThread;
@@ -88,8 +91,10 @@ class CLOUD_ENGINE_API Server : public ThreadDispatchPolicy {
 
 	// Max idle time before a KCP session is considered stale (ms)
 	uint32_t session_timeout_ms_ = 30000;
+	size_t max_message_size_ = 1024 * 1024;
 
 	void RecvingLoop(RecvThread* th);
+	void DrainOutgoing(RecvThread* th, uint32_t now_ms);
 };
 
 }  // namespace kcp

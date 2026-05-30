@@ -25,6 +25,13 @@ set_tests_properties(integration.network.udp PROPERTIES
     TIMEOUT 60 LABELS "integration;network"
     WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
+add_integ_test(test_integ_kcp network/test_kcp.cpp)
+add_test(NAME integration.network.kcp COMMAND test_integ_kcp)
+set_tests_properties(integration.network.kcp PROPERTIES
+    TIMEOUT 120 LABELS "integration;network;kcp"
+    RUN_SERIAL TRUE
+    WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
 add_integ_test(test_integ_conn_limit network/test_connection_limit.cpp)
 add_test(NAME integration.network.conn_limit COMMAND test_integ_conn_limit)
 set_tests_properties(integration.network.conn_limit PROPERTIES
