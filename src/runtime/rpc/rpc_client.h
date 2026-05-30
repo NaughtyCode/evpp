@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <functional>
 #include <future>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -62,12 +63,14 @@ public:
 								   const std::string& method,
 								   const std::string& args_json);
 
-	// Callback-based async call.
+	// Callback-based async call. timeout_ms controls when ProcessTimeouts()
+	// resolves the callback with a timeout error.
 	using ResponseCallback = std::function<void(const RpcResponse&)>;
 	void CallAsync(const std::string& service,
 				   const std::string& method,
 				   const std::string& args_json,
-				   ResponseCallback callback);
+				   ResponseCallback callback,
+				   int timeout_ms = 5000);
 
 	// Sync call: blocks until response or timeout.
 	// WARNING: This blocks the calling thread. Only use from non-critical
@@ -96,7 +99,12 @@ public:
 	}
 
 private:
-	uint32_t NextMsgId();
+	struct PendingRequest;
+
+	uint32_t NextMsgIdLocked();
+	void CompletePending(std::unique_ptr<PendingRequest> pending,
+						 const RpcResponse& response) noexcept;
+	void FailPending(uint32_t msgid, RpcResponse response) noexcept;
 
 	// Common logic for Call/CallSync: enqueues a request and returns
 	// a (msgid, future) pair.  If no transport is set the future is

@@ -1,5 +1,8 @@
 #include "runtime/rpc/rpc_server.h"
 
+#include <exception>
+#include <mutex>
+
 #include "runtime/core/log/log.h"
 
 namespace engine {
@@ -18,6 +21,13 @@ void RpcServer::RegisterMethod(const std::string& service,
 								const std::string& method,
 								RpcMethodHandler handler) {
 	std::lock_guard<std::shared_mutex> lock(mutex_);
+	if (!handler) {
+		auto it = services_.find(service);
+		if (it != services_.end()) {
+			it->second.method_handlers.erase(method);
+		}
+		return;
+	}
 	services_[service].method_handlers[method] = std::move(handler);
 }
 
@@ -32,6 +42,19 @@ void RpcServer::Clear() {
 }
 
 RpcResponse RpcServer::HandleRequest(const RpcRequest& request) {
+	if (request.header.type != RpcMessageType::kRequest) {
+		return RpcResponse::Error(request.header.msgid, 400,
+			"invalid rpc request type");
+	}
+	if (request.header.service.empty()) {
+		return RpcResponse::Error(request.header.msgid, 400,
+			"service name is empty");
+	}
+	if (request.header.method.empty()) {
+		return RpcResponse::Error(request.header.msgid, 400,
+			"method name is empty");
+	}
+
 	// Take a snapshot of handlers under shared lock so the actual
 	// invocation happens outside the lock (handlers may block).
 	RpcServiceHandler service_handler;
@@ -53,7 +76,7 @@ RpcResponse RpcServer::HandleRequest(const RpcRequest& request) {
 		auto& entry = it->second;
 
 		auto mit = entry.method_handlers.find(request.header.method);
-		if (mit != entry.method_handlers.end()) {
+		if (mit != entry.method_handlers.end() && mit->second) {
 			method_handler = mit->second;
 			has_method = true;
 		} else if (entry.service_handler) {

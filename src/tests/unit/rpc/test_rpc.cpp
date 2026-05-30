@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <stdexcept>
 #include <string>
 #include <thread>
 
@@ -817,6 +818,68 @@ TEST_CASE("RpcClient SetSendCallback re-registration overwrites", "[rpc][client]
 	client.OnResponse(RpcResponse::Ok(1, "ok"));
 }
 
+TEST_CASE("RpcClient Call resolves with transport error when send throws", "[rpc][client]") {
+	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {
+		throw std::runtime_error("socket closed");
+	});
+
+	auto future = client.Call("Svc", "m", "{}");
+	REQUIRE(client.PendingCount() == 0);
+	REQUIRE(future.wait_for(std::chrono::milliseconds(10)) == std::future_status::ready);
+
+	auto resp = future.get();
+	REQUIRE(resp.success == false);
+	REQUIRE(resp.error_code == -2);
+	REQUIRE(resp.error_message.find("transport send failed") != std::string::npos);
+	REQUIRE(resp.error_message.find("socket closed") != std::string::npos);
+}
+
+TEST_CASE("RpcClient CallAsync resolves with transport error when send throws", "[rpc][client]") {
+	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {
+		throw std::runtime_error("queue full");
+	});
+
+	bool called = false;
+	RpcResponse captured;
+	REQUIRE_NOTHROW(client.CallAsync("Svc", "m", "{}", [&](const RpcResponse& r) {
+		called = true;
+		captured = r;
+	}));
+
+	REQUIRE(called);
+	REQUIRE(client.PendingCount() == 0);
+	REQUIRE(captured.success == false);
+	REQUIRE(captured.error_code == -2);
+	REQUIRE(captured.error_message.find("queue full") != std::string::npos);
+}
+
+TEST_CASE("RpcClient callback exceptions are contained", "[rpc][client]") {
+	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
+
+	client.CallAsync("Svc", "m", "{}", [](const RpcResponse&) {
+		throw std::runtime_error("callback failed");
+	});
+
+	REQUIRE_NOTHROW(client.OnResponse(RpcResponse::Ok(1, "ok")));
+	REQUIRE(client.PendingCount() == 0);
+}
+
+TEST_CASE("RpcClient timeout callback exceptions are contained", "[rpc][client]") {
+	RpcClient client;
+	client.SetSendCallback([](RpcRequest) {});
+
+	client.CallAsync("Svc", "m", "{}", [](const RpcResponse&) {
+		throw std::runtime_error("timeout callback failed");
+	}, 1);
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(2));
+	REQUIRE_NOTHROW(client.ProcessTimeouts());
+	REQUIRE(client.PendingCount() == 0);
+}
+
 TEST_CASE("RpcClient Call returns error when no transport", "[rpc][client]") {
 	RpcClient client;
 	auto future = client.Call("Svc", "m", "{}");
@@ -952,6 +1015,62 @@ TEST_CASE("RpcServer method handler with no service handler returns 405 for unkn
 	auto r2 = server.HandleRequest(req2);
 	REQUIRE(r2.success == false);
 	REQUIRE(r2.error_code == 405);
+}
+
+TEST_CASE("RpcServer rejects malformed request metadata", "[rpc][server]") {
+	RpcServer server;
+	server.RegisterService("Svc",
+		[](const std::string&, const std::string&) -> std::string {
+			return "should_not_run";
+		});
+
+	RpcRequest wrong_type;
+	wrong_type.header.msgid = 1;
+	wrong_type.header.type = RpcMessageType::kResponse;
+	wrong_type.header.service = "Svc";
+	wrong_type.header.method = "m";
+	auto r1 = server.HandleRequest(wrong_type);
+	REQUIRE(r1.success == false);
+	REQUIRE(r1.error_code == 400);
+
+	RpcRequest empty_service;
+	empty_service.header.msgid = 2;
+	empty_service.header.method = "m";
+	auto r2 = server.HandleRequest(empty_service);
+	REQUIRE(r2.success == false);
+	REQUIRE(r2.error_code == 400);
+
+	RpcRequest empty_method;
+	empty_method.header.msgid = 3;
+	empty_method.header.service = "Svc";
+	auto r3 = server.HandleRequest(empty_method);
+	REQUIRE(r3.success == false);
+	REQUIRE(r3.error_code == 400);
+}
+
+TEST_CASE("RpcServer empty method handler is treated as unregistered", "[rpc][server]") {
+	RpcServer server;
+	server.RegisterMethod("Svc", "m", RpcMethodHandler{});
+
+	RpcRequest req;
+	req.header.msgid = 1;
+	req.header.service = "Svc";
+	req.header.method = "m";
+	auto resp = server.HandleRequest(req);
+	REQUIRE(resp.success == false);
+	REQUIRE(resp.error_code == 404);
+
+	server.RegisterService("Svc",
+		[](const std::string& method, const std::string&) -> std::string {
+			return "fallback:" + method;
+		});
+	server.RegisterMethod("Svc", "m",
+		[](const std::string&) -> std::string { return "specific"; });
+	server.RegisterMethod("Svc", "m", RpcMethodHandler{});
+
+	resp = server.HandleRequest(req);
+	REQUIRE(resp.success == true);
+	REQUIRE(resp.body == "fallback:m");
 }
 
 TEST_CASE("RpcServer handler receives empty body", "[rpc][server]") {

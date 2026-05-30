@@ -6,7 +6,9 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
@@ -40,6 +42,7 @@ struct PendingRpcCall {
 	std::string method;
 	std::string body;
 	std::promise<std::string> promise;
+	std::atomic<bool> canceled{false};
 };
 
 // Server context
@@ -55,7 +58,7 @@ struct RpcServerCtx {
 	// Deferred execution queue  - requests from transport thread wait here
 	// until drained by UpdateRpcBindings() on the main thread.
 	std::mutex queue_mutex;
-	std::vector<std::unique_ptr<PendingRpcCall>> pending;
+	std::vector<std::shared_ptr<PendingRpcCall>> pending;
 	std::atomic<bool> alive{true};
 	std::atomic<int> active_dispatches{0};
 	bool disposed = false;
@@ -110,26 +113,71 @@ int PushRpcError(lua_State* L, const char* msg) {
 	return 2;
 }
 
+std::string JsonEscape(std::string_view value) {
+	std::string out;
+	out.reserve(value.size() + 8);
+	const char* hex = "0123456789abcdef";
+	for (unsigned char ch : value) {
+		switch (ch) {
+			case '"': out += "\\\""; break;
+			case '\\': out += "\\\\"; break;
+			case '\b': out += "\\b"; break;
+			case '\f': out += "\\f"; break;
+			case '\n': out += "\\n"; break;
+			case '\r': out += "\\r"; break;
+			case '\t': out += "\\t"; break;
+			default:
+				if (ch < 0x20) {
+					out += "\\u00";
+					out += hex[(ch >> 4) & 0x0f];
+					out += hex[ch & 0x0f];
+				} else {
+					out.push_back(static_cast<char>(ch));
+				}
+				break;
+		}
+	}
+	return out;
+}
+
+std::string RpcErrorBody(std::string_view message) {
+	return std::string(R"({"error":")") + JsonEscape(message) + R"("})";
+}
+
 // Drain the pending queue for a server, fulfilling all promises with the
 // given error message.  Used by Stop/GC/Shutdown to unblock in-flight
 // handlers before the server is destroyed.
 // Retries up to 3 passes to catch handlers that were blocked on queue_mutex
-// during a prior pass.  Once the queue is empty, all in-flight handlers
-// have returned  - safe to destroy the server.
-static void DrainPendingQueue(RpcServerCtx* ctx, const char* error_msg) {
+// during a prior pass. Active handlers that race after these passes observe
+// alive=false before enqueueing, or time out with their own canceled request.
+static void DrainPendingQueue(RpcServerCtx* ctx, const std::string& error_body) {
 	for (int pass = 0; pass < 3; ++pass) {
-		std::vector<std::unique_ptr<PendingRpcCall>> batch;
+		std::vector<std::shared_ptr<PendingRpcCall>> batch;
 		{
 			std::lock_guard<std::mutex> lock(ctx->queue_mutex);
 			batch.swap(ctx->pending);
 		}
 		if (batch.empty()) break;
 		for (auto& req : batch) {
-			try { req->promise.set_value(error_msg); } catch (...) {}
+			req->canceled.store(true, std::memory_order_release);
+			try { req->promise.set_value(error_body); } catch (...) {}
 		}
 		// Yield between passes so in-flight handlers blocked on
 		// queue_mutex have a chance to push their requests.
 		if (pass < 2) std::this_thread::yield();
+	}
+}
+
+static void CancelPendingCall(
+		RpcServerCtx* ctx,
+		const std::shared_ptr<PendingRpcCall>& req) {
+	req->canceled.store(true, std::memory_order_release);
+	std::lock_guard<std::mutex> lock(ctx->queue_mutex);
+	for (auto it = ctx->pending.begin(); it != ctx->pending.end(); ++it) {
+		if (it->get() == req.get()) {
+			ctx->pending.erase(it);
+			return;
+		}
 	}
 }
 
@@ -214,7 +262,7 @@ int l_server_register_service(lua_State* L) {
 											   const std::string& body) -> std::string {
 			auto captured = weak_ctx.lock();
 			if (!captured || !captured->alive.load(std::memory_order_acquire))
-				return R"({"error":"server stopped"})";
+				return RpcErrorBody("server stopped");
 
 			struct DispatchGuard {
 				RpcServerCtx* ctx;
@@ -225,7 +273,7 @@ int l_server_register_service(lua_State* L) {
 			captured->active_dispatches.fetch_add(1, std::memory_order_acq_rel);
 			DispatchGuard guard{captured.get()};
 
-			auto req = std::make_unique<PendingRpcCall>();
+			auto req = std::make_shared<PendingRpcCall>();
 			req->service = svc;
 			req->method = method;
 			req->body = body;
@@ -233,13 +281,25 @@ int l_server_register_service(lua_State* L) {
 
 			{
 				std::lock_guard<std::mutex> lock(captured->queue_mutex);
-				captured->pending.push_back(std::move(req));
+				if (!captured->alive.load(std::memory_order_acquire)) {
+					return RpcErrorBody("server stopped");
+				}
+				captured->pending.push_back(req);
 			}
 
 			auto status = future.wait_for(std::chrono::seconds(5));
-			if (status == std::future_status::timeout)
-				return R"({"error":"rpc handler timed out"})";
-			return future.get();
+			if (status == std::future_status::timeout) {
+				CancelPendingCall(captured.get(), req);
+				return RpcErrorBody("rpc handler timed out");
+			}
+
+			try {
+				return future.get();
+			} catch (const std::exception& e) {
+				return RpcErrorBody(e.what());
+			} catch (...) {
+				return RpcErrorBody("rpc handler failed");
+			}
 		});
 
 	auto* logger = GetLogger();
@@ -287,7 +347,7 @@ int l_server_stop(lua_State* L) {
 	}
 	ctx->service_callbacks.clear();
 
-	DrainPendingQueue(ctx, R"({"error":"server stopped"})");
+	DrainPendingQueue(ctx, RpcErrorBody("server stopped"));
 	StopRpcServerObject(ctx);
 
 	lua_pushnil(L);
@@ -325,7 +385,7 @@ int l_server_gc(lua_State* L) {
 	}
 	ctx->service_callbacks.clear();
 
-	DrainPendingQueue(ctx, R"({"error":"gc"})");
+	DrainPendingQueue(ctx, RpcErrorBody("gc"));
 	StopRpcServerObject(ctx);
 
 	lua_pushnil(L);
@@ -366,11 +426,11 @@ int l_client_call(lua_State* L) {
 	auto resp = ctx->client->CallSync(service, method, args, timeout_ms);
 
 	if (resp.success) {
-		lua_pushstring(L, resp.body.c_str());
+		lua_pushlstring(L, resp.body.data(), resp.body.size());
 		lua_pushnil(L);
 	} else {
 		lua_pushnil(L);
-		lua_pushstring(L, resp.error_message.c_str());
+		lua_pushlstring(L, resp.error_message.data(), resp.error_message.size());
 	}
 	return 2;
 }
@@ -390,6 +450,11 @@ int l_client_call_async(lua_State* L) {
 	const char* method = luaL_checkstring(L, 3);
 	const char* args = luaL_optstring(L, 4, "{}");
 	luaL_checktype(L, 5, LUA_TFUNCTION);
+	lua_Integer timeout_arg = luaL_optinteger(L, 6, 5000);
+	if (timeout_arg < 0 || timeout_arg > std::numeric_limits<int>::max()) {
+		return PushRpcError(L, "timeout_ms out of range");
+	}
+	int timeout_ms = static_cast<int>(timeout_arg);
 
 	// Store callback in registry for main-thread invocation.
 	lua_pushvalue(L, 5);
@@ -415,7 +480,8 @@ int l_client_call_async(lua_State* L) {
 			}
 			// If captured is null the client was destroyed; cb_ref is
 			// released by the destruction path (stop/gc/shutdown).
-		});
+		},
+		timeout_ms);
 
 	lua_pushboolean(L, 1);
 	return 1;
@@ -454,9 +520,13 @@ int l_client_set_send_callback(lua_State* L) {
 		{
 			int msgh = PushLuaErrorHandlerForCall(captured_L, 4);
 			if (lua_pcall(captured_L, 4, 0, msgh) != LUA_OK) {
+				const char* err = lua_tostring(captured_L, -1);
+				std::string message = err ? err : "lua send callback error";
 				auto* logger = GetLogger();
 				ENGINE_LOG_ERROR(logger, "RpcClient: send callback error: {}",
-							 lua_tostring(captured_L, -1));
+							 message);
+				lua_settop(captured_L, base_top);
+				throw std::runtime_error(message);
 			}
 		}
 		lua_settop(captured_L, base_top);
@@ -711,19 +781,23 @@ void UpdateRpcBindings(ScriptVM& vm) {
 		auto* ctx = ctx_sp.get();
 		if (ctx->disposed) continue;
 
-		std::vector<std::unique_ptr<PendingRpcCall>> batch;
+		std::vector<std::shared_ptr<PendingRpcCall>> batch;
 		{
 			std::lock_guard<std::mutex> lock(ctx->queue_mutex);
 			batch.swap(ctx->pending);
 		}
 
 		for (auto& req : batch) {
+			if (!req || req->canceled.load(std::memory_order_acquire)) {
+				continue;
+			}
+
 			// Check time budget  - stop processing if we've used >5ms.
 			// Re-enqueue remaining items so their promises are NOT
 			// destroyed (which would throw future_error in the
 			// waiting transport thread).
 			if (std::chrono::steady_clock::now() - budget_start >= kMaxBudget) {
-				std::vector<std::unique_ptr<PendingRpcCall>> leftover(
+				std::vector<std::shared_ptr<PendingRpcCall>> leftover(
 					std::make_move_iterator(batch.begin() + (&req - batch.data())),
 					std::make_move_iterator(batch.end()));
 				{
@@ -735,7 +809,7 @@ void UpdateRpcBindings(ScriptVM& vm) {
 				return;
 			}
 
-			std::string result = R"({"error":"service not found"})";
+			std::string result = RpcErrorBody("service not found");
 
 			auto it = ctx->service_callbacks.find(req->service);
 			if (it != ctx->service_callbacks.end() && it->second != LUA_NOREF) {
@@ -756,7 +830,7 @@ void UpdateRpcBindings(ScriptVM& vm) {
 					}
 				} else {
 					const char* err = lua_tostring(L, -1);
-					result = std::string(R"({"error":")") + (err ? err : "lua error") + R"("})";
+					result = RpcErrorBody(err ? err : "lua error");
 					auto* logger = GetLogger();
 					ENGINE_LOG_ERROR(logger,
 						"RPC handler error in service [{}]: {}",
@@ -765,7 +839,9 @@ void UpdateRpcBindings(ScriptVM& vm) {
 				lua_settop(L, base_top);
 			}
 
-			try { req->promise.set_value(result); } catch (...) {}
+			if (!req->canceled.load(std::memory_order_acquire)) {
+				try { req->promise.set_value(result); } catch (...) {}
+			}
 		}
 	}
 }
@@ -793,7 +869,7 @@ void ShutdownRpcBindings(ScriptVM& vm) {
 		}
 		ctx->service_callbacks.clear();
 
-		DrainPendingQueue(ctx, R"({"error":"shutdown"})");
+		DrainPendingQueue(ctx, RpcErrorBody("shutdown"));
 		StopRpcServerObject(ctx);
 
 		if (ctx->instance_ref != LUA_NOREF) {

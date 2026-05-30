@@ -272,6 +272,26 @@ TEST_CASE("Lua callback error is propagated as JSON error body", "[rpc_bind][err
 	REQUIRE(resp.body.find("intentional test error") != std::string::npos);
 }
 
+TEST_CASE("Lua callback error body escapes JSON string content", "[rpc_bind][error]") {
+	RpcBindFixture f;
+
+	REQUIRE(f.RunLua(
+		"s = rpc.new_server()\n"
+		"s:register_service('BadJsonSvc', function(svc, m, b)\n"
+		"  error('bad \"quote\"')\n"
+		"end)\n"));
+
+	auto* L = f.vm.GetState();
+	lua_getglobal(L, "s");
+	auto* server = GetServer(L);
+	lua_pop(L, 1);
+	REQUIRE(server != nullptr);
+
+	auto resp = SimulateRequest(f, server, "BadJsonSvc", "crash");
+	REQUIRE(resp.success == true);
+	REQUIRE(resp.body.find("\\\"quote\\\"") != std::string::npos);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Server: stop rejects in-flight handler
 // ═══════════════════════════════════════════════════════════════════════════
@@ -482,6 +502,49 @@ TEST_CASE("client call with send_callback succeeds when response injected", "[rp
 		"return sent.svc .. ',' .. sent.mtd .. ',' .. sent.body", result));
 	REQUIRE(result.find("RemoteSvc,RemoteMethod") != std::string::npos);
 	REQUIRE(result.find("{\"a\":1}") != std::string::npos);
+}
+
+TEST_CASE("client call returns send callback errors without waiting for timeout", "[rpc_bind][client]") {
+	RpcBindFixture f;
+	std::string result;
+	REQUIRE(f.RunLuaResult(
+		"c = rpc.new_client()\n"
+		"c:set_send_callback(function(msgid, svc, mtd, body)\n"
+		"  error('send failed \"closed\"')\n"
+		"end)\n"
+		"local body, err = c:call('RemoteSvc', 'RemoteMethod', '{}', 1000)\n"
+		"return tostring(body) .. ',' .. tostring(err)", result));
+	REQUIRE(result.find("nil") != std::string::npos);
+	REQUIRE(result.find("transport send failed") != std::string::npos);
+	REQUIRE(result.find("closed") != std::string::npos);
+}
+
+TEST_CASE("client call preserves binary response body", "[rpc_bind][client]") {
+	RpcBindFixture f;
+	REQUIRE(f.RunLua(
+		"c = rpc.new_client()\n"
+		"c:set_send_callback(function(msgid, svc, mtd, body) end)\n"));
+
+	auto* L = f.vm.GetState();
+	lua_getglobal(L, "c");
+	auto* client = script::RpcBind_GetClient(L, -1);
+	lua_pop(L, 1);
+	REQUIRE(client != nullptr);
+
+	std::thread responder([client]() {
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		client->OnResponse(RpcResponse::Ok(1, std::string("a\0b", 3)));
+	});
+
+	std::string result;
+	bool ok = f.RunLuaResult(
+		"local body, err = c:call('RemoteSvc', 'RemoteMethod', '{}', 1000)\n"
+		"if err then return 'err:' .. err end\n"
+		"return body", result);
+	responder.join();
+
+	REQUIRE(ok);
+	REQUIRE(result == std::string("a\0b", 3));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -745,22 +808,16 @@ TEST_CASE("client call_async timeout invokes callback with error", "[rpc_bind][c
 		"c:call_async('Svc', 'Method', '{}', function(body, err)\n"
 		"  timeout_body = tostring(body)\n"
 		"  timeout_err = tostring(err)\n"
-		"end)\n"));
+		"end, 1)\n"));
 
-	// Manually trigger timeout via ProcessTimeouts, then drain.
-	auto* L = f.vm.GetState();
-	lua_getglobal(L, "c");
-	auto* client = script::RpcBind_GetClient(L, -1);
-	lua_pop(L, 1);
-	REQUIRE(client != nullptr);
-
-	// Force the pending request to expire by calling ProcessTimeouts.
-	// The default deadline is 5s, so this won't actually time out.
-	// Instead, test that ProcessTimeouts + UpdateRpcBindings is safe.
+	std::this_thread::sleep_for(std::chrono::milliseconds(2));
 	REQUIRE_NOTHROW(script::UpdateRpcBindings(f.vm));
 
-	// Clean up.
-	REQUIRE(f.RunLua("c:stop()\n"));
+	std::string body, err;
+	REQUIRE(f.RunLuaResult("return timeout_body", body));
+	REQUIRE(body == "nil");
+	REQUIRE(f.RunLuaResult("return timeout_err", err));
+	REQUIRE(err == "timeout");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
