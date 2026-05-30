@@ -11,6 +11,7 @@ DATABASE_SERVICE_INTERNAL_ACCESS before including this header."
 #if defined(ENGINE_MONGODB_ENABLED)
 
 #include <atomic>
+#include <chrono>
 #include <concurrentqueue.h>
 #include <memory>
 #include <string>

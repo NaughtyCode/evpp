@@ -3,6 +3,8 @@
 #include "runtime/database/data_service/database_service.h"
 
 #include <cstdio>
+#include <mutex>
+#include <shared_mutex>
 
 #define DATABASE_SERVICE_INTERNAL_ACCESS
 #include "runtime/core/log/log.h"
@@ -12,6 +14,65 @@
 #include "runtime/database/mongo/mongo_uri.h"
 
 namespace engine {
+
+namespace {
+
+bool ValidateConfig(const DbServiceConfig& config) {
+	auto* logger = GetLogger();
+
+	if (config.thread_pool.thread_count < 1) {
+		ENGINE_LOG_ERROR(logger,
+						 "DatabaseService: thread_count must be >= 1 (got {})",
+						 config.thread_pool.thread_count);
+		return false;
+	}
+
+	if (config.connection_pool.max_pool_size < config.thread_pool.thread_count) {
+		ENGINE_LOG_ERROR(logger,
+						 "DatabaseService: max_pool_size ({}) must be >= thread_count ({})",
+						 config.connection_pool.max_pool_size,
+						 config.thread_pool.thread_count);
+		return false;
+	}
+
+	if (config.thread_pool.request_queue_size < 1) {
+		ENGINE_LOG_ERROR(logger,
+						 "DatabaseService: request_queue_size must be >= 1 (got {})",
+						 config.thread_pool.request_queue_size);
+		return false;
+	}
+
+	if (config.thread_pool.response_queue_size < 1) {
+		ENGINE_LOG_ERROR(logger,
+						 "DatabaseService: response_queue_size must be >= 1 (got {})",
+						 config.thread_pool.response_queue_size);
+		return false;
+	}
+
+	if (config.thread_pool.target_fps < 0) {
+		ENGINE_LOG_ERROR(logger,
+						 "DatabaseService: target_fps must be >= 0 (got {})",
+						 config.thread_pool.target_fps);
+		return false;
+	}
+
+	if (config.thread_pool.max_requests_per_frame < 0) {
+		ENGINE_LOG_ERROR(logger,
+						 "DatabaseService: max_requests_per_frame must be >= 0 (got {})",
+						 config.thread_pool.max_requests_per_frame);
+		return false;
+	}
+
+	if (config.connection_pool.wait_queue_timeout_ms <= 0) {
+		ENGINE_LOG_WARN(logger,
+						"DatabaseService: wait_queue_timeout_ms <= 0 disables pool Pop timeout; "
+						"shutdown can block if a worker waits for a client");
+	}
+
+	return true;
+}
+
+}  // namespace
 
 // Singleton
 
@@ -34,22 +95,28 @@ DatabaseService::~DatabaseService() = default;
 // and prevents Stop() from hanging during Shutdown.
 
 bool DatabaseService::Initialize(const DbServiceConfig& config, const mongo::MongoUri& uri) {
+	std::unique_lock<std::shared_mutex> lock(state_mutex_);
+
 	if (running_.load(std::memory_order_acquire)) {
-		ENGINE_LOG_WARN(GetLogger(), "DatabaseService: already initialized\n");
+		ENGINE_LOG_WARN(GetLogger(), "DatabaseService: already initialized");
 		return false;
 	}
 
 	// ── Validation (design §4: Initialize preconditions) ───────────────
-	if (config.thread_pool.thread_count < 1) {
-		ENGINE_LOG_ERROR(GetLogger(), "DatabaseService: thread_count must be >= 1 (got {})\n", config.thread_pool.thread_count);
+	if (!threads_.empty() || pool_) {
+		ENGINE_LOG_WARN(GetLogger(), "DatabaseService: initialize called with stale state; call Shutdown first");
 		return false;
 	}
 
-	if (config.connection_pool.max_pool_size < config.thread_pool.thread_count) {
-		ENGINE_LOG_ERROR(GetLogger(), "DatabaseService: max_pool_size ({}) < thread_count ({}), Pop() may timeout", config.connection_pool.max_pool_size, 					 config.thread_pool.thread_count);
-	}
+	if (!ValidateConfig(config)) return false;
 
 	config_ = config;
+	next_thread_.store(0, std::memory_order_relaxed);
+	poll_cursor_ = 0;
+	total_enqueued_.store(0, std::memory_order_relaxed);
+	total_dropped_.store(0, std::memory_order_relaxed);
+	total_completed_.store(0, std::memory_order_relaxed);
+	total_errors_.store(0, std::memory_order_relaxed);
 
 	// ── Prepare URI with waitQueueTimeoutMS (design §13) ───────────────
 	//
@@ -111,7 +178,9 @@ bool DatabaseService::Initialize(const DbServiceConfig& config, const mongo::Mon
 //   5. Clear thread vector.
 
 void DatabaseService::Shutdown() {
-	if (!running_.load(std::memory_order_acquire)) return;
+	std::unique_lock<std::shared_mutex> lock(state_mutex_);
+
+	if (!running_.load(std::memory_order_acquire) && threads_.empty() && !pool_) return;
 
 	running_.store(false, std::memory_order_release);
 
@@ -155,10 +224,18 @@ void DatabaseService::Shutdown() {
 int DatabaseService::NextThreadIndex() {
 	int n = static_cast<int>(threads_.size());
 	if (n == 0) return 0;
-	return next_thread_.fetch_add(1, std::memory_order_relaxed) % n;
+	return static_cast<int>(next_thread_.fetch_add(1, std::memory_order_relaxed) %
+							static_cast<uint64_t>(n));
 }
 
 bool DatabaseService::SendRequest(DbRequest&& request) {
+	if (request.operation == DbOperation::kNoOp) {
+		RecordDropped();
+		return false;
+	}
+
+	std::shared_lock<std::shared_mutex> lock(state_mutex_);
+
 	if (!running_.load(std::memory_order_acquire)) return false;
 	if (threads_.empty()) return false;
 
@@ -182,6 +259,8 @@ bool DatabaseService::SendRequest(DbRequest&& request) {
 // no mutex needed.
 
 std::unique_ptr<DbResponse> DatabaseService::PollResponse() {
+	std::shared_lock<std::shared_mutex> lock(state_mutex_);
+
 	int n = static_cast<int>(threads_.size());
 	if (n == 0) return nullptr;
 
@@ -199,6 +278,9 @@ std::unique_ptr<DbResponse> DatabaseService::PollResponse() {
 // Status queries
 
 bool DatabaseService::IsHealthy() const {
+	std::shared_lock<std::shared_mutex> lock(state_mutex_);
+
+	if (!running_.load(std::memory_order_acquire) || threads_.empty()) return false;
 	for (const auto& t : threads_) {
 		if (!t->IsHealthy()) return false;
 	}
@@ -206,6 +288,7 @@ bool DatabaseService::IsHealthy() const {
 }
 
 int DatabaseService::GetThreadCount() const {
+	std::shared_lock<std::shared_mutex> lock(state_mutex_);
 	return static_cast<int>(threads_.size());
 }
 

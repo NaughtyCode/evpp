@@ -104,6 +104,11 @@ set_tests_properties(unit.hotreload PROPERTIES LABELS "unit" WORKING_DIRECTORY "
 
 # ── Database ORM tests (only if MongoDB is enabled) ─────────────────
 if(ENGINE_MONGODB_ENABLED)
+    add_unit_test(test_data_service database/test_data_service.cpp)
+    target_sources(test_data_service PRIVATE ${ENGINE_ROOT}/runtime/database/data_service/db_script_vm.cc)
+    add_test(NAME unit.database.data_service COMMAND test_data_service)
+    set_tests_properties(unit.database.data_service PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
     add_unit_test(test_orm database/test_orm.cpp)
     add_test(NAME unit.database.orm COMMAND test_orm)
     set_tests_properties(unit.database.orm PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")

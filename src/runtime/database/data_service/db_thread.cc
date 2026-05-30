@@ -4,10 +4,13 @@
 #include "runtime/database/data_service/db_thread.h"
 
 #include <chrono>
+#include <utility>
+#include <vector>
 
 #include "runtime/config/config.h"
 #include "runtime/core/log/log.h"
 #include "runtime/core/log/log_macros.h"
+#include "runtime/database/data_service/database_service.h"
 #include "runtime/database/data_service/db_script_vm.h"
 #include "runtime/database/mongo/mongo_bson.h"
 #include "runtime/database/mongo/mongo_bson_ext.h"
@@ -37,8 +40,10 @@ namespace {
 
 static constexpr uint32_t kMaxCursorDocuments = 1000;
 
-std::string SerializeCursor(mongo::MongoCursor* cursor, int32_t skip,
-							 uint32_t max_documents = kMaxCursorDocuments) {
+bool SerializeCursor(mongo::MongoCursor* cursor,
+					 int32_t skip,
+					 DbResponse* resp,
+					 uint32_t max_documents = kMaxCursorDocuments) {
 	std::string result = "[";
 	bool first = true;
 	uint32_t count = 0;
@@ -61,7 +66,60 @@ std::string SerializeCursor(mongo::MongoCursor* cursor, int32_t skip,
 		++count;
 	}
 	result += "]";
-	return result;
+
+	mongo::MongoError err;
+	if (cursor->HasError(&err)) {
+		resp->success = false;
+		resp->error_code = err.Code();
+		resp->error_message = err.Message();
+		return false;
+	}
+
+	resp->result_data = std::move(result);
+	resp->success = true;
+	return true;
+}
+
+bool ValidateBsonArrayOfDocuments(const mongo::BsonDocument& array_doc,
+								  const char* field_name,
+								  DbResponse* resp) {
+	mongo::BsonIter iter(array_doc);
+	size_t expected_index = 0;
+	while (iter.Next()) {
+		const char* key = iter.Key();
+		const std::string expected_key = std::to_string(expected_index);
+		if (!key || expected_key != key) {
+			resp->success = false;
+			resp->error_message =
+				std::string(field_name) + " must be a JSON array, not a document";
+			return false;
+		}
+
+		if (iter.Type() != static_cast<int>(mongo::BsonType::kDocument)) {
+			resp->success = false;
+			resp->error_message =
+				std::string(field_name) + " must contain only JSON documents";
+			return false;
+		}
+
+		++expected_index;
+	}
+
+	return true;
+}
+
+void SleepResponsive(std::chrono::steady_clock::duration duration,
+					 const std::atomic<bool>& running) {
+	const auto deadline = std::chrono::steady_clock::now() + duration;
+	const auto max_sleep = std::chrono::milliseconds(1);
+
+	while (running.load(std::memory_order_acquire)) {
+		const auto now = std::chrono::steady_clock::now();
+		if (now >= deadline) return;
+
+		const auto remaining = deadline - now;
+		std::this_thread::sleep_for(remaining < max_sleep ? remaining : max_sleep);
+	}
 }
 
 // Parse a JSON string into a BsonDocument, returning true on success.
@@ -205,6 +263,7 @@ std::unique_ptr<DbResponse> DBThread::DequeueResponse() {
 
 void DBThread::EnqueueResponse(DbResponse&& resp) {
 	resp.status = DbRequestStatus::kCompleted;
+	const bool success = resp.success;
 
 	// Drop oldest responses while the queue is at capacity.  The retry
 	// counter guards against a theoretical infinite loop when size_approx()
@@ -220,10 +279,21 @@ void DBThread::EnqueueResponse(DbResponse&& resp) {
 							"DBThread[{}]: response queue full, dropped response [id={}]",
 							index_,
 							dropped.request_id);
+			DatabaseService::Instance().RecordDropped();
 		}
 		++retries;
 	}
-	response_queue_.enqueue(std::move(resp));
+
+	if (!response_queue_.enqueue(std::move(resp))) {
+		ENGINE_LOG_ERROR(logger_, "DBThread[{}]: failed to enqueue response", index_);
+		DatabaseService::Instance().RecordDropped();
+		return;
+	}
+
+	DatabaseService::Instance().RecordCompleted();
+	if (!success) {
+		DatabaseService::Instance().RecordError();
+	}
 }
 
 // EventLoop — the DBThread's main function (§6.1)
@@ -351,7 +421,8 @@ void DBThread::EventLoop() {
 
 			try {
 				DbRequest req;
-				while (request_queue_.try_dequeue(req)) {
+				while (running_.load(std::memory_order_acquire) &&
+					   request_queue_.try_dequeue(req)) {
 					if (req.operation != DbOperation::kNoOp) {
 						ProcessRequest(req);
 					}
@@ -374,6 +445,8 @@ void DBThread::EventLoop() {
 				break;
 			}
 
+			if (!running_.load(std::memory_order_acquire)) break;
+
 			frame_count_++;
 
 			// ── Per-frame Lua callback ────────────────────────────
@@ -387,13 +460,15 @@ void DBThread::EventLoop() {
 				script_vm_.CallFrameCallback(frame_count_, delta);
 			}
 
+			if (!running_.load(std::memory_order_acquire)) break;
 			timer_mgr_->update();
+			if (!running_.load(std::memory_order_acquire)) break;
 
 			// ── Frame rate control ─────────────────────────────────
 			if (config_.thread_pool.target_fps > 0) {
 				auto elapsed = std::chrono::steady_clock::now() - frame_start;
 				if (elapsed < frame_interval) {
-					std::this_thread::sleep_for(frame_interval - elapsed);
+					SleepResponsive(frame_interval - elapsed, running_);
 				} else if (processed > 0 && elapsed > frame_interval * 2) {
 					ENGINE_LOG_WARN(
 						logger_,
@@ -409,7 +484,7 @@ void DBThread::EventLoop() {
 				// Unlimited mode: minimal sleep when idle to avoid
 				// busy-wait. 1ms keeps latency low while preventing
 				// 100% CPU spin on an empty queue.
-				std::this_thread::sleep_for(std::chrono::microseconds(1000));
+				SleepResponsive(std::chrono::microseconds(1000), running_);
 			}
 		}
 	} catch (const std::exception& e) {
@@ -593,8 +668,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 				break;
 			}
 			try {
-				resp.result_data = SerializeCursor(cursor, 0);
-				resp.success = true;
+				SerializeCursor(cursor, 0, &resp);
 			} catch (...) {
 				cursor->Destroy();
 				throw;
@@ -617,7 +691,14 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 				cursor->SetLimit(1);
 				mongo::BsonDocument doc;
 				if (cursor->Next(&doc)) resp.result_data = doc.ToJson();
-				resp.success = true;
+				mongo::MongoError err;
+				if (cursor->HasError(&err)) {
+					resp.success = false;
+					resp.error_code = err.Code();
+					resp.error_message = err.Message();
+				} else {
+					resp.success = true;
+				}
 			} catch (...) {
 				cursor->Destroy();
 				throw;
@@ -661,9 +742,9 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 
 			mongo::BsonDocument arr;
 			if (!ParseJsonDoc(req.bson_data, "bson_data", &arr, &resp)) break;
+			if (!ValidateBsonArrayOfDocuments(arr, "bson_data", &resp)) break;
 			mongo::BsonIter iter(arr);
 			while (iter.Next()) {
-				if (iter.Type() != static_cast<int>(mongo::BsonType::kDocument)) continue;
 				uint32_t len = 0;
 				const uint8_t* data = nullptr;
 				iter.AsDocument(&len, &data);
@@ -752,8 +833,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 				resp.success = false;
 				resp.error_message =
 					"Empty filter rejected: set allow_empty_filter=true to confirm";
-				EnqueueResponse(std::move(resp));
-				return;
+				break;
 			}
 			mongo::BsonDocument reply;
 			mongo::MongoError err;
@@ -780,8 +860,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 				resp.error_message =
 					"Empty filter rejected: set allow_empty_filter=true to confirm "
 					"intentional full-collection delete";
-				EnqueueResponse(std::move(resp));
-				return;
+				break;
 			}
 			mongo::BsonDocument reply;
 			mongo::MongoError err;
@@ -832,6 +911,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 			}
 			mongo::BsonDocument pipeline;
 			if (!ParseJsonDoc(pipe_json, pipe_field, &pipeline, &resp)) break;
+			if (!ValidateBsonArrayOfDocuments(pipeline, pipe_field, &resp)) break;
 			auto* cursor = coll->Aggregate(pipeline, nullptr, nullptr);
 			if (!cursor) {
 				resp.success = false;
@@ -839,8 +919,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 				break;
 			}
 			try {
-				resp.result_data = SerializeCursor(cursor, 0);
-				resp.success = true;
+				SerializeCursor(cursor, 0, &resp);
 			} catch (...) {
 				cursor->Destroy();
 				throw;

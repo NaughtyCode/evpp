@@ -3,6 +3,8 @@
 #include "runtime/database/data_service/db_service_main_bind.h"
 
 #include <cstring>
+#include <cstdint>
+#include <limits>
 
 #include "runtime/database/data_service/database_service.h"
 #include "runtime/vm/vm.h"
@@ -129,6 +131,12 @@ int l_db_send_request(lua_State* L) {
 	}
 	lua_pop(L, 1);
 
+	if (req.operation == DbOperation::kNoOp) {
+		lua_pushboolean(L, 0);
+		lua_pushstring(L, "db_send_request: noop is an internal operation");
+		return 2;
+	}
+
 	// database
 	lua_getfield(L, 1, "database");
 	if (lua_isstring(L, -1)) {
@@ -168,7 +176,7 @@ int l_db_send_request(lua_State* L) {
 	lua_getfield(L, 1, "limit");
 	if (lua_isinteger(L, -1)) {
 		lua_Integer v = lua_tointeger(L, -1);
-		if (v < 0 || v > INT32_MAX) {
+		if (v < 0 || v > std::numeric_limits<int32_t>::max()) {
 			lua_pop(L, 1);
 			lua_pushboolean(L, 0);
 			lua_pushstring(L, "db_send_request: limit must be in [0, 2147483647]");
@@ -187,7 +195,7 @@ int l_db_send_request(lua_State* L) {
 	lua_getfield(L, 1, "skip");
 	if (lua_isinteger(L, -1)) {
 		lua_Integer v = lua_tointeger(L, -1);
-		if (v < 0 || v > INT32_MAX) {
+		if (v < 0 || v > std::numeric_limits<int32_t>::max()) {
 			lua_pop(L, 1);
 			lua_pushboolean(L, 0);
 			lua_pushstring(L, "db_send_request: skip must be in [0, 2147483647]");
@@ -198,6 +206,18 @@ int l_db_send_request(lua_State* L) {
 		lua_pop(L, 1);
 		lua_pushboolean(L, 0);
 		lua_pushstring(L, "db_send_request: skip must be an integer");
+		return 2;
+	}
+	lua_pop(L, 1);
+
+	// allow_empty_filter
+	lua_getfield(L, 1, "allow_empty_filter");
+	if (lua_isboolean(L, -1)) {
+		req.allow_empty_filter = lua_toboolean(L, -1) != 0;
+	} else if (!lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+		lua_pushboolean(L, 0);
+		lua_pushstring(L, "db_send_request: allow_empty_filter must be boolean");
 		return 2;
 	}
 	lua_pop(L, 1);

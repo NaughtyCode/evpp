@@ -46,6 +46,7 @@ namespace script {
 //       script       = <string>  (required for "execute_script")
 //       limit        = <int>     (kFind: max documents, 0 = unlimited)
 //       skip         = <int>     (kFind: skip first N documents)
+//       allow_empty_filter = <bool> (delete ops: explicit "{}" confirmation)
 //
 //     Operation names (string form, case-insensitive):
 //       "find"           → kFind
@@ -60,7 +61,6 @@ namespace script {
 //       "aggregate"      → kAggregate
 //       "command"        → kCommand
 //       "execute_script" → kExecuteScript
-//       "noop"           → kNoOp
 //     Integer values matching the DbOperation enum are also accepted.
 //
 //   db_poll_response()    → table | nil

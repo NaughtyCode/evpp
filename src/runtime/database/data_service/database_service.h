@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <shared_mutex>
 #include <vector>
 
 #include "runtime/core/engine_api.h"
@@ -158,6 +159,7 @@ class CLOUD_ENGINE_API DatabaseService {
 	// the common case is a single MT caller.
 	int NextThreadIndex();
 
+	mutable std::shared_mutex state_mutex_;
 	std::atomic<uint64_t> next_thread_{0};
 
 	// pool_ MUST be declared BEFORE threads_ (LIFO destruction order:

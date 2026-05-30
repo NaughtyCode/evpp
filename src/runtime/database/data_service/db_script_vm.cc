@@ -332,6 +332,7 @@ bool DBScriptVM::AreCoreSlotsValid() const {
 
 void DBScriptVM::CallFrameCallback(int64_t frame_count, double delta_seconds) {
 	auto L = GetState();
+	const int base_top = lua_gettop(L);
 
 	lua_getglobal(L, "on_db_frame");
 	if (!lua_isfunction(L, -1)) {
@@ -356,8 +357,11 @@ void DBScriptVM::CallFrameCallback(int64_t frame_count, double delta_seconds) {
 							 thread->Index(),
 							 err ? err : "unknown");
 		}
-		lua_pop(L, 1);
+		lua_settop(L, base_top);
+		return;
 	}
+
+	lua_settop(L, base_top);
 }
 
 }  // namespace engine
