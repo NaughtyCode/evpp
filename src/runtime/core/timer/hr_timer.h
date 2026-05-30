@@ -441,6 +441,7 @@ class HrTimerManager {
 			// timer, so we MUST NOT access timer-> after it returns.
 			TimerMode captured_mode = timer->mode_;
 			bool was_repeating = mode_is_repeating(captured_mode);
+			auto callback = timer->callback_;
 
 			// Unlock during callback to avoid deadlocks when the callback
 			// re-enters the timer system.  Re-lock afterwards so the next
@@ -452,7 +453,7 @@ class HrTimerManager {
 			int64_t latency = time_delta_ns(now, timer->expires());
 			stats_.record_expire(latency);
 			lock.unlock();
-			result = timer->callback_ ? timer->callback_(timer) : TimerResult::kNoRestart;
+			result = callback ? callback(timer) : TimerResult::kNoRestart;
 			lock.lock();
 
 			processed++;

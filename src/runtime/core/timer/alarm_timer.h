@@ -101,6 +101,18 @@ class Alarm {
 	bool is_armed() const {
 		return state_ == kStateEnqueued;
 	}
+	bool is_firing() const {
+		return state_ == kStateFiring;
+	}
+	bool is_cancelled() const {
+		return state_ == kStateCancelled;
+	}
+	TimerState state() const {
+		if (state_ == kStateEnqueued) return TimerState::kArmed;
+		if (state_ == kStateFiring) return TimerState::kFiring;
+		if (state_ == kStateCancelled) return TimerState::kCancelled;
+		return TimerState::kInactive;
+	}
 	void* data() const {
 		return data_;
 	}
@@ -124,6 +136,7 @@ class Alarm {
 
 	// Called when the alarm fires
 	void fire(TimePoint now) {
+		if (state_ == kStateCancelled) return;
 		state_ = kStateFiring;
 		if (callback_) {
 			callback_(this, now);
@@ -137,6 +150,7 @@ class Alarm {
 	static constexpr int kStateInactive = 0x00;
 	static constexpr int kStateEnqueued = 0x01;
 	static constexpr int kStateFiring = 0x02;
+	static constexpr int kStateCancelled = 0x03;
 
 	TimePoint expires_{0};
 	AlarmType type_ = AlarmType::kBoottime;
@@ -208,10 +222,14 @@ class AlarmTimerManager {
 	bool try_to_cancel(Alarm* alarm) {
 		assert(alarm);
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
-		if (alarm->state_ == Alarm::kStateFiring) return false;
+		if (alarm->state_ == Alarm::kStateFiring) {
+			alarm->state_ = Alarm::kStateCancelled;
+			stats_.record_cancel();
+			return true;
+		}
 		if (!alarm->is_armed()) return false;
 		remove_locked(alarm);
-		alarm->state_ = Alarm::kStateInactive;
+		alarm->state_ = Alarm::kStateCancelled;
 		stats_.record_cancel();
 		return true;
 	}
@@ -219,9 +237,14 @@ class AlarmTimerManager {
 	bool cancel(Alarm* alarm) {
 		assert(alarm);
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		if (alarm->state_ == Alarm::kStateFiring) {
+			alarm->state_ = Alarm::kStateCancelled;
+			stats_.record_cancel();
+			return true;
+		}
 		if (!alarm->is_armed()) return false;
 		remove_locked(alarm);
-		alarm->state_ = Alarm::kStateInactive;
+		alarm->state_ = Alarm::kStateCancelled;
 		stats_.record_cancel();
 		return true;
 	}

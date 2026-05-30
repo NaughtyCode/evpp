@@ -123,6 +123,9 @@ int l_timer_timeout(lua_State* L) {
 			}
 			if (owner) {
 				owner->ctxs.erase(id);
+				if (owner->timer_mgr) {
+					owner->timer_mgr->destroy_timer(id);
+				}
 			}
 			return TimerResult::kNoRestart;
 		});

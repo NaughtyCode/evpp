@@ -1,6 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include "timer_fixture.h"
 
+#include <atomic>
+#include <thread>
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TimerManager: lifecycle
 // ═══════════════════════════════════════════════════════════════════════════
@@ -12,6 +15,24 @@ TEST_CASE("TimerManager initialize and shutdown", "[timer][lifecycle]") {
 
     f.tm.shutdown();
     REQUIRE_FALSE(f.tm.is_initialized());
+}
+
+TEST_CASE("TimerManager binds to initializing thread", "[timer][lifecycle][thread]") {
+    engine::TimerManager tm;
+    REQUIRE_FALSE(tm.has_thread_binding());
+
+    tm.initialize();
+    REQUIRE(tm.has_thread_binding());
+    REQUIRE(tm.is_bound_to_current_thread());
+
+    std::atomic<bool> other_thread_is_owner{true};
+    std::thread other([&tm, &other_thread_is_owner]() {
+        other_thread_is_owner.store(tm.is_bound_to_current_thread());
+    });
+    other.join();
+
+    REQUIRE_FALSE(other_thread_is_owner.load());
+    tm.shutdown();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -57,6 +78,29 @@ TEST_CASE("One-shot timer destroys safely without start", "[timer][oneshot]") {
     REQUIRE_FALSE(f.tm.is_timer_active(id));
     f.tm.destroy_timer(id);
     REQUIRE(f.tm.timer_state(id) == engine::TimerState::kInactive);
+}
+
+TEST_CASE("Timer can destroy itself while firing", "[timer][oneshot][lifetime]") {
+    TimerFixture f;
+    f.Reset();
+
+    int fired = 0;
+    engine::TimerId id = 0;
+    id = f.tm.create_timer([&](engine::HrTimerNode*) {
+        ++fired;
+        f.tm.destroy_timer(id);
+        f.tm.start_timer_relative(id, std::chrono::milliseconds(1));
+        return engine::TimerResult::kNoRestart;
+    });
+    f.tm.start_timer_relative(id, std::chrono::milliseconds(10));
+
+    auto result = f.AdvanceBy(std::chrono::milliseconds(20));
+    REQUIRE(result.hrtimers_fired == 1);
+    REQUIRE(fired == 1);
+    REQUIRE(f.tm.stats().total_hrtimers == 0);
+
+    f.AdvanceBy(std::chrono::milliseconds(20));
+    REQUIRE(fired == 1);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -162,4 +206,32 @@ TEST_CASE("Create and destroy many timers", "[timer][stress]") {
     for (auto id : ids) {
         f.tm.destroy_timer(id);
     }
+}
+
+TEST_CASE("Wheel timer batch destruction is deferred safely", "[timer][wheel][lifetime]") {
+    TimerFixture f;
+    f.Reset();
+
+    int first_fired = 0;
+    int second_fired = 0;
+    engine::TimerId first = 0;
+    engine::TimerId second = 0;
+
+    first = f.tm.create_wheel_timer([&](engine::TimerWheelNode*) {
+        ++first_fired;
+        f.tm.destroy_timer(second);
+        f.tm.destroy_timer(first);
+    });
+    second = f.tm.create_wheel_timer([&](engine::TimerWheelNode*) {
+        ++second_fired;
+    });
+
+    f.tm.start_wheel_timer(first, 1);
+    f.tm.start_wheel_timer(second, 1);
+
+    auto result = f.AdvanceBy(std::chrono::milliseconds(2));
+    REQUIRE(result.wheel_timers_fired == 1);
+    REQUIRE(first_fired == 1);
+    REQUIRE(second_fired == 0);
+    REQUIRE(f.tm.stats().total_wheel_timers == 0);
 }

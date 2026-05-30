@@ -30,6 +30,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -68,8 +69,16 @@ class CLOUD_ENGINE_API TimerManager {
 	void shutdown();
 
 	bool is_initialized() const {
+		verify_thread_affinity("is_initialized");
 		return initialized_.load();
 	}
+
+	// Debug thread affinity. A TimerManager is owned by exactly one thread.
+	// initialize() binds automatically; bind_to_current_thread() is provided
+	// for code that wants to make ownership explicit before initialization.
+	void bind_to_current_thread();
+	bool has_thread_binding() const;
+	bool is_bound_to_current_thread() const;
 
 	// Main loop update — call every frame / tick
 	// Processes all expired timers across all subsystems.
@@ -175,6 +184,7 @@ class CLOUD_ENGINE_API TimerManager {
 	template <typename Rep, typename Period>
 	TimerId create_timer_for(std::chrono::duration<Rep, Period> dur,
 							 std::function<void()> callback) {
+		verify_thread_affinity("create_timer_for");
 		TimerId id = create_simple_timer(std::move(callback));
 		start_timer_relative(id, std::chrono::duration_cast<Duration>(dur));
 		return id;
@@ -296,6 +306,12 @@ class CLOUD_ENGINE_API TimerManager {
 	TimerEntry* get_entry(TimerId id);
 	const TimerEntry* get_entry(TimerId id) const;
 
+	void verify_thread_affinity(const char* api_name) const;
+	void bind_to_current_thread_if_unbound(const char* api_name) const;
+	bool is_destroy_deferred(TimerId id) const;
+	void defer_destroy(TimerId id);
+	void process_deferred_destroys();
+
 	// Internal update helpers
 	UpdateResult update_hrtimers(UpdateResult result, TimePoint now);
 	UpdateResult update_wheel(UpdateResult result);
@@ -315,6 +331,8 @@ class CLOUD_ENGINE_API TimerManager {
 	mutable std::mutex entries_mutex_;
 	std::unordered_map<TimerId, std::unique_ptr<TimerEntry>> entries_;
 	std::atomic<TimerId> next_id_{1};
+	std::vector<TimerId> deferred_destroy_ids_;
+	int update_depth_ = 0;
 
 	// Time tracking
 	TimePoint last_update_time_{0};
@@ -327,6 +345,12 @@ class CLOUD_ENGINE_API TimerManager {
 	// Statistics
 	mutable ManagerStats stats_;
 	uint64_t total_update_time_ns_ = 0;
+
+	// Debug-only ownership guard state. Stored in all builds so tests and
+	// diagnostics can query it; enforcement is compiled under H_DEBUG_MODE.
+	mutable std::mutex thread_binding_mutex_;
+	mutable bool has_thread_binding_ = false;
+	mutable std::thread::id bound_thread_id_{};
 };
 
 }  // namespace engine

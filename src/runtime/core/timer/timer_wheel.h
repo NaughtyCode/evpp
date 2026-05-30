@@ -105,6 +105,12 @@ class TimerWheelNode {
 	bool is_queued() const {
 		return state_.load() == TimerState::kArmed;
 	}
+	bool is_firing() const {
+		return state_.load() == TimerState::kFiring;
+	}
+	bool is_cancelled() const {
+		return state_.load() == TimerState::kCancelled;
+	}
 	bool is_deferrable() const {
 		return (flags_ & kFlagDeferrable) != 0;
 	}
@@ -137,11 +143,14 @@ class TimerWheelNode {
 	static constexpr uint32_t kFlagIrqSafe = 0x00200000;
 
 	void fire() {
+		if (state_.load() == TimerState::kCancelled) return;
 		state_ = TimerState::kFiring;
 		if (callback_) {
 			callback_(this);
 		}
-		state_ = TimerState::kInactive;
+		if (state_.load() == TimerState::kFiring) {
+			state_ = TimerState::kInactive;
+		}
 	}
 
 	// For bucket list management
@@ -244,6 +253,11 @@ class TimerWheel {
 	bool del_timer(TimerWheelNode* timer) {
 		assert(timer);
 		std::lock_guard<std::mutex> lock(mutex_);
+		if (timer->is_firing()) {
+			timer->state_ = TimerState::kCancelled;
+			stats_.record_cancel();
+			return true;
+		}
 		if (!timer->is_queued()) return false;
 		remove_timer_locked(timer);
 		timer->state_ = TimerState::kCancelled;
@@ -404,6 +418,7 @@ class TimerWheel {
 		for (auto* n : expired) {
 			n->clear_bucket_iterator();
 			n->bucket_index_ = -1;
+			n->state_ = TimerState::kFiring;
 		}
 		bucket.clear();
 		pending_[idx].store(0);
