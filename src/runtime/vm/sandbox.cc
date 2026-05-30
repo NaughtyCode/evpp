@@ -78,6 +78,12 @@ void luaL_openlibs_sandboxed(lua_State* L, LuaSandboxLevel level) {
 	/* ── base library — always loaded last (contains print, error, pcall, etc.) ── */
 	luaL_requiref(L, LUA_GNAME, luaopen_base, 1);
 	lua_pop(L, 1);
+	if (level == LuaSandboxLevel::Strict) {
+		lua_pushnil(L);
+		lua_setglobal(L, "dofile");
+		lua_pushnil(L);
+		lua_setglobal(L, "loadfile");
+	}
 
 	const char* level_str = "unknown";
 	switch (level) {

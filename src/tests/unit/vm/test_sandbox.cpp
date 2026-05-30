@@ -116,6 +116,12 @@ TEST_CASE("Strict: debug library is absent", "[sandbox][strict]") {
     REQUIRE(EvalBool(engine::LuaSandboxLevel::Strict, "return debug == nil"));
 }
 
+TEST_CASE("Strict: base file loaders are absent", "[sandbox][strict]") {
+    auto level = engine::LuaSandboxLevel::Strict;
+    REQUIRE(EvalBool(level, "return dofile == nil"));
+    REQUIRE(EvalBool(level, "return loadfile == nil"));
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
  * Server level — io + os allowed, no debug
  * ═══════════════════════════════════════════════════════════════════════════ */

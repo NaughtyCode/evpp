@@ -305,6 +305,26 @@ TEST_CASE("ReloadFile loads and executes a Lua script", "[hotreload][reload]") {
 	lua_pop(L, 1);
 }
 
+TEST_CASE("ReloadFile restores Lua stack after repeated successful reloads",
+          "[hotreload][reload]") {
+	TempDir tmp("hotreload_stack_test");
+	tmp.write("simple.lua", "return { value = 1 }");
+
+	ScriptVM vm;
+	ScriptReloader reloader;
+	reloader.SetTarget(&vm, {tmp.path});
+
+	lua_State* L = vm.GetState();
+	int base_top = lua_gettop(L);
+
+	REQUIRE(reloader.ReloadFile(tmp.file("simple.lua")));
+	REQUIRE(lua_gettop(L) == base_top);
+
+	tmp.write("simple.lua", "return { value = 2 }");
+	REQUIRE(reloader.ReloadFile(tmp.file("simple.lua")));
+	REQUIRE(lua_gettop(L) == base_top);
+}
+
 TEST_CASE("ReloadFile returns false for script with syntax error",
           "[hotreload][reload]") {
 	TempDir tmp("hotreload_synerr_test");

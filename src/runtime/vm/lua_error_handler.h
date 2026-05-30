@@ -90,9 +90,13 @@ inline LuaCallResult SafeCallLua(lua_State* L, LuaCallOptions opts) {
 	// func_idx <= 0 means the stack is too shallow for the claimed
 	// nargs — the "function" position doesn't exist.
 	if (func_idx <= 0 || !lua_isfunction(L, func_idx)) {
-		// Pop whatever args were pushed on top, but never more than
-		// what's actually on the stack.
-		lua_pop(L, std::min(opts.nargs, lua_gettop(L)));
+		if (func_idx > 0) {
+			lua_settop(L, func_idx - 1);
+		} else {
+			// Pop whatever args were pushed on top, but never more than
+			// what's actually on the stack.
+			lua_pop(L, std::min(opts.nargs, lua_gettop(L)));
+		}
 		return LuaCallResult::NotFound;
 	}
 

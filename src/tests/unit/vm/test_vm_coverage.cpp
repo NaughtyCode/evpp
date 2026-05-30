@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -293,6 +294,18 @@ TEST_CASE("RegisterCallback handles 0-arg 0-result case", "[vm][register]") {
     REQUIRE(called);
 }
 
+TEST_CASE("RegisterCallback converts C++ exceptions to Lua errors", "[vm][register]") {
+    ScriptVMFixture f;
+
+    f.vm.RegisterCallback("explode", [](lua_State*) -> int {
+        throw std::runtime_error("boom");
+    });
+
+    std::string err;
+    REQUIRE_FALSE(f.RunLua("explode()", &err));
+    test::AssertContains(err, "boom");
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ScriptVM — ToString and LuaVersion
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -348,6 +361,38 @@ TEST_CASE("ScriptImporter: ClearCache resets package.loaded", "[vm][importer]") 
     // Verify import still works after clear
     REQUIRE(f.RunLuaCapture("return type(require)", result));
     REQUIRE(result == "function");
+}
+
+TEST_CASE("ScriptImporter: ClearCache preserves non-import package.loaded entries", "[vm][importer]") {
+    ScriptVMFixture f;
+
+    lua_State* L = f.vm.GetState();
+    lua_getglobal(L, "package");
+    lua_getfield(L, -1, "loaded");
+    lua_pushboolean(L, 1);
+    lua_setfield(L, -2, "engine_builtin");
+    lua_pop(L, 2);
+
+    f.vm.GetImporter().ClearCache(L);
+
+    lua_getglobal(L, "package");
+    lua_getfield(L, -1, "loaded");
+    lua_getfield(L, -1, "engine_builtin");
+    REQUIRE(lua_toboolean(L, -1) == 1);
+    lua_pop(L, 3);
+}
+
+TEST_CASE("ScriptImporter: rejects path traversal module names", "[vm][importer]") {
+    engine::ScriptVM vm;
+    vm.GetImporter().Init("resources/script");
+    ExportImport(vm);
+
+    lua_State* L = vm.GetState();
+    lua_getglobal(L, "import");
+    lua_pushstring(L, "../secret");
+    int rc = lua_pcall(L, 1, 1, 0);
+    REQUIRE(rc != LUA_OK);
+    lua_settop(L, 0);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -775,6 +820,25 @@ TEST_CASE("SafeCallLua returns NotFound when stack has no function", "[luaerr]")
     // Empty stack — no function to call
     LuaCallResult result = SafeCallLua(L, opts);
     REQUIRE(result == LuaCallResult::NotFound);
+
+    lua_close(L);
+}
+
+TEST_CASE("SafeCallLua NotFound removes non-function and args", "[luaerr]") {
+    lua_State* L = luaL_newstate();
+    REQUIRE(L != nullptr);
+    luaL_openlibs(L);
+
+    lua_pushnil(L);
+    lua_pushinteger(L, 42);
+
+    LuaCallOptions opts;
+    opts.nargs = 1;
+    opts.nresults = 0;
+
+    LuaCallResult result = SafeCallLua(L, opts);
+    REQUIRE(result == LuaCallResult::NotFound);
+    REQUIRE(lua_gettop(L) == 0);
 
     lua_close(L);
 }

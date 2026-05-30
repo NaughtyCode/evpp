@@ -126,6 +126,27 @@ TEST_CASE("CreateCoroutine from C function returns handle >= 1", "[coroutine][cr
     lua_close(L);
 }
 
+TEST_CASE("CreateCoroutine anchors thread without leaking main stack", "[coroutine][create]") {
+    lua_State* L = MakeLuaState();
+    REQUIRE(L != nullptr);
+
+    auto& sched = CoroutineScheduler::Instance();
+    sched.Init(L);
+    sched.CancelAll();
+
+    int base_top = lua_gettop(L);
+    lua_pushcfunction(L, CoroReturnInt);
+    int handle = sched.CreateCoroutine(L);
+    REQUIRE(handle >= 1);
+    REQUIRE(lua_gettop(L) == base_top);
+
+    sched.Update();
+    REQUIRE(lua_gettop(L) == base_top);
+    REQUIRE(sched.ActiveCount() == 0);
+
+    lua_close(L);
+}
+
 TEST_CASE("CreateCoroutine with empty stack returns 0", "[coroutine][create]") {
     lua_State* L = MakeLuaState();
     REQUIRE(L != nullptr);

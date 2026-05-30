@@ -8,7 +8,9 @@
 
 #include "runtime/core/engine_api.h"
 
-struct lua_State;
+extern "C" {
+#include "lauxlib.h"
+}
 
 namespace engine {
 
@@ -78,13 +80,17 @@ class CLOUD_ENGINE_API CoroutineScheduler {
 
 	struct CoroState {
 		lua_State* thread = nullptr;
+		int thread_ref = LUA_NOREF;
 		int handle = 0;
 		State state = State::Suspended;
 		int64_t wake_at_ms = 0;  // 0 = no timer wait
+		bool started = false;
+		int pending_resume_args = 0;
 	};
 
 	// Remove dead coroutines from the map.
 	void GarbageCollect();
+	void ReleaseCoroutine(CoroState& cs);
 
 	lua_State* main_L_ = nullptr;
 	std::unordered_map<int, CoroState> coroutines_;

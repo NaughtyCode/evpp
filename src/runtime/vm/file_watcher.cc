@@ -5,13 +5,6 @@
 #include <filesystem>
 #include <thread>
 
-#ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#endif
-
 #include "runtime/core/log/log.h"
 
 namespace engine {
@@ -27,9 +20,11 @@ void FileWatcher::WatchDirectory(const std::string& path,
 	watch_entries_.push_back({path, extension});
 
 	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger,
-	                "FileWatcher: watching [{}] for [{}] files",
-	                path, extension);
+	if (logger) {
+		ENGINE_LOG_INFO(logger,
+		                "FileWatcher: watching [{}] for [{}] files",
+		                path, extension);
+	}
 }
 
 void FileWatcher::SetChangeCallback(ChangeCallback callback) {
@@ -38,17 +33,26 @@ void FileWatcher::SetChangeCallback(ChangeCallback callback) {
 
 void FileWatcher::Start(int poll_interval_ms) {
 	if (running_.load(std::memory_order_acquire)) return;
+	if (poll_interval_ms < 1) poll_interval_ms = 1;
 
 	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger,
-	                "FileWatcher: starting, watching [{}] dir(s), "
-	                "interval=[{}ms]",
-	                watch_entries_.size(),
-	                poll_interval_ms);
+	if (logger) {
+		ENGINE_LOG_INFO(logger,
+		                "FileWatcher: starting, watching [{}] dir(s), "
+		                "interval=[{}ms]",
+		                watch_entries_.size(),
+		                poll_interval_ms);
+	}
 
-	thread_ = std::make_unique<std::thread>(
-		[this, poll_interval_ms]() { WatchLoop(poll_interval_ms); });
 	running_.store(true, std::memory_order_release);
+	try {
+		thread_ = std::make_unique<std::thread>(
+			[this, poll_interval_ms]() { WatchLoop(poll_interval_ms); });
+	} catch (...) {
+		running_.store(false, std::memory_order_release);
+		thread_.reset();
+		throw;
+	}
 }
 
 void FileWatcher::PrimeKnownFiles() {
@@ -81,10 +85,12 @@ void FileWatcher::PrimeKnownFiles() {
 }
 
 void FileWatcher::Stop() {
-	if (!running_.load(std::memory_order_acquire)) return;
+	if (!running_.load(std::memory_order_acquire) && !thread_) return;
 
 	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger, "FileWatcher: stopping...");
+	if (logger) {
+		ENGINE_LOG_INFO(logger, "FileWatcher: stopping...");
+	}
 
 	running_.store(false, std::memory_order_release);
 	if (thread_ && thread_->joinable()) {
@@ -92,19 +98,12 @@ void FileWatcher::Stop() {
 	}
 	thread_.reset();
 
-	ENGINE_LOG_INFO(logger, "FileWatcher: stopped");
+	if (logger) {
+		ENGINE_LOG_INFO(logger, "FileWatcher: stopped");
+	}
 }
 
 void FileWatcher::WatchLoop(int poll_interval_ms) {
-#ifdef _WIN32
-	SetThreadDescription(GetCurrentThread(), L"evpp_file_watcher");
-#elif defined(__linux__)
-	pthread_setname_np(pthread_self(), "evpp_file_watcher");
-#endif
-
-	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger, "FileWatcher: watch loop started");
-
 	while (running_.load(std::memory_order_acquire)) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(poll_interval_ms));
 
@@ -115,16 +114,20 @@ void FileWatcher::WatchLoop(int poll_interval_ms) {
 			try {
 				callback_(changed);
 			} catch (const std::exception& e) {
-				ENGINE_LOG_ERROR(logger,
-					"FileWatcher: callback exception: {}", e.what());
+				auto* logger = GetLogger();
+				if (logger) {
+					ENGINE_LOG_ERROR(logger,
+						"FileWatcher: callback exception: {}", e.what());
+				}
 			} catch (...) {
-				ENGINE_LOG_ERROR(logger,
-					"FileWatcher: callback exception: unknown");
+				auto* logger = GetLogger();
+				if (logger) {
+					ENGINE_LOG_ERROR(logger,
+						"FileWatcher: callback exception: unknown");
+				}
 			}
 		}
 	}
-
-	ENGINE_LOG_INFO(logger, "FileWatcher: watch loop exited");
 }
 
 // Convert filesystem file_time_type to system_clock time_point.

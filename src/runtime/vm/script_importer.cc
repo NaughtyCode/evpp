@@ -1,6 +1,7 @@
 #include "runtime/vm/script_importer.h"
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 
 #include "runtime/core/log/log.h"
@@ -16,6 +17,9 @@ namespace engine {
 
 void ScriptImporter::Init(std::string scripts_dir) {
 	search_paths_.clear();
+	importing_.clear();
+	loaded_modules_.clear();
+	module_globals_.clear();
 
 	if (!scripts_dir.empty()) {
 #ifdef _WIN32
@@ -40,7 +44,13 @@ void ScriptImporter::Init(std::string scripts_dir) {
 int ScriptImporter::Import(lua_State* L, std::string_view name) {
 	// ── Wildcard: "subdir.*" loads all .lua files in that directory ──
 	if (name.size() >= 2 && name.substr(name.size() - 2) == ".*") {
+		if (!IsSafeModuleName(name.substr(0, name.size() - 2))) {
+			return luaL_error(L, "import: invalid module name '%s'", std::string(name).c_str());
+		}
 		return ImportAll(L, name);
+	}
+	if (!IsSafeModuleName(name)) {
+		return luaL_error(L, "import: invalid module name '%s'", std::string(name).c_str());
 	}
 	return ImportSingle(L, name);
 }
@@ -118,6 +128,7 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
 	// Stack: ..., pkg, loaded, result
 	lua_pushvalue(L, -1);  // ..., pkg, loaded, result, copy
 	lua_setfield(L, -3, name_str.c_str());	// loaded[name] = copy
+	loaded_modules_.insert(name_str);
 	lua_remove(L, -3);	// ..., pkg, result
 	lua_remove(L, -2);	// ..., result
 	cleanup_importing();
@@ -151,6 +162,7 @@ int ScriptImporter::ImportAll(lua_State* L, std::string_view name) {
 
 	std::error_code ec;
 	int count = 0;
+	std::vector<std::filesystem::path> files;
 
 	// ── Result table ────────────────────────────────────────────────
 	lua_newtable(L);
@@ -162,9 +174,13 @@ int ScriptImporter::ImportAll(lua_State* L, std::string_view name) {
 
 		auto ext = entry.path().extension().string();
 		if (ext != ".lua" && ext != ".LUA") continue;
+		files.push_back(entry.path());
+	}
+	std::sort(files.begin(), files.end());
 
-		std::string stem = entry.path().stem().string();
-		std::string filepath = entry.path().string();
+	for (const auto& path : files) {
+		std::string stem = path.stem().string();
+		std::string filepath = path.string();
 
 		ENGINE_LOG_INFO(logger, "import:   loading [{}]", filepath);
 
@@ -199,6 +215,7 @@ int ScriptImporter::ImportAll(lua_State* L, std::string_view name) {
 		lua_pushvalue(L, table_idx);  // push result table
 		lua_getfield(L, -1, stem.c_str());	// get result[stem]
 		lua_setfield(L, -3, cache_name.c_str());  // package.loaded[cache_name] = result
+		loaded_modules_.insert(cache_name);
 		lua_pop(L, 3);	// pop result_table_copy, loaded, package
 
 		++count;
@@ -210,6 +227,8 @@ int ScriptImporter::ImportAll(lua_State* L, std::string_view name) {
 
 void ScriptImporter::SetPaths(const std::string& paths) {
 	search_paths_.clear();
+	loaded_modules_.clear();
+	module_globals_.clear();
 	size_t start = 0;
 	while (start < paths.size()) {
 		size_t end = paths.find(';', start);
@@ -289,13 +308,19 @@ void ScriptImporter::ClearCache(lua_State* L) {
 	module_globals_.clear();
 
 	lua_getglobal(L, "package");  // ..., package
-	if (lua_isnil(L, -1)) {
+	if (!lua_istable(L, -1)) {
 		lua_pop(L, 1);
 		return;
 	}
-	lua_newtable(L);  // ..., package, new_loaded
-	lua_setfield(L, -2, "loaded");	// package.loaded = {}
-	lua_pop(L, 1);	// ...
+	lua_getfield(L, -1, "loaded");  // ..., package, loaded
+	if (lua_istable(L, -1)) {
+		for (const auto& name : loaded_modules_) {
+			lua_pushnil(L);
+			lua_setfield(L, -2, name.c_str());
+		}
+	}
+	lua_pop(L, 2);	// loaded, package
+	loaded_modules_.clear();
 }
 
 std::string ScriptImporter::ModuleToPath(std::string_view name) {
@@ -306,6 +331,25 @@ std::string ScriptImporter::ModuleToPath(std::string_view name) {
 		}
 	}
 	return result;
+}
+
+bool ScriptImporter::IsSafeModuleName(std::string_view name) {
+	if (name.empty()) return false;
+
+	bool segment_has_char = false;
+	for (unsigned char ch : name) {
+		if (ch == '.') {
+			if (!segment_has_char) return false;
+			segment_has_char = false;
+			continue;
+		}
+		if (std::isalnum(ch) || ch == '_') {
+			segment_has_char = true;
+			continue;
+		}
+		return false;
+	}
+	return segment_has_char;
 }
 
 std::string ScriptImporter::FindModule(std::string_view name) const {

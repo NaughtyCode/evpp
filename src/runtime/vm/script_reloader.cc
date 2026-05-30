@@ -285,13 +285,16 @@ bool ScriptReloader::ValidateScript(const std::string& filepath) {
 	{
 		int msgh = PushLuaErrorHandlerForCall(L, 0);
 		ret = lua_pcall(L, 0, 0, msgh);
+		if (ret == LUA_OK) {
+			lua_remove(L, msgh);
+		}
 	}
 	if (ret != LUA_OK) {
 		ENGINE_LOG_WARN(logger,
 		                "ScriptReloader: validation runtime failed [{}]: {}",
 		                filepath,
 		                lua_tostring(L, -1));
-		lua_pop(L, 1);
+		lua_settop(L, 0);
 		lua_close(L);
 		return false;
 	}
@@ -304,25 +307,29 @@ bool ScriptReloader::ValidateScript(const std::string& filepath) {
 
 static std::string ExtractModuleName(const std::string& filepath,
                                       const std::vector<std::string>& script_dirs) {
-	std::filesystem::path fp(filepath);
+	std::error_code ec;
+	std::filesystem::path fp = std::filesystem::absolute(filepath, ec).lexically_normal();
+	if (ec) {
+		fp = std::filesystem::path(filepath).lexically_normal();
+	}
 	for (const auto& dir : script_dirs) {
-		std::filesystem::path dp(dir);
-		std::string fp_str = std::filesystem::absolute(fp).string();
-		std::string dp_str = std::filesystem::absolute(dp).string();
-		if (fp_str.size() > dp_str.size() &&
-		    fp_str.compare(0, dp_str.size(), dp_str) == 0) {
-			std::string relative = fp_str.substr(
-				dp_str.size() + (dp_str.back() == '/' ||
-				                 dp_str.back() == '\\' ? 0 : 1));
-			for (auto& c : relative) {
-				if (c == '/' || c == '\\') c = '.';
-			}
-			if (relative.size() > 4 &&
-			    relative.compare(relative.size() - 4, 4, ".lua") == 0) {
-				relative.resize(relative.size() - 4);
-			}
-			return relative;
+		ec.clear();
+		std::filesystem::path dp = std::filesystem::absolute(dir, ec).lexically_normal();
+		if (ec) {
+			dp = std::filesystem::path(dir).lexically_normal();
 		}
+		std::filesystem::path relative = fp.lexically_relative(dp);
+		if (relative.empty()) continue;
+		auto rel_str = relative.string();
+		if (rel_str == "." || rel_str.rfind("..", 0) == 0 || relative.is_absolute()) continue;
+
+		for (auto& c : rel_str) {
+			if (c == '/' || c == '\\') c = '.';
+		}
+		if (rel_str.size() > 4 && rel_str.compare(rel_str.size() - 4, 4, ".lua") == 0) {
+			rel_str.resize(rel_str.size() - 4);
+		}
+		return rel_str;
 	}
 	// Fallback: use stem.
 	return fp.stem().string();
@@ -333,6 +340,7 @@ static std::string ExtractModuleName(const std::string& filepath,
 bool ScriptReloader::ReloadFileCore(lua_State* L, const std::string& filepath,
                                      const std::string& module_name) {
 	auto* logger = GetLogger();
+	int base_top = lua_gettop(L);
 
 	// Remove only this module from package.loaded.
 	lua_getglobal(L, "package");
@@ -349,26 +357,30 @@ bool ScriptReloader::ReloadFileCore(lua_State* L, const std::string& filepath,
 	// Load and execute the file.
 	int ret = luaL_loadfile(L, filepath.c_str());
 	if (ret != LUA_OK) {
+		const char* msg = lua_tostring(L, -1);
 		ENGINE_LOG_ERROR(logger,
 		                 "ScriptReloader: load failed for [{}]: {}",
 		                 filepath,
-		                 lua_tostring(L, -1));
-		lua_pop(L, 1);
+		                 msg ? msg : "unknown Lua load error");
+		lua_settop(L, base_top);
 		return false;
 	}
 
+	int msgh = 0;
 	{
-		int msgh = PushLuaErrorHandlerForCall(L, 0);
+		msgh = PushLuaErrorHandlerForCall(L, 0);
 		ret = lua_pcall(L, 0, 1, msgh);
 	}
 	if (ret != LUA_OK) {
+		const char* msg = lua_tostring(L, -1);
 		ENGINE_LOG_ERROR(logger,
 		                 "ScriptReloader: execute failed for [{}]: {}",
 		                 filepath,
-		                 lua_tostring(L, -1));
-		lua_pop(L, 1);
+		                 msg ? msg : "unknown Lua runtime error");
+		lua_settop(L, base_top);
 		return false;
 	}
+	lua_remove(L, msgh);
 
 	// If the module returned a table, register it in package.loaded.
 	if (lua_istable(L, -1)) {
@@ -383,7 +395,7 @@ bool ScriptReloader::ReloadFileCore(lua_State* L, const std::string& filepath,
 		}
 		lua_pop(L, 1);
 	}
-	lua_pop(L, 1);
+	lua_settop(L, base_top);
 
 	return true;
 }
@@ -410,6 +422,7 @@ bool ScriptReloader::ReloadFile(const std::string& filepath) {
 	if (!ReloadFileCore(L, filepath, module_name)) {
 		RestoreGlobals(L);
 		RestorePackageLoaded(L, module_name);
+		ClearSnapshot(L);
 		return false;
 	}
 
@@ -418,6 +431,7 @@ bool ScriptReloader::ReloadFile(const std::string& filepath) {
 		luaL_unref(L, LUA_REGISTRYINDEX, package_loaded_snapshot_ref_);
 		package_loaded_snapshot_ref_ = LUA_NOREF;
 	}
+	ClearSnapshot(L);
 
 	// Update debounce timestamp so the watcher doesn't re-trigger on this
 	// file within the debounce window.
@@ -585,6 +599,7 @@ bool ScriptReloader::ReloadAll() {
 
 		ENGINE_LOG_ERROR(logger,
 			"ScriptReloader: reload-all rolled back to initial state");
+		ClearSnapshot(L);
 		return false;
 	}
 
@@ -741,11 +756,15 @@ void ScriptReloader::RestorePackageLoaded(lua_State* L,
 	lua_getglobal(L, "package");
 	if (!lua_istable(L, -1)) {
 		lua_pop(L, 1);
+		luaL_unref(L, LUA_REGISTRYINDEX, package_loaded_snapshot_ref_);
+		package_loaded_snapshot_ref_ = LUA_NOREF;
 		return;
 	}
 	lua_getfield(L, -1, "loaded");
 	if (!lua_istable(L, -1)) {
 		lua_pop(L, 2);
+		luaL_unref(L, LUA_REGISTRYINDEX, package_loaded_snapshot_ref_);
+		package_loaded_snapshot_ref_ = LUA_NOREF;
 		return;
 	}
 

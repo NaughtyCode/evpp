@@ -44,6 +44,7 @@ class CLOUD_ENGINE_API ScriptImporter {
 	};
 
 	static std::string ModuleToPath(std::string_view name);
+	static bool IsSafeModuleName(std::string_view name);
 	std::string FindModule(std::string_view name) const;
 	std::string FindDir(std::string_view dir_name) const;
 
@@ -61,6 +62,7 @@ class CLOUD_ENGINE_API ScriptImporter {
 
 	std::vector<std::string> search_paths_;
 	std::unordered_set<std::string> importing_;
+	std::unordered_set<std::string> loaded_modules_;
 	std::unordered_map<std::string, ModuleGlobals> module_globals_;
 };
 

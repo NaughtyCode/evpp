@@ -3,6 +3,7 @@
 #include <chrono>
 #include <filesystem>
 #include <stdexcept>
+#include <vector>
 
 #include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
@@ -134,6 +135,8 @@ bool ScriptVM::DoString(std::string_view script,
 						std::string* error_out,
 						std::string* result_out) {
 	ENGINE_PROFILE_SCOPE("engine.script", "DoString", "chunk", std::string(chunk_name).c_str());
+	if (error_out) error_out->clear();
+	if (result_out) result_out->clear();
 
 	if (!L_) {
 		if (error_out) *error_out = "ScriptVM not initialized";
@@ -146,6 +149,7 @@ bool ScriptVM::DoString(std::string_view script,
 		ENGINE_LOG_ERROR(logger, "ScriptVM::DoString rejected: script size [{}] exceeds limit [{}]",
 						 script.size(), kMaxDoStringSize);
 		if (error_out) *error_out = "script exceeds maximum size";
+		lua_settop(L_, base_top);
 		return false;
 	}
 
@@ -155,8 +159,8 @@ bool ScriptVM::DoString(std::string_view script,
 		const char* msg = lua_tostring(L_, -1);
 		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger, "ScriptVM::DoString load error: [{}]", msg);
-		if (error_out) *error_out = msg;
-		lua_pop(L_, 1);
+		if (error_out) *error_out = msg ? msg : "unknown Lua load error";
+		lua_settop(L_, base_top);
 		return false;
 	}
 
@@ -167,7 +171,7 @@ bool ScriptVM::DoString(std::string_view script,
 		const char* msg = lua_tostring(L_, -1);
 		auto* logger = GetLogger();
 		ENGINE_LOG_ERROR(logger, "ScriptVM::DoString run error: [{}]", msg);
-		if (error_out) *error_out = msg;
+		if (error_out) *error_out = msg ? msg : "unknown Lua runtime error";
 		lua_settop(L_, base_top);
 		return false;
 	}
@@ -192,6 +196,7 @@ bool ScriptVM::DoString(std::string_view script,
 
 bool ScriptVM::DoFile(const std::string& filename, std::string* error_out) {
 	ENGINE_PROFILE_SCRIPT_DOFILE(filename.c_str());
+	if (error_out) error_out->clear();
 
 	if (!L_) {
 		if (error_out) *error_out = "ScriptVM not initialized";
@@ -206,8 +211,8 @@ bool ScriptVM::DoFile(const std::string& filename, std::string* error_out) {
 	if (rc != LUA_OK) {
 		const char* msg = lua_tostring(L_, -1);
 		ENGINE_LOG_ERROR(logger, "ScriptVM::DoFile load error [{}]: [{}]", filename, msg);
-		if (error_out) *error_out = msg;
-		lua_pop(L_, 1);
+		if (error_out) *error_out = msg ? msg : "unknown Lua load error";
+		lua_settop(L_, base_top);
 		return false;
 	}
 
@@ -216,11 +221,12 @@ bool ScriptVM::DoFile(const std::string& filename, std::string* error_out) {
 	if (rc != LUA_OK) {
 		const char* msg = lua_tostring(L_, -1);
 		ENGINE_LOG_ERROR(logger, "ScriptVM::DoFile run error [{}]: [{}]", filename, msg);
-		if (error_out) *error_out = msg;
+		if (error_out) *error_out = msg ? msg : "unknown Lua runtime error";
 		lua_settop(L_, base_top);
 		return false;
 	}
 	lua_remove(L_, msgh);
+	lua_settop(L_, base_top);
 
 	ENGINE_LOG_INFO(logger, "ScriptVM::DoFile [{}] OK", filename);
 	return true;
@@ -244,6 +250,7 @@ size_t ScriptVM::DoDirectory(const std::string& dir_path) {
 		return 1;
 	}
 
+	std::vector<std::string> files;
 	for (const auto& entry : std::filesystem::directory_iterator(dir_path, ec)) {
 		if (ec) break;
 
@@ -252,7 +259,11 @@ size_t ScriptVM::DoDirectory(const std::string& dir_path) {
 		auto ext = entry.path().extension().string();
 		if (ext != ".lua" && ext != ".LUA") continue;
 
-		auto filepath = entry.path().string();
+		files.push_back(entry.path().string());
+	}
+	std::sort(files.begin(), files.end());
+
+	for (const auto& filepath : files) {
 		ENGINE_LOG_INFO(logger, "ScriptVM::DoDirectory loading [{}]", filepath);
 
 		if (DoFile(filepath)) {
@@ -446,7 +457,13 @@ void ScriptVM::RegisterCallback(std::string_view name, LuaCallback callback) {
 int ScriptVM::CallbackTrampoline(lua_State* L) {
 	auto* cb = static_cast<LuaCallback*>(lua_touserdata(L, lua_upvalueindex(1)));
 	if (cb && *cb) {
-		return (*cb)(L);
+		try {
+			return (*cb)(L);
+		} catch (const std::exception& e) {
+			return luaL_error(L, "C++ Lua callback exception: %s", e.what());
+		} catch (...) {
+			return luaL_error(L, "C++ Lua callback exception: unknown");
+		}
 	}
 	return 0;
 }
