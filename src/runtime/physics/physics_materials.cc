@@ -4,6 +4,8 @@
 
 #include "runtime/core/mem/mem.h"
 
+#include <algorithm>
+#include <cmath>
 #include <vector>
 
 #include <glaze/glaze.hpp>
@@ -33,6 +35,10 @@ bool MaterialTable::LoadFromJson(const std::string& json) {
 
 void MaterialTable::Register(const std::vector<MaterialEntry>& entries) {
 	for (const auto& entry : entries) {
+		if (entry.name.empty() || !std::isfinite(entry.friction) || entry.friction < 0.0f ||
+			!std::isfinite(entry.restitution) || entry.restitution < 0.0f) {
+			continue;
+		}
 		auto mat = JPH::Ref<PhysicsMaterialSimple>(
 			CLOUDENGINE_MEM_NEW(PhysicsMaterialSimple, entry.name, entry.friction, entry.restitution));
 		materials_[entry.name] = mat;  // Ref<Derived> → RefConst<Derived>

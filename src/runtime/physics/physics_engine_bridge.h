@@ -86,6 +86,11 @@ class ScriptVM;
 // (included above)
 #else
 // Stub type — ensures std::optional<PhysicsFrameResult> compiles
+struct BodyTransform {
+	uint32_t body_id = 0;
+	double pos_x = 0.0, pos_y = 0.0, pos_z = 0.0;
+	float rot_x = 0.0f, rot_y = 0.0f, rot_z = 0.0f, rot_w = 1.0f;
+};
 struct PhysicsFrameResult {
 	uint64_t frame_id = 0;
 	bool valid() const {
@@ -136,7 +141,23 @@ class PHYSICS_API PhysicsEngineBridge {
 	/// trigger the PostStepCallback for Lua collision callbacks, then enqueue
 	/// the result.
 	/// Thread: MT only. Internal SPSC lock-free queue, thread-safe.
-	void Tick(uint64_t frame_id, float delta_time);
+	bool Tick(uint64_t frame_id, float delta_time);
+
+	/// Enqueue a dynamic body spawn command. The created body id is returned
+	/// asynchronously in a later PhysicsFrameResult transform/diff packet.
+	bool EnqueueSpawn(const std::string& proto_id,
+					  double x,
+					  double y,
+					  double z,
+					  float qx = 0.0f,
+					  float qy = 0.0f,
+					  float qz = 0.0f,
+					  float qw = 1.0f,
+					  uint64_t user_data = 0);
+	bool EnqueueDestroy(uint32_t body_id);
+	bool EnqueueApplyForce(
+		uint32_t body_id, float fx, float fy, float fz, double px, double py, double pz);
+	bool EnqueueSetVelocity(uint32_t body_id, float vx, float vy, float vz);
 
 	/// Block until the physics frame result for the given frame_id is
 	/// available, or timeout_ms elapses. Returns std::nullopt on timeout.
@@ -156,6 +177,37 @@ class PHYSICS_API PhysicsEngineBridge {
 	/// Whether the physics system was initialized.
 	/// Thread: any. Reads std::atomic<bool>, lock-free.
 	bool IsInitialized() const;
+
+	struct Vec3 {
+		float x = 0.0f;
+		float y = 0.0f;
+		float z = 0.0f;
+	};
+
+	struct RayCastHit {
+		uint32_t body_id = 0;
+		double x = 0.0;
+		double y = 0.0;
+		double z = 0.0;
+	};
+
+	struct Stats {
+		uint32_t active_bodies = 0;
+		uint32_t total_bodies = 0;
+		int body_pairs = 0;
+		int contact_constraints = 0;
+	};
+
+	std::optional<BodyTransform> GetTransform(uint32_t body_id) const;
+	std::optional<Vec3> GetVelocity(uint32_t body_id) const;
+	bool IsBodyActive(uint32_t body_id) const;
+	std::optional<RayCastHit> RayCast(
+		double ox, double oy, double oz, double dx, double dy, double dz, float max_dist) const;
+	Stats GetPhysicsStats() const;
+
+	bool ReloadThresholds();
+	bool ReloadLogLevel();
+	bool Recover(const std::string& saved_state = {});
 
 	// ── ScriptVM access ───────────────────────────────────────────────
 
@@ -186,7 +238,28 @@ class PHYSICS_API PhysicsEngineBridge {
 	bool Start() {
 		return false;
 	}
-	void Tick(uint64_t, float) {
+	bool Tick(uint64_t, float) {
+		return false;
+	}
+	bool EnqueueSpawn(const std::string&,
+					  double,
+					  double,
+					  double,
+					  float = 0.0f,
+					  float = 0.0f,
+					  float = 0.0f,
+					  float = 1.0f,
+					  uint64_t = 0) {
+		return false;
+	}
+	bool EnqueueDestroy(uint32_t) {
+		return false;
+	}
+	bool EnqueueApplyForce(uint32_t, float, float, float, double, double, double) {
+		return false;
+	}
+	bool EnqueueSetVelocity(uint32_t, float, float, float) {
+		return false;
 	}
 	std::optional<PhysicsFrameResult> FetchResult(uint64_t, int) {
 		return std::nullopt;
@@ -200,6 +273,47 @@ class PHYSICS_API PhysicsEngineBridge {
 		return false;
 	}
 	bool IsInitialized() const {
+		return false;
+	}
+	struct Vec3 {
+		float x = 0.0f;
+		float y = 0.0f;
+		float z = 0.0f;
+	};
+	struct RayCastHit {
+		uint32_t body_id = 0;
+		double x = 0.0;
+		double y = 0.0;
+		double z = 0.0;
+	};
+	struct Stats {
+		uint32_t active_bodies = 0;
+		uint32_t total_bodies = 0;
+		int body_pairs = 0;
+		int contact_constraints = 0;
+	};
+	std::optional<BodyTransform> GetTransform(uint32_t) const {
+		return std::nullopt;
+	}
+	std::optional<Vec3> GetVelocity(uint32_t) const {
+		return std::nullopt;
+	}
+	bool IsBodyActive(uint32_t) const {
+		return false;
+	}
+	std::optional<RayCastHit> RayCast(double, double, double, double, double, double, float) const {
+		return std::nullopt;
+	}
+	Stats GetPhysicsStats() const {
+		return {};
+	}
+	bool ReloadThresholds() {
+		return false;
+	}
+	bool ReloadLogLevel() {
+		return false;
+	}
+	bool Recover(const std::string& = {}) {
 		return false;
 	}
 	ScriptVM* GetScriptVM() {

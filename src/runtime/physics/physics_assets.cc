@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include <Jolt/Jolt.h>
@@ -208,8 +209,9 @@ namespace engine {
 // Helpers
 
 JPH::RVec3 AssetLoader::ParseVec3(const std::vector<double>& v) {
-	return JPH::RVec3(
-		v.size() > 0 ? v[0] : 0.0, v.size() > 1 ? v[1] : 0.0, v.size() > 2 ? v[2] : 0.0);
+	return JPH::RVec3(static_cast<JPH::Real>(v.size() > 0 ? v[0] : 0.0),
+					  static_cast<JPH::Real>(v.size() > 1 ? v[1] : 0.0),
+					  static_cast<JPH::Real>(v.size() > 2 ? v[2] : 0.0));
 }
 
 JPH::Quat AssetLoader::ParseQuat(const std::vector<float>& q) {
@@ -226,6 +228,39 @@ namespace {
 
 bool IsPositiveFinite(double value) {
 	return std::isfinite(value) && value > 0.0;
+}
+
+bool IsFiniteFloat(float value) {
+	return std::isfinite(value);
+}
+
+bool IsFiniteDoubleVec(const std::vector<double>& values, size_t expected) {
+	if (values.size() != expected) {
+		return false;
+	}
+	for (double value : values) {
+		if (!std::isfinite(value)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool IsFiniteFloatVec(const std::vector<float>& values, size_t expected) {
+	if (values.size() != expected) {
+		return false;
+	}
+	for (float value : values) {
+		if (!std::isfinite(value)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool IsMaterialValid(const JsonMaterial& material) {
+	return std::isfinite(material.friction) && material.friction >= 0.0f &&
+		   std::isfinite(material.restitution) && material.restitution >= 0.0f;
 }
 
 bool IsFiniteVec3(const glz::generic& value) {
@@ -591,9 +626,17 @@ static JPH::EMotionType ParseMotionType(const std::string& s) {
 	return JPH::EMotionType::Dynamic;
 }
 
+static bool IsMotionTypeName(const std::string& s) {
+	return s == "static" || s == "kinematic" || s == "dynamic";
+}
+
 static JPH::EMotionQuality ParseMotionQuality(const std::string& s) {
 	if (s == "linear_cast" || s == "linearCast") return JPH::EMotionQuality::LinearCast;
 	return JPH::EMotionQuality::Discrete;
+}
+
+static bool IsMotionQualityName(const std::string& s) {
+	return s == "linear_cast" || s == "linearCast" || s == "discrete";
 }
 
 // LoadScene — main entry point
@@ -644,6 +687,7 @@ AssetLoadResult AssetLoader::LoadScene(const std::string& json_path,
 		// First pass: create bodies and collect BodyIDs for batch addition
 		std::vector<JPH::BodyID> body_ids;
 		body_ids.reserve(asset.static_bodies->size());
+		std::unordered_set<std::string> static_ids;
 		auto destroy_created_static_bodies = [&]() {
 			for (JPH::BodyID id : body_ids) {
 				body_interface.DestroyBody(id);
@@ -654,11 +698,36 @@ AssetLoadResult AssetLoader::LoadScene(const std::string& json_path,
 		};
 
 		for (const auto& sbody : *asset.static_bodies) {
+			if (sbody.id.empty()) {
+				result.error = "static body id must not be empty";
+				destroy_created_static_bodies();
+				return result;
+			}
+			if (!static_ids.insert(sbody.id).second) {
+				result.error = "duplicate static body id: " + sbody.id;
+				destroy_created_static_bodies();
+				return result;
+			}
+			if (!IsMaterialValid(sbody.material)) {
+				result.error = "static body '" + sbody.id + "': invalid material";
+				destroy_created_static_bodies();
+				return result;
+			}
+			if (!IsFiniteDoubleVec(sbody.transform.position, 3) ||
+				!IsFiniteFloatVec(sbody.transform.rotation, 4)) {
+				result.error = "static body '" + sbody.id + "': invalid transform";
+				destroy_created_static_bodies();
+				return result;
+			}
 			// Resolve object layer
 			auto layer_it = layer_config.object_layers.find(sbody.object_layer);
-			JPH::ObjectLayer obj_layer = (layer_it != layer_config.object_layers.end())
-											 ? JPH::ObjectLayer(layer_it->second)
-											 : JPH::ObjectLayer(0);
+			if (layer_it == layer_config.object_layers.end()) {
+				result.error = "static body '" + sbody.id + "': unknown objectLayer '" +
+							   sbody.object_layer + "'";
+				destroy_created_static_bodies();
+				return result;
+			}
+			JPH::ObjectLayer obj_layer(layer_it->second);
 
 			// Create shape
 			auto shape_result = CreateShape(sbody.shape, combined_materials, assets_dir);
@@ -704,9 +773,28 @@ AssetLoadResult AssetLoader::LoadScene(const std::string& json_path,
 
 	// ── Load dynamic prototypes ────────────────────────────────────────
 	if (asset.dynamic_prototypes.has_value()) {
+		std::unordered_set<std::string> proto_ids;
 		for (const auto& proto : *asset.dynamic_prototypes) {
+			if (proto.proto_id.empty()) {
+				result.error = "prototype id must not be empty";
+				return result;
+			}
+			if (!proto_ids.insert(proto.proto_id).second) {
+				result.error = "duplicate prototype id: " + proto.proto_id;
+				return result;
+			}
 			if (!std::isfinite(proto.mass) || proto.mass <= 0.0f) {
 				result.error = "prototype '" + proto.proto_id + "': mass must be finite and > 0";
+				return result;
+			}
+			if (!IsMaterialValid(proto.material) || !IsMotionTypeName(proto.motion_type) ||
+				!IsMotionQualityName(proto.motion_quality) ||
+				!IsFiniteFloat(proto.linear_damping) || proto.linear_damping < 0.0f ||
+				!IsFiniteFloat(proto.angular_damping) || proto.angular_damping < 0.0f ||
+				!IsFiniteFloat(proto.gravity_factor) ||
+				!IsFiniteFloat(proto.max_linear_velocity) || proto.max_linear_velocity <= 0.0f ||
+				!IsFiniteFloat(proto.max_angular_velocity) || proto.max_angular_velocity <= 0.0f) {
+				result.error = "prototype '" + proto.proto_id + "': invalid physical properties";
 				return result;
 			}
 			auto shape_result = CreateShape(proto.shape, combined_materials, assets_dir);
@@ -716,9 +804,12 @@ AssetLoadResult AssetLoader::LoadScene(const std::string& json_path,
 			}
 
 			auto layer_it = layer_config.object_layers.find(proto.object_layer);
-			JPH::ObjectLayer obj_layer = (layer_it != layer_config.object_layers.end())
-											 ? JPH::ObjectLayer(layer_it->second)
-											 : JPH::ObjectLayer(1);
+			if (layer_it == layer_config.object_layers.end()) {
+				result.error = "prototype '" + proto.proto_id + "': unknown objectLayer '" +
+							   proto.object_layer + "'";
+				return result;
+			}
+			JPH::ObjectLayer obj_layer(layer_it->second);
 
 			PrototypeEntry entry;
 			entry.proto_id = proto.proto_id;
@@ -741,6 +832,10 @@ AssetLoadResult AssetLoader::LoadScene(const std::string& json_path,
 			entry.allowed_dofs = 0;
 			for (uint8_t dof : proto.allowed_dofs) {
 				if (dof < 6) entry.allowed_dofs |= (1 << dof);
+			}
+			if (entry.allowed_dofs == 0) {
+				result.error = "prototype '" + proto.proto_id + "': allowedDofs has no valid axes";
+				return result;
 			}
 
 			prototypes_[entry.proto_id] = entry;
@@ -769,14 +864,23 @@ AssetLoadResult AssetLoader::LoadScene(const std::string& json_path,
 				}
 			}
 			if (!found_a || !found_b) {
-				ENGINE_LOG_ERROR(GetLogger(), "AssetLoader: constraint '{}' -> '{}': referenced body not found", con.body_a.c_str(), 							 con.body_b.c_str());
-				continue;  // skip broken constraints
+				result.error = "constraint '" + con.body_a + "' -> '" + con.body_b +
+							   "': referenced body not found";
+				return result;
 			}
 
 			JPH::RVec3 pivot = ParseVec3(con.pivot);
 			JPH::Vec3 axis = JPH::Vec3(static_cast<float>(con.axis.size() > 0 ? con.axis[0] : 0.0),
 									   static_cast<float>(con.axis.size() > 1 ? con.axis[1] : 1.0),
 									   static_cast<float>(con.axis.size() > 2 ? con.axis[2] : 0.0));
+			if (!IsFiniteDoubleVec(con.pivot, 3) || !IsFiniteDoubleVec(con.axis, 3) ||
+				axis.LengthSq() <= 1.0e-12f || !std::isfinite(con.limits.min) ||
+				!std::isfinite(con.limits.max) || con.limits.min > con.limits.max) {
+				result.error = "constraint '" + con.body_a + "' -> '" + con.body_b +
+							   "': invalid pivot/axis/limits";
+				return result;
+			}
+			axis = axis.Normalized();
 
 			JPH::BodyID ja(body_a_id);
 			JPH::BodyID jb(body_b_id);
@@ -810,10 +914,19 @@ AssetLoadResult AssetLoader::LoadScene(const std::string& json_path,
 				settings.mLimitsMin = static_cast<float>(con.limits.min);
 				settings.mLimitsMax = static_cast<float>(con.limits.max);
 				if (con.axis2.has_value()) {
+					if (!IsFiniteDoubleVec(*con.axis2, 3)) {
+						result.error = "slider constraint axis2 must contain 3 finite numbers";
+						return result;
+					}
 					settings.mSliderAxis2 = JPH::Vec3(
 						static_cast<float>((*con.axis2).size() > 0 ? (*con.axis2)[0] : 0.0),
 						static_cast<float>((*con.axis2).size() > 1 ? (*con.axis2)[1] : 0.0),
 						static_cast<float>((*con.axis2).size() > 2 ? (*con.axis2)[2] : 0.0));
+					if (settings.mSliderAxis2.LengthSq() <= 1.0e-12f) {
+						result.error = "slider constraint axis2 must be non-zero";
+						return result;
+					}
+					settings.mSliderAxis2 = settings.mSliderAxis2.Normalized();
 				} else {
 					settings.mSliderAxis2 = axis;
 				}
@@ -831,7 +944,9 @@ AssetLoadResult AssetLoader::LoadScene(const std::string& json_path,
 					++result.constraints_loaded;
 				}
 			} else {
-				ENGINE_LOG_ERROR(GetLogger(), "AssetLoader: unknown constraint type '{}'. Supported: hinge, spring, slider, fixed", con.type.c_str());
+				result.error = "unknown constraint type '" + con.type +
+							   "'. Supported: hinge, spring, slider, fixed";
+				return result;
 			}
 		}
 	}

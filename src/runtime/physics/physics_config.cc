@@ -2,6 +2,7 @@
 
 #include "runtime/physics/physics_config.h"
 
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -142,8 +143,18 @@ bool PhysicsConfigManager::LoadThresholds(const std::string& path) {
 
 bool PhysicsConfigManager::ValidateConfigs(std::string& error_out) const {
 	// PhysicsConfig validations
-	if (physics_config_.fixed_delta_time <= 0.0f) {
+	auto finite = [](float value) { return std::isfinite(value); };
+	if (!finite(physics_config_.gravity_x) || !finite(physics_config_.gravity_y) ||
+		!finite(physics_config_.gravity_z)) {
+		error_out = "gravity components must be finite";
+		return false;
+	}
+	if (!finite(physics_config_.fixed_delta_time) || physics_config_.fixed_delta_time <= 0.0f) {
 		error_out = "fixedDeltaTime must be > 0";
+		return false;
+	}
+	if (physics_config_.scene_path.empty()) {
+		error_out = "scenePath must not be empty";
 		return false;
 	}
 	if (physics_config_.sub_step_count < 1 || physics_config_.sub_step_count > 16) {
@@ -186,14 +197,69 @@ bool PhysicsConfigManager::ValidateConfigs(std::string& error_out) const {
 			return false;
 		}
 	}
+	if (!finite(physics_config_.speculative_contact_distance) ||
+		physics_config_.speculative_contact_distance < 0.0f) {
+		error_out = "speculativeContactDistance must be finite and >= 0";
+		return false;
+	}
+	if (!finite(physics_config_.penetration_slop) || physics_config_.penetration_slop < 0.0f) {
+		error_out = "penetrationSlop must be finite and >= 0";
+		return false;
+	}
+	if (!finite(physics_config_.baumgarte) || physics_config_.baumgarte < 0.0f) {
+		error_out = "baumgarte must be finite and >= 0";
+		return false;
+	}
+	if (!finite(physics_config_.time_before_sleep) || physics_config_.time_before_sleep < 0.0f) {
+		error_out = "timeBeforeSleep must be finite and >= 0";
+		return false;
+	}
+	if (!finite(physics_config_.point_velocity_sleep_threshold) ||
+		physics_config_.point_velocity_sleep_threshold < 0.0f) {
+		error_out = "pointVelocitySleepThreshold must be finite and >= 0";
+		return false;
+	}
+	if (!finite(physics_config_.linear_cast_threshold) ||
+		physics_config_.linear_cast_threshold < 0.0f) {
+		error_out = "linearCastThreshold must be finite and >= 0";
+		return false;
+	}
+	if (!finite(physics_config_.linear_cast_max_penetration) ||
+		physics_config_.linear_cast_max_penetration < 0.0f) {
+		error_out = "linearCastMaxPenetration must be finite and >= 0";
+		return false;
+	}
+	if (!finite(physics_config_.max_penetration_distance) ||
+		physics_config_.max_penetration_distance < 0.0f) {
+		error_out = "maxPenetrationDistance must be finite and >= 0";
+		return false;
+	}
+	if (!finite(physics_config_.min_velocity_for_restitution) ||
+		physics_config_.min_velocity_for_restitution < 0.0f) {
+		error_out = "minVelocityForRestitution must be finite and >= 0";
+		return false;
+	}
 
 	// ThreadingConfig validations
+	if (threading_config_.thread_priority != "high" && threading_config_.thread_priority != "low" &&
+		threading_config_.thread_priority != "normal") {
+		error_out = "threadPriority must be one of: high, normal, low";
+		return false;
+	}
 	if (threading_config_.command_queue_size < 1) {
 		error_out = "commandQueueSize must be > 0";
 		return false;
 	}
+	if (threading_config_.command_queue_size > 1'000'000) {
+		error_out = "commandQueueSize must be <= 1000000";
+		return false;
+	}
 	if (threading_config_.result_queue_size < 1) {
 		error_out = "resultQueueSize must be > 0";
+		return false;
+	}
+	if (threading_config_.result_queue_size > 1'000'000) {
+		error_out = "resultQueueSize must be <= 1000000";
 		return false;
 	}
 	if (threading_config_.job_system_thread_count < -1) {
@@ -215,20 +281,22 @@ bool PhysicsConfigManager::ValidateConfigs(std::string& error_out) const {
 	}
 
 	// ThresholdsConfig validations
-	if (thresholds_config_.position_epsilon < 0.0f) {
-		error_out = "positionEpsilon must be >= 0";
+	if (!finite(thresholds_config_.position_epsilon) || thresholds_config_.position_epsilon < 0.0f) {
+		error_out = "positionEpsilon must be finite and >= 0";
 		return false;
 	}
-	if (thresholds_config_.rotation_epsilon < 0.0f) {
-		error_out = "rotationEpsilon must be >= 0";
+	if (!finite(thresholds_config_.rotation_epsilon) || thresholds_config_.rotation_epsilon < 0.0f) {
+		error_out = "rotationEpsilon must be finite and >= 0";
 		return false;
 	}
-	if (thresholds_config_.linear_velocity_epsilon < 0.0f) {
-		error_out = "linearVelocityEpsilon must be >= 0";
+	if (!finite(thresholds_config_.linear_velocity_epsilon) ||
+		thresholds_config_.linear_velocity_epsilon < 0.0f) {
+		error_out = "linearVelocityEpsilon must be finite and >= 0";
 		return false;
 	}
-	if (thresholds_config_.angular_velocity_epsilon < 0.0f) {
-		error_out = "angularVelocityEpsilon must be >= 0";
+	if (!finite(thresholds_config_.angular_velocity_epsilon) ||
+		thresholds_config_.angular_velocity_epsilon < 0.0f) {
+		error_out = "angularVelocityEpsilon must be finite and >= 0";
 		return false;
 	}
 
@@ -406,8 +474,12 @@ bool PhysicsConfigManager::ReloadThresholds(const std::string& config_dir) {
 	}
 
 	// Validate new thresholds
-	if (new_cfg.position_epsilon < 0.0f || new_cfg.rotation_epsilon < 0.0f ||
-		new_cfg.linear_velocity_epsilon < 0.0f || new_cfg.angular_velocity_epsilon < 0.0f) {
+	if (!std::isfinite(new_cfg.position_epsilon) || new_cfg.position_epsilon < 0.0f ||
+		!std::isfinite(new_cfg.rotation_epsilon) || new_cfg.rotation_epsilon < 0.0f ||
+		!std::isfinite(new_cfg.linear_velocity_epsilon) ||
+		new_cfg.linear_velocity_epsilon < 0.0f ||
+		!std::isfinite(new_cfg.angular_velocity_epsilon) ||
+		new_cfg.angular_velocity_epsilon < 0.0f) {
 		ENGINE_LOG_ERROR(engine::GetLogger(), "PhysicsConfigManager: invalid threshold values");
 		return false;
 	}

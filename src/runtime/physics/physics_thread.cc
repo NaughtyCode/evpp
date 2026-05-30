@@ -23,17 +23,13 @@ namespace engine {
 
 void PhysicsThread::InitTimerManager() {
 	timer_mgr_ = std::make_unique<TimerManager>();
-	timer_mgr_->initialize();
 }
 
 // Destructor
 
 PhysicsThread::~PhysicsThread() {
 	Stop();
-	if (timer_mgr_) {
-		timer_mgr_->shutdown();
-		timer_mgr_.reset();
-	}
+	timer_mgr_.reset();
 }
 
 // CreatePhysicsLogger - map PhysicsLogConfig to engine::LogConfig [D7][D8]
@@ -62,7 +58,8 @@ bool PhysicsThread::Start(const PhysicsConfig& config,
 						  const ThreadingConfig& threading,
 						  const ThresholdsConfig& thresholds,
 						  const PhysicsLogConfig& log_config,
-						  const std::string& assets_path) {
+						  const std::string& assets_path,
+						  const std::string& restore_state) {
 	if (running_.load(std::memory_order_acquire)) {
 		return false;
 	}
@@ -75,6 +72,7 @@ bool PhysicsThread::Start(const PhysicsConfig& config,
 	thresholds_config_ = thresholds;
 	log_config_ = log_config;
 	assets_path_ = assets_path;
+	restore_state_on_start_ = restore_state;
 	healthy_.store(false, std::memory_order_release);
 
 	// Create independent logger
@@ -192,44 +190,37 @@ bool PhysicsThread::Recover(const std::string& saved_state) {
 	Stop();
 
 	// Restart with the same config
-	bool ok =
-		Start(physics_config_, threading_config_, thresholds_config_, log_config_, assets_path_);
+	bool ok = Start(physics_config_,
+					threading_config_,
+					thresholds_config_,
+					log_config_,
+					assets_path_,
+					saved_state);
 	if (!ok) {
 		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: recovery failed Start() returned false");
 		return false;
 	}
 
-	// Wait for the event loop to initialize the world — condition_variable
-	// replaces the old 50×100ms sleep polling loop.
-	{
-		std::unique_lock<std::mutex> lock(health_cv_mutex_);
-		bool became_healthy = health_cv_.wait_for(
-			lock, std::chrono::milliseconds(5000),
-			[this]() { return healthy_.load(std::memory_order_acquire); });
-		if (!became_healthy) {
-			PHYSICS_LOG_ERROR(logger_,
-					  "PhysicsThread: recovery failed --- "
-					  "world did not become healthy within 5000ms");
-			return false;
-		}
-	}
-
-	// Optionally restore state
-	if (!saved_state.empty()) {
-		if (!world_.RestoreState(saved_state)) {
-			PHYSICS_LOG_ERROR(logger_,
-							  "PhysicsThread: recovery?"
-							  "state restoration failed");
-			return false;
-		}
-		PHYSICS_LOG_INFO(logger_,
-						 "PhysicsThread: state restored "
-						 "([{}] bytes)",
-						 saved_state.size());
-	}
-
 	PHYSICS_LOG_INFO(logger_, "PhysicsThread: recovery complete");
 	return true;
+}
+
+std::string PhysicsThread::SaveState() const {
+	if (running_.load(std::memory_order_acquire) && !IsPhysicsThread()) {
+		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: SaveState must run on the physics thread");
+		assert(false && "PhysicsThread::SaveState called from the wrong thread");
+		return {};
+	}
+	return world_.SaveState();
+}
+
+bool PhysicsThread::RestoreState(const std::string& data) {
+	if (running_.load(std::memory_order_acquire) && !IsPhysicsThread()) {
+		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: RestoreState must run on the physics thread");
+		assert(false && "PhysicsThread::RestoreState called from the wrong thread");
+		return false;
+	}
+	return world_.RestoreState(data);
 }
 
 // EnqueueCommand
@@ -298,6 +289,19 @@ void PhysicsThread::EventLoop() {
 
 	PHYSICS_LOG_INFO(logger_, "PhysicsThread: event loop started");
 
+	if (timer_mgr_) {
+		timer_mgr_->initialize();
+	}
+
+	auto shutdown_thread_resources = [this]() {
+		if (shutdown_callback_) {
+			shutdown_callback_();
+		}
+		if (timer_mgr_) {
+			timer_mgr_->shutdown();
+		}
+	};
+
 	// Initialize PhysicsWorld with configs captured at Start()
 	bool ok = world_.Initialize(
 		physics_config_, threading_config_, thresholds_config_, logger_, assets_path_);
@@ -305,6 +309,33 @@ void PhysicsThread::EventLoop() {
 		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: world initialization failed");
 		healthy_.store(false, std::memory_order_release);
 		running_.store(false, std::memory_order_release);
+		shutdown_thread_resources();
+		health_cv_.notify_all();
+		return;
+	}
+	if (!restore_state_on_start_.empty()) {
+		if (!world_.RestoreState(restore_state_on_start_)) {
+			PHYSICS_LOG_ERROR(logger_,
+							  "PhysicsThread: state restoration failed during startup "
+							  "([{}] bytes)",
+							  restore_state_on_start_.size());
+			restore_state_on_start_.clear();
+			healthy_.store(false, std::memory_order_release);
+			running_.store(false, std::memory_order_release);
+			shutdown_thread_resources();
+			health_cv_.notify_all();
+			return;
+		}
+		PHYSICS_LOG_INFO(logger_,
+						 "PhysicsThread: state restored during startup ([{}] bytes)",
+						 restore_state_on_start_.size());
+		restore_state_on_start_.clear();
+	}
+	if (startup_callback_ && !startup_callback_()) {
+		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: startup callback failed");
+		healthy_.store(false, std::memory_order_release);
+		running_.store(false, std::memory_order_release);
+		shutdown_thread_resources();
 		health_cv_.notify_all();
 		return;
 	}
@@ -408,6 +439,7 @@ void PhysicsThread::EventLoop() {
 	}
 
 	PHYSICS_LOG_INFO(logger_, "PhysicsThread: event loop exited");
+	shutdown_thread_resources();
 }
 
 }  // namespace engine

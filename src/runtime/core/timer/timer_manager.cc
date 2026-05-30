@@ -122,6 +122,7 @@ void TimerManager::initialize() {
 }
 
 void TimerManager::shutdown() {
+	if (!initialized_.load()) return;
 	verify_thread_affinity("shutdown");
 	if (!initialized_.exchange(false)) return;
 
@@ -138,6 +139,11 @@ void TimerManager::shutdown() {
 	}
 	if (update_depth_ == 0) {
 		process_deferred_destroys();
+	}
+	{
+		std::lock_guard<std::mutex> lock(thread_binding_mutex_);
+		has_thread_binding_ = false;
+		bound_thread_id_ = std::thread::id{};
 	}
 }
 

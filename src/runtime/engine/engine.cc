@@ -529,6 +529,16 @@ void Engine::ApplyConfigChanges() {
 // Cleanup -- release all resources
 
 void Engine::Cleanup() {
+	if (!initialized_.load(std::memory_order_acquire) &&
+		!running_.load(std::memory_order_acquire) &&
+		!loop_ && !owned_loop_ && !timer_mgr_ && !script_vm_ &&
+		!script_reloader_ && !frame_timer_) {
+		cleaned_up_.store(true, std::memory_order_release);
+		initialized_.store(false, std::memory_order_release);
+		running_.store(false, std::memory_order_release);
+		cleanup_phase_.store(CleanupPhase::Complete, std::memory_order_release);
+		return;
+	}
 	if (cleaned_up_.exchange(true)) return;
 	running_.store(false, std::memory_order_release);
 
@@ -594,7 +604,6 @@ void Engine::Cleanup() {
 	}
 
 	cleanup_phase_.store(CleanupPhase::NetworkShutdown, std::memory_order_release);
-	assert(script_vm_ != nullptr);
 	if (script_vm_) {
 		script::ShutdownRpcBindings(*script_vm_);
 		script::ShutdownNetBindings();
@@ -602,7 +611,6 @@ void Engine::Cleanup() {
 	check_timeout("NetworkShutdown");
 
 	cleanup_phase_.store(CleanupPhase::TimerShutdown, std::memory_order_release);
-	assert(script_vm_ != nullptr);
 	if (script_vm_) {
 		script::ShutdownEntityBindings();
 	}

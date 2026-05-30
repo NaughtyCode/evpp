@@ -96,7 +96,8 @@ class PhysicsThread {
 			   const ThreadingConfig& threading,
 			   const ThresholdsConfig& thresholds,
 			   const PhysicsLogConfig& log_config,
-			   const std::string& assets_path);
+			   const std::string& assets_path,
+			   const std::string& restore_state = {});
 	void Stop();
 
 	// ── Main thread interface ────────────────────────────────────────
@@ -169,12 +170,8 @@ class PhysicsThread {
 	}
 
 	// ── Save / Restore physics state (delegates to PhysicsWorld) ─────
-	std::string SaveState() const {
-		return world_.SaveState();
-	}
-	bool RestoreState(const std::string& data) {
-		return world_.RestoreState(data);
-	}
+	std::string SaveState() const;
+	bool RestoreState(const std::string& data);
 
 	// ── Hot-reload thresholds ────────────────────────────────────────
 	void SetThresholds(const ThresholdsConfig& thresholds) {
@@ -197,6 +194,15 @@ class PhysicsThread {
 	using PostStepCallback = std::function<void(const std::vector<CollisionEvent>&)>;
 	void SetPostStepCallback(PostStepCallback cb) {
 		post_step_callback_ = std::move(cb);
+	}
+
+	using StartupCallback = std::function<bool()>;
+	using ShutdownCallback = std::function<void()>;
+	void SetStartupCallback(StartupCallback cb) {
+		startup_callback_ = std::move(cb);
+	}
+	void SetShutdownCallback(ShutdownCallback cb) {
+		shutdown_callback_ = std::move(cb);
 	}
 
 	// ── Crash recovery ───────────────────────────────────────────────
@@ -268,6 +274,7 @@ class PhysicsThread {
 	// SetThresholds
 	PhysicsLogConfig log_config_;  // [MT->] immutable after Start
 	std::string assets_path_;  // [MT->] immutable after Start
+	std::string restore_state_on_start_;  // [MT->] consumed once in EventLoop startup
 
 	// Independent logger (owned by physics thread)
 	// logger_ pointer created in Start() (MT); thereafter only PT writes
@@ -280,9 +287,12 @@ class PhysicsThread {
 	PostStepCallback post_step_callback_;  // [MT->] set in Start();
 	// [PT] invoked in EventLoop
 
+	StartupCallback startup_callback_;  // [MT->] set before Start; PT executes once
+	ShutdownCallback shutdown_callback_;  // [MT->] set before Start; PT executes on exit
+
 	// Per-thread TimerManager — created before Start(), updated in EventLoop.
 	std::unique_ptr<TimerManager> timer_mgr_;  // [MT->] created in InitTimerManager();
-	// [PT] update in EventLoop
+	// [PT] initialize/update/shutdown in EventLoop
 
 	// Physics thread ID — captured at EventLoop() entry, used by
 	// VerifyIsPhysicsThread() to detect cross-thread misuse.

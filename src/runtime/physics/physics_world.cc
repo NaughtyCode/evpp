@@ -7,15 +7,18 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdarg>
 #include <cstdio>
 #include <limits>
 
 #include <Jolt/Core/Factory.h>
+#include <Jolt/Core/IssueReporting.h>
 #include <Jolt/Core/JobSystemSingleThreaded.h>
 #include <Jolt/Core/JobSystemThreadPool.h>
 #include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Body/Body.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Body/BodyLockInterface.h>
 #include <Jolt/Physics/Collision/CastResult.h>
@@ -33,6 +36,51 @@
 
 namespace engine {
 
+namespace {
+
+bool IsFiniteVec3(JPH::Vec3Arg v) {
+	return std::isfinite(v.GetX()) && std::isfinite(v.GetY()) && std::isfinite(v.GetZ());
+}
+
+bool IsFiniteRVec3(JPH::RVec3Arg v) {
+	return std::isfinite(v.GetX()) && std::isfinite(v.GetY()) && std::isfinite(v.GetZ());
+}
+
+bool IsFiniteQuat(JPH::QuatArg q) {
+	return std::isfinite(q.GetX()) && std::isfinite(q.GetY()) &&
+		   std::isfinite(q.GetZ()) && std::isfinite(q.GetW());
+}
+
+JPH::Quat NormalizeOrIdentity(JPH::QuatArg q) {
+	return q.LengthSq() > 1.0e-12f ? q.Normalized() : JPH::Quat::sIdentity();
+}
+
+void JoltTraceHandler(const char* fmt, ...) {
+	char buffer[1024];
+	va_list args;
+	va_start(args, fmt);
+	std::vsnprintf(buffer, sizeof(buffer), fmt, args);
+	va_end(args);
+	ENGINE_LOG_WARN(GetLogger(), "Jolt: {}", buffer);
+}
+
+#ifdef JPH_ENABLE_ASSERTS
+bool JoltAssertFailedHandler(const char* expression,
+							 const char* message,
+							 const char* file,
+							 JPH::uint line) {
+	ENGINE_LOG_ERROR(GetLogger(),
+					 "Jolt assert failed: expr=[{}], message=[{}], file=[{}:{}]",
+					 expression ? expression : "",
+					 message ? message : "",
+					 file ? file : "",
+					 line);
+	return false;
+}
+#endif
+
+}  // namespace
+
 // Static guard for one-time Jolt registration (steps 1-3)
 
 std::atomic<bool> PhysicsWorld::s_jolt_registered_{false};
@@ -46,7 +94,7 @@ void ContactListenerImpl::PushRecord(uint32_t body_a,
 									 JPH::RVec3Arg cp2,
 									 bool has_contact_points) {
 	// Lock: serializes concurrent appends from multiple JT workers during
-	// system_.Update(). Drain() is called after all JT workers finish, so
+	// system_->Update(). Drain() is called after all JT workers finish, so
 	// this lock never serializes JT against PT.
 	std::lock_guard<std::mutex> lock(mutex_);
 	records_.push_back({body_a, body_b, type, cp1, cp2, has_contact_points});
@@ -81,11 +129,11 @@ void ContactListenerImpl::OnContactPersisted(const JPH::Body& inBody1,
 	if (count > 0) {
 		double inv = 1.0 / static_cast<double>(count);
 		PushRecord(inBody1.GetID().GetIndexAndSequenceNumber(),
-				   inBody2.GetID().GetIndexAndSequenceNumber(),
-				   CollisionEvent::Type::Persist,
-				   cp1_sum * inv,
-				   cp2_sum * inv,
-				   true);
+		   inBody2.GetID().GetIndexAndSequenceNumber(),
+		   CollisionEvent::Type::Persist,
+		   cp1_sum * static_cast<JPH::Real>(inv),
+		   cp2_sum * static_cast<JPH::Real>(inv),
+		   true);
 	}
 }
 
@@ -108,8 +156,8 @@ JPH::ValidateResult ContactListenerImpl::OnContactValidate(
 
 std::vector<ContactListenerImpl::ContactRecord> ContactListenerImpl::Drain() {
 	// Lock: technically unnecessary at this point (all JT workers have
-	// finished — this is called from CollectCollisionEvents() after
-	// system_.Update() returns). Included for consistency with PushRecord()
+	// finished - this is called from CollectCollisionEvents() after
+	// system_->Update() returns). Included for consistency with PushRecord()
 	// and as defense-in-depth against future code changes.
 	std::lock_guard<std::mutex> lock(mutex_);
 	std::vector<ContactRecord> drained;
@@ -121,7 +169,7 @@ std::vector<ContactListenerImpl::ContactRecord> ContactListenerImpl::Drain() {
 
 void BodyActivationListenerImpl::OnBodyActivated(const JPH::BodyID& inBodyID,
 												 JPH::uint64 inBodyUserData) {
-	// Lock: serializes JT writes (during system_.Update()) against
+	// Lock: serializes JT writes (during system_->Update()) against
 	// MT reads from GetStats(). Multiple JT workers may fire this
 	// callback concurrently.
 	std::lock_guard<std::mutex> lock(mutex_);
@@ -130,17 +178,17 @@ void BodyActivationListenerImpl::OnBodyActivated(const JPH::BodyID& inBodyID,
 
 void BodyActivationListenerImpl::OnBodyDeactivated(const JPH::BodyID& inBodyID,
 												   JPH::uint64 inBodyUserData) {
-	// Lock: same reasoning as OnBodyActivated — JT writes vs MT reads.
+	// Lock: same reasoning as OnBodyActivated - JT writes vs MT reads.
 	std::lock_guard<std::mutex> lock(mutex_);
 	active_bodies_[inBodyID.GetIndexAndSequenceNumber()] = false;
 }
 
 bool BodyActivationListenerImpl::IsActive(const JPH::BodyID& id) const {
-	// Lock: serializes against JT writes during system_.Update().
+	// Lock: serializes against JT writes during system_->Update().
 	// This is called from:
 	//   - GenerateDiffs() on PT (after Update, no JT race, but lock
 	//     is needed for consistency with the MT path below)
-	//   - GetStats() on MT (may race with JT writes — lock is REQUIRED)
+	//   - GetStats() on MT (may race with JT writes - lock is REQUIRED)
 	std::lock_guard<std::mutex> lock(mutex_);
 	auto it = active_bodies_.find(id.GetIndexAndSequenceNumber());
 	return it != active_bodies_.end() && it->second;
@@ -153,29 +201,53 @@ void BodyActivationListenerImpl::Clear() {
 	active_bodies_.clear();
 }
 
+PhysicsWorld::PhysicsWorld() {
+	system_.emplace();
+}
+
 // PhysicsWorld destructor
 
 PhysicsWorld::~PhysicsWorld() {
+	ResetRuntimeState(false);
+}
+
+void PhysicsWorld::ResetRuntimeState(bool recreate_system) {
 	// Destroy in reverse order of creation
+	system_.reset();
 	activation_listener_.Clear();
 	state_snapshots_.clear();
 	prototype_pool_.clear();
 	object_registry_.Clear();
 	temp_allocator_.reset();
 	job_system_.reset();
+	obj_vs_bp_filter_.reset();
+	layer_pair_filter_.reset();
+	bp_layer_interface_.reset();
+	last_body_pairs_.store(0, std::memory_order_release);
+	last_contact_constraints_.store(0, std::memory_order_release);
+	initialized_ = false;
+	if (recreate_system) {
+		system_.emplace();
+	}
 
 	// Note: Jolt Factory and RegisterTypes are program-global.
 	// They are not cleaned up here for simplicity.
 	// A full cleanup would need: JPH::UnregisterTypes() and delete Factory::sInstance.
 }
 
-// Initialize — strict 10-step order per [J2]
+// Initialize - strict 10-step order per [J2]
 
 bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 							  const ThreadingConfig& threading,
 							  const ThresholdsConfig& thresholds,
 							  quill::Logger* logger,
 							  const std::string& assets_path) {
+	if (initialized_ || job_system_ || temp_allocator_ || bp_layer_interface_ || layer_pair_filter_ ||
+		obj_vs_bp_filter_) {
+		ResetRuntimeState();
+	} else if (!system_) {
+		system_.emplace();
+	}
 	logger_ = logger;
 	config_ = config;
 	{
@@ -183,15 +255,19 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 		thresholds_ = thresholds;
 	}
 
-	// ── Step 1-3: One-time Jolt registration (program-global) ──────────
+	// Step 1-3: One-time Jolt registration (program-global)
 	if (!s_jolt_registered_.exchange(true)) {
+		JPH::Trace = JoltTraceHandler;
+#ifdef JPH_ENABLE_ASSERTS
+		JPH::AssertFailed = JoltAssertFailedHandler;
+#endif
 		JPH::RegisterDefaultAllocator();  // Step 1
 		JPH::Factory::sInstance = CLOUDENGINE_MEM_NEW(JPH::Factory);  // Step 2
 		JPH::RegisterTypes();  // Step 3
 		PHYSICS_LOG_INFO(logger_, "JoltPhysics registered (allocator, factory, types)");
 	}
 
-	// ── Step 4: Create JobSystem ────────────────────────────────────────
+	// Step 4: Create JobSystem
 	if (threading.job_system_thread_count == 0 || threading.job_system_max_jobs <= 0) {
 		// Single-threaded for debugging / deterministic verification
 		job_system_ = std::make_unique<JPH::JobSystemSingleThreaded>(static_cast<unsigned int>(
@@ -211,25 +287,23 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 						 thread_count);
 	}
 
-	// ── Step 5: Create TempAllocator ──────────────────────────────────
-	uint64_t requested_temp_size = static_cast<uint64_t>(config.max_body_pairs) * 256ULL;
+	// Step 5: Create TempAllocator
+	constexpr uint64_t kMinTempAllocatorBytes = 16ULL * 1024ULL * 1024ULL;
+	uint64_t requested_temp_size =
+		static_cast<uint64_t>(config.max_body_pairs) * 256ULL +
+		static_cast<uint64_t>(config.max_contact_points) * 512ULL +
+		1024ULL * 1024ULL;
+	requested_temp_size = (std::max)(requested_temp_size, kMinTempAllocatorBytes);
 	unsigned int temp_size = static_cast<unsigned int>(
 		(std::min)(requested_temp_size,
 				   static_cast<uint64_t>((std::numeric_limits<unsigned int>::max)())));
-	if (temp_size > 256 * 1024 * 1024) {
-		// Use malloc fallback for very large configs
-		unsigned int clamped = (temp_size > 0x7FFFFFFF) ? 0x7FFFFFFF : temp_size;
-		temp_allocator_ = std::make_unique<JPH::TempAllocatorImplWithMallocFallback>(clamped);
-		PHYSICS_LOG_INFO(logger_,
-						 "PhysicsWorld: temp allocator with malloc fallback, "
-						 "size=[{} MB]",
-						 clamped / (1024 * 1024));
-	} else {
-		temp_allocator_ = std::make_unique<JPH::TempAllocatorImpl>(temp_size);
-		PHYSICS_LOG_INFO(logger_, "PhysicsWorld: temp allocator, size=[{} KB]", temp_size / 1024);
-	}
+	unsigned int clamped = (temp_size > 0x7FFFFFFF) ? 0x7FFFFFFF : temp_size;
+	temp_allocator_ = std::make_unique<JPH::TempAllocatorImplWithMallocFallback>(clamped);
+	PHYSICS_LOG_INFO(logger_,
+					 "PhysicsWorld: temp allocator with malloc fallback, size=[{} MB]",
+					 clamped / (1024 * 1024));
 
-	// ── Step 6: Construct layer interface instances ──────────────────
+	// Step 6: Construct layer interface instances
 	// Use unique_ptr because base classes (BroadPhaseLayerInterface etc.)
 	// inherit from NonCopyable and have no default constructors.
 	const auto& lc = config.layer_config;
@@ -237,8 +311,8 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 	layer_pair_filter_ = std::make_unique<ObjectLayerPairFilterImpl>(lc);
 	obj_vs_bp_filter_ = std::make_unique<ObjectVSBLayerFilterImpl>(lc, *bp_layer_interface_);
 
-	// ── Step 7: Init PhysicsSystem ────────────────────────────────────
-	system_.Init(static_cast<unsigned int>(config.max_bodies),
+	// Step 7: Init PhysicsSystem
+	system_->Init(static_cast<unsigned int>(config.max_bodies),
 				 static_cast<unsigned int>(config.num_body_mutexes),
 				 static_cast<unsigned int>(config.max_body_pairs),
 				 static_cast<unsigned int>(config.max_contact_points),
@@ -252,7 +326,7 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 					 config.max_body_pairs,
 					 config.max_contact_points);
 
-	// ── Step 8: Set physics settings + gravity ───────────────────────
+	// Step 8: Set physics settings + gravity
 	{
 		JPH::PhysicsSettings settings;
 		settings.mNumVelocitySteps = config.solver_iterations;
@@ -274,8 +348,8 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 		settings.mUseManifoldReduction = config.use_manifold_reduction;
 		settings.mCheckActiveEdges = config.check_active_edges;
 
-		system_.SetPhysicsSettings(settings);
-		system_.SetGravity(JPH::Vec3(config.gravity_x, config.gravity_y, config.gravity_z));
+		system_->SetPhysicsSettings(settings);
+		system_->SetGravity(JPH::Vec3(config.gravity_x, config.gravity_y, config.gravity_z));
 
 		// [J13] Combine functions: Jolt defaults are geometric mean for
 		// friction (sqrt(f1*f2)) and max for restitution (max(r1,r2)),
@@ -283,23 +357,23 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 		// needed unless custom combine logic is desired.
 	}
 
-	// ── Step 9: Set listeners ───────────────────────────────────────
-	system_.SetContactListener(&contact_listener_);
-	system_.SetBodyActivationListener(&activation_listener_);
+	// Step 9: Set listeners
+	system_->SetContactListener(&contact_listener_);
+	system_->SetBodyActivationListener(&activation_listener_);
 
-	// ── Step 10: Load assets ─────────────────────────────────────────
+	// Step 10: Load assets
 	if (!assets_path.empty()) {
 		AssetLoader loader;
-		JPH::BodyInterface& bi = system_.GetBodyInterface();
+		JPH::BodyInterface& bi = system_->GetBodyInterface();
 		MaterialTable mt;  // empty; inline materials in asset JSON
-		auto result = loader.LoadScene(assets_path, bi, system_, mt, config.layer_config);
+		auto result = loader.LoadScene(assets_path, bi, *system_, mt, config.layer_config);
 		if (!result.success) {
 			PHYSICS_LOG_ERROR(
 				logger_, "PhysicsWorld: failed to load assets [{}]: {}", assets_path, result.error);
 			return false;
 		}
 		PHYSICS_LOG_INFO(logger_,
-						 "PhysicsWorld: assets loaded — "
+						 "PhysicsWorld: assets loaded -> "
 						 "[{}] static bodies, [{}] prototypes, [{}] constraints",
 						 result.static_bodies_loaded,
 						 result.dynamic_prototypes_loaded,
@@ -315,15 +389,20 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 	}
 
 	PHYSICS_LOG_INFO(logger_, "PhysicsWorld: initialization complete");
+	initialized_ = true;
 	return true;
 }
 
-// CreateBody — spawn dynamic body from prototype [D3]
+// CreateBody - spawn dynamic body from prototype [D3]
 
 uint32_t PhysicsWorld::CreateBody(const std::string& proto_id,
 								  const JPH::RVec3& position,
 								  const JPH::Quat& rotation,
 								  uint64_t user_data) {
+	if (proto_id.empty() || !IsFiniteRVec3(position) || !IsFiniteQuat(rotation)) {
+		PHYSICS_LOG_ERROR(logger_, "PhysicsWorld: invalid CreateBody request");
+		return 0;
+	}
 	auto it = prototype_pool_.find(proto_id);
 	if (it == prototype_pool_.end()) {
 		PHYSICS_LOG_ERROR(logger_, "PhysicsWorld: prototype '{}' not found", proto_id);
@@ -333,7 +412,7 @@ uint32_t PhysicsWorld::CreateBody(const std::string& proto_id,
 	const auto& proto = it->second;
 
 	JPH::BodyCreationSettings settings(
-		proto.shape, position, rotation, proto.motion_type, proto.object_layer);
+		proto.shape, position, NormalizeOrIdentity(rotation), proto.motion_type, proto.object_layer);
 	if (proto.motion_type != JPH::EMotionType::Static && proto.mass > 0.0f) {
 		settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
 	}
@@ -353,7 +432,7 @@ uint32_t PhysicsWorld::CreateBody(const std::string& proto_id,
 	settings.mAllowedDOFs = JPH::EAllowedDOFs(proto.allowed_dofs);
 	settings.mUserData = user_data;
 
-	JPH::BodyInterface& bi = system_.GetBodyInterface();
+	JPH::BodyInterface& bi = system_->GetBodyInterface();
 	JPH::Body* body = bi.CreateBody(settings);
 	if (!body) {
 		PHYSICS_LOG_ERROR(logger_, "PhysicsWorld: failed to create body from '{}'", proto_id);
@@ -379,7 +458,7 @@ uint32_t PhysicsWorld::CreateBody(const std::string& proto_id,
 
 bool PhysicsWorld::DestroyBody(uint32_t body_id) {
 	JPH::BodyID jid(body_id);
-	JPH::BodyInterface& bi = system_.GetBodyInterface();
+	JPH::BodyInterface& bi = system_->GetBodyInterface();
 
 	if (!bi.IsAdded(jid)) {
 		return false;
@@ -397,8 +476,11 @@ bool PhysicsWorld::DestroyBody(uint32_t body_id) {
 // ApplyForce [D3]
 
 bool PhysicsWorld::ApplyForce(uint32_t body_id, const JPH::Vec3& force, const JPH::RVec3& point) {
+	if (!IsFiniteVec3(force) || !IsFiniteRVec3(point)) {
+		return false;
+	}
 	JPH::BodyID jid(body_id);
-	JPH::BodyInterface& bi = system_.GetBodyInterface();
+	JPH::BodyInterface& bi = system_->GetBodyInterface();
 
 	if (!bi.IsAdded(jid)) return false;
 
@@ -412,8 +494,11 @@ bool PhysicsWorld::ApplyForce(uint32_t body_id, const JPH::Vec3& force, const JP
 // SetVelocity [D3]
 
 bool PhysicsWorld::SetVelocity(uint32_t body_id, const JPH::Vec3& velocity) {
+	if (!IsFiniteVec3(velocity)) {
+		return false;
+	}
 	JPH::BodyID jid(body_id);
-	JPH::BodyInterface& bi = system_.GetBodyInterface();
+	JPH::BodyInterface& bi = system_->GetBodyInterface();
 
 	if (!bi.IsAdded(jid)) return false;
 
@@ -424,14 +509,14 @@ bool PhysicsWorld::SetVelocity(uint32_t body_id, const JPH::Vec3& velocity) {
 	return true;
 }
 
-// Step — execute one physics simulation step [D5][D6]
+// Step - execute one physics simulation step [D5][D6]
 
 PhysicsFrameResult PhysicsWorld::Step(float delta_time, uint64_t frame_id) {
 	PhysicsFrameResult result;
 	result.frame_id = frame_id;
 
-	if (delta_time <= 0.0f) {
-		result.error = "delta_time <= 0";
+	if (!std::isfinite(delta_time) || delta_time <= 0.0f) {
+		result.error = "delta_time must be finite and > 0";
 		return result;
 	}
 
@@ -439,7 +524,7 @@ PhysicsFrameResult PhysicsWorld::Step(float delta_time, uint64_t frame_id) {
 	{
 		ENGINE_PROFILE_PHYSICS_STEP(delta_time);
 
-		JPH::EPhysicsUpdateError err = system_.Update(
+		JPH::EPhysicsUpdateError err = system_->Update(
 			delta_time, config_.sub_step_count, temp_allocator_.get(), job_system_.get());
 
 		if (err != JPH::EPhysicsUpdateError::None) {
@@ -456,7 +541,7 @@ PhysicsFrameResult PhysicsWorld::Step(float delta_time, uint64_t frame_id) {
 				err_str += (err_str.empty() ? "" : ", ") + std::string("ContactConstraintsFull");
 
 			PHYSICS_LOG_ERROR(
-				logger_, "PhysicsWorld: Update error — frame=[{}], error=[{}]", frame_id, err_str);
+				logger_, "PhysicsWorld: Update error - frame=[{}], error=[{}]", frame_id, err_str);
 			result.error = err_str;
 			return result;
 		}
@@ -492,10 +577,10 @@ PhysicsFrameResult PhysicsWorld::Step(float delta_time, uint64_t frame_id) {
 	return result;
 }
 
-// CollectTransforms — snapshot all active dynamic bodies
+// CollectTransforms - snapshot all active dynamic bodies
 
 void PhysicsWorld::CollectTransforms(PhysicsFrameResult& result) {
-	JPH::BodyInterface& bi = system_.GetBodyInterfaceNoLock();
+	JPH::BodyInterface& bi = system_->GetBodyInterfaceNoLock();
 
 	for (auto& [body_id, snap] : state_snapshots_) {
 		JPH::BodyID jid(body_id);
@@ -519,7 +604,7 @@ void PhysicsWorld::CollectTransforms(PhysicsFrameResult& result) {
 	}
 }
 
-// CollectCollisionEvents — drain ContactListener buffer
+// CollectCollisionEvents - drain ContactListener buffer
 
 void PhysicsWorld::CollectCollisionEvents(PhysicsFrameResult& result) {
 	auto records = contact_listener_.Drain();
@@ -554,10 +639,10 @@ void PhysicsWorld::CollectCollisionEvents(PhysicsFrameResult& result) {
 	}
 }
 
-// GenerateDiffs — produce DiffPackets for changed bodies
+// GenerateDiffs - produce DiffPackets for changed bodies
 
 void PhysicsWorld::GenerateDiffs(PhysicsFrameResult& result) {
-	JPH::BodyInterface& bi = system_.GetBodyInterfaceNoLock();
+	JPH::BodyInterface& bi = system_->GetBodyInterfaceNoLock();
 	ThresholdsConfig thresholds;
 	{
 		std::lock_guard<std::mutex> lock(thresholds_mutex_);
@@ -590,7 +675,7 @@ void PhysicsWorld::GenerateDiffs(PhysicsFrameResult& result) {
 
 std::optional<std::pair<JPH::RVec3, JPH::Quat>> PhysicsWorld::GetTransform(uint32_t body_id) const {
 	JPH::BodyID jid(body_id);
-	JPH::BodyLockRead lock(system_.GetBodyLockInterface(), jid);
+	JPH::BodyLockRead lock(system_->GetBodyLockInterface(), jid);
 	if (!lock.Succeeded()) return std::nullopt;
 	const JPH::Body& body = lock.GetBody();
 	return std::make_pair(body.GetPosition(), body.GetRotation());
@@ -598,7 +683,7 @@ std::optional<std::pair<JPH::RVec3, JPH::Quat>> PhysicsWorld::GetTransform(uint3
 
 std::optional<JPH::Vec3> PhysicsWorld::GetVelocity(uint32_t body_id) const {
 	JPH::BodyID jid(body_id);
-	JPH::BodyLockRead lock(system_.GetBodyLockInterface(), jid);
+	JPH::BodyLockRead lock(system_->GetBodyLockInterface(), jid);
 	if (!lock.Succeeded()) return std::nullopt;
 	const JPH::Body& body = lock.GetBody();
 	return body.GetLinearVelocity();
@@ -606,14 +691,14 @@ std::optional<JPH::Vec3> PhysicsWorld::GetVelocity(uint32_t body_id) const {
 
 bool PhysicsWorld::IsActive(uint32_t body_id) const {
 	JPH::BodyID jid(body_id);
-	JPH::BodyLockRead lock(system_.GetBodyLockInterface(), jid);
+	JPH::BodyLockRead lock(system_->GetBodyLockInterface(), jid);
 	if (!lock.Succeeded()) return false;
 	return lock.GetBody().IsActive();
 }
 
 PhysicsWorld::Stats PhysicsWorld::GetStats() const {
 	Stats s;
-	auto body_stats = system_.GetBodyStats();
+	auto body_stats = system_->GetBodyStats();
 	s.total_bodies = static_cast<uint32_t>(body_stats.mNumBodies);
 	s.active_bodies = static_cast<uint32_t>(body_stats.mNumActiveBodiesDynamic +
 											body_stats.mNumActiveBodiesKinematic +
@@ -632,7 +717,7 @@ std::optional<PhysicsWorld::RayCastHit> PhysicsWorld::RayCast(const JPH::RVec3& 
 															  const JPH::Vec3& direction,
 															  float max_distance) const {
 	const float direction_len_sq = direction.LengthSq();
-	if (!std::isfinite(max_distance) || max_distance <= 0.0f ||
+	if (!IsFiniteRVec3(origin) || !std::isfinite(max_distance) || max_distance <= 0.0f ||
 		!std::isfinite(direction_len_sq) || direction_len_sq <= 1.0e-12f) {
 		return std::nullopt;
 	}
@@ -640,7 +725,7 @@ std::optional<PhysicsWorld::RayCastHit> PhysicsWorld::RayCast(const JPH::RVec3& 
 	JPH::Vec3 ray_delta = direction.Normalized() * max_distance;
 	JPH::RRayCast ray(origin, ray_delta);
 	JPH::RayCastResult hit;
-	if (!system_.GetNarrowPhaseQuery().CastRay(ray, hit)) {
+	if (!system_->GetNarrowPhaseQuery().CastRay(ray, hit)) {
 		return std::nullopt;
 	}
 	if (hit.mFraction < 0.0f || hit.mFraction > 1.0f) {
@@ -655,7 +740,7 @@ std::optional<PhysicsWorld::RayCastHit> PhysicsWorld::RayCast(const JPH::RVec3& 
 
 std::string PhysicsWorld::SaveState() const {
 	JPH::StateRecorderImpl recorder;
-	system_.SaveState(recorder);
+	system_->SaveState(recorder);
 	return recorder.GetData();
 }
 
@@ -666,7 +751,40 @@ bool PhysicsWorld::RestoreState(const std::string& data) {
 	JPH::StateRecorderImpl recorder;
 	recorder.WriteBytes(data.data(), data.size());
 	recorder.Rewind();
-	return system_.RestoreState(recorder);
+	bool ok = system_->RestoreState(recorder);
+	if (ok) {
+		RebuildStateSnapshots();
+	}
+	return ok;
+}
+
+void PhysicsWorld::RebuildStateSnapshots() {
+	state_snapshots_.clear();
+
+	JPH::BodyIDVector body_ids;
+	system_->GetBodies(body_ids);
+	for (const JPH::BodyID& id : body_ids) {
+		JPH::BodyLockRead lock(system_->GetBodyLockInterface(), id);
+		if (!lock.Succeeded()) {
+			continue;
+		}
+		const JPH::Body& body = lock.GetBody();
+		if (body.GetMotionType() == JPH::EMotionType::Static) {
+			continue;
+		}
+
+		BodyStateSnapshot snapshot;
+		snapshot.position = body.GetPosition();
+		snapshot.rotation = body.GetRotation();
+		snapshot.linear_velocity = body.GetLinearVelocity();
+		snapshot.angular_velocity = body.GetAngularVelocity();
+
+		uint32_t body_id = id.GetIndexAndSequenceNumber();
+		state_snapshots_[body_id] = snapshot;
+		if (!object_registry_.Has(body_id)) {
+			object_registry_.Register(body_id, "");
+		}
+	}
 }
 
 }  // namespace engine

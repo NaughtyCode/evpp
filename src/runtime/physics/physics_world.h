@@ -190,7 +190,7 @@ class BodyActivationListenerImpl final : public JPH::BodyActivationListener {
 
 class PhysicsWorld {
 	public:
-	PhysicsWorld() = default;
+	PhysicsWorld();
 	~PhysicsWorld();
 
 	PhysicsWorld(const PhysicsWorld&) = delete;
@@ -261,10 +261,10 @@ class PhysicsWorld {
 
 	// ── Accessors ───────────────────────────────────────────────────────
 	JPH::PhysicsSystem& GetSystem() {
-		return system_;
+		return *system_;
 	}
 	const JPH::PhysicsSystem& GetSystem() const {
-		return system_;
+		return *system_;
 	}
 	quill::Logger* GetLogger() const {
 		return logger_;
@@ -275,9 +275,11 @@ class PhysicsWorld {
 	void CollectTransforms(PhysicsFrameResult& result);
 	void CollectCollisionEvents(PhysicsFrameResult& result);
 	void GenerateDiffs(PhysicsFrameResult& result);
+	void RebuildStateSnapshots();
+	void ResetRuntimeState(bool recreate_system = true);
 
 	// ── Members ─────────────────────────────────────────────────────────
-	JPH::PhysicsSystem system_;
+	std::optional<JPH::PhysicsSystem> system_;
 	std::unique_ptr<JPH::JobSystem> job_system_;
 	std::unique_ptr<JPH::TempAllocator> temp_allocator_;
 
@@ -301,6 +303,7 @@ class PhysicsWorld {
 
 	// Config copy (for runtime access)
 	PhysicsConfig config_;
+	bool initialized_ = false;
 
 	// Thresholds (set at init, hot-reloaded via SetThresholds)
 	ThresholdsConfig thresholds_;

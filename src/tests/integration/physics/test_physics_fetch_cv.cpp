@@ -15,6 +15,18 @@ using namespace std::chrono_literals;
 namespace {
 constexpr const char* kPhysicsConfigDir = "resources/physics/config";
 constexpr const char* kPhysicsScriptsDir = "";
+
+#ifdef ENGINE_PHYSICS_ENABLED
+engine::PhysicsEngineBridge& StartFreshPhysics() {
+	auto& bridge = engine::PhysicsEngineBridge::Instance();
+	if (bridge.IsInitialized()) {
+		bridge.Shutdown();
+	}
+	REQUIRE(bridge.Initialize(kPhysicsConfigDir, kPhysicsScriptsDir));
+	REQUIRE(bridge.Start());
+	return bridge;
+}
+#endif
 }
 
 /* ============================================================================
@@ -24,17 +36,10 @@ constexpr const char* kPhysicsScriptsDir = "";
 #ifdef ENGINE_PHYSICS_ENABLED
 
 TEST_CASE("FetchResult returns within timeout when no data", "[integration][physics][cv]") {
-	auto& bridge = engine::PhysicsEngineBridge::Instance();
-
-	if (!bridge.IsInitialized()) {
-		bridge.Initialize(kPhysicsConfigDir, kPhysicsScriptsDir);
-	}
-	if (!bridge.IsRunning()) {
-		bridge.Start();
-	}
+	auto& bridge = StartFreshPhysics();
 
 	// Tick to produce a frame
-	bridge.Tick(1, 0.016f);
+	REQUIRE(bridge.Tick(1, 0.016f));
 
 	auto start = std::chrono::steady_clock::now();
 	auto result = bridge.FetchResult(1, 100);
@@ -43,17 +48,11 @@ TEST_CASE("FetchResult returns within timeout when no data", "[integration][phys
 
 	// Should return quickly — not spin for full 100ms
 	REQUIRE(elapsed < 150);
+	bridge.Shutdown();
 }
 
 TEST_CASE("FetchResult timeout returns nullopt", "[integration][physics][cv]") {
-	auto& bridge = engine::PhysicsEngineBridge::Instance();
-
-	if (!bridge.IsInitialized()) {
-		bridge.Initialize(kPhysicsConfigDir, kPhysicsScriptsDir);
-	}
-	if (!bridge.IsRunning()) {
-		bridge.Start();
-	}
+	auto& bridge = StartFreshPhysics();
 
 	// Request a frame_id that was never produced — should time out
 	auto start = std::chrono::steady_clock::now();
@@ -65,20 +64,14 @@ TEST_CASE("FetchResult timeout returns nullopt", "[integration][physics][cv]") {
 	// Should wait ~50ms, not spin (allow some margin for CV signaling overhead)
 	REQUIRE(elapsed >= 40);
 	REQUIRE(elapsed < 100);
+	bridge.Shutdown();
 }
 
 TEST_CASE("FetchResult receives result from physics thread without busy-wait", "[integration][physics][cv]") {
-	auto& bridge = engine::PhysicsEngineBridge::Instance();
-
-	if (!bridge.IsInitialized()) {
-		bridge.Initialize(kPhysicsConfigDir, kPhysicsScriptsDir);
-	}
-	if (!bridge.IsRunning()) {
-		bridge.Start();
-	}
+	auto& bridge = StartFreshPhysics();
 
 	uint64_t frame_id = 100;
-	bridge.Tick(frame_id, 0.016f);
+	REQUIRE(bridge.Tick(frame_id, 0.016f));
 
 	auto start = std::chrono::steady_clock::now();
 	auto result = bridge.FetchResult(frame_id, 200);
@@ -89,21 +82,15 @@ TEST_CASE("FetchResult receives result from physics thread without busy-wait", "
 	REQUIRE(result->frame_id == frame_id);
 	// With CV notification, result should arrive quickly (< 5ms once available)
 	REQUIRE(elapsed < 5000);
+	bridge.Shutdown();
 }
 
 TEST_CASE("Multiple FetchResult calls without new data wait on CV", "[integration][physics][cv]") {
-	auto& bridge = engine::PhysicsEngineBridge::Instance();
-
-	if (!bridge.IsInitialized()) {
-		bridge.Initialize(kPhysicsConfigDir, kPhysicsScriptsDir);
-	}
-	if (!bridge.IsRunning()) {
-		bridge.Start();
-	}
+	auto& bridge = StartFreshPhysics();
 
 	// First fetch returns data
 	uint64_t frame_id = 200;
-	bridge.Tick(frame_id, 0.016f);
+	REQUIRE(bridge.Tick(frame_id, 0.016f));
 	auto r1 = bridge.FetchResult(frame_id, 100);
 	REQUIRE(r1.has_value());
 
@@ -116,6 +103,7 @@ TEST_CASE("Multiple FetchResult calls without new data wait on CV", "[integratio
 	REQUIRE_FALSE(r2.has_value());
 	// Should have waited ~30ms on CV (not returned instantly via spin)
 	REQUIRE(elapsed >= 25);
+	bridge.Shutdown();
 }
 
 #endif  // ENGINE_PHYSICS_ENABLED

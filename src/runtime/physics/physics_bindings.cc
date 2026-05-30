@@ -36,6 +36,11 @@ bool CheckInit(lua_State* L) {
 	return true;
 }
 
+JPH::Quat NormalizedOrIdentity(float x, float y, float z, float w) {
+	JPH::Quat q(x, y, z, w);
+	return q.LengthSq() > 1.0e-12f ? q.Normalized() : JPH::Quat::sIdentity();
+}
+
 // physics.spawn(proto_id, x, y, z, qx, qy, qz, qw[, user_data]) → body_id | nil, err
 
 int LuaSpawn(lua_State* L) {
@@ -60,7 +65,31 @@ int LuaSpawn(lua_State* L) {
 	// For synchronous Lua API, we'd need a different mechanism.
 	// For now, we report that spawn commands are enqueued.
 
-	PhysicsSystem::Instance().EnqueueSpawn(proto_id, x, y, z, qx, qy, qz, qw, user_data);
+	auto* thread = PhysicsSystem::GetThreadFromState(L);
+	if (thread && thread->IsPhysicsThread()) {
+		auto* world = PhysicsSystem::GetWorldFromState(L);
+		if (!world) {
+			return PushNilError(L, "physics world not available");
+		}
+		uint32_t body_id = world->CreateBody(
+			proto_id,
+			JPH::RVec3(static_cast<JPH::Real>(x),
+					   static_cast<JPH::Real>(y),
+					   static_cast<JPH::Real>(z)),
+			NormalizedOrIdentity(qx, qy, qz, qw),
+			user_data);
+		if (body_id == 0 && !world->GetRegistry().Has(body_id)) {
+			return PushNilError(L, "spawn failed");
+		}
+		lua_pushinteger(L, body_id);
+		return 1;
+	}
+
+	bool accepted = PhysicsSystem::Instance().EnqueueSpawn(
+		proto_id, x, y, z, qx, qy, qz, qw, user_data);
+	if (!accepted) {
+		return PushNilError(L, "spawn command rejected");
+	}
 
 	// Return a temporary body_id (0) — the real ID will appear in transforms
 	// after the next Tick/FetchResult cycle.
@@ -74,9 +103,16 @@ int LuaDestroy(lua_State* L) {
 	if (!CheckInit(L)) return 2;
 
 	uint32_t body_id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-	PhysicsSystem::Instance().EnqueueDestroy(body_id);
+	auto* thread = PhysicsSystem::GetThreadFromState(L);
+	bool ok = false;
+	if (thread && thread->IsPhysicsThread()) {
+		auto* world = PhysicsSystem::GetWorldFromState(L);
+		ok = world && world->DestroyBody(body_id);
+	} else {
+		ok = PhysicsSystem::Instance().EnqueueDestroy(body_id);
+	}
 
-	lua_pushboolean(L, 1);
+	lua_pushboolean(L, ok ? 1 : 0);
 	return 1;
 }
 
@@ -93,8 +129,20 @@ int LuaApplyForce(lua_State* L) {
 	double py = luaL_checknumber(L, 6);
 	double pz = luaL_checknumber(L, 7);
 
-	PhysicsSystem::Instance().EnqueueApplyForce(body_id, fx, fy, fz, px, py, pz);
-	lua_pushboolean(L, 1);
+	auto* thread = PhysicsSystem::GetThreadFromState(L);
+	bool ok = false;
+	if (thread && thread->IsPhysicsThread()) {
+		auto* world = PhysicsSystem::GetWorldFromState(L);
+		ok = world &&
+			 world->ApplyForce(body_id,
+							   JPH::Vec3(fx, fy, fz),
+							   JPH::RVec3(static_cast<JPH::Real>(px),
+										  static_cast<JPH::Real>(py),
+										  static_cast<JPH::Real>(pz)));
+	} else {
+		ok = PhysicsSystem::Instance().EnqueueApplyForce(body_id, fx, fy, fz, px, py, pz);
+	}
+	lua_pushboolean(L, ok ? 1 : 0);
 	return 1;
 }
 
@@ -108,8 +156,15 @@ int LuaSetVelocity(lua_State* L) {
 	float vy = static_cast<float>(luaL_checknumber(L, 3));
 	float vz = static_cast<float>(luaL_checknumber(L, 4));
 
-	PhysicsSystem::Instance().EnqueueSetVelocity(body_id, vx, vy, vz);
-	lua_pushboolean(L, 1);
+	auto* thread = PhysicsSystem::GetThreadFromState(L);
+	bool ok = false;
+	if (thread && thread->IsPhysicsThread()) {
+		auto* world = PhysicsSystem::GetWorldFromState(L);
+		ok = world && world->SetVelocity(body_id, JPH::Vec3(vx, vy, vz));
+	} else {
+		ok = PhysicsSystem::Instance().EnqueueSetVelocity(body_id, vx, vy, vz);
+	}
+	lua_pushboolean(L, ok ? 1 : 0);
 	return 1;
 }
 

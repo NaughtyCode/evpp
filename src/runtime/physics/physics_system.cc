@@ -4,8 +4,11 @@
 #include "runtime/physics/physics_system.h"
 
 #include <algorithm>
+#include <cassert>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
+#include <filesystem>
 
 #include <Jolt/Math/Quat.h>
 #include <Jolt/Math/Vec3.h>
@@ -21,6 +24,27 @@
 #include "runtime/vm/vm.h"
 
 namespace engine {
+
+namespace {
+
+bool IsFiniteVec3(double x, double y, double z) {
+	return std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
+}
+
+bool IsFiniteVec3(float x, float y, float z) {
+	return std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
+}
+
+bool IsFiniteQuat(float x, float y, float z, float w) {
+	return std::isfinite(x) && std::isfinite(y) && std::isfinite(z) && std::isfinite(w);
+}
+
+JPH::Quat NormalizedOrIdentity(float x, float y, float z, float w) {
+	JPH::Quat q(x, y, z, w);
+	return q.LengthSq() > 1.0e-12f ? q.Normalized() : JPH::Quat::sIdentity();
+}
+
+}  // namespace
 
 // Singleton
 
@@ -71,8 +95,8 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
 
 	// Register subsystem objects in the VM's custom-pointer store so they
 	// can be retrieved from any lua_State* via typed accessors.
-	// Must be done BEFORE DoDirectory — physics scripts may call physics
-	// APIs during top-level execution.
+	// Must be done before scripts are loaded on the physics thread; physics
+	// scripts may call physics APIs during top-level execution.
 	InitCustomPtrStore();
 
 	// Register physics API bindings
@@ -84,18 +108,6 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
 
 	// Register import() — physics scripts use import("runtime.common.class")
 	ExportImport(*script_vm_);
-
-	// Load physics scripts
-	if (!scripts_dir.empty()) {
-		size_t failed = script_vm_->DoDirectory(scripts_dir);
-		if (failed > 0) {
-			ENGINE_LOG_WARN(GetLogger(),
-							"PhysicsSystem: [{}] script(s) failed to load from [{}]",
-							failed,
-							scripts_dir);
-		}
-		script_vm_->InitScript();
-	}
 
 	is_initialized_ = true;
 
@@ -150,6 +162,28 @@ bool PhysicsSystem::Start() {
 	// physics thread's point of view.
 	physics_thread_.SetPostStepCallback(
 		[this](const std::vector<CollisionEvent>& events) { this->UpdateScript(events); });
+	physics_thread_.SetStartupCallback([this]() {
+		if (!script_vm_ || scripts_dir_.empty()) {
+			return true;
+		}
+
+		size_t failed = script_vm_->DoDirectory(scripts_dir_);
+		if (failed > 0) {
+			ENGINE_LOG_WARN(GetLogger(),
+							"PhysicsSystem: [{}] script(s) failed to load from [{}]",
+							failed,
+							scripts_dir_);
+		}
+		script_vm_->InitScript();
+		return true;
+	});
+	physics_thread_.SetShutdownCallback([this]() {
+		if (!script_vm_) {
+			return;
+		}
+		script_vm_->DestroyScript();
+		script::ShutdownTimerBindings(*script_vm_);
+	});
 
 	bool ok = physics_thread_.Start(config_manager_->GetPhysicsConfig(),
 									config_manager_->GetThreadingConfig(),
@@ -175,8 +209,12 @@ void PhysicsSystem::Shutdown() {
 		physics_thread_.Stop();
 	}
 
+	physics_thread_.SetPostStepCallback({});
+	physics_thread_.SetStartupCallback({});
+	physics_thread_.SetShutdownCallback({});
+
 	if (script_vm_) {
-		script_vm_->DestroyScript();
+		script::ShutdownTimerBindings(*script_vm_);
 		script_vm_.reset();
 	}
 
@@ -195,7 +233,7 @@ bool PhysicsSystem::IsRunning() const {
 
 // Enqueue commands (5 types)
 
-void PhysicsSystem::EnqueueSpawn(const std::string& proto_id,
+bool PhysicsSystem::EnqueueSpawn(const std::string& proto_id,
 								 double x,
 								 double y,
 								 double z,
@@ -205,49 +243,98 @@ void PhysicsSystem::EnqueueSpawn(const std::string& proto_id,
 								 float qw,
 								 uint64_t user_data) {
 	ENGINE_PROFILE_SCOPE("engine.physics", "EnqueueSpawn");
+	if (!is_initialized_ || proto_id.empty() || !IsFiniteVec3(x, y, z) ||
+		!IsFiniteQuat(qx, qy, qz, qw)) {
+		return false;
+	}
+	if (physics_thread_.IsPhysicsThread()) {
+		PHYSICS_LOG_ERROR(physics_thread_.GetLogger(),
+						  "PhysicsSystem: EnqueueSpawn called from physics thread");
+		assert(false && "PhysicsSystem::EnqueueSpawn called from physics thread");
+		return false;
+	}
 	SpawnArgs args;
 	args.proto_id = proto_id;
-	args.position = JPH::RVec3(x, y, z);
-	args.rotation = JPH::Quat(qx, qy, qz, qw);
+	args.position = JPH::RVec3(
+		static_cast<JPH::Real>(x), static_cast<JPH::Real>(y), static_cast<JPH::Real>(z));
+	args.rotation = NormalizedOrIdentity(qx, qy, qz, qw);
 	args.user_data = user_data;
-	physics_thread_.EnqueueCommand(PhysicsCommand::MakeSpawn(std::move(args)));
+	return physics_thread_.EnqueueCommand(PhysicsCommand::MakeSpawn(std::move(args)));
 }
 
-void PhysicsSystem::EnqueueDestroy(uint32_t body_id) {
+bool PhysicsSystem::EnqueueDestroy(uint32_t body_id) {
 	ENGINE_PROFILE_SCOPE("engine.physics", "EnqueueDestroy");
+	if (!is_initialized_) return false;
+	if (physics_thread_.IsPhysicsThread()) {
+		PHYSICS_LOG_ERROR(physics_thread_.GetLogger(),
+						  "PhysicsSystem: EnqueueDestroy called from physics thread");
+		assert(false && "PhysicsSystem::EnqueueDestroy called from physics thread");
+		return false;
+	}
 	DestroyArgs args;
 	args.body_id = body_id;
-	physics_thread_.EnqueueCommand(PhysicsCommand::MakeDestroy(args));
+	return physics_thread_.EnqueueCommand(PhysicsCommand::MakeDestroy(args));
 }
 
-void PhysicsSystem::EnqueueApplyForce(
+bool PhysicsSystem::EnqueueApplyForce(
 	uint32_t body_id, float fx, float fy, float fz, double px, double py, double pz) {
+	if (!is_initialized_ || !IsFiniteVec3(fx, fy, fz) || !IsFiniteVec3(px, py, pz)) {
+		return false;
+	}
+	if (physics_thread_.IsPhysicsThread()) {
+		PHYSICS_LOG_ERROR(physics_thread_.GetLogger(),
+						  "PhysicsSystem: EnqueueApplyForce called from physics thread");
+		assert(false && "PhysicsSystem::EnqueueApplyForce called from physics thread");
+		return false;
+	}
 	ApplyForceArgs args;
 	args.body_id = body_id;
 	args.force = JPH::Vec3(fx, fy, fz);
-	args.point = JPH::RVec3(px, py, pz);
-	physics_thread_.EnqueueCommand(PhysicsCommand::MakeApplyForce(std::move(args)));
+	args.point = JPH::RVec3(
+		static_cast<JPH::Real>(px), static_cast<JPH::Real>(py), static_cast<JPH::Real>(pz));
+	return physics_thread_.EnqueueCommand(PhysicsCommand::MakeApplyForce(std::move(args)));
 }
 
-void PhysicsSystem::EnqueueSetVelocity(uint32_t body_id, float vx, float vy, float vz) {
+bool PhysicsSystem::EnqueueSetVelocity(uint32_t body_id, float vx, float vy, float vz) {
+	if (!is_initialized_ || !IsFiniteVec3(vx, vy, vz)) {
+		return false;
+	}
+	if (physics_thread_.IsPhysicsThread()) {
+		PHYSICS_LOG_ERROR(physics_thread_.GetLogger(),
+						  "PhysicsSystem: EnqueueSetVelocity called from physics thread");
+		assert(false && "PhysicsSystem::EnqueueSetVelocity called from physics thread");
+		return false;
+	}
 	SetVelocityArgs args;
 	args.body_id = body_id;
 	args.velocity = JPH::Vec3(vx, vy, vz);
-	physics_thread_.EnqueueCommand(PhysicsCommand::MakeSetVelocity(std::move(args)));
+	return physics_thread_.EnqueueCommand(PhysicsCommand::MakeSetVelocity(std::move(args)));
 }
 
-void PhysicsSystem::Tick(uint64_t frame_id, float delta_time) {
+bool PhysicsSystem::Tick(uint64_t frame_id, float delta_time) {
 	ENGINE_PROFILE_SCOPE("engine.physics", "EnqueueTick");
+	if (!is_initialized_ || !std::isfinite(delta_time) || delta_time <= 0.0f) {
+		return false;
+	}
+	if (physics_thread_.IsPhysicsThread()) {
+		PHYSICS_LOG_ERROR(physics_thread_.GetLogger(),
+						  "PhysicsSystem: Tick called from physics thread");
+		assert(false && "PhysicsSystem::Tick called from physics thread");
+		return false;
+	}
 	TickArgs args;
 	args.frame_id = frame_id;
 	args.delta_time = delta_time;
-	physics_thread_.EnqueueCommand(PhysicsCommand::MakeTick(std::move(args)));
+	return physics_thread_.EnqueueCommand(PhysicsCommand::MakeTick(std::move(args)));
 }
 
 // FetchResult — blocking wait for a frame result
 
 std::optional<PhysicsFrameResult> PhysicsSystem::FetchResult(uint64_t frame_id, int timeout_ms) {
 	ENGINE_PROFILE_PHYSICS_FETCH(frame_id);
+	if (!is_initialized_ || timeout_ms < 0) {
+		return std::nullopt;
+	}
 	auto cached = pending_results_.find(frame_id);
 	if (cached != pending_results_.end()) {
 		PhysicsFrameResult result = std::move(cached->second);
@@ -355,7 +442,8 @@ std::optional<PhysicsSystem::RayCastResult> PhysicsSystem::RayCast(
 	double ox, double oy, double oz, double dx, double dy, double dz, float max_dist) const {
 	if (!is_initialized_) return std::nullopt;
 	auto hit = physics_thread_.GetWorld().RayCast(
-		JPH::RVec3(ox, oy, oz),
+		JPH::RVec3(
+			static_cast<JPH::Real>(ox), static_cast<JPH::Real>(oy), static_cast<JPH::Real>(oz)),
 		JPH::Vec3(static_cast<float>(dx), static_cast<float>(dy), static_cast<float>(dz)),
 		max_dist);
 	if (!hit.has_value()) return std::nullopt;

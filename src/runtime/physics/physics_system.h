@@ -111,7 +111,7 @@ class PhysicsSystem {
 	// commands into the SPSC lock-free queue via PhysicsThread::EnqueueCommand.
 	// No mutex is required.
 
-	void EnqueueSpawn(const std::string& proto_id,
+	bool EnqueueSpawn(const std::string& proto_id,
 					  double x,
 					  double y,
 					  double z,
@@ -120,11 +120,11 @@ class PhysicsSystem {
 					  float qz,
 					  float qw,
 					  uint64_t user_data = 0);
-	void EnqueueDestroy(uint32_t body_id);
-	void EnqueueApplyForce(
+	bool EnqueueDestroy(uint32_t body_id);
+	bool EnqueueApplyForce(
 		uint32_t body_id, float fx, float fy, float fz, double px, double py, double pz);
-	void EnqueueSetVelocity(uint32_t body_id, float vx, float vy, float vz);
-	void Tick(uint64_t frame_id, float delta_time);
+	bool EnqueueSetVelocity(uint32_t body_id, float vx, float vy, float vz);
+	bool Tick(uint64_t frame_id, float delta_time);
 
 	// ── Result retrieval (MT dequeues from PT, SPSC lock-free queue) ──
 	std::optional<PhysicsFrameResult> FetchResult(uint64_t frame_id, int timeout_ms);

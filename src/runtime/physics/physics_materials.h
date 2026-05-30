@@ -5,6 +5,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <algorithm>
 
 // Windows SDK defines GetIntensity as a macro (from GDI+/display headers),
 // which conflicts with Jolt::Color::GetIntensity().
@@ -39,9 +40,10 @@ class PhysicsMaterialSimple final : public JPH::PhysicsMaterial {
 		return name_.c_str();
 	}
 	JPH::Color GetDebugColor() const override {
-		return JPH::Color(static_cast<JPH::uint8>(friction_ * 255.0f),
+		float friction = std::clamp(friction_, 0.0f, 1.0f);
+		return JPH::Color(static_cast<JPH::uint8>(friction * 255.0f),
 						  0,
-						  static_cast<JPH::uint8>((1.0f - friction_) * 255.0f));
+						  static_cast<JPH::uint8>((1.0f - friction) * 255.0f));
 	}
 
 	const std::string& GetName() const {
