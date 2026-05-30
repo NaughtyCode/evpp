@@ -6,6 +6,7 @@
 #include <string>
 #include <typeindex>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <runtime/evpp/tcp_callbacks.h>
@@ -29,6 +30,8 @@ class EntityManager;
 
 class CLOUD_ENGINE_API Entity {
 public:
+	static constexpr uint32_t kInvalidPhysicsBodyId = UINT32_MAX;
+
 	explicit Entity(EntityId id);
 	~Entity();
 
@@ -51,6 +54,7 @@ public:
 	// Components (C++ type-erased via shared_ptr<void>)
 	template <typename T>
 	T* AddComponent(std::unique_ptr<T> component) {
+		if (!component) return nullptr;
 		T* raw = component.get();
 		components_[std::type_index(typeid(T))] = std::shared_ptr<void>(std::move(component));
 		return raw;
@@ -72,6 +76,10 @@ public:
 	void AddLuaComponent(const std::string& name, int lua_ref);
 	int GetLuaComponent(const std::string& name) const;
 	void RemoveLuaComponent(const std::string& name);
+	std::unordered_map<std::string, int> TakeLuaComponents();
+	void ClearLuaComponents();
+	size_t LuaComponentCount() const { return lua_components_.size(); }
+	size_t ComponentCount() const { return components_.size(); }
 
 	// Connection binding
 	void BindConnection(const evpp::TCPConnPtr& conn);
@@ -80,8 +88,9 @@ public:
 
 	// Physics body linkage
 	void SetPhysicsBodyId(uint32_t body_id) { physics_body_id_ = body_id; }
+	void ClearPhysicsBodyId() { physics_body_id_ = kInvalidPhysicsBodyId; }
 	uint32_t GetPhysicsBodyId() const { return physics_body_id_; }
-	bool HasPhysicsBody() const { return physics_body_id_ != kInvalidBodyId; }
+	bool HasPhysicsBody() const { return physics_body_id_ != kInvalidPhysicsBodyId; }
 
 	// TimerManager injection — set by EntityManager at creation time.
 	void SetTimerManager(TimerManager* tm) { timer_mgr_ = tm; }
@@ -91,6 +100,7 @@ public:
 	// The callback should capture EntityId and check EntityManager for safety.
 	void AddOwnedTimer(TimerId id);
 	void RemoveOwnedTimer(TimerId id);
+	size_t OwnedTimerCount() const { return owned_timers_.size(); }
 
 	// Convenience: create a timer whose callback is guarded by entity existence.
 	TimerId AddTimer(int64_t interval_ms, bool repeat, std::function<void()> callback);
@@ -99,6 +109,7 @@ public:
 private:
 	friend class EntityManager;
 	void SetState(EntityState state) { state_ = state; }
+	void ClearConnectionForManager(const evpp::TCPConn* raw_conn);
 
 	EntityId id_;
 	EntityState state_ = EntityState::Created;
@@ -113,8 +124,7 @@ private:
 	// Lua component name → registry ref
 	std::unordered_map<std::string, int> lua_components_;
 
-	static constexpr uint32_t kInvalidBodyId = UINT32_MAX;
-	uint32_t physics_body_id_ = kInvalidBodyId;
+	uint32_t physics_body_id_ = kInvalidPhysicsBodyId;
 };
 
 }  // namespace entity

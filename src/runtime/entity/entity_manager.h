@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <runtime/evpp/tcp_callbacks.h>
@@ -19,9 +20,13 @@ namespace entity {
 
 class CLOUD_ENGINE_API EntityManager {
 public:
+	using EntityDestroyHook = std::function<void(Entity&)>;
+
 	static EntityManager& Instance();
 
-	void SetTimerManager(TimerManager* tm) { timer_mgr_ = tm; }
+	void SetTimerManager(TimerManager* tm);
+	void SetDestroyHook(EntityDestroyHook hook) { on_destroy_ = std::move(hook); }
+	void NotifyEntityDestroying(Entity& entity);
 
 	EntityManager(const EntityManager&) = delete;
 	EntityManager& operator=(const EntityManager&) = delete;
@@ -52,13 +57,14 @@ public:
 
 private:
 	EntityManager() = default;
-	~EntityManager() = default;
+	~EntityManager();
 
 	std::unordered_map<EntityId, std::unique_ptr<Entity>> entities_;
 	std::unordered_map<const evpp::TCPConn*, EntityId> conn_to_entity_;
 	std::unordered_map<uint32_t, EntityId> body_to_entity_;
 	SequentialIdAllocator id_allocator_;
 	TimerManager* timer_mgr_ = nullptr;
+	EntityDestroyHook on_destroy_;
 };
 
 }  // namespace entity

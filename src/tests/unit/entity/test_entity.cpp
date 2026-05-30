@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <string>
 #include <thread>
 
 #include "log_init.h"
@@ -12,9 +13,19 @@
 #include "runtime/entity/entity_manager.h"
 #include "runtime/core/timer/timer_manager.h"
 #include "runtime/evpp/tcp_conn.h"
+#include "runtime/script/entity_bind.h"
+#include "runtime/vm/vm.h"
 
 using namespace engine::entity;
 using namespace std::chrono;
+
+namespace {
+
+bool RunLua(engine::ScriptVM& vm, const std::string& code, std::string& result) {
+	return vm.DoString(code, "test_entity_lua", nullptr, &result);
+}
+
+}  // namespace
 
 // EntityId & Allocator tests
 
@@ -101,6 +112,19 @@ TEST_CASE("AttributeTable change callback", "[entity][attribute]") {
 	REQUIRE(last_key == "hp");
 	REQUIRE(last_old == 100);
 	REQUIRE(last_new == 80);
+
+	attrs.Set("hp", AttrValue{int64_t(80)});
+	REQUIRE(call_count == 1);  // no-op updates should not dirty the entity
+}
+
+TEST_CASE("AttributeTable TryGet distinguishes missing from default value", "[entity][attribute]") {
+	AttributeTable attrs;
+	REQUIRE(attrs.TryGet("missing") == nullptr);
+
+	attrs.Set("zero", AttrValue{int64_t(0)});
+	auto* val = attrs.TryGet("zero");
+	REQUIRE(val != nullptr);
+	REQUIRE(std::get<int64_t>(*val) == 0);
 }
 
 // Entity lifecycle tests
@@ -172,6 +196,22 @@ TEST_CASE("Entity Lua component add and get", "[entity][component]") {
 	REQUIRE(e.GetLuaComponent("inventory") == -1);
 }
 
+TEST_CASE("Entity Destroy clears typed and Lua components", "[entity][component][lifecycle]") {
+	Entity e(1);
+	e.AddComponent(std::make_unique<TestComponent>(7));
+	e.AddLuaComponent("inventory", 123);
+
+	REQUIRE(e.ComponentCount() == 1);
+	REQUIRE(e.LuaComponentCount() == 1);
+
+	e.Destroy();
+
+	REQUIRE(e.ComponentCount() == 0);
+	REQUIRE(e.LuaComponentCount() == 0);
+	REQUIRE(e.GetComponent<TestComponent>() == nullptr);
+	REQUIRE(e.GetLuaComponent("inventory") == -1);
+}
+
 // Entity timer ownership tests
 // Note: actual timer firing is tested by the TimerManager unit tests;
 // here we verify that Entity correctly tracks owned timer IDs.
@@ -185,6 +225,14 @@ TEST_CASE("Entity AddTimer returns non-zero timer ID", "[entity][timer]") {
 
 	engine::TimerId tid = e.AddTimer(100, false, []() {});
 	REQUIRE(tid != engine::kInvalidTimerId);
+}
+
+TEST_CASE("Entity AddTimer without TimerManager is safe", "[entity][timer]") {
+	Entity e(1);
+	e.Activate();
+
+	REQUIRE(e.AddTimer(100, false, []() {}) == engine::kInvalidTimerId);
+	REQUIRE(e.OwnedTimerCount() == 0);
 }
 
 TEST_CASE("Entity Destroy is safe with owned timers", "[entity][timer]") {
@@ -203,6 +251,7 @@ TEST_CASE("Entity Destroy is safe with owned timers", "[entity][timer]") {
 	// Destroy should cancel all timers without crashing
 	REQUIRE_NOTHROW(e.Destroy());
 	REQUIRE(e.GetState() == EntityState::Destroyed);
+	REQUIRE(e.OwnedTimerCount() == 0);
 }
 
 // EntityManager tests
@@ -231,12 +280,30 @@ TEST_CASE("EntityManager DestroyEntity removes single entity", "[entity][manager
 
 	auto* e1 = mgr.CreateEntity();
 	mgr.CreateEntity();
+	EntityId e1_id = e1->GetId();
 	REQUIRE(mgr.Count() == 2);
 
-	mgr.DestroyEntity(e1->GetId());
+	mgr.DestroyEntity(e1_id);
 	REQUIRE(mgr.Count() == 1);
-	REQUIRE(mgr.GetEntity(e1->GetId()) == nullptr);
+	REQUIRE(mgr.GetEntity(e1_id) == nullptr);
 
+	mgr.DestroyAll();
+}
+
+TEST_CASE("EntityManager SetTimerManager updates existing entities", "[entity][manager][timer]") {
+	auto& mgr = EntityManager::Instance();
+	mgr.DestroyAll();
+
+	auto* e = mgr.CreateEntity();
+	REQUIRE(e != nullptr);
+	REQUIRE(e->GetTimerManager() == nullptr);
+
+	engine::TimerManager tm;
+	tm.initialize();
+	mgr.SetTimerManager(&tm);
+	REQUIRE(e->GetTimerManager() == &tm);
+
+	mgr.SetTimerManager(nullptr);
 	mgr.DestroyAll();
 }
 
@@ -251,6 +318,23 @@ TEST_CASE("EntityManager CreateEntity with explicit ID", "[entity][manager]") {
 	// Duplicate ID should fail
 	auto* dup = mgr.CreateEntity(42);
 	REQUIRE(dup == nullptr);
+
+	mgr.DestroyAll();
+}
+
+TEST_CASE("EntityManager auto allocation skips explicit ID collisions", "[entity][manager][id]") {
+	auto& mgr = EntityManager::Instance();
+	mgr.DestroyAll();
+
+	auto* first = mgr.CreateEntity();
+	REQUIRE(first != nullptr);
+	EntityId colliding_id = first->GetId() + 1;
+	auto* explicit_entity = mgr.CreateEntity(colliding_id);
+	REQUIRE(explicit_entity != nullptr);
+
+	auto* automatic = mgr.CreateEntity();
+	REQUIRE(automatic != nullptr);
+	REQUIRE(automatic->GetId() != colliding_id);
 
 	mgr.DestroyAll();
 }
@@ -273,6 +357,26 @@ TEST_CASE("EntityManager ForEachActive only visits active entities", "[entity][m
 	REQUIRE(count == 2);
 
 	mgr.DestroyAll();
+}
+
+TEST_CASE("EntityManager ForEachActive tolerates entity destruction in callback", "[entity][manager]") {
+	auto& mgr = EntityManager::Instance();
+	mgr.DestroyAll();
+
+	for (int i = 0; i < 3; ++i) {
+		auto* e = mgr.CreateEntity();
+		REQUIRE(e != nullptr);
+		e->Activate();
+	}
+
+	int visited = 0;
+	mgr.ForEachActive([&](Entity& e) {
+		++visited;
+		mgr.DestroyEntity(e.GetId());
+	});
+
+	REQUIRE(visited == 3);
+	REQUIRE(mgr.Count() == 0);
 }
 
 TEST_CASE("EntityManager ActiveCount", "[entity][manager]") {
@@ -302,6 +406,108 @@ TEST_CASE("EntityManager connection binding and lookup", "[entity][manager]") {
 	REQUIRE(e->GetConnection() == nullptr);
 
 	mgr.DestroyAll();
+}
+
+TEST_CASE("EntityManager physics body binding stays one-to-one", "[entity][manager][physics]") {
+	auto& mgr = EntityManager::Instance();
+	mgr.DestroyAll();
+
+	auto* e1 = mgr.CreateEntity();
+	auto* e2 = mgr.CreateEntity();
+	REQUIRE(e1 != nullptr);
+	REQUIRE(e2 != nullptr);
+
+	mgr.RegisterPhysicsBodyBinding(100, e1->GetId());
+	REQUIRE(e1->HasPhysicsBody());
+	REQUIRE(e1->GetPhysicsBodyId() == 100);
+	REQUIRE(mgr.FindByPhysicsBodyId(100) == e1);
+
+	mgr.RegisterPhysicsBodyBinding(100, e2->GetId());
+	REQUIRE_FALSE(e1->HasPhysicsBody());
+	REQUIRE(e2->HasPhysicsBody());
+	REQUIRE(mgr.FindByPhysicsBodyId(100) == e2);
+
+	mgr.UnregisterPhysicsBodyBinding(100);
+	REQUIRE_FALSE(e2->HasPhysicsBody());
+	REQUIRE(mgr.FindByPhysicsBodyId(100) == nullptr);
+
+	mgr.DestroyAll();
+}
+
+TEST_CASE("Entity direct Destroy unregisters physics body binding", "[entity][manager][physics]") {
+	auto& mgr = EntityManager::Instance();
+	mgr.DestroyAll();
+
+	auto* e = mgr.CreateEntity();
+	REQUIRE(e != nullptr);
+	mgr.RegisterPhysicsBodyBinding(200, e->GetId());
+	REQUIRE(mgr.FindByPhysicsBodyId(200) == e);
+
+	e->Destroy();
+
+	REQUIRE_FALSE(e->HasPhysicsBody());
+	REQUIRE(mgr.FindByPhysicsBodyId(200) == nullptr);
+
+	mgr.DestroyAll();
+}
+
+TEST_CASE("Lua entity get_attr returns nil for missing attributes", "[entity][lua]") {
+	EntityManager::Instance().DestroyAll();
+	engine::ScriptVM vm;
+	engine::script::ExportEntity(vm);
+
+	std::string result;
+	REQUIRE(RunLua(vm,
+				   "local e = entity.create()\n"
+				   "return tostring(e:get_attr('missing'))",
+				   result));
+	REQUIRE(result == "nil");
+
+	engine::script::ShutdownEntityBindings();
+}
+
+TEST_CASE("Lua entity destroy releases entity and components", "[entity][lua]") {
+	EntityManager::Instance().DestroyAll();
+	engine::ScriptVM vm;
+	engine::script::ExportEntity(vm);
+
+	std::string result;
+	REQUIRE(RunLua(vm,
+				   "local e = entity.create()\n"
+				   "e:add_component('bag', {slots = 8})\n"
+				   "local id = e:get_id()\n"
+				   "local ok = e:destroy()\n"
+				   "return tostring(ok) .. ',' .. tostring(id)",
+				   result));
+	REQUIRE(result.find("true,") == 0);
+	REQUIRE(EntityManager::Instance().Count() == 0);
+
+	engine::script::ShutdownEntityBindings();
+}
+
+TEST_CASE("Lua entity context is invalidated when C++ destroys entity", "[entity][lua]") {
+	EntityManager::Instance().DestroyAll();
+	engine::ScriptVM vm;
+	engine::script::ExportEntity(vm);
+
+	std::string result;
+	REQUIRE(RunLua(vm,
+				   "e = entity.create()\n"
+				   "e:add_component('bag', {slots = 8})\n"
+				   "return e:get_id()",
+				   result));
+	EntityId id = static_cast<EntityId>(std::stoull(result));
+
+	EntityManager::Instance().DestroyEntity(id);
+	REQUIRE(EntityManager::Instance().Count() == 0);
+
+	REQUIRE(RunLua(vm,
+				   "local ok, err = pcall(function() return e:get_state() end)\n"
+				   "return tostring(ok) .. ',' .. tostring(err:find('invalid context', 1, true) ~= nil)",
+				   result));
+	REQUIRE(result == "false,true");
+
+	engine::script::ShutdownEntityBindings();
 }
 
 // Static assertions

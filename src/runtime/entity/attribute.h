@@ -24,6 +24,9 @@ public:
 	void Set(const std::string& key, AttrValue value) {
 		auto it = attrs_.find(key);
 		if (it != attrs_.end()) {
+			if (it->second == value) {
+				return;
+			}
 			AttrValue old = it->second;
 			it->second = std::move(value);
 			if (on_change_) {
@@ -32,6 +35,11 @@ public:
 		} else {
 			attrs_.emplace(key, std::move(value));
 		}
+	}
+
+	const AttrValue* TryGet(const std::string& key) const {
+		auto it = attrs_.find(key);
+		return it != attrs_.end() ? &it->second : nullptr;
 	}
 
 	AttrValue Get(const std::string& key, const AttrValue& default_val = {}) const {
@@ -46,6 +54,8 @@ public:
 	void Remove(const std::string& key) {
 		attrs_.erase(key);
 	}
+
+	void Clear() { attrs_.clear(); }
 
 	size_t Count() const { return attrs_.size(); }
 

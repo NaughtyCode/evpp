@@ -1,7 +1,10 @@
 #include "runtime/script/entity_bind.h"
 
+#include <cinttypes>
 #include <cstdint>
+#include <memory>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 
 #include "runtime/core/log/log.h"
@@ -26,19 +29,89 @@ using entity::EntityState;
 
 const char* kEntityMetaName = "entity.instance";
 
+struct LuaRegistryRef {
+	lua_State* L = nullptr;
+	int ref = LUA_NOREF;
+
+	~LuaRegistryRef() { Release(); }
+
+	void Release() {
+		if (L && ref != LUA_NOREF) {
+			luaL_unref(L, LUA_REGISTRYINDEX, ref);
+			ref = LUA_NOREF;
+		}
+	}
+};
+
 struct EntityCtx {
-	EntityId id;
+	EntityId id = entity::kInvalidEntityId;
+	lua_State* L = nullptr;
 	bool disposed = false;
 	int conn_ref = LUA_NOREF;  // Lua conn instance table (for send)
-	// TimerId  - Lua callback registry ref (for cleanup on destroy)
-	std::unordered_map<uint64_t, int> timer_refs;
+	std::unordered_map<TimerId, std::shared_ptr<LuaRegistryRef>> timer_refs;
 };
+
+std::unordered_map<EntityId, EntityCtx*> g_entity_contexts;
 
 EntityCtx* GetEntityCtx(lua_State* L, int idx) {
 	lua_getfield(L, idx, "_ctx");
 	auto* ctx = static_cast<EntityCtx*>(lua_touserdata(L, -1));
 	lua_pop(L, 1);
 	return ctx;
+}
+
+bool IsValidLuaRef(int ref) {
+	return ref != LUA_NOREF && ref != LUA_REFNIL;
+}
+
+void ReleaseEntityLuaComponents(lua_State* L, Entity* entity) {
+	if (!L || !entity) return;
+	for (auto& pair : entity->TakeLuaComponents()) {
+		if (IsValidLuaRef(pair.second)) {
+			luaL_unref(L, LUA_REGISTRYINDEX, pair.second);
+		}
+	}
+}
+
+void ReleaseEntityCtxRefs(lua_State* L, EntityCtx* ctx) {
+	if (!ctx) return;
+	if (!L) L = ctx->L;
+
+	for (auto& pair : ctx->timer_refs) {
+		if (pair.second) {
+			pair.second->Release();
+		}
+	}
+	ctx->timer_refs.clear();
+
+	if (L && IsValidLuaRef(ctx->conn_ref)) {
+		luaL_unref(L, LUA_REGISTRYINDEX, ctx->conn_ref);
+		ctx->conn_ref = LUA_NOREF;
+	}
+
+	ReleaseEntityLuaComponents(L, EntityManager::Instance().GetEntity(ctx->id));
+}
+
+void EraseTimerRef(EntityId eid, TimerId tid) {
+	auto it = g_entity_contexts.find(eid);
+	if (it == g_entity_contexts.end() || !it->second) return;
+	it->second->timer_refs.erase(tid);
+}
+
+void EraseEntityContext(EntityCtx* ctx) {
+	if (!ctx) return;
+	auto it = g_entity_contexts.find(ctx->id);
+	if (it != g_entity_contexts.end() && it->second == ctx) {
+		g_entity_contexts.erase(it);
+	}
+}
+
+void OnEntityDestroyFromManager(Entity& entity) {
+	auto it = g_entity_contexts.find(entity.GetId());
+	if (it == g_entity_contexts.end() || !it->second || it->second->disposed) return;
+	auto* ctx = it->second;
+	ctx->disposed = true;
+	ReleaseEntityCtxRefs(ctx->L, ctx);
 }
 
 // ── entity.create([id])  - entity_instance ─────────────────────────────
@@ -57,6 +130,8 @@ int l_entity_create(lua_State* L) {
 
 	auto* ctx = CLOUDENGINE_MEM_NEW(EntityCtx);
 	ctx->id = entity->GetId();
+	ctx->L = L;
+	g_entity_contexts[ctx->id] = ctx;
 
 	// Build Lua instance table
 	lua_newtable(L);
@@ -82,26 +157,14 @@ int l_entity_destroy(lua_State* L) {
 	}
 
 	ctx->disposed = true;
-
-	// Release timer callback refs
-	for (auto& pair : ctx->timer_refs) {
-		luaL_unref(L, LUA_REGISTRYINDEX, pair.second);
-	}
-	ctx->timer_refs.clear();
-
-	// Release conn ref
-	if (ctx->conn_ref != LUA_NOREF) {
-		luaL_unref(L, LUA_REGISTRYINDEX, ctx->conn_ref);
-		ctx->conn_ref = LUA_NOREF;
-	}
+	ReleaseEntityCtxRefs(L, ctx);
 
 	EntityManager::Instance().DestroyEntity(ctx->id);
+	EraseEntityContext(ctx);
 
 	lua_pushnil(L);
 	lua_setfield(L, 1, "_ctx");
 
-	// Defer delete so pending Lua calls on this entity don't crash
-	// (entity methods re-check ctx->disposed).
 	CLOUDENGINE_MEM_DELETE(ctx);
 
 	lua_pushboolean(L, 1);
@@ -164,7 +227,11 @@ int l_entity_get_attr(lua_State* L) {
 	if (!entity) return luaL_error(L, "entity not found");
 
 	const char* key = luaL_checkstring(L, 2);
-	auto val = entity->Attrs().Get(key);
+	const auto* val = entity->Attrs().TryGet(key);
+	if (!val) {
+		lua_pushnil(L);
+		return 1;
+	}
 
 	// Convert AttrValue variant to Lua value
 	std::visit([L](auto&& v) {
@@ -178,7 +245,7 @@ int l_entity_get_attr(lua_State* L) {
 		} else if constexpr (std::is_same_v<T, bool>) {
 			lua_pushboolean(L, v ? 1 : 0);
 		}
-	}, val);
+	}, *val);
 
 	return 1;
 }
@@ -193,6 +260,11 @@ int l_entity_set_attr(lua_State* L) {
 
 	const char* key = luaL_checkstring(L, 2);
 	int val_type = lua_type(L, 3);
+
+	if (val_type == LUA_TNIL) {
+		entity->Attrs().Remove(key);
+		return 0;
+	}
 
 	entity::AttrValue val;
 	switch (val_type) {
@@ -242,7 +314,7 @@ int l_entity_bind_connection(lua_State* L) {
 
 	if (lua_gettop(L) < 2 || lua_isnil(L, 2)) {
 		// Unbind
-		if (ctx->conn_ref != LUA_NOREF) {
+		if (IsValidLuaRef(ctx->conn_ref)) {
 			luaL_unref(L, LUA_REGISTRYINDEX, ctx->conn_ref);
 			ctx->conn_ref = LUA_NOREF;
 		}
@@ -252,7 +324,7 @@ int l_entity_bind_connection(lua_State* L) {
 	luaL_checktype(L, 2, LUA_TTABLE);
 
 	// Release old conn ref
-	if (ctx->conn_ref != LUA_NOREF) {
+	if (IsValidLuaRef(ctx->conn_ref)) {
 		luaL_unref(L, LUA_REGISTRYINDEX, ctx->conn_ref);
 		ctx->conn_ref = LUA_NOREF;
 	}
@@ -270,7 +342,7 @@ int l_entity_get_connection(lua_State* L) {
 	auto* ctx = GetEntityCtx(L, 1);
 	if (!ctx || ctx->disposed) return luaL_error(L, "entity: invalid context");
 
-	if (ctx->conn_ref != LUA_NOREF) {
+	if (IsValidLuaRef(ctx->conn_ref)) {
 		lua_rawgeti(L, LUA_REGISTRYINDEX, ctx->conn_ref);
 	} else {
 		lua_pushnil(L);
@@ -285,7 +357,7 @@ int l_entity_send(lua_State* L) {
 	auto* ctx = GetEntityCtx(L, 1);
 	if (!ctx || ctx->disposed) return luaL_error(L, "entity: invalid context");
 
-	if (ctx->conn_ref == LUA_NOREF) {
+	if (!IsValidLuaRef(ctx->conn_ref)) {
 		return luaL_error(L, "entity has no bound connection");
 	}
 
@@ -322,18 +394,26 @@ int l_entity_add_timer(lua_State* L) {
 	luaL_checktype(L, 4, LUA_TFUNCTION);
 
 	lua_pushvalue(L, 4);
-	int cb_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	auto cb_ref = std::make_shared<LuaRegistryRef>();
+	cb_ref->L = L;
+	cb_ref->ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
 	EntityId eid = ctx->id;
+	auto tid_holder = std::make_shared<TimerId>(kInvalidTimerId);
 
-	auto timer_cb = [L, eid, cb_ref, repeat]() {
+	auto timer_cb = [L, eid, cb_ref, repeat, tid_holder]() {
 		auto* ent = EntityManager::Instance().GetEntity(eid);
 		if (!ent || ent->GetState() != EntityState::Active) {
-			luaL_unref(L, LUA_REGISTRYINDEX, cb_ref);
+			if (!repeat) {
+				cb_ref->Release();
+				EraseTimerRef(eid, *tid_holder);
+			}
 			return;
 		}
+		if (cb_ref->ref == LUA_NOREF) return;
+
 		const int base_top = lua_gettop(L);
-		lua_rawgeti(L, LUA_REGISTRYINDEX, cb_ref);
+		lua_rawgeti(L, LUA_REGISTRYINDEX, cb_ref->ref);
 		int msgh = PushLuaErrorHandlerForCall(L, 0);
 		if (lua_pcall(L, 0, 0, msgh) != LUA_OK) {
 			auto* logger = GetLogger();
@@ -342,17 +422,19 @@ int l_entity_add_timer(lua_State* L) {
 		}
 		lua_settop(L, base_top);
 		if (!repeat) {
-			luaL_unref(L, LUA_REGISTRYINDEX, cb_ref);
+			cb_ref->Release();
+			EraseTimerRef(eid, *tid_holder);
 		}
 	};
 
 	TimerId tid = entity->AddTimer(interval_ms, repeat, std::move(timer_cb));
-
-	// Track the Lua ref for cleanup on cancel/destroy (repeating only;
-	// one-shot refs are released in the callback above).
-	if (repeat) {
-		ctx->timer_refs[tid] = cb_ref;
+	if (tid == kInvalidTimerId) {
+		cb_ref->Release();
+		return luaL_error(L, "entity timer manager is not initialized or interval is invalid");
 	}
+
+	*tid_holder = tid;
+	ctx->timer_refs[tid] = cb_ref;
 
 	lua_pushinteger(L, static_cast<lua_Integer>(tid));
 	return 1;
@@ -369,7 +451,9 @@ int l_entity_cancel_timer(lua_State* L) {
 	// Release Lua callback ref if tracked
 	auto it = ctx->timer_refs.find(tid);
 	if (it != ctx->timer_refs.end()) {
-		luaL_unref(L, LUA_REGISTRYINDEX, it->second);
+		if (it->second) {
+			it->second->Release();
+		}
 		ctx->timer_refs.erase(it);
 	}
 
@@ -394,7 +478,7 @@ int l_entity_add_component(lua_State* L) {
 
 	// Remove old component if exists
 	int old_ref = entity->GetLuaComponent(name);
-	if (old_ref != LUA_NOREF) {
+	if (IsValidLuaRef(old_ref)) {
 		luaL_unref(L, LUA_REGISTRYINDEX, old_ref);
 	}
 
@@ -415,7 +499,7 @@ int l_entity_get_component(lua_State* L) {
 
 	const char* name = luaL_checkstring(L, 2);
 	int ref = entity->GetLuaComponent(name);
-	if (ref != LUA_NOREF) {
+	if (IsValidLuaRef(ref)) {
 		lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
 	} else {
 		lua_pushnil(L);
@@ -433,7 +517,7 @@ int l_entity_remove_component(lua_State* L) {
 
 	const char* name = luaL_checkstring(L, 2);
 	int ref = entity->GetLuaComponent(name);
-	if (ref != LUA_NOREF) {
+	if (IsValidLuaRef(ref)) {
 		luaL_unref(L, LUA_REGISTRYINDEX, ref);
 		entity->RemoveLuaComponent(name);
 	}
@@ -445,21 +529,15 @@ int l_entity_remove_component(lua_State* L) {
 
 int l_entity_gc(lua_State* L) {
 	auto* ctx = GetEntityCtx(L, 1);
-	if (!ctx || ctx->disposed) return 0;
+	if (!ctx) return 0;
 
-	ctx->disposed = true;
-
-	for (auto& pair : ctx->timer_refs) {
-		luaL_unref(L, LUA_REGISTRYINDEX, pair.second);
-	}
-	ctx->timer_refs.clear();
-
-	if (ctx->conn_ref != LUA_NOREF) {
-		luaL_unref(L, LUA_REGISTRYINDEX, ctx->conn_ref);
-		ctx->conn_ref = LUA_NOREF;
+	if (!ctx->disposed) {
+		ctx->disposed = true;
+		ReleaseEntityCtxRefs(L, ctx);
+		EntityManager::Instance().DestroyEntity(ctx->id);
 	}
 
-	EntityManager::Instance().DestroyEntity(ctx->id);
+	EraseEntityContext(ctx);
 
 	lua_pushnil(L);
 	lua_setfield(L, 1, "_ctx");
@@ -514,15 +592,21 @@ void ExportEntity(ScriptVM& vm) {
 	luaL_newlib(L, kEntityFunctions);
 	lua_setglobal(L, "entity");
 
+	EntityManager::Instance().SetDestroyHook(OnEntityDestroyFromManager);
+
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "ScriptBind: entity module exported");
 }
 
 void ShutdownEntityBindings() {
-	// Destroy all entities managed by EntityManager.
-	// Lua refs are released by l_entity_gc during normal Lua GC,
-	// but explicit shutdown destroys remaining entities.
 	auto* logger = GetLogger();
+	for (auto& pair : g_entity_contexts) {
+		auto* ctx = pair.second;
+		if (!ctx || ctx->disposed) continue;
+		ctx->disposed = true;
+		ReleaseEntityCtxRefs(ctx->L, ctx);
+	}
+
 	size_t count = EntityManager::Instance().Count();
 	if (count > 0) {
 		EntityManager::Instance().DestroyAll();
