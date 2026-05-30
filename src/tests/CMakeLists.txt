@@ -37,6 +37,14 @@ if(NOT TARGET engine_lua_static)
     add_subdirectory(${ENGINE_ROOT}/thirdparty/lua ${CMAKE_BINARY_DIR}/lua)
 endif()
 
+if(NOT TARGET engine_kcp_static)
+    add_subdirectory(${ENGINE_ROOT}/thirdparty/kcp ${CMAKE_BINARY_DIR}/kcp EXCLUDE_FROM_ALL)
+endif()
+
+if(ENGINE_PROFILER_ENABLED AND NOT TARGET engine_perfetto_static)
+    add_subdirectory(${ENGINE_ROOT}/thirdparty/perfetto ${CMAKE_BINARY_DIR}/perfetto EXCLUDE_FROM_ALL)
+endif()
+
 set(ENGINE_EMBEDDED_TEST_CONFIG_HEADER
     "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/embedded_test_config.h"
 )
@@ -87,9 +95,13 @@ endif()
 
 set(ENGINE_EMBEDDED_TEST_LINK_LIBS
     engine_lua_static
+    engine_kcp_static
     ${ENGINE_EMBEDDED_TEST_PLATFORM_LIBS}
 )
 
+if(ENGINE_PROFILER_ENABLED)
+    list(APPEND ENGINE_EMBEDDED_TEST_LINK_LIBS engine_perfetto_static)
+endif()
 if(ENGINE_PHYSICS_ENABLED)
     list(APPEND ENGINE_EMBEDDED_TEST_LINK_LIBS Jolt)
 endif()
@@ -117,7 +129,6 @@ target_compile_definitions(engine_runtime_test_objects PRIVATE
     ENGINE_AUTOMATED_TESTS=1
     ENGINE_EMBEDDED_TESTS=1
     ENGINE_TEST_RUNTIME=1
-    "CLOUD_ENGINE_API="
 )
 
 if(WIN32)
@@ -163,7 +174,6 @@ function(configure_engine_test_entry name suite_macro)
         ENGINE_EMBEDDED_TESTS=1
         ${suite_macro}=1
         "ENGINE_TEST_TARGET_${test_target_id}=1"
-        "CLOUD_ENGINE_API="
     )
 
     if(WIN32)

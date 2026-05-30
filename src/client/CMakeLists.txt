@@ -135,6 +135,19 @@ if(NOT TARGET engine_lua_static)
     add_subdirectory(${ENGINE_ROOT}/thirdparty/lua ${CMAKE_BINARY_DIR}/lua)
 endif()
 
+if(NOT TARGET engine_kcp_static)
+    add_subdirectory(${ENGINE_ROOT}/thirdparty/kcp ${CMAKE_BINARY_DIR}/kcp EXCLUDE_FROM_ALL)
+endif()
+
+if(ENGINE_PROFILER_ENABLED AND NOT TARGET engine_perfetto_static)
+    add_subdirectory(${ENGINE_ROOT}/thirdparty/perfetto ${CMAKE_BINARY_DIR}/perfetto EXCLUDE_FROM_ALL)
+endif()
+
+list(APPEND LIBRARIES engine_kcp_static)
+if(ENGINE_PROFILER_ENABLED)
+    list(APPEND LIBRARIES engine_perfetto_static)
+endif()
+
 # ═══════════════════════════════════════════════════════════════════════
 # Third-party dependencies
 # ═══════════════════════════════════════════════════════════════════════
@@ -284,7 +297,6 @@ if(ENGINE_PHYSICS_ENABLED)
 endif()
 
 target_compile_definitions(GameClient PRIVATE ENGINE_BUILD CLIENT_BUILD)
-target_compile_definitions(GameClient PRIVATE "CLOUD_ENGINE_API=")
 
 if(ENGINE_PHYSICS_ENABLED)
     target_compile_definitions(GameClient PUBLIC ENGINE_PHYSICS_ENABLED)

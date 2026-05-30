@@ -120,6 +120,14 @@ if(NOT TARGET engine_lua_static)
     add_subdirectory(${ENGINE_ROOT}/thirdparty/lua ${CMAKE_BINARY_DIR}/lua)
 endif()
 
+if(NOT TARGET engine_kcp_static)
+    add_subdirectory(${ENGINE_ROOT}/thirdparty/kcp ${CMAKE_BINARY_DIR}/kcp EXCLUDE_FROM_ALL)
+endif()
+
+if(ENGINE_PROFILER_ENABLED AND NOT TARGET engine_perfetto_static)
+    add_subdirectory(${ENGINE_ROOT}/thirdparty/perfetto ${CMAKE_BINARY_DIR}/perfetto EXCLUDE_FROM_ALL)
+endif()
+
 if(NOT TARGET event_core_static)
     set(EVENT__DISABLE_TESTS ON CACHE BOOL "Disable libevent tests")
     set(EVENT__DISABLE_REGRESS ON CACHE BOOL "Disable libevent regression tests")
@@ -245,9 +253,13 @@ endif()
 
 set(ENGINE_RUNTIME_LINK_LIBS
     engine_lua_static
+    engine_kcp_static
     ${ENGINE_PLATFORM_LIBS}
 )
 
+if(ENGINE_PROFILER_ENABLED)
+    list(APPEND ENGINE_RUNTIME_LINK_LIBS engine_perfetto_static)
+endif()
 if(ENGINE_PHYSICS_ENABLED)
     list(APPEND ENGINE_RUNTIME_LINK_LIBS Jolt)
 endif()
@@ -276,7 +288,7 @@ add_dependencies(GameServer copy_resources)
 set_target_properties(GameServer PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
 
 target_include_directories(GameServer PRIVATE ${ENGINE_RUNTIME_INCLUDE_DIRS})
-target_compile_definitions(GameServer PRIVATE ENGINE_BUILD "CLOUD_ENGINE_API=")
+target_compile_definitions(GameServer PRIVATE ENGINE_BUILD)
 
 if(ENGINE_PHYSICS_ENABLED)
     target_compile_definitions(GameServer PRIVATE ENGINE_PHYSICS_ENABLED)

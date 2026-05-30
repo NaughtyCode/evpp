@@ -23,22 +23,6 @@ set(LUA_LIB_SOURCES ${ENGINE_LUA_LIB_SOURCES})
 set(LUA_SOURCES ${ENGINE_LUA_SOURCES})
 source_group("thirdparty\\lua" FILES ${LUA_SOURCES})
 
-# ── Perfetto ───────────────────────────────────────────────────────
-if(ENGINE_PROFILER_ENABLED)
-    set(PERFETTO_SOURCES
-        ${ENGINE_ROOT}/thirdparty/perfetto/perfetto.cc
-    )
-    source_group("thirdparty\\perfetto" FILES ${PERFETTO_SOURCES})
-else()
-    set(PERFETTO_SOURCES "")
-endif()
-
-# ── KCP ──────────────────────────────────────────────────────────
-set(KCP_SOURCES
-    ${ENGINE_ROOT}/thirdparty/kcp/ikcp.c
-)
-source_group("thirdparty\\kcp" FILES ${KCP_SOURCES})
-
 # ═══════════════════════════════════════════════════════════════════════
 # Engine modules
 # ═══════════════════════════════════════════════════════════════════════
@@ -327,8 +311,6 @@ source_group("database\\data_service" FILES ${DB_SERVICE_SOURCES})
 # ═══════════════════════════════════════════════════════════════════════
 
 set(SERVERENGINE_SOURCES
-    ${PERFETTO_SOURCES}
-    ${KCP_SOURCES}
     ${EXPORT_HEADER}
     ${MEM_SOURCES}
     ${LOG_SOURCES}
