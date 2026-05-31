@@ -102,7 +102,7 @@ Sets an attribute value by key name. The value type is auto-detected from the Lu
 | Parameter | Type | C Type | Description |
 |-----------|------|--------|-------------|
 | `key` | `string` | `const char*` (via `luaL_checkstring`) | Attribute name |
-| `value` | `integer` / `number` / `string` / `boolean` | Variant type (see below) | Value to store |
+| `value` | `integer` / `number` / `string` / `boolean` / `nil` | Variant type (see below) | Value to store. `nil` removes the attribute. |
 
 **类型映射：**
 
@@ -112,9 +112,22 @@ Sets an attribute value by key name. The value type is auto-detected from the Lu
 | `number` (float) | `double` |
 | `string` | `std::string` |
 | `boolean` | `bool` |
+| `nil` | remove existing attribute |
 | 其他类型 | 抛出 Lua error |
 
 | Returns | — | 无返回值 |
+
+### `entity:remove_attr(key)`
+
+Removes an attribute by key name.
+
+| Parameter | Type | C Type | Description |
+|-----------|------|--------|-------------|
+| `key` | `string` | `const char*` (via `luaL_checkstring`) | Attribute name |
+
+| Returns | Type | C Type | Description |
+|---------|------|--------|-------------|
+| `removed` | `boolean` | `int` (0/1 via `lua_pushboolean`) | `true` if the attribute existed and was removed |
 
 ### `entity:has_attr(key)`
 
@@ -127,6 +140,22 @@ Checks if an attribute exists.
 | Returns | Type | C Type | Description |
 |---------|------|--------|-------------|
 | `exists` | `boolean` | `int` (0/1 via `lua_pushboolean`) | `true` if the attribute exists |
+
+### `entity:attr_count()`
+
+Returns the current number of stored attributes.
+
+| Returns | Type | C Type | Description |
+|---------|------|--------|-------------|
+| `count` | `integer` | `lua_Integer` (via `lua_pushinteger`) | Attribute count |
+
+### `entity:list_attrs()`
+
+Returns all attribute keys as a 1-based Lua array.
+
+| Returns | Type | C Type | Description |
+|---------|------|--------|-------------|
+| `keys` | `table` | Lua table (array, via `lua_createtable` + `lua_rawseti`) | Attribute key strings |
 
 ### `entity:bind_connection(conn)`
 
@@ -251,6 +280,10 @@ Removes a Lua component by name and releases its registry ref.
 | `set_attr` | value (float) | `number` | `double` | `!lua_isinteger` → `lua_tonumber` |
 | `set_attr` | value (string) | `string` | `std::string` | `lua_tolstring` |
 | `set_attr` | value (bool) | `boolean` | `bool` | `lua_toboolean` |
+| `set_attr` | value (`nil`) | `nil` | remove attr | `lua_type == LUA_TNIL` |
+| `remove_attr` / `has_attr` | 返回值 | `boolean` | `bool` | `lua_pushboolean` |
+| `attr_count` | 返回值 | `integer` | `size_t` → `lua_Integer` | `lua_pushinteger` |
+| `list_attrs` | 返回值 | `table` | `std::vector<std::string>` | `lua_createtable` + `lua_rawseti` |
 | `bind_connection` | conn | `table` or `nil` | `int` (registry ref) | `luaL_ref` / `luaL_unref` |
 | `send` | data | `string` | `const char*` + `size_t` | `luaL_checklstring` |
 | `add_timer` | interval_ms | `integer` | `int64_t` | `luaL_checkinteger` |
@@ -281,6 +314,11 @@ log_info("HP: " .. hp)
 if e:has_attr("mana") then
     log_info("Has mana: " .. e:get_attr("mana"))
 end
+log_info("Attribute count: " .. e:attr_count())
+for _, key in ipairs(e:list_attrs()) do
+    log_debug("attr key: " .. key)
+end
+e:remove_attr("speed")
 
 -- Lua components (ECS pattern)
 e:add_component("movement", {

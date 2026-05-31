@@ -14,7 +14,7 @@ The Physics system uses Jolt Physics for rigid body simulation. It operates on a
 
 ## Module
 
-C++ API via `PhysicsCommand` structures. Not directly exposed to Lua — physics interactions go through higher-level game abstractions.
+C++ API via `PhysicsCommand` structures. The same subsystem is also exposed to Lua through the `physics` module documented below.
 
 ## Command Types
 

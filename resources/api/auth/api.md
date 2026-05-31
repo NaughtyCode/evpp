@@ -10,7 +10,7 @@
 
 ## Overview
 
-The Auth system provides Lua bindings for session management and token-based authentication. It exposes functions for creating/validating/revoking sessions and adding token-based credentials.
+The Auth system provides Lua bindings for session management, token authentication, JWT authentication, and permission checks. It exposes functions for backend selection, authentication, direct session creation, validation/revocation, and per-entity permissions.
 
 ## Module
 
@@ -39,6 +39,18 @@ Adds a token-to-entity mapping to the token authentication backend. If no backen
 |---------|------|--------|-------------|
 | `ok` | `boolean` | `int` (0/1 via `lua_pushboolean`) | `true` on success |
 
+### `auth.set_jwt_backend(secret)`
+
+Activates the JWT authentication backend and sets the shared secret used by `JwtAuthBackend`.
+
+| Parameter | Type | C Type | Description |
+|-----------|------|--------|-------------|
+| `secret` | `string` | `const char*` (via `luaL_checkstring`) | JWT signing/verification secret |
+
+| Returns | Type | C Type | Description |
+|---------|------|--------|-------------|
+| `ok` | `boolean` | `int` (0/1 via `lua_pushboolean`) | `true` on success |
+
 ### `auth.authenticate(method, params_table)`
 
 Authenticates using the specified method and parameters.
@@ -51,10 +63,50 @@ Authenticates using the specified method and parameters.
 | Returns | Type | C Type | Description |
 |---------|------|--------|-------------|
 | `ok` | `boolean` | `int` (0/1 via `lua_pushboolean`) | `true` on success |
-| `session_id` | `string` | `lua_pushstring` | Session ID (non-empty on success) |
-| `err` | `string` | `lua_pushstring` | Error message on failure |
+| `entity_id` | `string` | `lua_pushstring` | Authenticated entity ID on success |
+| `session_id` | `string` | `lua_pushstring` | Session ID on success |
+| `nil, err` | `nil, string` | `lua_pushnil` + `lua_pushstring` | Failure result |
 
-返回值数量：成功返回 2 个值（true, session_id），失败返回 2 个值（false, "authentication failed"）。
+返回值数量：成功返回 3 个值（`true, entity_id, session_id`），失败返回 2 个值（`nil, errmsg`）。
+
+### `auth.grant_permission(entity_id, permission)`
+
+Grants a permission string to an entity on the active auth backend. If no backend exists, a token backend is created automatically.
+
+| Parameter | Type | C Type | Description |
+|-----------|------|--------|-------------|
+| `entity_id` | `string` | `const char*` (via `luaL_checkstring`) | Entity identifier |
+| `permission` | `string` | `const char*` (via `luaL_checkstring`) | Permission key, for example `"admin"` or `"entity:read"` |
+
+| Returns | Type | C Type | Description |
+|---------|------|--------|-------------|
+| `ok` | `boolean` | `int` (0/1 via `lua_pushboolean`) | `true` on success |
+
+### `auth.revoke_permission(entity_id, permission)`
+
+Revokes a permission string from an entity.
+
+| Parameter | Type | C Type | Description |
+|-----------|------|--------|-------------|
+| `entity_id` | `string` | `const char*` (via `luaL_checkstring`) | Entity identifier |
+| `permission` | `string` | `const char*` (via `luaL_checkstring`) | Permission key |
+
+| Returns | Type | C Type | Description |
+|---------|------|--------|-------------|
+| `ok` | `boolean` | `int` (0/1 via `lua_pushboolean`) | `true` on success |
+
+### `auth.has_permission(entity_id, permission)`
+
+Checks whether an entity currently has a permission string.
+
+| Parameter | Type | C Type | Description |
+|-----------|------|--------|-------------|
+| `entity_id` | `string` | `const char*` (via `luaL_checkstring`) | Entity identifier |
+| `permission` | `string` | `const char*` (via `luaL_checkstring`) | Permission key |
+
+| Returns | Type | C Type | Description |
+|---------|------|--------|-------------|
+| `has_permission` | `boolean` | `int` (0/1 via `lua_pushboolean`) | `true` if granted |
 
 ### `auth.create_session(entity_id)`
 
@@ -102,9 +154,10 @@ Removes all expired sessions from the session manager.
 
 | 函数 | 参数/返回值 | Lua 类型 | 底层 C 类型 | 获取方式 |
 |------|-----------|----------|------------|---------|
-| 所有函数 | token / entity_id / method / session_id | `string` | `const char*` | `luaL_checkstring` |
+| 所有函数 | token / entity_id / method / session_id / permission / secret | `string` | `const char*` | `luaL_checkstring` |
 | `authenticate` | params_table | `table` | Lua table (string→string) | `lua_next` + `lua_isstring` |
-| `authenticate` / `create_session` | 返回值 session_id | `string` | `std::string` → `const char*` | `lua_pushstring` |
+| `authenticate` | 返回值 entity_id / session_id | `string` | `std::string` → `const char*` | `lua_pushstring` |
+| `create_session` | 返回值 session_id | `string` | `std::string` → `const char*` | `lua_pushstring` |
 | 所有函数 | 返回值 ok / valid | `boolean` | `int` (0/1) | `lua_pushboolean` |
 
 ## Example
@@ -117,12 +170,18 @@ auth.add_token("admin-token-456", "admin_001")
 
 -- Authenticate with token
 local params = { token = "secret-token-123" }
-local ok, session_id = auth.authenticate("token", params)
+local ok, entity_id, session_id = auth.authenticate("token", params)
 if ok then
-    log_info("Authenticated: session = " .. session_id)
+    log_info("Authenticated: entity = " .. entity_id .. ", session = " .. session_id)
 else
-    log_error("Authentication failed: " .. session_id)  -- session_id is error msg
+    log_error("Authentication failed: " .. entity_id)  -- entity_id is error msg on failure
 end
+
+auth.grant_permission("player_001", "entity:read")
+if auth.has_permission("player_001", "entity:read") then
+    log_info("player_001 can read entities")
+end
+auth.revoke_permission("player_001", "entity:read")
 
 -- Create session directly for an entity
 local sid = auth.create_session("player_002")

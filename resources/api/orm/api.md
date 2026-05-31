@@ -38,7 +38,7 @@ Registers a collection schema with the ORM session. Defines fields with types an
 |---------|------|--------|-------------|
 | `ok` | `boolean` | `int` (0/1 via `lua_pushboolean`) | `true` on success |
 
-### `orm.find(collection, query_table)`
+### `orm.find(collection, query_table [, options])`
 
 Finds documents matching a query. Returns an array of JSON document strings.
 
@@ -46,6 +46,7 @@ Finds documents matching a query. Returns an array of JSON document strings.
 |-----------|------|--------|-------------|
 | `collection` | `string` | `const char*` (via `luaL_checkstring`) | Collection name |
 | `query_table` | `table` | Lua table (via `lua_next` 遍历) | Query filter as key-value table。仅 string → string 条目有效。 |
+| `options` | `table` | Lua table | Optional `{ limit = integer, skip = integer }`; negative values are clamped to 0. |
 
 | Returns | Type | C Type | Description |
 |---------|------|--------|-------------|
@@ -120,6 +121,34 @@ Returns cache hit/miss statistics from the ORM session.
 | `misses` | `integer` | Total cache misses |
 | `hit_rate` | `number` | Global hit rate (0.0 ~ 1.0) |
 
+### `orm.clear_cache()`
+
+Clears all ORM caches.
+
+| Returns | Type | C Type | Description |
+|---------|------|--------|-------------|
+| `ok` | `boolean` | `int` (0/1 via `lua_pushboolean`) | `true` on success |
+
+### `orm.set_database(database)`
+
+Sets the default database name used by the ORM session.
+
+| Parameter | Type | C Type | Description |
+|-----------|------|--------|-------------|
+| `database` | `string` | `const char*` (via `luaL_checkstring`) | Default database name |
+
+| Returns | Type | C Type | Description |
+|---------|------|--------|-------------|
+| `ok` | `boolean` | `int` (0/1 via `lua_pushboolean`) | `true` on success |
+
+### `orm.get_database()`
+
+Returns the current default database name.
+
+| Returns | Type | C Type | Description |
+|---------|------|--------|-------------|
+| `database` | `string` | `lua_pushstring` | Default database name |
+
 ## Schema Field Types
 
 | Lua Type String | C++ FieldType | Description |
@@ -136,14 +165,17 @@ Returns cache hit/miss statistics from the ORM session.
 | 所有函数 | collection / id / doc_json / update_json | `string` | `const char*` | `luaL_checkstring` |
 | `define` | schema_table | `table` | Lua table | `lua_getfield` + `lua_next` 遍历 |
 | `find` | query_table | `table` | Lua table (string→string) | `lua_next` + `lua_isstring` |
+| `find` | options.limit / options.skip | `integer` | `int32_t` | `lua_getfield` + `lua_tointeger` |
 | `find` / `find_by_id` | 返回值 | `table` (JSON string array) / `string` / `nil` | `std::string` / `std::optional<std::string>` → `const char*` | `lua_pushstring` / `lua_pushnil` |
 | `cache_stats` | hits / misses | `integer` | `uint64_t` → `lua_Integer` | `lua_pushinteger` |
 | `cache_stats` | hit_rate | `number` | `double` | `lua_pushnumber` |
+| `set_database` / `get_database` | database | `string` | `std::string` / `const char*` | `luaL_checkstring` / `lua_pushstring` |
 
 ## Example
 
 ```lua
 -- Define a schema
+orm.set_database("game")
 orm.define("players", {
     fields = {
         name = "string",
@@ -163,7 +195,7 @@ orm.insert("players", '{"name":"player1","score":500,"level":10,"active":true,"w
 orm.insert("players", '{"name":"player2","score":300,"level":5,"active":false,"win_rate":0.42}')
 
 -- Find by query
-local results = orm.find("players", { active = "true" })
+local results = orm.find("players", { active = "true" }, { limit = 20, skip = 0 })
 for i, doc in ipairs(results) do
     log_info("Player " .. i .. ": " .. doc)
 end
@@ -184,4 +216,5 @@ orm.delete("players", "player2")
 local stats = orm.cache_stats()
 log_info(string.format("Cache: hits=%d misses=%d hit_rate=%.2f",
     stats.hits, stats.misses, stats.hit_rate))
+orm.clear_cache()
 ```

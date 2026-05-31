@@ -116,6 +116,18 @@ Sets the session timeout. Inactive sessions are cleaned up after this duration.
 
 | Returns | — | 无返回值 |
 
+### `server:set_max_message_size(max_bytes)`
+
+Sets the per-message receive size limit for all KCP sessions on this server.
+
+| Parameter | Type | C Type | Description |
+|-----------|------|--------|-------------|
+| `max_bytes` | `integer` | `lua_Integer` → `size_t` (via `luaL_checkinteger`) | Maximum accepted message payload size. Must be greater than 0. |
+
+| Returns | — | 无返回值 |
+
+Invalid values raise a Lua error.
+
 ## Callback Signature
 
 ```
@@ -137,6 +149,7 @@ on_message(data, remote_ip, conv)
 | callback | conv | `integer` | `uint32_t` → `lua_Integer` | `lua_pushinteger` |
 | KCP tuning | nodelay, interval, etc. | `integer` | `lua_Integer` → `int` | `luaL_checkinteger` |
 | `set_session_timeout` | timeout_ms | `integer` | `lua_Integer` → `uint32_t` | `luaL_checkinteger` |
+| `set_max_message_size` | max_bytes | `integer` | `lua_Integer` → `size_t` | `luaL_checkinteger` |
 
 ## Example
 
@@ -150,6 +163,7 @@ server:set_kcp_nodelay(1, 10, 2, 1)
 server:set_kcp_wnd_size(256, 256)
 server:set_kcp_mtu(1400)
 server:set_session_timeout(30000)
+server:set_max_message_size(1024 * 1024)
 
 -- Pause/resume
 server:pause()

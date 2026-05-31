@@ -4,9 +4,9 @@
 
 | 属性 | 值 |
 |------|-----|
-| **调用线程** | 调用者线程（通常为主线程 / EventLoop 线程）。所有 `aoi.*` 函数均为同步调用，直接操作全局 `AOIManager` 单例（通过 `std::unique_ptr<AOIManager>` 持有）。 |
-| **线程安全** | 否。`g_aoi_manager` 是进程级全局变量（`std::unique_ptr`），所有 ScriptVM 共享同一 AOI 实例。无锁保护，AOI 管理器内部使用 `SpatialGrid` 进行空间索引，非线程安全。所有 AOI 操作必须在同一线程上串行调用。多个 VM 共享 AOI 状态时需注意实体 ID 冲突。 |
-| **回调线程** | 仅事件日志。`aoi.init()` 注册了一个内置的 enter/leave 事件回调，该回调在 `RegisterEntity` / `OnEntityMove` / `UnregisterEntity` 调用期间同步触发，仅在调用者线程上打印 DEBUG 日志。没有 Lua 回调机制。 |
+| **调用线程** | 调用者线程（通常为主线程 / EventLoop 线程）。所有 `aoi.*` 函数均为同步调用，操作当前 ScriptVM registry 中保存的 `AOIManager` 实例。 |
+| **线程安全** | 否。每个 `lua_State` 拥有独立 AOI 状态，但 `AOIManager` / `SpatialGrid` 本身不提供跨线程同步。所有 AOI 操作必须在该 ScriptVM 所属线程串行调用。 |
+| **回调线程** | 调用者线程。`set_event_callback()` 注册的 Lua 回调会在 `register_entity` / `update_entity` / `unregister_entity` 触发可见性变化时同步调用。回调执行期间禁止再次修改 AOI。 |
 
 ## Overview
 
@@ -32,7 +32,22 @@ Initializes the AOI system with a spatial grid.
 |---------|------|--------|-------------|
 | `ok` | `boolean` | `int` (0/1 via `lua_pushboolean`) | `true` on success |
 
-初始化时自动注册一个内部 enter/leave 事件回调，打印 DEBUG 级别日志。
+再次调用会先清理当前 AOI 实例、事件回调和已注册实体，然后创建新的空间索引。
+
+### `aoi.set_event_callback(callback_or_nil)`
+
+Registers or clears the Lua enter/leave callback.
+
+| Parameter | Type | C Type | Description |
+|-----------|------|--------|-------------|
+| `callback_or_nil` | `function` or `nil` | Lua registry ref | Callback signature: `function(observer_id, target_id, entered)`。传 `nil` 清空回调。 |
+
+| Returns | Type | Description |
+|---------|------|-------------|
+| `ok` | `boolean` | `true` on success |
+| `nil, err` | `nil, string` | Returned when AOI is not initialized or when called from an AOI callback |
+
+`entered == true` 表示 `target_id` 进入 `observer_id` 的可见集合，`false` 表示离开。回调异常会记录日志并恢复 Lua 栈，不会向外继续抛出。
 
 ### `aoi.register_entity(entity_id, x, y [, aoi_radius])`
 
@@ -45,7 +60,7 @@ Registers an entity in the AOI system and sets its initial position.
 | `y` | `number` | `float` (via `luaL_checknumber` + `static_cast<float>`) | Y position in world-space |
 | `aoi_radius` | `number` | `float` (via `luaL_optnumber`, default 100.0) | Visibility radius (entities within this distance are "visible") |
 
-| Returns | — | 无返回值 |
+| Returns | — / `nil, err` | 成功无返回值；AOI 未初始化、回调内修改或底层异常时返回 `nil, err`。 |
 
 如果 AOI 未初始化，返回 `nil, "AOI not initialized"`。
 
@@ -59,7 +74,7 @@ Updates an entity's position. Triggers visibility recomputation — entities ent
 | `x` | `number` | `float` (via `luaL_checknumber` + `static_cast<float>`) | New X position |
 | `y` | `number` | `float` (via `luaL_checknumber` + `static_cast<float>`) | New Y position |
 
-| Returns | — | 无返回值（AOI 未初始化时无操作，不报错） |
+| Returns | — / `nil, err` | 成功无返回值；AOI 未初始化、回调内修改或底层异常时返回 `nil, err`。 |
 
 ### `aoi.unregister_entity(entity_id)`
 
@@ -69,7 +84,7 @@ Removes an entity from the AOI system. Fires leave events for all entities that 
 |-----------|------|--------|-------------|
 | `entity_id` | `integer` | `lua_Integer` → `entity::EntityId` (via `luaL_checkinteger`) | Entity identifier to remove |
 
-| Returns | — | 无返回值（AOI 未初始化时无操作） |
+| Returns | — / `nil, err` | 成功无返回值；AOI 未初始化或回调内修改时返回 `nil, err`。 |
 
 ### `aoi.get_visible(entity_id)`
 
@@ -116,6 +131,7 @@ Shuts down the AOI system, destroying the spatial grid and clearing all register
 | 函数 | 参数/返回值 | Lua 类型 | 底层 C 类型 | 获取方式 |
 |------|-----------|----------|------------|---------|
 | `init` | world_width, world_height, cell_size | `number` | `float` | `luaL_checknumber` / `luaL_optnumber` + `static_cast<float>` |
+| `set_event_callback` | callback_or_nil | `function` or `nil` | registry ref | `luaL_ref` / `luaL_unref` |
 | 所有实体操作 | entity_id | `integer` | `entity::EntityId` (uint64) | `luaL_checkinteger` + `static_cast<EntityId>` |
 | 位置相关 | x, y, new_x, new_y | `number` | `float` | `luaL_checknumber` + `static_cast<float>` |
 | `register_entity` | aoi_radius | `number` | `float` (default 100.0f) | `luaL_optnumber` + `static_cast<float>` |
@@ -128,6 +144,10 @@ Shuts down the AOI system, destroying the spatial grid and clearing all register
 ```lua
 -- Initialize AOI for a 10000x10000 world with 50-unit cells
 aoi.init(10000, 10000, 50)
+aoi.set_event_callback(function(observer, target, entered)
+    local event = entered and "entered" or "left"
+    log_debug(string.format("AOI: %d %s %d", target, event, observer))
+end)
 
 -- Register entities
 aoi.register_entity(1001, 100, 200, 150)  -- entity 1001 at (100,200), sees 150 units
@@ -160,6 +180,7 @@ aoi.shutdown()
 ## Notes
 
 - AOI uses a uniform grid (`SpatialGrid`) — optimal for evenly-distributed entities
-- The enter/leave event callback is hardcoded to DEBUG log (not configurable from Lua)
+- The enter/leave event callback is configured by `aoi.set_event_callback(callback_or_nil)`
+- AOI mutation APIs return `nil, err` instead of raising for not-initialized state and callback reentrancy guard failures
 - `aoi_radius` determines an entity's visibility range in both directions (observer and observed)
 - Uninitialized AOI gracefully returns empty tables or 0 rather than throwing errors
