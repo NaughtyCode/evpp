@@ -190,6 +190,31 @@ TEST_CASE("Stats reflect active/total counts", "[timer][stats]") {
 // TimerManager: concurrent access (basic)
 // ═══════════════════════════════════════════════════════════════════════════
 
+TEST_CASE("Stats sample subsystem expiry counters on demand", "[timer][stats]") {
+    TimerFixture f;
+    f.Reset();
+
+    int hrtimer_fired = 0;
+    f.CreateTimeout(10, [&hrtimer_fired]() { ++hrtimer_fired; });
+
+    auto hrtimer_result = f.AdvanceBy(std::chrono::milliseconds(20));
+    auto stats = f.tm.stats();
+    REQUIRE(hrtimer_result.hrtimers_fired == 1);
+    REQUIRE(hrtimer_fired == 1);
+    REQUIRE(stats.hrtimer_stats.total_expired == 1);
+
+    int wheel_fired = 0;
+    auto wheel_id = f.tm.create_wheel_timer(
+        [&wheel_fired](engine::TimerWheelNode*) { ++wheel_fired; });
+    f.tm.start_wheel_timer(wheel_id, 1);
+
+    auto wheel_result = f.AdvanceBy(std::chrono::milliseconds(2));
+    stats = f.tm.stats();
+    REQUIRE(wheel_result.wheel_timers_fired == 1);
+    REQUIRE(wheel_fired == 1);
+    REQUIRE(stats.wheel_stats.total_expired == 1);
+}
+
 TEST_CASE("Create and destroy many timers", "[timer][stress]") {
     TimerFixture f;
     f.Reset();

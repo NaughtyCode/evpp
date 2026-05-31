@@ -227,7 +227,6 @@ TimerManager::UpdateResult TimerManager::update(TimePoint current_time) {
 
 TimerManager::UpdateResult TimerManager::update_hrtimers(UpdateResult result, TimePoint now) {
 	result.hrtimers_fired = hrtimer_mgr_->process_all_expired(now);
-	stats_.hrtimer_stats = hrtimer_mgr_->stats();
 	return result;
 }
 
@@ -246,7 +245,6 @@ TimerManager::UpdateResult TimerManager::update_wheel(UpdateResult result) {
 		}
 		result.wheel_timers_fired = fired_count;
 	}
-	stats_.wheel_stats = wheel_->stats();
 	return result;
 }
 
