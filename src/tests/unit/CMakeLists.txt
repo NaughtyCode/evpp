@@ -77,6 +77,10 @@ add_unit_test(test_rate_limiter network/test_rate_limiter.cpp)
 add_test(NAME unit.network.rate_limiter COMMAND test_rate_limiter)
 set_tests_properties(unit.network.rate_limiter PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
+add_unit_test(test_evpp_utilities network/test_evpp_utilities.cpp)
+add_test(NAME unit.network.evpp_utilities COMMAND test_evpp_utilities)
+set_tests_properties(unit.network.evpp_utilities PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
 # ── Entity tests ────────────────────────────────────────────────────
 add_unit_test(test_entity entity/test_entity.cpp)
 add_test(NAME unit.entity COMMAND test_entity)
@@ -94,6 +98,14 @@ set_tests_properties(unit.rpc_bind PROPERTIES LABELS "unit" WORKING_DIRECTORY "$
 add_unit_test(test_json_bind script/test_json_bind.cpp)
 add_test(NAME unit.json_bind COMMAND test_json_bind)
 set_tests_properties(unit.json_bind PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
+add_unit_test(test_net_bind script/test_net_bind.cpp)
+add_test(NAME unit.net_bind COMMAND test_net_bind)
+set_tests_properties(unit.net_bind PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
+add_unit_test(test_mem_bind script/test_mem_bind.cpp)
+add_test(NAME unit.mem_bind COMMAND test_mem_bind)
+set_tests_properties(unit.mem_bind PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
 # ── Auth tests ──────────────────────────────────────────────────────
 add_unit_test(test_auth auth/test_auth.cpp)
