@@ -2,12 +2,14 @@
 
 #include "log_init.h"
 #include "runtime/entity/entity.h"
+#include "runtime/entity/entity_manager.h"
 #include "runtime/script/space_bind.h"
 #include "runtime/space/connection_router.h"
 #include "runtime/space/space.h"
 #include "runtime/space/space_manager.h"
 #include "runtime/space/space_message.h"
 #include "runtime/vm/vm.h"
+#include "timer_fixture.h"
 
 using namespace engine::space;
 using namespace engine::entity;
@@ -132,6 +134,33 @@ TEST_CASE("Space CreateEntity leaves entity in Created state", "[space][entity]"
     auto* e = space.CreateEntity();
     REQUIRE(e != nullptr);
     REQUIRE(e->GetState() == EntityState::Created);
+}
+
+TEST_CASE("Space entity timer uses space-local lookup", "[space][entity][timer]") {
+    TimerFixture f;
+    f.Reset();
+    EntityManager::Instance().SetTimerManager(&f.tm);
+    struct ResetTimerManager {
+        ~ResetTimerManager() {
+            EntityManager::Instance().SetTimerManager(nullptr);
+        }
+    } reset;
+
+    SpaceConfig cfg;
+    Space space(1, cfg);
+    auto* e = space.CreateEntity(4242);
+    REQUIRE(e != nullptr);
+    e->Activate();
+
+    int fired = 0;
+    auto tid = e->AddTimer(10, false, [&fired]() {
+        ++fired;
+    });
+    REQUIRE(tid != engine::kInvalidTimerId);
+
+    f.AdvanceBy(std::chrono::milliseconds(50));
+    REQUIRE(fired == 1);
+    REQUIRE(e->OwnedTimerCount() == 0);
 }
 
 TEST_CASE("Space GetEntity returns entity by id", "[space][entity]") {

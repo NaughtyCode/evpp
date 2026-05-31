@@ -11,6 +11,7 @@
 
 #include "runtime/core/engine_api.h"
 #include "runtime/database/cache.h"
+#include "runtime/database/data_service/db_request.h"
 
 namespace engine {
 
@@ -103,6 +104,13 @@ public:
 	// Clear all caches.
 	void ClearAllCaches();
 
+	// Persistence backpressure visibility. Write operations still apply to the
+	// local cache, but failed async DB enqueue attempts are retained here for
+	// diagnostics and explicit retry.
+	size_t PendingPersistenceFailureCount() const;
+	size_t RetryPendingPersistenceFailures(size_t max_requests = 0);
+	void ClearPendingPersistenceFailures();
+
 private:
 	OrmSession() = default;
 	OrmSession(const OrmSession&) = delete;
@@ -112,12 +120,14 @@ private:
 
 	CollectionSchema* GetMutableSchema(const std::string& collection);
 	uint64_t NextRequestId();
+	bool QueueBestEffortWrite(DbRequest&& req);
 
 	mutable std::mutex mutex_;
 	std::string default_database_ = "game";
 	std::unordered_map<std::string, CollectionSchema> schemas_;
 	std::unordered_map<std::string, std::unique_ptr<EntityCache<std::string>>> caches_;
 	std::unordered_map<std::string, std::unordered_map<std::string, std::string>> local_store_;
+	std::vector<DbRequest> pending_persistence_failures_;
 	uint64_t next_request_id_ = 1;
 };
 

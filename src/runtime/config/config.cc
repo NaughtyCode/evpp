@@ -614,6 +614,11 @@ ConfigChangeSet ConfigManager::Diff(const RuntimeConfig& old_rt,
 	EmitChange(changes, "admin_port",
 			   ToString(old_srv.admin_port), ToString(new_srv.admin_port));
 	EmitChange(changes, "admin_bind_address", old_srv.admin_bind_address, new_srv.admin_bind_address);
+	EmitChange(changes, "admin_auth_token",
+			   old_srv.admin_auth_token.empty() ? "unset" : "set",
+			   new_srv.admin_auth_token.empty() ? "unset" : "set");
+	EmitChange(changes, "admin_metrics_enabled",
+			   ToString(old_srv.admin_metrics_enabled), ToString(new_srv.admin_metrics_enabled));
 	EmitChange(changes, "mongodb_dev", old_srv.mongodb_dev, new_srv.mongodb_dev);
 	EmitChange(changes, "mongodb_public", old_srv.mongodb_public, new_srv.mongodb_public);
 	EmitChange(changes, "active_mongodb", old_srv.active_mongodb, new_srv.active_mongodb);

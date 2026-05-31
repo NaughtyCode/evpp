@@ -91,6 +91,7 @@ int l_config_get(lua_State* L) {
     if (p == "server.scripts_dir")            return PushConfigValue(L, srv.scripts_dir);
     if (p == "server.admin_port")             return PushConfigValue(L, srv.admin_port);
     if (p == "server.admin_bind_address")     return PushConfigValue(L, srv.admin_bind_address);
+    if (p == "server.admin_metrics_enabled")  return PushConfigValue(L, srv.admin_metrics_enabled);
     if (p == "server.shutdown_timeout_sec")   return PushConfigValue(L, srv.shutdown_timeout_sec);
     if (p == "server.connection_drain_timeout_sec") return PushConfigValue(L, srv.connection_drain_timeout_sec);
     if (p == "server.max_connections")        return PushConfigValue(L, srv.max_connections);

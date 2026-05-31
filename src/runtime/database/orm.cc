@@ -1,6 +1,9 @@
 #include "runtime/database/orm.h"
 
+#include <algorithm>
+#include <cstddef>
 #include <cstring>
+#include <iterator>
 #include <sstream>
 #include <utility>
 
@@ -221,8 +224,8 @@ std::string NormalizeMongoUpdateJson(const std::string& update_json) {
 	return "{\"$set\":" + update_json + "}";
 }
 
-void SendBestEffort(DbRequest&& req) {
-	DatabaseService::Instance().SendRequest(std::move(req));
+bool SendBestEffort(DbRequest&& req) {
+	return DatabaseService::Instance().SendRequest(std::move(req));
 }
 
 }  // namespace
@@ -283,6 +286,21 @@ CollectionSchema* OrmSession::GetMutableSchema(const std::string& collection) {
 
 uint64_t OrmSession::NextRequestId() {
 	return next_request_id_++;
+}
+
+bool OrmSession::QueueBestEffortWrite(DbRequest&& req) {
+	DbRequest retry_copy = req;
+	if (SendBestEffort(std::move(req))) {
+		return true;
+	}
+
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		pending_persistence_failures_.push_back(std::move(retry_copy));
+	}
+	ENGINE_LOG_ERROR(GetLogger(),
+					 "ORM: failed to enqueue persistence request, queued for retry");
+	return false;
 }
 
 std::optional<std::string> OrmSession::FindById(const std::string& collection,
@@ -381,7 +399,7 @@ bool OrmSession::Insert(const std::string& collection, const std::string& doc_js
 		req.bson_data = doc_json;
 	}
 
-	SendBestEffort(std::move(req));
+	QueueBestEffortWrite(std::move(req));
 	return true;
 }
 
@@ -424,7 +442,7 @@ bool OrmSession::Update(const std::string& collection,
 		req.bson_data2 = NormalizeMongoUpdateJson(update_json);
 	}
 
-	SendBestEffort(std::move(req));
+	QueueBestEffortWrite(std::move(req));
 	return true;
 }
 
@@ -451,7 +469,7 @@ bool OrmSession::DeleteById(const std::string& collection, const std::string& id
 		req.bson_data = BuildIdFilterJson(id);
 	}
 
-	SendBestEffort(std::move(req));
+	QueueBestEffortWrite(std::move(req));
 	return true;
 }
 
@@ -492,6 +510,53 @@ void OrmSession::ClearAllCaches() {
 	for (auto& [name, cache] : caches_) {
 		cache->Clear();
 	}
+}
+
+size_t OrmSession::PendingPersistenceFailureCount() const {
+	std::lock_guard<std::mutex> lock(mutex_);
+	return pending_persistence_failures_.size();
+}
+
+size_t OrmSession::RetryPendingPersistenceFailures(size_t max_requests) {
+	std::vector<DbRequest> retry_batch;
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		const size_t limit = max_requests == 0
+			? pending_persistence_failures_.size()
+			: std::min(max_requests, pending_persistence_failures_.size());
+		retry_batch.reserve(limit);
+		for (size_t i = 0; i < limit; ++i) {
+			retry_batch.push_back(std::move(pending_persistence_failures_[i]));
+		}
+		pending_persistence_failures_.erase(
+			pending_persistence_failures_.begin(),
+			pending_persistence_failures_.begin() + static_cast<std::ptrdiff_t>(limit));
+	}
+
+	size_t requeued = 0;
+	std::vector<DbRequest> still_failed;
+	for (auto& req : retry_batch) {
+		DbRequest retry_copy = req;
+		if (SendBestEffort(std::move(req))) {
+			++requeued;
+		} else {
+			still_failed.push_back(std::move(retry_copy));
+		}
+	}
+
+	if (!still_failed.empty()) {
+		std::lock_guard<std::mutex> lock(mutex_);
+		pending_persistence_failures_.insert(
+			pending_persistence_failures_.begin(),
+			std::make_move_iterator(still_failed.begin()),
+			std::make_move_iterator(still_failed.end()));
+	}
+	return requeued;
+}
+
+void OrmSession::ClearPendingPersistenceFailures() {
+	std::lock_guard<std::mutex> lock(mutex_);
+	pending_persistence_failures_.clear();
 }
 
 }  // namespace database

@@ -25,6 +25,7 @@ public:
 	static EntityManager& Instance();
 
 	void SetTimerManager(TimerManager* tm);
+	TimerManager* GetTimerManager() const { return timer_mgr_; }
 	void SetDestroyHook(EntityDestroyHook hook) { on_destroy_ = std::move(hook); }
 	void NotifyEntityDestroying(Entity& entity);
 

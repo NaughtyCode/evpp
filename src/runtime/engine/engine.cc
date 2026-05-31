@@ -12,7 +12,6 @@
 
 #include <csignal>
 #include <cstdio>
-#include <cstdlib>
 #include <filesystem>
 #include <memory>
 #include <stdexcept>
@@ -573,15 +572,17 @@ void Engine::Cleanup() {
 		config_reload_callback_id_ = 0;
 	}
 
+	bool cleanup_timed_out = false;
 	auto check_timeout = [&](const char* phase_name) -> bool {
 		auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
 			std::chrono::steady_clock::now() - cleanup_start).count();
 		if (shutdown_timeout > 0 && elapsed > shutdown_timeout) {
 			auto* log = GetLogger();
 			ENGINE_LOG_CRITICAL(log,
-			                    "Cleanup: timeout after {}s at phase {}, force-exiting",
+			                    "Cleanup: timeout after {}s at phase {}, forcing best-effort teardown",
 			                    elapsed, phase_name);
-			std::quick_exit(EXIT_FAILURE);
+			cleanup_timed_out = true;
+			return false;
 		}
 		return true;
 	};
@@ -616,7 +617,7 @@ void Engine::Cleanup() {
 	{
 		const int64_t active_connections =
 			monitoring::MetricsRegistry::Instance().connections_active().Value();
-		if (drain_timeout > 0 && active_connections > 0) {
+		if (!cleanup_timed_out && drain_timeout > 0 && active_connections > 0) {
 			auto drain_deadline = std::chrono::steady_clock::now()
 				+ std::chrono::seconds(drain_timeout);
 			ENGINE_LOG_INFO(logger,
@@ -687,7 +688,12 @@ void Engine::Cleanup() {
 
 	auto total_elapsed = std::chrono::duration_cast<std::chrono::seconds>(
 		std::chrono::steady_clock::now() - cleanup_start).count();
-	ENGINE_LOG_INFO(logger, "Cleanup: complete, total_time={}s", total_elapsed);
+	if (cleanup_timed_out) {
+		ENGINE_LOG_CRITICAL(logger, "Cleanup: best-effort teardown complete after timeout, total_time={}s",
+							total_elapsed);
+	} else {
+		ENGINE_LOG_INFO(logger, "Cleanup: complete, total_time={}s", total_elapsed);
+	}
 
 	cleanup_phase_.store(CleanupPhase::Complete, std::memory_order_release);
 	initialized_.store(false, std::memory_order_release);

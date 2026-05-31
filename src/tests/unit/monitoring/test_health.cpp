@@ -125,6 +125,22 @@ TEST_CASE("AdminHttpServer::Start with valid loop", "[health][admin]") {
 // Engine: initialized() with test instance (SetInstanceForTesting)
 // ═══════════════════════════════════════════════════════════════════════════
 
+TEST_CASE("AdminHttpServer refuses non-loopback bind without token", "[health][admin]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    REQUIRE(cfg.LoadServerFromString(R"({
+        "http": { "timeout_sec": 5.0 },
+        "msgpack": { "max_nesting_depth": 16 },
+        "scripts_dir": ".",
+        "admin_port": 18083,
+        "admin_bind_address": "127.0.0.1"
+    })"));
+
+    engine::monitoring::AdminHttpServer server;
+    evpp::EventLoop loop;
+    REQUIRE_FALSE(server.Start(&loop, 18083, "0.0.0.0"));
+    REQUIRE_FALSE(server.IsRunning());
+}
+
 TEST_CASE("Engine test instance: initialized accessor", "[health][engine][test_instance]") {
     // Verify SetInstanceForTesting / ClearTestInstance works
     auto& real = engine::Engine::Instance();

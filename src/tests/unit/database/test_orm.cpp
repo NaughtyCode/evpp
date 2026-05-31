@@ -354,6 +354,22 @@ TEST_CASE("ClearAllCaches resets caches", "[orm][cache]") {
     REQUIRE_NOTHROW(session.ClearAllCaches());
 }
 
+TEST_CASE("Write enqueue failures are visible for retry", "[orm][persistence]") {
+    OrmSession& session = OrmSession::Instance();
+
+    CollectionSchema schema;
+    schema.collection_name = "pending_failure_test";
+    session.RegisterSchema(schema);
+
+    const auto before = session.PendingPersistenceFailureCount();
+    REQUIRE(session.Insert("pending_failure_test", R"({"id":"p1"})"));
+    REQUIRE(session.PendingPersistenceFailureCount() >= before + 1);
+
+    const auto retried = session.RetryPendingPersistenceFailures(1);
+    REQUIRE(retried == 0);
+    REQUIRE(session.PendingPersistenceFailureCount() >= before + 1);
+}
+
 // ============================================================================
 // OrmSession: CRUD on unregistered collection
 // ============================================================================

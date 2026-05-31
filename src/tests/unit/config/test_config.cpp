@@ -272,6 +272,32 @@ TEST_CASE("ConfigValidator rejects msgpack.max_nesting_depth = 0", "[config][val
     })"));
 }
 
+TEST_CASE("ConfigValidator rejects public admin bind without token", "[config][validation]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    REQUIRE_FALSE(cfg.LoadServerFromString(R"({
+        "http": { "timeout_sec": 5.0 },
+        "msgpack": { "max_nesting_depth": 16 },
+        "scripts_dir": ".",
+        "admin_port": 8081,
+        "admin_bind_address": "0.0.0.0"
+    })"));
+}
+
+TEST_CASE("ConfigValidator accepts public admin bind with token", "[config][validation]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    REQUIRE(cfg.LoadServerFromString(R"({
+        "http": { "timeout_sec": 5.0 },
+        "msgpack": { "max_nesting_depth": 16 },
+        "scripts_dir": ".",
+        "admin_port": 8081,
+        "admin_bind_address": "0.0.0.0",
+        "admin_auth_token": "test-token"
+    })"));
+
+    auto srv = cfg.GetServerConfig();
+    REQUIRE(srv.admin_auth_token == "test-token");
+}
+
 TEST_CASE("ConfigValidator rejects invalid operational server settings", "[config][validation]") {
     auto& cfg = engine::ConfigManager::Instance();
     REQUIRE_FALSE(cfg.LoadServerFromString(R"({

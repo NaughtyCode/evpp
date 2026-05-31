@@ -62,6 +62,12 @@ void MergeResult(ConfigValidator::Result& dest, const ConfigValidator::Result& s
 	}
 }
 
+bool IsLoopbackBindAddress(const std::string& address) {
+	return address == "127.0.0.1" ||
+		   address == "::1" ||
+		   address == "localhost";
+}
+
 }  // namespace
 
 // ── RuntimeConfig validation ──────────────────────────────────────────────
@@ -142,6 +148,13 @@ ConfigValidator::Result ConfigValidator::ValidateServer(const ServerConfig& conf
 	if (config.admin_port != 0) {
 		CheckRange(r, config.admin_port, 1, 65535, "admin_port");
 		CheckNotEmpty(r, config.admin_bind_address, "admin_bind_address");
+		if (!config.admin_bind_address.empty() &&
+			!IsLoopbackBindAddress(config.admin_bind_address) &&
+			config.admin_auth_token.empty()) {
+			r.valid = false;
+			if (!r.errors.empty()) r.errors += "; ";
+			r.errors += "admin_auth_token is required when admin_bind_address is not loopback";
+		}
 	}
 
 	// http

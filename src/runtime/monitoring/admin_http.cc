@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <sstream>
+#include <utility>
 
 #include <runtime/evpp/event_loop.h>
 
@@ -35,6 +36,64 @@ double UptimeSeconds() {
 	EnsureStartTime();
 	auto now = std::chrono::steady_clock::now();
 	return std::chrono::duration<double>(now - g_start_time).count();
+}
+
+bool IsLoopbackBindAddress(const std::string& address) {
+	return address == "127.0.0.1" ||
+		   address == "::1" ||
+		   address == "localhost";
+}
+
+bool ConstantTimeEqual(const std::string& lhs, const std::string& rhs) {
+	if (lhs.size() != rhs.size()) return false;
+	unsigned char diff = 0;
+	for (size_t i = 0; i < lhs.size(); ++i) {
+		diff |= static_cast<unsigned char>(lhs[i] ^ rhs[i]);
+	}
+	return diff == 0;
+}
+
+bool HasValidAdminToken(const evpp::http::ContextPtr& ctx,
+						const std::string& expected_token) {
+	const char* auth = ctx->FindRequestHeader("Authorization");
+	if (auth) {
+		const std::string header(auth);
+		const std::string prefix = "Bearer ";
+		if (header.rfind(prefix, 0) == 0 &&
+			ConstantTimeEqual(header.substr(prefix.size()), expected_token)) {
+			return true;
+		}
+	}
+
+	const char* token = ctx->FindRequestHeader("X-Admin-Token");
+	return token && ConstantTimeEqual(token, expected_token);
+}
+
+bool AuthorizeAdminRequest(const evpp::http::ContextPtr& ctx,
+						   const evpp::http::HTTPSendResponseCallback& respcb) {
+	auto server_cfg = ConfigManager::Instance().GetServerConfig();
+	if (server_cfg.admin_auth_token.empty()) {
+		return true;
+	}
+
+	if (HasValidAdminToken(ctx, server_cfg.admin_auth_token)) {
+		return true;
+	}
+
+	ctx->set_response_http_code(401);
+	ctx->AddResponseHeader("WWW-Authenticate", "Bearer");
+	respcb("{\"status\":\"unauthorized\"}");
+	return false;
+}
+
+evpp::http::HTTPRequestCallback GuardAdminHandler(evpp::http::HTTPRequestCallback handler) {
+	return [handler = std::move(handler)](
+		evpp::EventLoop* loop,
+		const evpp::http::ContextPtr& ctx,
+		const evpp::http::HTTPSendResponseCallback& respcb) {
+		if (!AuthorizeAdminRequest(ctx, respcb)) return;
+		handler(loop, ctx, respcb);
+	};
 }
 
 const char* CleanupPhaseToString(engine::Engine::CleanupPhase phase) {
@@ -245,8 +304,14 @@ void HandleStats(evpp::EventLoop*, const evpp::http::ContextPtr&,
 
 // ── /metrics ─────────────────────────────────────────────────────────
 
-void HandleMetrics(evpp::EventLoop*, const evpp::http::ContextPtr&,
+void HandleMetrics(evpp::EventLoop*, const evpp::http::ContextPtr& ctx,
 				   const evpp::http::HTTPSendResponseCallback& respcb) {
+	auto server_cfg = ConfigManager::Instance().GetServerConfig();
+	if (!server_cfg.admin_metrics_enabled) {
+		ctx->set_response_http_code(404);
+		respcb("# metrics disabled\n");
+		return;
+	}
 	respcb(MetricsRegistry::Instance().ExportPrometheus());
 }
 
@@ -266,6 +331,18 @@ bool AdminHttpServer::Start(evpp::EventLoop* loop, int port,
 	loop_ = loop;
 	port_ = port;
 	bind_address_ = bind_address;
+
+	auto server_cfg = ConfigManager::Instance().GetServerConfig();
+	if (!IsLoopbackBindAddress(bind_address_) && server_cfg.admin_auth_token.empty()) {
+		auto* logger = engine::GetLogger();
+		ENGINE_LOG_ERROR(logger,
+						 "AdminHttpServer: refusing unauthenticated non-loopback bind on {}:{}",
+						 bind_address_, port);
+		loop_ = nullptr;
+		port_ = 0;
+		bind_address_ = "127.0.0.1";
+		return false;
+	}
 
 	service_ = std::make_unique<evpp::http::Service>(loop);
 	if (!service_->Listen(bind_address_, port)) {
@@ -300,13 +377,13 @@ void AdminHttpServer::Stop() {
 }
 
 void AdminHttpServer::RegisterHandlers() {
-	service_->RegisterHandler("/health", HandleHealth);
-	service_->RegisterHandler("/health/startup", HandleStartup);
-	service_->RegisterHandler("/health/readiness", HandleReadiness);
-	service_->RegisterHandler("/health/liveness", HandleLiveness);
-	service_->RegisterHandler("/health/phase", HandleHealthPhase);
-	service_->RegisterHandler("/stats", HandleStats);
-	service_->RegisterHandler("/metrics", HandleMetrics);
+	service_->RegisterHandler("/health", GuardAdminHandler(HandleHealth));
+	service_->RegisterHandler("/health/startup", GuardAdminHandler(HandleStartup));
+	service_->RegisterHandler("/health/readiness", GuardAdminHandler(HandleReadiness));
+	service_->RegisterHandler("/health/liveness", GuardAdminHandler(HandleLiveness));
+	service_->RegisterHandler("/health/phase", GuardAdminHandler(HandleHealthPhase));
+	service_->RegisterHandler("/stats", GuardAdminHandler(HandleStats));
+	service_->RegisterHandler("/metrics", GuardAdminHandler(HandleMetrics));
 }
 
 }  // namespace monitoring

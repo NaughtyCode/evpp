@@ -13,7 +13,9 @@ DATABASE_SERVICE_INTERNAL_ACCESS before including this header."
 #include <atomic>
 #include <chrono>
 #include <concurrentqueue.h>
+#include <deque>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 
@@ -159,6 +161,9 @@ class DBThread {
 		response_queue_;  // [SPSC] DBT → MT (DBT: enqueue, MT: try_dequeue)
 
 	// ── Thread control ─────────────────────────────────────────────────
+	std::mutex overflow_response_mutex_;
+	std::deque<DbResponse> overflow_responses_;
+
 	std::unique_ptr<std::thread> thread_;  // [MT] lifecycle (spawned in Start, joined in Stop)
 	std::atomic<bool> running_{false};	// [ATOM] MT writes (Start/Stop), DBT reads (loop condition)
 	std::atomic<bool> healthy_{

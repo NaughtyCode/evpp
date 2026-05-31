@@ -350,6 +350,8 @@ struct ServerConfig {
 
 	int admin_port = 8081;  // admin HTTP port; 0 = disabled
 	std::string admin_bind_address = "127.0.0.1";  // bind for admin HTTP
+	std::string admin_auth_token;  // optional bearer token for admin HTTP
+	bool admin_metrics_enabled = true;  // expose /metrics when true
 	std::string config_webhook_url;                 // POST after Reload (empty=off)
 	int config_webhook_timeout_sec = 5;
 

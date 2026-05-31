@@ -31,6 +31,7 @@ class EntityManager;
 class CLOUD_ENGINE_API Entity {
 public:
 	static constexpr uint32_t kInvalidPhysicsBodyId = UINT32_MAX;
+	using EntityResolver = std::function<Entity*(EntityId)>;
 
 	explicit Entity(EntityId id);
 	~Entity();
@@ -104,6 +105,7 @@ public:
 	// TimerManager injection — set by EntityManager at creation time.
 	void SetTimerManager(TimerManager* tm) { timer_mgr_ = tm; }
 	TimerManager* GetTimerManager() const { return timer_mgr_; }
+	void SetEntityResolver(EntityResolver resolver) { entity_resolver_ = std::move(resolver); }
 
 	// Timer ownership — timers are auto-cancelled on Destroy.
 	// The callback should capture EntityId and check EntityManager for safety.
@@ -127,6 +129,7 @@ private:
 	bool connection_registered_ = false;
 	std::vector<TimerId> owned_timers_;
 	TimerManager* timer_mgr_ = nullptr;
+	EntityResolver entity_resolver_;
 
 	// type_index → type-erased component
 	std::unordered_map<std::type_index, std::shared_ptr<void>> components_;

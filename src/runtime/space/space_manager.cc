@@ -1,5 +1,6 @@
 #include "runtime/space/space_manager.h"
 
+#include <limits>
 #include <vector>
 
 #include "runtime/core/log/log.h"
@@ -15,13 +16,22 @@ SpaceManager& SpaceManager::Instance() {
 
 Space* SpaceManager::CreateSpace(const SpaceConfig& config) {
 	ENGINE_PROFILE_SPACE_CREATE();
-	for (;;) {
+	constexpr size_t kMaxAllocationAttempts = 1024;
+	for (size_t attempts = 0; attempts < kMaxAllocationAttempts; ++attempts) {
 		SpaceId id = next_space_id_.fetch_add(1, std::memory_order_relaxed);
 		if (id == kInvalidSpaceId || spaces_.find(id) != spaces_.end()) {
 			continue;
 		}
 		return CreateSpaceWithId(id, config);
 	}
+
+	auto* logger = GetLogger();
+	if (logger) {
+		ENGINE_LOG_CRITICAL(logger,
+							"SpaceManager: failed to allocate space id after {} attempts",
+							kMaxAllocationAttempts);
+	}
+	return nullptr;
 }
 
 Space* SpaceManager::CreateSpaceWithId(SpaceId id, const SpaceConfig& config) {
@@ -50,6 +60,10 @@ Space* SpaceManager::CreateSpaceWithId(SpaceId id, const SpaceConfig& config) {
 	if (logger) {
 		ENGINE_LOG_INFO(logger, "SpaceManager: created space [{}] name=[{}], total=[{}]",
 						id, config.name, spaces_.size());
+	}
+
+	if (id == std::numeric_limits<SpaceId>::max()) {
+		return raw;
 	}
 
 	SpaceId expected = next_space_id_.load(std::memory_order_relaxed);

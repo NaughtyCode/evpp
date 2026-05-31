@@ -147,8 +147,10 @@ TimerId Entity::AddTimer(int64_t interval_ms, bool repeat, std::function<void()>
 	EntityId eid = id_;
 	auto tid_holder = std::make_shared<TimerId>(kInvalidTimerId);
 	TimerManager* timer_mgr = timer_mgr_;
-	auto safe_cb = [eid, repeat, tid_holder, timer_mgr, cb = std::move(callback)]() {
-		auto* entity = EntityManager::Instance().GetEntity(eid);
+	auto resolver = entity_resolver_;
+	auto safe_cb = [eid, repeat, tid_holder, timer_mgr, resolver = std::move(resolver),
+					cb = std::move(callback)]() {
+		auto* entity = resolver ? resolver(eid) : EntityManager::Instance().GetEntity(eid);
 		if (entity && !repeat) {
 			entity->RemoveOwnedTimer(*tid_holder);
 		}

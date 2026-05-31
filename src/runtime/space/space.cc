@@ -3,6 +3,7 @@
 #include <atomic>
 
 #include "runtime/core/log/log.h"
+#include "runtime/entity/entity_manager.h"
 #include "runtime/profiler/profiler_events.h"
 #include "runtime/script/space_bind.h"
 #include "runtime/vm/vm.h"
@@ -108,6 +109,10 @@ entity::Entity* Space::CreateEntity(entity::EntityId id) {
 
 	auto entity = std::make_unique<entity::Entity>(id);
 	auto* raw = entity.get();
+	raw->SetTimerManager(entity::EntityManager::Instance().GetTimerManager());
+	raw->SetEntityResolver([this](entity::EntityId entity_id) {
+		return GetEntity(entity_id);
+	});
 	entities_[id] = std::move(entity);
 	return raw;
 }

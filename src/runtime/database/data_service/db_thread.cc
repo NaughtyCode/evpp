@@ -252,43 +252,40 @@ std::unique_ptr<DbResponse> DBThread::DequeueResponse() {
 	if (response_queue_.try_dequeue(resp)) {
 		return std::make_unique<DbResponse>(std::move(resp));
 	}
+	{
+		std::lock_guard<std::mutex> lock(overflow_response_mutex_);
+		if (!overflow_responses_.empty()) {
+			auto overflow = std::make_unique<DbResponse>(std::move(overflow_responses_.front()));
+			overflow_responses_.pop_front();
+			return overflow;
+		}
+	}
 	return nullptr;
 }
 
 // EnqueueResponse — DBT → MT, with capacity check (§6.3)
 //
-// If the response queue is full, the oldest response is silently dropped.
-// This is a deliberate trade-off: blocking the DBThread to wait for MT to
-// drain responses would stall all DB processing for this thread. The dropped
-// response's request_id is logged at WARN level for diagnostics.
+// If the response queue is full, newer responses are preserved in a bounded
+// overflow buffer so older completed requests are still observable by pollers.
 
 void DBThread::EnqueueResponse(DbResponse&& resp) {
 	resp.status = DbRequestStatus::kCompleted;
 	const bool success = resp.success;
 
-	// Drop oldest responses while the queue is at capacity.  The retry
-	// counter guards against a theoretical infinite loop when size_approx()
-	// overcounts and try_dequeue keeps failing — in practice size_approx()
-	// is reliable within a small epsilon, so the limit is never hit.
-	int retries = 0;
-	while (response_queue_.size_approx() >=
-			   static_cast<size_t>(config_.thread_pool.response_queue_size) &&
-		   retries < 5) {
-		DbResponse dropped;
-		if (response_queue_.try_dequeue(dropped)) {
-			ENGINE_LOG_WARN(logger_,
-							"DBThread[{}]: response queue full, dropped response [id={}]",
-							index_,
-							dropped.request_id);
+	const auto max_responses = static_cast<size_t>(config_.thread_pool.response_queue_size);
+	if (response_queue_.size_approx() >= max_responses ||
+		!response_queue_.enqueue(resp)) {
+		std::lock_guard<std::mutex> lock(overflow_response_mutex_);
+		if (overflow_responses_.size() < max_responses) {
+			overflow_responses_.push_back(std::move(resp));
+		} else {
+			ENGINE_LOG_ERROR(logger_,
+							 "DBThread[{}]: response overflow full, dropped response [id={}]",
+							 index_,
+							 resp.request_id);
 			DatabaseService::Instance().RecordDropped();
+			return;
 		}
-		++retries;
-	}
-
-	if (!response_queue_.enqueue(std::move(resp))) {
-		ENGINE_LOG_ERROR(logger_, "DBThread[{}]: failed to enqueue response", index_);
-		DatabaseService::Instance().RecordDropped();
-		return;
 	}
 
 	DatabaseService::Instance().RecordCompleted();
