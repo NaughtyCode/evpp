@@ -32,6 +32,7 @@ if(NOT DEFINED ENGINE_ROOT)
 endif()
 
 include(${ENGINE_ROOT}/runtime/CMakeLists.txt)
+include(${ENGINE_ROOT}/cmake/JoltPhysics.cmake)
 
 if(NOT TARGET engine_lua_static)
     add_subdirectory(${ENGINE_ROOT}/thirdparty/lua ${CMAKE_BINARY_DIR}/lua)
@@ -43,6 +44,10 @@ endif()
 
 if(ENGINE_PROFILER_ENABLED AND NOT TARGET engine_perfetto_static)
     add_subdirectory(${ENGINE_ROOT}/thirdparty/perfetto ${CMAKE_BINARY_DIR}/perfetto EXCLUDE_FROM_ALL)
+endif()
+
+if(ENGINE_PHYSICS_ENABLED AND NOT TARGET Jolt)
+    configure_engine_jolt_physics(${ENGINE_ROOT})
 endif()
 
 set(ENGINE_EMBEDDED_TEST_CONFIG_HEADER

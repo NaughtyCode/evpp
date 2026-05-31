@@ -39,12 +39,15 @@ examples/pingpong/client/pingpong_client
 examples/pingpong/server/pingpong_server
 
 core.*
+!src/thirdparty/JoltPhysics/JoltPhysics/Jolt/Core/Core.h
 
 *.out
 
 *.orig
 
 build
+!src/thirdparty/JoltPhysics/JoltPhysics/Build/
+!src/thirdparty/JoltPhysics/JoltPhysics/Build/CMakeLists.txt
 build-debug
 build-release
 build-win64
@@ -131,4 +134,3 @@ build_*/*
 artifacts/build2/*
 
 build-vs/*
-

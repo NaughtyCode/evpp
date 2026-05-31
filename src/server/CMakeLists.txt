@@ -115,6 +115,7 @@ message(STATUS "EXECUTABLE_OUTPUT_PATH ${EXECUTABLE_OUTPUT_PATH}")
 message(STATUS "LIBRARY_OUTPUT_PATH ${LIBRARY_OUTPUT_PATH}")
 
 include(${ENGINE_ROOT}/runtime/CMakeLists.txt)
+include(${ENGINE_ROOT}/cmake/JoltPhysics.cmake)
 
 if(NOT TARGET engine_lua_static)
     add_subdirectory(${ENGINE_ROOT}/thirdparty/lua ${CMAKE_BINARY_DIR}/lua)
@@ -213,8 +214,7 @@ if(ENGINE_MONGODB_ENABLED AND NOT TARGET bson_static)
 endif()
 
 if(ENGINE_PHYSICS_ENABLED AND NOT TARGET Jolt)
-    add_subdirectory(${ENGINE_ROOT}/thirdparty/JoltPhysics/JoltPhysics/Build jolt)
-    set_target_properties(Jolt PROPERTIES FOLDER "thirdparty")
+    configure_engine_jolt_physics(${ENGINE_ROOT})
 endif()
 
 set(ENGINE_RUNTIME_INCLUDE_DIRS
