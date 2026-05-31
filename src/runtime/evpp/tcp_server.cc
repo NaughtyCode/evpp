@@ -6,6 +6,8 @@
 #include "runtime/evpp/tcp_conn.h"
 #include "runtime/monitoring/metrics.h"
 
+#include <vector>
+
 namespace evpp {
 TCPServer::TCPServer(EventLoop* loop,
 					 const std::string& laddr,
@@ -91,6 +93,10 @@ void TCPServer::Stop(DoneCallback on_stopped_cb) {
 	}
 	status_.store(kStopping);
 	substatus_.store(kStoppingListener);
+	if (loop_->IsInLoopThread() && loop_->IsStopped()) {
+		StopInLoop(on_stopped_cb);
+		return;
+	}
 	loop_->RunInLoop(std::bind(&TCPServer::StopInLoop, this, on_stopped_cb));
 }
 
@@ -111,21 +117,26 @@ void TCPServer::StopInLoop(DoneCallback on_stopped_cb) {
 		status_.store(kStopped);
 	} else {
 		ENGINE_LOG_TRACE(engine::GetLogger(), "this={} close connections", (void*) this);
+		std::vector<TCPConnPtr> conns;
+		conns.reserve(connections_.size());
 		for (auto& c : connections_) {
-			if (c.second->IsConnected()) {
+			conns.push_back(c.second);
+		}
+		for (auto& conn : conns) {
+			if (conn->IsConnected()) {
 				ENGINE_LOG_TRACE(engine::GetLogger(),
 								 "this={} close connection id={} fd={}",
 								 (void*) this,
-								 c.second->id(),
-								 c.second->fd());
-				c.second->Close();
+								 conn->id(),
+								 conn->fd());
+				conn->Close();
 			} else {
 				ENGINE_LOG_TRACE(engine::GetLogger(),
 								 "this={} Do not need to call Close for this TCPConn it may be "
 								 "doing disconnecting. TCPConn={} fd={} status={}",
 								 (void*) this,
-								 (void*) c.second.get(),
-								 c.second->fd(),
+								 (void*) conn.get(),
+								 conn->fd(),
 								 StatusToString());
 			}
 		}
@@ -247,7 +258,11 @@ void TCPServer::RemoveConnection(const TCPConnPtr& conn) {
 			status_.store(kStopped);
 		}
 	};
-	loop_->RunInLoop(f);
+	if (loop_->IsInLoopThread()) {
+		f();
+	} else {
+		loop_->RunInLoop(f);
+	}
 }
 
 }

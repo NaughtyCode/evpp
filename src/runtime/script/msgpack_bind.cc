@@ -649,10 +649,15 @@ int UnpackFull(lua_State* L, int limit, int offset) {
 	size_t len = 0;
 	const char* s = luaL_checklstring(L, 1, &len);
 	bool decode_all = (limit == 0 && offset == 0);
+	const size_t max_payload = GetMaxPayloadSize();
 
 	if (offset < 0 || limit < 0) {
 		return luaL_error(
 			L, "Invalid request to unpack with offset of %d and limit of %d.", offset, limit);
+	}
+	if (len > max_payload) {
+		return luaL_error(L, "msgpack decode: payload exceeds maximum size (%zu bytes)",
+						  max_payload);
 	}
 	if (static_cast<size_t>(offset) > len) {
 		return luaL_error(

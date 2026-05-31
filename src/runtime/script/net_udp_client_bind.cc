@@ -38,6 +38,18 @@ struct UdpClientCtx {
 
 const char* kUdpClientMetaName = "net.udp_client.instance";
 
+uint32_t GetMaxUdpMessageSize() {
+	return ConfigManager::Instance().GetServerConfig().resource_limits.max_message_size;
+}
+
+int CheckUdpPayloadSize(lua_State* L, size_t len) {
+	const uint32_t limit = GetMaxUdpMessageSize();
+	if (len > limit) {
+		return luaL_error(L, "message size %zu exceeds limit %u", len, limit);
+	}
+	return 0;
+}
+
 // ── l_udp_client_connect(host, port)  - instance_table ──
 int l_udp_client_connect(lua_State* L) {
 	const char* host = luaL_checkstring(L, 1);
@@ -87,12 +99,7 @@ int l_udp_client_send(lua_State* L) {
 	size_t len = 0;
 	const char* data = luaL_checklstring(L, 2, &len);
 
-		{
-			uint32_t limit = ConfigManager::Instance().GetServerConfig().resource_limits.max_message_size;
-			if (len > limit) {
-				return luaL_error(L, "message size %zu exceeds limit %u", len, limit);
-			}
-		}
+	CheckUdpPayloadSize(L, len);
 
 	bool ok = ctx->client->Send(data, len);
 	lua_pushboolean(L, ok ? 1 : 0);
@@ -107,6 +114,7 @@ int l_udp_client_do_request(lua_State* L) {
 
 	size_t len = 0;
 	const char* data = luaL_checklstring(L, 2, &len);
+	CheckUdpPayloadSize(L, len);
 	lua_Integer t = luaL_optinteger(L, 3, 3000);
 	if (t < 0) {
 		return luaL_error(L, "timeout must be >= 0");
@@ -181,6 +189,7 @@ int l_udp_client_do_request_static(lua_State* L) {
 	int port = static_cast<int>(port64);
 	size_t len = 0;
 	const char* data = luaL_checklstring(L, 3, &len);
+	CheckUdpPayloadSize(L, len);
 	lua_Integer t = luaL_optinteger(L, 4, 3000);
 	if (t < 0) {
 		return luaL_error(L, "timeout must be >= 0");
@@ -211,12 +220,7 @@ int l_udp_client_send_to(lua_State* L) {
 	size_t len = 0;
 	const char* data = luaL_checklstring(L, 3, &len);
 
-		{
-			uint32_t limit = ConfigManager::Instance().GetServerConfig().resource_limits.max_message_size;
-			if (len > limit) {
-				return luaL_error(L, "message size %zu exceeds limit %u", len, limit);
-			}
-		}
+	CheckUdpPayloadSize(L, len);
 
 	evpp::udp::sync::Client tmp;
 	if (!tmp.Connect(host, port)) {

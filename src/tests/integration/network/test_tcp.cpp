@@ -20,6 +20,7 @@ using namespace std::chrono_literals;
 // test cases run back-to-back.
 static const int kIntTestPort1 = 19877;
 static const int kIntTestPort2 = 19878;
+static const int kIntTestPort3 = 19879;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Integration: TCP echo roundtrip
@@ -152,4 +153,28 @@ TEST_CASE("TCP large message echo", "[integration][network][tcp]") {
     REQUIRE(server_done);
     REQUIRE(client_done);
     REQUIRE(client_received == "RE:" + test_msg);
+}
+
+TEST_CASE("TCPServer stop succeeds after EventLoop has exited", "[integration][network][tcp]") {
+    evpp::EventLoop loop;
+
+    auto* server = new evpp::TCPServer(&loop,
+        "127.0.0.1:" + std::to_string(kIntTestPort3), "StoppedLoopServer", 0);
+    REQUIRE(server->Init());
+    REQUIRE(server->Start());
+
+    loop.RunAfter(10.0, [&]() {
+        loop.Stop();
+    });
+    loop.Run();
+
+    bool stopped = false;
+    server->Stop([&]() {
+        stopped = true;
+    });
+
+    REQUIRE(stopped);
+    REQUIRE(server->IsStopped());
+
+    delete server;
 }

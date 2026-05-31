@@ -173,6 +173,13 @@ int l_net_http_post(lua_State* L) {
 	const char* body = luaL_checklstring(L, 2, &body_len);
 	luaL_checktype(L, 3, LUA_TFUNCTION);
 
+	const auto max_body = ConfigManager::Instance()
+							  .GetServerConfig()
+							  .resource_limits.max_http_body_size;
+	if (body_len > max_body) {
+		return luaL_error(L, "HTTP body size %zu exceeds limit %u", body_len, max_body);
+	}
+
 	auto* loop = Engine::Instance().GetEventLoop();
 	if (!loop) {
 		return luaL_error(L, "EventLoop not available");

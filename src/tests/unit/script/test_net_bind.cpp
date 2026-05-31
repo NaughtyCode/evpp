@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "runtime/config/config.h"
 #include "log_init.h"
 #include "runtime/script/net_bind.h"
 #include "runtime/vm/vm.h"
@@ -84,6 +85,54 @@ return tostring(ok) .. ',' ..
 )lua",
 		result));
 	REQUIRE(result == "false,false,true");
+}
+
+TEST_CASE("net.http rejects oversized POST bodies before creating requests", "[net_bind][http]") {
+	REQUIRE(ConfigManager::Instance().LoadServerFromString(R"({
+        "http": { "timeout_sec": 1.0 },
+        "msgpack": { "max_nesting_depth": 16, "max_payload_size": 1048576 },
+        "resource_limits": {
+            "max_message_size": 64,
+            "max_buffer_capacity": 64,
+            "max_http_body_size": 8,
+            "max_msgpack_depth": 16
+        }
+    })"));
+
+	NetBindFixture f;
+	std::string result;
+	REQUIRE(f.RunLuaResult(
+		R"lua(
+local ok, err = pcall(net.http.post, 'http://127.0.0.1', string.rep('x', 9), function() end)
+return tostring(ok) .. ',' ..
+       tostring(type(err) == 'string' and err:find('HTTP body size') ~= nil)
+)lua",
+		result));
+	REQUIRE(result == "false,true");
+}
+
+TEST_CASE("net.udp_client.do_request enforces configured message size", "[net_bind][udp]") {
+	REQUIRE(ConfigManager::Instance().LoadServerFromString(R"({
+        "http": { "timeout_sec": 1.0 },
+        "msgpack": { "max_nesting_depth": 16, "max_payload_size": 1048576 },
+        "resource_limits": {
+            "max_message_size": 8,
+            "max_buffer_capacity": 8,
+            "max_http_body_size": 1024,
+            "max_msgpack_depth": 16
+        }
+    })"));
+
+	NetBindFixture f;
+	std::string result;
+	REQUIRE(f.RunLuaResult(
+		R"lua(
+local ok, err = pcall(net.udp_client.do_request, '127.0.0.1', 9, string.rep('x', 9), 1)
+return tostring(ok) .. ',' ..
+       tostring(type(err) == 'string' and err:find('message size') ~= nil)
+)lua",
+		result));
+	REQUIRE(result == "false,true");
 }
 
 TEST_CASE("ShutdownNetBindings is idempotent without live transports", "[net_bind][shutdown]") {

@@ -59,6 +59,10 @@ void TCPClient::Connect() {
 
 void TCPClient::Disconnect() {
 	ENGINE_LOG_TRACE(engine::GetLogger(), "this={}", (void*) this);
+	if (loop_->IsInLoopThread() && loop_->IsStopped()) {
+		DisconnectInLoop();
+		return;
+	}
 	loop_->RunInLoop(std::bind(&TCPClient::DisconnectInLoop, this));
 }
 

@@ -64,9 +64,11 @@ private:
 	std::shared_ptr<AuthBackend> backend_;
 	mutable std::mutex mutex_;
 	std::unordered_map<std::string, SessionInfo> sessions_;
+	std::unordered_map<std::string, uint64_t> session_order_;
 	std::unordered_map<const evpp::TCPConn*, std::string> conn_to_session_;
 	std::unordered_map<const evpp::TCPConn*, std::weak_ptr<evpp::TCPConn>> conn_refs_;
 	size_t max_sessions_ = 5;
+	uint64_t next_session_order_ = 0;
 };
 
 }  // namespace auth

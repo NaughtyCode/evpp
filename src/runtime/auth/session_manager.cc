@@ -63,10 +63,17 @@ SessionInfo SessionManager::CreateSession(const std::string& entity_id,
 		while (account_sessions >= max_sessions_) {
 			std::string oldest_sid;
 			int64_t oldest_created = std::numeric_limits<int64_t>::max();
+			uint64_t oldest_order = std::numeric_limits<uint64_t>::max();
 			for (const auto& [sid, info] : sessions_) {
-				if (info.entity_id == entity_id && info.created_at < oldest_created) {
+				const auto order_it = session_order_.find(sid);
+				const uint64_t order =
+					order_it == session_order_.end() ? 0 : order_it->second;
+				if (info.entity_id == entity_id &&
+					(info.created_at < oldest_created ||
+					 (info.created_at == oldest_created && order < oldest_order))) {
 					oldest_sid = sid;
 					oldest_created = info.created_at;
+					oldest_order = order;
 				}
 			}
 			if (oldest_sid.empty()) break;
@@ -89,6 +96,7 @@ SessionInfo SessionManager::CreateSession(const std::string& entity_id,
 	info.auth_method = "token";
 
 	sessions_[sid] = info;
+	session_order_[sid] = next_session_order_++;
 	if (conn) {
 		conn_to_session_[conn.get()] = sid;
 		conn_refs_[conn.get()] = conn;
@@ -204,6 +212,7 @@ void SessionManager::RemoveSessionLocked(const std::string& session_id,
 	}
 
 	sessions_.erase(session_id);
+	session_order_.erase(session_id);
 
 	for (auto it = conn_to_session_.begin(); it != conn_to_session_.end(); ) {
 		if (it->second == session_id) {

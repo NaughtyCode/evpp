@@ -4,11 +4,15 @@
 #include <filesystem>
 #include <fstream>
 #include <algorithm>
+#include <cstdint>
+#include <limits>
 #include <mutex>
 #include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include <glaze/json.hpp>
 
 #include "runtime/config/config.h"
 #include "runtime/config/path_resolver.h"
@@ -126,7 +130,16 @@ int l_config_get(lua_State* L) {
 // The resulting table is indexed by row number (1-based) AND by the "id"
 // field if present.
 
-void PushJsonValue(lua_State* L, const std::string& json, size_t& pos);
+using ModuleJsonValue = glz::generic_i64;
+using ModuleJsonArray = ModuleJsonValue::array_t;
+using ModuleJsonObject = ModuleJsonValue::object_t;
+
+constexpr int kMaxConfigModuleDepth = 256;
+
+bool PushModuleJsonValue(lua_State* L,
+                         const ModuleJsonValue& value,
+                         std::string& error,
+                         int depth);
 
 void BuildModuleIdIndex(lua_State* L) {
     if (!lua_istable(L, -1)) {
@@ -155,118 +168,92 @@ void BuildModuleIdIndex(lua_State* L) {
     }
 }
 
-void SkipWhitespace(const std::string& json, size_t& pos) {
-    while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t' ||
-           json[pos] == '\n' || json[pos] == '\r')) {
-        ++pos;
+bool PushModuleJsonArray(lua_State* L,
+                         const ModuleJsonArray& array,
+                         std::string& error,
+                         int depth) {
+    if (array.size() > static_cast<size_t>((std::numeric_limits<int>::max)())) {
+        error = "module JSON array is too large for Lua";
+        return false;
     }
-}
+    if (!lua_checkstack(L, 2)) {
+        error = "Lua stack overflow while pushing module array";
+        return false;
+    }
 
-std::string ReadJsonString(const std::string& json, size_t& pos) {
-    std::string result;
-    ++pos;  // skip opening "
-    while (pos < json.size() && json[pos] != '"') {
-        if (json[pos] == '\\') {
-            ++pos;
-            if (pos < json.size()) {
-                switch (json[pos]) {
-                case 'n': result += '\n'; break;
-                case 't': result += '\t'; break;
-                case '\\': result += '\\'; break;
-                case '"': result += '"'; break;
-                default: result += json[pos]; break;
-                }
-            }
-        } else {
-            result += json[pos];
+    lua_createtable(L, static_cast<int>(array.size()), 0);
+    for (size_t i = 0; i < array.size(); ++i) {
+        if (!PushModuleJsonValue(L, array[i], error, depth + 1)) {
+            return false;
         }
-        ++pos;
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
     }
-    if (pos < json.size()) ++pos;  // skip closing "
-    return result;
+    return true;
 }
 
-double ReadJsonNumber(const std::string& json, size_t& pos) {
-    size_t start = pos;
-    if (json[pos] == '-') ++pos;
-    while (pos < json.size() && (json[pos] >= '0' && json[pos] <= '9')) ++pos;
-    if (pos < json.size() && json[pos] == '.') {
-        ++pos;
-        while (pos < json.size() && (json[pos] >= '0' && json[pos] <= '9')) ++pos;
-        return std::stod(json.substr(start, pos - start));
+bool PushModuleJsonObject(lua_State* L,
+                          const ModuleJsonObject& object,
+                          std::string& error,
+                          int depth) {
+    if (object.size() > static_cast<size_t>((std::numeric_limits<int>::max)())) {
+        error = "module JSON object is too large for Lua";
+        return false;
     }
-    return static_cast<double>(std::stoll(json.substr(start, pos - start)));
+    if (!lua_checkstack(L, 3)) {
+        error = "Lua stack overflow while pushing module object";
+        return false;
+    }
+
+    lua_createtable(L, 0, static_cast<int>(object.size()));
+    for (const auto& [key, child] : object) {
+        lua_pushlstring(L, key.data(), key.size());
+        if (!PushModuleJsonValue(L, child, error, depth + 1)) {
+            return false;
+        }
+        lua_settable(L, -3);
+    }
+    return true;
 }
 
-bool ReadJsonBool(const std::string& json, size_t& pos) {
-    if (json.compare(pos, 4, "true") == 0) { pos += 4; return true; }
-    if (json.compare(pos, 5, "false") == 0) { pos += 5; return false; }
+bool PushModuleJsonValue(lua_State* L,
+                         const ModuleJsonValue& value,
+                         std::string& error,
+                         int depth) {
+    if (depth > kMaxConfigModuleDepth) {
+        error = "module JSON maximum nesting depth exceeded";
+        return false;
+    }
+
+    if (value.is_null()) {
+        lua_pushnil(L);
+        return true;
+    }
+    if (value.is_boolean()) {
+        lua_pushboolean(L, value.get_boolean() ? 1 : 0);
+        return true;
+    }
+    if (value.is_string()) {
+        const auto& string = value.get_string();
+        lua_pushlstring(L, string.data(), string.size());
+        return true;
+    }
+    if (value.is_int64()) {
+        lua_pushinteger(L, static_cast<lua_Integer>(value.get<int64_t>()));
+        return true;
+    }
+    if (value.is_double()) {
+        lua_pushnumber(L, static_cast<lua_Number>(value.get<double>()));
+        return true;
+    }
+    if (value.is_array()) {
+        return PushModuleJsonArray(L, value.get_array(), error, depth);
+    }
+    if (value.is_object()) {
+        return PushModuleJsonObject(L, value.get_object(), error, depth);
+    }
+
+    error = "module JSON contains an unsupported value";
     return false;
-}
-
-void PushJsonValue(lua_State* L, const std::string& json, size_t& pos) {
-    SkipWhitespace(json, pos);
-    if (pos >= json.size()) { lua_pushnil(L); return; }
-
-    char c = json[pos];
-    if (c == '"') {
-        lua_pushstring(L, ReadJsonString(json, pos).c_str());
-    } else if (c == '-' || (c >= '0' && c <= '9')) {
-        double num = ReadJsonNumber(json, pos);
-        double intpart;
-        if (std::modf(num, &intpart) == 0.0 && num >= std::numeric_limits<lua_Integer>::min() &&
-            num <= std::numeric_limits<lua_Integer>::max()) {
-            lua_pushinteger(L, static_cast<lua_Integer>(num));
-        } else {
-            lua_pushnumber(L, num);
-        }
-    } else if (c == 't' || c == 'f') {
-        lua_pushboolean(L, ReadJsonBool(json, pos) ? 1 : 0);
-    } else if (c == '{') {
-        ++pos;  // skip '{'
-        lua_newtable(L);
-        int idx = 1;
-        SkipWhitespace(json, pos);
-        if (pos < json.size() && json[pos] == '"') {
-            // Object
-            while (pos < json.size() && json[pos] != '}') {
-                SkipWhitespace(json, pos);
-                if (json[pos] == '}') break;
-                std::string key = ReadJsonString(json, pos);
-                SkipWhitespace(json, pos);
-                if (json[pos] == ':') ++pos;
-                PushJsonValue(L, json, pos);
-                lua_setfield(L, -2, key.c_str());
-                SkipWhitespace(json, pos);
-                if (json[pos] == ',') ++pos;
-            }
-        } else {
-            // Array
-            while (pos < json.size() && json[pos] != '}') {
-                PushJsonValue(L, json, pos);
-                lua_rawseti(L, -2, idx++);
-                SkipWhitespace(json, pos);
-                if (json[pos] == ',') ++pos;
-            }
-        }
-        if (pos < json.size()) ++pos;  // skip '}'
-    } else if (c == '[') {
-        ++pos;  // skip '['
-        lua_newtable(L);
-        int idx = 1;
-        while (pos < json.size() && json[pos] != ']') {
-            PushJsonValue(L, json, pos);
-            lua_rawseti(L, -2, idx++);
-            SkipWhitespace(json, pos);
-            if (json[pos] == ',') ++pos;
-        }
-        if (pos < json.size()) ++pos;  // skip ']'
-    } else if (c == 'n') {
-        if (json.compare(pos, 4, "null") == 0) { pos += 4; lua_pushnil(L); return; }
-        lua_pushnil(L);
-    } else {
-        lua_pushnil(L);
-    }
 }
 
 int l_config_get_module(lua_State* L) {
@@ -289,16 +276,26 @@ int l_config_get_module(lua_State* L) {
     buf << ifs.rdbuf();
     std::string json = buf.str();
 
-    // Expect top-level array of objects
-    size_t pos = 0;
-    SkipWhitespace(json, pos);
-    if (pos >= json.size() || json[pos] != '[') {
+    auto parsed = glz::read_json<ModuleJsonValue>(json);
+    if (!parsed) {
+        lua_pushnil(L);
+        const auto message = std::string("module JSON parse error: ") +
+                             glz::format_error(parsed.error(), json);
+        lua_pushlstring(L, message.data(), message.size());
+        return 2;
+    }
+    if (!parsed->is_array()) {
         lua_pushnil(L);
         lua_pushstring(L, "module JSON must be a top-level array");
         return 2;
     }
 
-    PushJsonValue(L, json, pos);
+    std::string error;
+    if (!PushModuleJsonValue(L, *parsed, error, 0)) {
+        lua_pushnil(L);
+        lua_pushlstring(L, error.data(), error.size());
+        return 2;
+    }
     BuildModuleIdIndex(L);
 
     return 1;
@@ -410,15 +407,13 @@ int l_config_on_change(lua_State* L) {
 
 int l_config_unregister(lua_State* L) {
     const int id = static_cast<int>(luaL_checkinteger(L, 1));
-    auto& cfg = ConfigManager::Instance();
-    cfg.UnregisterReloadCallback(id);
 
     std::vector<ChangeCallbackEntry> removed;
     {
         std::lock_guard<std::mutex> lock(g_change_cb_mutex);
         auto it = g_change_callbacks.begin();
         while (it != g_change_callbacks.end()) {
-            if (it->reload_cb_id == id) {
+            if (it->reload_cb_id == id && it->L == L) {
                 removed.push_back(*it);
                 it = g_change_callbacks.erase(it);
             } else {
@@ -427,11 +422,11 @@ int l_config_unregister(lua_State* L) {
         }
     }
 
+    auto& cfg = ConfigManager::Instance();
     for (const auto& entry : removed) {
+        cfg.UnregisterReloadCallback(entry.reload_cb_id);
         RemovePendingEventsForCallback(entry.L, entry.callback_ref);
-        if (entry.L == L) {
-            luaL_unref(L, LUA_REGISTRYINDEX, entry.callback_ref);
-        }
+        luaL_unref(L, LUA_REGISTRYINDEX, entry.callback_ref);
     }
     return 0;
 }

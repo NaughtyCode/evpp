@@ -646,6 +646,30 @@ TEST_CASE("Lua config.get_module returns nil for unknown module", "[game_config]
     REQUIRE(result.find("not found") != std::string::npos);
 }
 
+TEST_CASE("Lua config.get_module reports malformed JSON instead of throwing", "[game_config][lua]") {
+    TempDir tmp("game_config_bad_module_json_test");
+    std::filesystem::create_directories(std::filesystem::path(tmp.path) / "script" / "data");
+    {
+        std::ofstream of(std::filesystem::path(tmp.path) / "script" / "data" / "broken.json");
+        of << R"([{"id": 1, "name": "broken", ])";
+    }
+
+    const std::string resource_dir = std::filesystem::path(tmp.path).generic_string();
+    REQUIRE(ConfigManager::Instance().LoadRuntimeFromString(
+        std::string(R"({"resource_dir":")") + resource_dir +
+        R"(","log":{"dir":"."},"frame":{"target_fps":30},"scripts_dir":"."})"));
+
+    ScriptVM vm;
+    script::ExportConfigBindings(vm);
+
+    std::string result;
+    REQUIRE(vm.DoString(
+        "local m, err = config.get_module('broken'); "
+        "return tostring(m == nil) .. ',' .. tostring(type(err) == 'string' and err:find('parse error') ~= nil)",
+        "test", nullptr, &result));
+    REQUIRE(result == "true,true");
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Lua config bindings — config.on_change(module, callback)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -771,6 +795,49 @@ TEST_CASE("Lua config.unregister removes queued pending callbacks", "[game_confi
     REQUIRE(vm.DoString("return tostring(callback_fired)", "test", nullptr, &result));
     REQUIRE(result == "false");
     script::ShutdownConfigBindings(vm);
+}
+
+TEST_CASE("Lua config.unregister cannot remove callbacks owned by another VM", "[game_config][lua]") {
+    ConfigFixture f;
+    f.LoadFromStrings();
+
+    auto& cfg = ConfigManager::Instance();
+    REQUIRE(cfg.LoadRuntimeFromString(R"({
+        "resource_dir": ".",
+        "log": { "dir": "." },
+        "frame": { "target_fps": 30 },
+        "scripts_dir": "."
+    })"));
+
+    ScriptVM owner_vm;
+    ScriptVM other_vm;
+    script::ExportConfigBindings(owner_vm);
+    script::ExportConfigBindings(other_vm);
+
+    std::string callback_id;
+    REQUIRE(owner_vm.DoString(
+        "callback_fired = false; "
+        "local id = config.on_change('frame', function(changes) callback_fired = true end); "
+        "return tostring(id)",
+        "test", nullptr, &callback_id));
+
+    std::string result;
+    REQUIRE(other_vm.DoString("config.unregister(" + callback_id + "); return 'ok'",
+                              "test", nullptr, &result));
+
+    REQUIRE(cfg.LoadRuntimeFromString(R"({
+        "resource_dir": ".",
+        "log": { "dir": "." },
+        "frame": { "target_fps": 31 },
+        "scripts_dir": "."
+    })"));
+
+    REQUIRE(owner_vm.DoString("config.flush_changes(); return tostring(callback_fired)",
+                              "test", nullptr, &result));
+    REQUIRE(result == "true");
+
+    script::ShutdownConfigBindings(owner_vm);
+    script::ShutdownConfigBindings(other_vm);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

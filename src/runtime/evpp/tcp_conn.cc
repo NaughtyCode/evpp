@@ -75,6 +75,9 @@ void TCPConn::Close() {
 					 fd_,
 					 StatusToString(),
 					 AddrToString());
+	if (status_ == kDisconnected || status_ == kDisconnecting) {
+		return;
+	}
 	status_ = kDisconnecting;
 	auto c = shared_from_this();
 	auto f = [c]() {
@@ -83,7 +86,11 @@ void TCPConn::Close() {
 	};
 
 	// Use QueueInLoop to fix TCPClient::Close bug when the application delete TCPClient in callback
-	loop_->QueueInLoop(f);
+	if (loop_->IsInLoopThread() && loop_->IsStopped()) {
+		f();
+	} else {
+		loop_->QueueInLoop(f);
+	}
 }
 
 void TCPConn::Send(const std::string& d) {

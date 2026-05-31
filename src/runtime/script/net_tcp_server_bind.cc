@@ -7,8 +7,12 @@
 #endif
 
 #include <cstdint>
+#include <chrono>
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 
 #include <runtime/evpp/buffer.h>
@@ -53,6 +57,13 @@ struct ServerCtx {
 
 const char* kServerMetaName = "net.server.instance";
 const char* kConnMetaName = "net.server.conn.instance";
+
+struct StopReleaseState {
+	std::mutex mutex;
+	std::condition_variable cv;
+	bool released = false;
+	bool erase_in_callback = false;
+};
 
 // Lightweight set of active ServerCtx pointers, used ONLY by
 // ShutdownServerBindings to find and stop all servers during engine shutdown.
@@ -539,12 +550,58 @@ void ShutdownServerBindings() {
 	for (auto* ctx : ctxs) {
 		if (ctx->disposed) continue;
 		ctx->disposed = true;
-		ctx->server->Stop();
+		std::shared_ptr<ServerCtx> keep_alive;
+		if (auto it = g_server_shared.find(ctx); it != g_server_shared.end()) {
+			keep_alive = it->second;
+		}
+
+		auto release_state = std::make_shared<StopReleaseState>();
+		const bool wait_for_loop =
+			ctx->event_loop && ctx->event_loop->IsRunning() && !ctx->event_loop->IsInLoopThread();
+		release_state->erase_in_callback = !wait_for_loop;
+		auto release_ctx = [ctx, release_state]() {
+			bool erase_in_callback = false;
+			{
+				std::lock_guard<std::mutex> lock(release_state->mutex);
+				release_state->released = true;
+				erase_in_callback = release_state->erase_in_callback;
+			}
+			release_state->cv.notify_one();
+			if (erase_in_callback) {
+				g_server_shared.erase(ctx);
+			}
+		};
+
+		ctx->server->Stop(release_ctx);
 		if (ctx->L && ctx->instance_ref != LUA_NOREF) {
 			luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->instance_ref);
 			ctx->instance_ref = LUA_NOREF;
 		}
-		g_server_shared.erase(ctx);
+
+		if (wait_for_loop) {
+			std::unique_lock<std::mutex> lock(release_state->mutex);
+			const bool stopped = release_state->cv.wait_for(
+				lock, std::chrono::seconds(5), [release_state] { return release_state->released; });
+			if (!stopped) {
+				bool erase_now = false;
+				{
+					std::lock_guard<std::mutex> state_lock(release_state->mutex);
+					if (release_state->released) {
+						erase_now = true;
+					} else {
+						release_state->erase_in_callback = true;
+					}
+				}
+				if (erase_now) {
+					g_server_shared.erase(ctx);
+				}
+				ENGINE_LOG_ERROR(logger,
+								 "ScriptBind: timed out waiting for net.server shutdown; "
+								 "keeping context alive for loop callback");
+			} else {
+				g_server_shared.erase(ctx);
+			}
+		}
 	}
 
 	if (!ctxs.empty()) {

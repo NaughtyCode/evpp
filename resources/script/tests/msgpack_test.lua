@@ -416,6 +416,13 @@ eq(type(msg3), "string")
 ok(string.find(msg3, "Missing bytes") ~= nil,
    "error message should mention 'Missing bytes'")
 
+start("cmsgpack_safe unpack oversized payload → error")
+local err4, msg4 = mps.unpack(string.rep("x", 1024 * 1024 + 1))
+eq(err4, nil)
+eq(type(msg4), "string")
+ok(string.find(msg4, "payload exceeds maximum size") ~= nil,
+   "error message should mention payload limit")
+
 -- ════════════════════════════════════════════════════════════════════════════
 -- 17. Error paths (unsafe module)
 -- ════════════════════════════════════════════════════════════════════════════
