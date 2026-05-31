@@ -120,16 +120,6 @@ void ScriptVM::DestroyScript() {
 // Maximum script size for DoString to prevent memory exhaustion (1 MB).
 static constexpr size_t kMaxDoStringSize = 1024 * 1024;
 
-// Source prefixes that are allowed for DoString (non-file sources).
-// Blocks bare user input from being executed directly.
-static bool IsAllowedDoStringSource(std::string_view chunk_name) {
-	// Allow internal loaders and explicit file/string markers
-	return chunk_name.starts_with("=") ||    // explicit =string
-		   chunk_name.starts_with("@") ||    // @file
-		   chunk_name.starts_with("load") || // load()
-		   chunk_name == "string";
-}
-
 bool ScriptVM::DoString(std::string_view script,
 						std::string_view chunk_name,
 						std::string* error_out,

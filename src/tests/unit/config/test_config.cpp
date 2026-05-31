@@ -80,7 +80,20 @@ TEST_CASE("ConfigManager loads ServerConfig from valid JSON", "[config][load]") 
     auto srv = f.cfg.GetServerConfig();
     REQUIRE(srv.http.timeout_sec == 5.0);
     REQUIRE(srv.msgpack.max_nesting_depth == 16);
+    REQUIRE_FALSE(srv.db_required);
     REQUIRE(srv.scripts_dir == "resources/script/server");
+}
+
+TEST_CASE("ConfigManager loads ServerConfig db_required from JSON", "[config][load]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    REQUIRE(cfg.LoadServerFromString(R"({
+        "http": { "timeout_sec": 5.0 },
+        "msgpack": { "max_nesting_depth": 16 },
+        "db_required": true,
+        "scripts_dir": "."
+    })"));
+
+    REQUIRE(cfg.GetServerConfig().db_required);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

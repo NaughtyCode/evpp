@@ -129,6 +129,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "logger created");
+	monitoring::MetricsRegistry::Instance().RegisterBuiltinMetrics();
 
 	// ---- Profiler initialization ----
 	{
@@ -215,6 +216,9 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		}
 		if (mongo_cfg.connection.uri.empty()) {
 			ENGINE_LOG_INFO(logger, "database service skipped: no MongoDB URI configured");
+			if (server_cfg.db_required) {
+				throw std::runtime_error("database service required but no MongoDB URI configured");
+			}
 		} else {
 			mongo::MongoError uri_error;
 			auto uri = mongo::MongoUri::NewWithError(mongo_cfg.connection.uri.c_str(), &uri_error);
@@ -222,9 +226,15 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 				ENGINE_LOG_ERROR(logger,
 								 "database service skipped: invalid MongoDB URI: {}",
 								 uri_error.Message());
+				if (server_cfg.db_required) {
+					throw std::runtime_error("database service required but MongoDB URI is invalid");
+				}
 			} else {
 				bool ok = DatabaseService::Instance().Initialize(db_svc_config, uri);
 				ENGINE_LOG_INFO(logger, "database service initialized, ok=[{}]", ok);
+				if (!ok && server_cfg.db_required) {
+					throw std::runtime_error("database service required but initialization failed");
+				}
 			}
 		}
 	}
@@ -333,7 +343,11 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	{
 		config_dir_ = std::filesystem::path(runtime_cfg.resource_dir).parent_path().string()
 					  + "/config";
-		ConfigManager::Instance().RegisterReloadCallback([this](const ConfigChangeSet& changes) {
+		if (config_reload_callback_id_ != 0) {
+			ConfigManager::Instance().UnregisterReloadCallback(config_reload_callback_id_);
+			config_reload_callback_id_ = 0;
+		}
+		config_reload_callback_id_ = ConfigManager::Instance().RegisterReloadCallback([this](const ConfigChangeSet& changes) {
 			std::lock_guard<std::mutex> lock(pending_config_mutex_);
 			// Merge changes — if the same field changed again before we
 			// applied the previous batch, keep only the latest old→new.
@@ -553,6 +567,11 @@ void Engine::Cleanup() {
 	ENGINE_LOG_INFO(logger,
 	                "Cleanup: starting, shutdown_timeout={}s, drain_timeout={}s",
 	                shutdown_timeout, drain_timeout);
+
+	if (config_reload_callback_id_ != 0) {
+		ConfigManager::Instance().UnregisterReloadCallback(config_reload_callback_id_);
+		config_reload_callback_id_ = 0;
+	}
 
 	auto check_timeout = [&](const char* phase_name) -> bool {
 		auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <string>
@@ -112,6 +113,7 @@ class CLOUD_ENGINE_API ScriptReloader {
 
 	// Process the validated reload list (main thread).
 	void ProcessReloadList(const std::vector<std::string>& files);
+	bool IsDispatchActive(uint64_t generation) const;
 
 	// Snapshot a single global variable for potential rollback.
 	void SnapshotGlobal(lua_State* L, const char* key);
@@ -134,6 +136,8 @@ class CLOUD_ENGINE_API ScriptReloader {
 	std::vector<std::string> script_dirs_;
 	std::unique_ptr<FileWatcher> watcher_;
 	LuaSandboxLevel sandbox_level_ = LuaSandboxLevel::Strict;
+	std::atomic<uint64_t> generation_{0};
+	std::atomic<bool> stopped_{true};
 
 	ReloadCallback reload_callback_;
 

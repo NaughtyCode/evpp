@@ -2,7 +2,6 @@
 
 #include <chrono>
 #include <limits>
-#include <random>
 #include <sstream>
 
 #include "runtime/auth/auth_backend.h"
@@ -33,13 +32,7 @@ std::shared_ptr<AuthBackend> SessionManager::GetBackendSnapshot() const {
 }
 
 std::string SessionManager::GenerateSessionId() {
-	static thread_local std::random_device rd;
-	static thread_local std::mt19937 gen(rd());
-	static thread_local std::uniform_int_distribution<uint64_t> dist;
-
-	std::ostringstream ss;
-	ss << std::hex << dist(gen) << dist(gen);
-	return ss.str();
+	return GenerateSecureSessionId();
 }
 
 SessionInfo SessionManager::CreateSession(const std::string& entity_id,

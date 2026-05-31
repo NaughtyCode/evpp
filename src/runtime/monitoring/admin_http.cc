@@ -119,14 +119,22 @@ void HandleReadiness(evpp::EventLoop*, const evpp::http::ContextPtr& ctx,
 
 	// DB health
 #if defined(ENGINE_MONGODB_ENABLED)
-	if (!DatabaseService::Instance().IsRunning()) {
-		db.status = "error";
-		db.message = "DatabaseService not running";
-		all_healthy = false;
-	} else if (!DatabaseService::Instance().IsHealthy()) {
-		db.status = "degraded";
-		db.message = "one or more DB threads unhealthy";
-		all_healthy = false;
+	{
+		auto server_cfg = ConfigManager::Instance().GetServerConfig();
+		if (!DatabaseService::Instance().IsRunning()) {
+			if (server_cfg.db_required) {
+				db.status = "error";
+				db.message = "DatabaseService not running";
+				all_healthy = false;
+			} else {
+				db.status = "disabled";
+				db.message = "DatabaseService not required";
+			}
+		} else if (!DatabaseService::Instance().IsHealthy()) {
+			db.status = "degraded";
+			db.message = "one or more DB threads unhealthy";
+			all_healthy = false;
+		}
 	}
 #else
 	db = {"disabled", "MongoDB not compiled"};

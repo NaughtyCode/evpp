@@ -2,9 +2,25 @@
 
 #include <array>
 #include <cstring>
+#include <iomanip>
 #include <random>
 #include <sstream>
 #include <vector>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <bcrypt.h>
+#pragma comment(lib, "bcrypt.lib")
+#else
+#include <cerrno>
+#include <sys/random.h>
+#endif
 
 #include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
@@ -124,7 +140,57 @@ std::string HmacSha256(const std::string& key, const std::string& message) {
 	return Sha256(o_key_pad + Sha256(i_key_pad + message));
 }
 
+bool FillSecureRandom(uint8_t* data, size_t size) {
+	if (!data || size == 0) return false;
+#ifdef _WIN32
+	return BCryptGenRandom(nullptr,
+						   data,
+						   static_cast<ULONG>(size),
+						   BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0;
+#else
+	size_t offset = 0;
+	while (offset < size) {
+		ssize_t n = getrandom(data + offset, size - offset, 0);
+		if (n > 0) {
+			offset += static_cast<size_t>(n);
+			continue;
+		}
+		if (n < 0 && errno == EINTR) continue;
+		return false;
+	}
+	return true;
+#endif
+}
+
+bool ConstantTimeEqual(std::string_view a, std::string_view b) {
+	if (a.size() != b.size()) return false;
+	unsigned char diff = 0;
+	for (size_t i = 0; i < a.size(); ++i) {
+		diff |= static_cast<unsigned char>(a[i] ^ b[i]);
+	}
+	return diff == 0;
+}
+
 }  // namespace
+
+std::string GenerateSecureSessionId() {
+	std::array<uint8_t, 16> bytes{};
+	if (!FillSecureRandom(bytes.data(), bytes.size())) {
+		auto* logger = GetLogger();
+		ENGINE_LOG_ERROR(logger, "Auth: OS secure random source failed, using random_device fallback");
+		std::random_device rd;
+		for (auto& b : bytes) {
+			b = static_cast<uint8_t>(rd());
+		}
+	}
+
+	std::ostringstream ss;
+	ss << std::hex << std::setfill('0');
+	for (uint8_t b : bytes) {
+		ss << std::setw(2) << static_cast<unsigned int>(b);
+	}
+	return ss.str();
+}
 
 // AuthBackend — permission checking
 
@@ -176,13 +242,7 @@ AuthResult TokenAuthBackend::Authenticate(const std::string& method,
 		return result;
 	}
 
-	// Generate a session ID
-	std::random_device rd;
-	std::mt19937 gen(rd());
-	std::uniform_int_distribution<uint64_t> dist;
-	std::ostringstream ss;
-	ss << std::hex << dist(gen) << dist(gen);
-	std::string session_id = ss.str();
+	std::string session_id = GenerateSecureSessionId();
 
 	sessions_[session_id] = token_it->second;
 
@@ -249,7 +309,30 @@ std::string JwtAuthBackend::Base64UrlDecode(std::string_view input) {
 	return decoded;
 }
 
+std::string JwtAuthBackend::Base64UrlEncode(std::string_view input) {
+	static const char kBase64Url[] =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+	std::string encoded;
+	encoded.reserve((input.size() * 4 + 2) / 3);
+	for (size_t i = 0; i < input.size(); i += 3) {
+		uint32_t triple = static_cast<uint8_t>(input[i]) << 16;
+		if (i + 1 < input.size()) triple |= static_cast<uint8_t>(input[i + 1]) << 8;
+		if (i + 2 < input.size()) triple |= static_cast<uint8_t>(input[i + 2]);
+
+		encoded.push_back(kBase64Url[(triple >> 18) & 0x3f]);
+		encoded.push_back(kBase64Url[(triple >> 12) & 0x3f]);
+		if (i + 1 < input.size()) encoded.push_back(kBase64Url[(triple >> 6) & 0x3f]);
+		if (i + 2 < input.size()) encoded.push_back(kBase64Url[triple & 0x3f]);
+	}
+	return encoded;
+}
+
 std::string JwtAuthBackend::VerifyToken(const std::string& token) {
+	if (secret_.empty()) {
+		ENGINE_LOG_ERROR(GetLogger(), "JwtAuth: refusing to verify token with empty secret");
+		return {};
+	}
+
 	// Split into header.payload.signature
 	auto pos1 = token.find('.');
 	if (pos1 == std::string::npos) return {};
@@ -260,28 +343,9 @@ std::string JwtAuthBackend::VerifyToken(const std::string& token) {
 	std::string payload_b64 = token.substr(pos1 + 1, pos2 - pos1 - 1);
 	std::string signature_b64 = token.substr(pos2 + 1);
 
-	// Verify signature using HMAC-SHA256
-	if (!secret_.empty()) {
-		std::string expected_sig = HmacSha256(secret_, header_b64 + "." + payload_b64);
-
-		// Base64url-encode the expected signature for comparison
-		static const char kBase64Url[] =
-			"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-		std::string expected_b64;
-		for (size_t i = 0; i < expected_sig.size(); i += 3) {
-			uint32_t triple = static_cast<uint8_t>(expected_sig[i]) << 16;
-			if (i + 1 < expected_sig.size())
-				triple |= static_cast<uint8_t>(expected_sig[i + 1]) << 8;
-			if (i + 2 < expected_sig.size())
-				triple |= static_cast<uint8_t>(expected_sig[i + 2]);
-			expected_b64 += kBase64Url[(triple >> 18) & 0x3f];
-			expected_b64 += kBase64Url[(triple >> 12) & 0x3f];
-			expected_b64 += (i + 1 < expected_sig.size()) ? kBase64Url[(triple >> 6) & 0x3f] : '=';
-			expected_b64 += (i + 2 < expected_sig.size()) ? kBase64Url[triple & 0x3f] : '=';
-		}
-
-		if (expected_b64 != signature_b64) return {};
-	}
+	std::string expected_sig = HmacSha256(secret_, header_b64 + "." + payload_b64);
+	std::string expected_b64 = Base64UrlEncode(expected_sig);
+	if (!ConstantTimeEqual(expected_b64, signature_b64)) return {};
 
 	// Decode payload
 	return Base64UrlDecode(payload_b64);
@@ -360,13 +424,7 @@ AuthResult JwtAuthBackend::Authenticate(const std::string& method,
 		}
 	}
 
-	// Create session
-	std::random_device rd;
-	std::mt19937 gen(rd());
-	std::uniform_int_distribution<uint64_t> dist;
-	std::ostringstream ss;
-	ss << std::hex << dist(gen) << dist(gen);
-	std::string session_id = ss.str();
+	std::string session_id = GenerateSecureSessionId();
 
 	SessionInfo info;
 	info.session_id = session_id;

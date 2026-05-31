@@ -4,6 +4,7 @@
 #include "runtime/evpp/libevent.h"
 #include "runtime/evpp/listener.h"
 #include "runtime/evpp/tcp_conn.h"
+#include "runtime/monitoring/metrics.h"
 
 namespace evpp {
 TCPServer::TCPServer(EventLoop* loop,
@@ -80,7 +81,14 @@ bool TCPServer::Start() {
 
 void TCPServer::Stop(DoneCallback on_stopped_cb) {
 	ENGINE_LOG_TRACE(engine::GetLogger(), "this={} Entering ...", (void*) this);
-	assert(status_ == kRunning);
+	if (!IsRunning()) {
+		if (on_stopped_cb) on_stopped_cb();
+		ENGINE_LOG_TRACE(engine::GetLogger(),
+						 "this={} Stop ignored, status={}",
+						 (void*) this,
+						 StatusToString());
+		return;
+	}
 	status_.store(kStopping);
 	substatus_.store(kStoppingListener);
 	loop_->RunInLoop(std::bind(&TCPServer::StopInLoop, this, on_stopped_cb));
@@ -179,6 +187,8 @@ void TCPServer::HandleNewConn(evpp_socket_t sockfd,
 	EventLoop* io_loop = GetNextLoop(raddr);
 	++next_conn_id_;
 	connection_count_++;
+	engine::monitoring::MetricsRegistry::Instance().connections_total().Inc();
+	engine::monitoring::MetricsRegistry::Instance().connections_active().Inc();
 #ifdef H_DEBUG_MODE
 	std::string n = name_ + "-" + remote_addr + "#" + std::to_string(next_conn_id_);
 #else
@@ -224,6 +234,7 @@ void TCPServer::RemoveConnection(const TCPConnPtr& conn) {
 		assert(this->loop_->IsInLoopThread());
 		this->connections_.erase(conn->id());
 		connection_count_--;
+		engine::monitoring::MetricsRegistry::Instance().connections_active().Dec();
 		if (IsStopping() && this->connections_.empty()) {
 			// At last, we stop all the working threads
 			ENGINE_LOG_TRACE(engine::GetLogger(), "this={} stop thread pool", (void*) this);

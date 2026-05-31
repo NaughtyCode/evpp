@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include <functional>
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -359,6 +360,7 @@ struct ServerConfig {
 
 	// Database service config file path (relative to working dir).
 	std::string db_service = "resources/config/server/db_service.json";
+	bool db_required = false;  // true = startup/readiness fail when DB is unavailable
 
 	// Explicit MongoDB selection override. When non-empty, this forces
 	// which MongoDB cluster to use ("dev" or "public"), overriding the
@@ -491,8 +493,8 @@ class CLOUD_ENGINE_API ConfigManager : public IConfigManager {
 	// Set/get the active deployment environment. Must be called
 	// BEFORE Load() for profile layering to take effect.
 	// Default is development. Overridden by --env CLI / EVPP_ENV.
-	void SetActiveEnvironment(Environment env) { active_environment_ = env; }
-	Environment GetActiveEnvironment() const { return active_environment_; }
+	void SetActiveEnvironment(Environment env) { active_environment_.store(env, std::memory_order_release); }
+	Environment GetActiveEnvironment() const { return active_environment_.load(std::memory_order_acquire); }
 
 	// Load all configs from a directory tree:
 	//   {config_dir}/runtime/runtime.json
@@ -614,7 +616,7 @@ class CLOUD_ENGINE_API ConfigManager : public IConfigManager {
 	ConfigManager() = default;
 
 	// Active deployment environment — set before Load(), reused by Reload().
-	Environment active_environment_ = Environment::development;
+	std::atomic<Environment> active_environment_{Environment::development};
 
 	// Apply environment profile overlay on top of the currently loaded
 	// runtime config. Reads profiles/{env}.json and merges matching fields.

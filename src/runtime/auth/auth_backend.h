@@ -11,6 +11,9 @@
 namespace engine {
 namespace auth {
 
+// Generate an opaque 128-bit session id encoded as lowercase hex.
+std::string GenerateSecureSessionId();
+
 // Abstract auth backend interface.
 class CLOUD_ENGINE_API AuthBackend {
 public:
@@ -80,6 +83,7 @@ private:
 
 	// Base64url decode a string.
 	static std::string Base64UrlDecode(std::string_view input);
+	static std::string Base64UrlEncode(std::string_view input);
 
 	std::string secret_;
 	std::unordered_map<std::string, SessionInfo> sessions_;

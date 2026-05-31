@@ -232,7 +232,11 @@ void Service::Stop() {
 	});
 
 	std::unique_lock<std::mutex> lock(stop_mutex);
-	stop_cv.wait(lock, [&stopped]() { return stopped; });
+	if (!stop_cv.wait_for(lock, std::chrono::seconds(5), [&stopped]() { return stopped; })) {
+		ENGINE_LOG_ERROR(engine::GetLogger(),
+						 "this={} http service stop timed out waiting for event loop",
+						 (void*) this);
+	}
 }
 
 void Service::StopInLoop() {

@@ -450,7 +450,7 @@ bool ConfigManager::Load(const std::string& config_dir) {
 	// The overlay JSON contains only the fields to override for this env.
 	{
 		std::lock_guard<std::shared_mutex> lock(config_mutex_);
-		runtime_config_.environment = EnvironmentToString(active_environment_);
+		runtime_config_.environment = EnvironmentToString(GetActiveEnvironment());
 	}
 	if (!ApplyProfileOverlay(config_dir)) {
 		return false;
@@ -499,7 +499,7 @@ bool ConfigManager::Load(const std::string& config_dir) {
 }
 
 bool ConfigManager::ApplyProfileOverlay(const std::string& config_dir) {
-	std::string env_str = EnvironmentToString(active_environment_);
+	std::string env_str = EnvironmentToString(GetActiveEnvironment());
 	std::string profile_path = config_dir + "/profiles/" + env_str + ".json";
 
 	std::error_code ec;
@@ -618,6 +618,8 @@ ConfigChangeSet ConfigManager::Diff(const RuntimeConfig& old_rt,
 	EmitChange(changes, "mongodb_public", old_srv.mongodb_public, new_srv.mongodb_public);
 	EmitChange(changes, "active_mongodb", old_srv.active_mongodb, new_srv.active_mongodb);
 	EmitChange(changes, "db_service", old_srv.db_service, new_srv.db_service);
+	EmitChange(changes, "db_required",
+			   ToString(old_srv.db_required), ToString(new_srv.db_required));
 	EmitChange(changes, "shutdown_timeout_sec",
 			   ToString(old_srv.shutdown_timeout_sec), ToString(new_srv.shutdown_timeout_sec));
 	EmitChange(changes, "connection_drain_timeout_sec",
@@ -675,17 +677,18 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 	}
 
 	// Apply environment profile overlay (common.json → {env}.json).
-	new_runtime.environment = EnvironmentToString(active_environment_);
+	Environment active_environment = GetActiveEnvironment();
+	new_runtime.environment = EnvironmentToString(active_environment);
 	{
 		std::string profile_path =
-			config_dir + "/profiles/" + EnvironmentToString(active_environment_) + ".json";
+			config_dir + "/profiles/" + EnvironmentToString(active_environment) + ".json";
 		std::error_code ec;
 		if (std::filesystem::exists(profile_path, ec)) {
 			RuntimeConfig profile_overlay = new_runtime;
 			std::string buf2;
 			auto err = glz::read_file_json(profile_overlay, profile_path, buf2);
 			if (!err) {
-				profile_overlay.environment = EnvironmentToString(active_environment_);
+				profile_overlay.environment = EnvironmentToString(active_environment);
 				InterpolateConfigStrings(profile_overlay);
 				auto vr = ConfigValidator::Validate(profile_overlay);
 				if (!vr.valid) {

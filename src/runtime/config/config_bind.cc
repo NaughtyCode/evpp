@@ -99,6 +99,7 @@ int l_config_get(lua_State* L) {
     if (p == "server.db_service")             return PushConfigValue(L, srv.db_service);
     if (p == "server.mongodb_dev")            return PushConfigValue(L, srv.mongodb_dev);
     if (p == "server.mongodb_public")         return PushConfigValue(L, srv.mongodb_public);
+    if (p == "server.db_required")            return PushConfigValue(L, srv.db_required);
     if (p == "server.msgpack.max_nesting_depth") return PushConfigValue(L, srv.msgpack.max_nesting_depth);
     if (p == "server.msgpack.max_payload_size")  return PushConfigValue(L, srv.msgpack.max_payload_size);
     if (p == "server.resource_limits.max_message_size") return PushConfigValue(L, static_cast<lua_Integer>(srv.resource_limits.max_message_size));

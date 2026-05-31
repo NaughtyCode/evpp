@@ -11,6 +11,7 @@
 #include "runtime/core/engine_api.h"
 #include "runtime/database/data_service/db_request.h"
 #include "runtime/database/data_service/db_service_config.h"
+#include "runtime/monitoring/metrics.h"
 
 namespace engine {
 namespace mongo {
@@ -141,9 +142,11 @@ class CLOUD_ENGINE_API DatabaseService {
 	// Called by DBThread after successful enqueue / completion / error.
 	void RecordEnqueue() {
 		total_enqueued_.fetch_add(1, std::memory_order_relaxed);
+		monitoring::MetricsRegistry::Instance().db_requests_total().Inc();
 	}
 	void RecordDropped() {
 		total_dropped_.fetch_add(1, std::memory_order_relaxed);
+		monitoring::MetricsRegistry::Instance().db_requests_dropped_total().Inc();
 	}
 	void RecordCompleted() {
 		total_completed_.fetch_add(1, std::memory_order_relaxed);

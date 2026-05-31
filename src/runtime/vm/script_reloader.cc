@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <condition_variable>
 #include <filesystem>
 #include <unordered_set>
 
@@ -50,6 +51,8 @@ void ScriptReloader::Start(int poll_interval_ms, int debounce_ms) {
 
 	// Stop any existing watcher and reset state for a clean restart.
 	Stop();
+	stopped_.store(false, std::memory_order_release);
+	generation_.fetch_add(1, std::memory_order_acq_rel);
 
 	// Clean up Reference-type snapshot entries before clearing.
 	{
@@ -91,9 +94,26 @@ void ScriptReloader::Start(int poll_interval_ms, int debounce_ms) {
 }
 
 void ScriptReloader::Stop() {
+	stopped_.store(true, std::memory_order_release);
+	generation_.fetch_add(1, std::memory_order_acq_rel);
 	if (watcher_) {
 		watcher_->Stop();
 		watcher_.reset();
+	}
+	if (loop_ && loop_->IsRunning() && !loop_->IsInLoopThread()) {
+		struct DrainState {
+			std::mutex mutex;
+			std::condition_variable cv;
+			bool drained = false;
+		};
+		auto state = std::make_shared<DrainState>();
+		loop_->RunInLoop([state]() {
+			std::lock_guard<std::mutex> lock(state->mutex);
+			state->drained = true;
+			state->cv.notify_one();
+		});
+		std::unique_lock<std::mutex> lock(state->mutex);
+		state->cv.wait_for(lock, std::chrono::seconds(2), [&]() { return state->drained; });
 	}
 }
 
@@ -152,12 +172,16 @@ void ScriptReloader::OnFilesChanged(const std::vector<std::string>& files) {
 	// All callback invocations must happen on the main thread for consistency.
 	if (loop_) {
 		if (!valid_files.empty()) {
-			loop_->RunInLoop([this, files = std::move(valid_files)]() {
+			const uint64_t generation = generation_.load(std::memory_order_acquire);
+			loop_->RunInLoop([this, generation, files = std::move(valid_files)]() {
+				if (!IsDispatchActive(generation)) return;
 				ProcessReloadList(files);
 			});
 		}
 		if (!failed_files.empty()) {
-			loop_->RunInLoop([this, files = std::move(failed_files)]() {
+			const uint64_t generation = generation_.load(std::memory_order_acquire);
+			loop_->RunInLoop([this, generation, files = std::move(failed_files)]() {
+				if (!IsDispatchActive(generation)) return;
 				for (const auto& f : files) {
 					if (reload_callback_) reload_callback_(f, false);
 				}
@@ -172,6 +196,11 @@ void ScriptReloader::OnFilesChanged(const std::vector<std::string>& files) {
 		pending_failures_.insert(pending_failures_.end(),
 		                         failed_files.begin(), failed_files.end());
 	}
+}
+
+bool ScriptReloader::IsDispatchActive(uint64_t generation) const {
+	return !stopped_.load(std::memory_order_acquire) &&
+		   generation_.load(std::memory_order_acquire) == generation;
 }
 
 // ProcessReloadList — called on main thread (via EventLoop or manual)

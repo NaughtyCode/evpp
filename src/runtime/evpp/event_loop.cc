@@ -174,7 +174,10 @@ void EventLoop::Run() {
 
 void EventLoop::Stop() {
 	EVPP_TRACE("this={}", (void*) this);
-	assert(status_.load() == kRunning);
+	if (!IsRunning()) {
+		EVPP_TRACE("this={} Stop ignored, status={}", (void*) this, StatusToString());
+		return;
+	}
 	status_.store(kStopping);
 	EVPP_TRACE("this={} EventLoop::Stop", (void*) this);
 	if (IsInLoopThread()) {

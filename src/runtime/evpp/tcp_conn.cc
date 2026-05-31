@@ -8,6 +8,7 @@
 #include "runtime/evpp/invoke_timer.h"
 #include "runtime/evpp/libevent.h"
 #include "runtime/evpp/sockets.h"
+#include "runtime/monitoring/metrics.h"
 
 #if defined(EVPP_HTTP_CLIENT_SUPPORTS_SSL) || defined(EVPP_OPENSSL_ENABLED)
 #include <openssl/err.h>
@@ -275,6 +276,12 @@ void TCPConn::SendInLoop(const void* data, size_t len) {
 			chan_->EnableWriteEvent();
 		}
 	}
+	if (len > 0) {
+		auto& metrics = engine::monitoring::MetricsRegistry::Instance();
+		metrics.messages_sent_total().Inc();
+		metrics.GetHistogram("evpp_message_size_bytes", {64, 256, 1024, 4096, 16384, 65536})
+			.Observe(static_cast<double>(len));
+	}
 }
 
 void TCPConn::HandleRead() {
@@ -315,6 +322,10 @@ void TCPConn::HandleRead() {
 		n = input_buffer_.ReadFromFD(chan_->fd(), &serrno);
 	}
 	if (n > 0) {
+		auto& metrics = engine::monitoring::MetricsRegistry::Instance();
+		metrics.messages_received_total().Inc();
+		metrics.GetHistogram("evpp_message_size_bytes", {64, 256, 1024, 4096, 16384, 65536})
+			.Observe(static_cast<double>(n));
 		msg_fn_(shared_from_this(), &input_buffer_);
 	} else if (n == 0) {
 		if (type() == kOutgoing) {

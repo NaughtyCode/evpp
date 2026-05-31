@@ -13,6 +13,7 @@
 #include <unordered_map>
 
 #include "runtime/core/log/log.h"
+#include "runtime/monitoring/metrics.h"
 #include "runtime/profiler/profiler_events.h"
 
 namespace engine {
@@ -208,6 +209,9 @@ TimerManager::UpdateResult TimerManager::update(TimePoint current_time) {
 
 	if (result.total_fired > 0) {
 		ENGINE_PROFILE_INSTANT("engine.timer", "TimerFired");
+		monitoring::MetricsRegistry::Instance()
+			.timers_fired_total()
+			.Inc(static_cast<int64_t>(result.total_fired));
 	}
 
 	// Update statistics

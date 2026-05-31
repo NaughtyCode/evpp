@@ -359,14 +359,17 @@ TEST_CASE("Built-in counters can be incremented", "[monitoring][builtin]") {
     auto& reg = MetricsRegistry::Instance();
     reg.RegisterBuiltinMetrics();
 
+    const auto connections_before = reg.connections_total().Value();
     reg.connections_total().Inc(5);
-    REQUIRE(reg.connections_total().Value() == 5);
+    REQUIRE(reg.connections_total().Value() == connections_before + 5);
 
+    const auto messages_before = reg.messages_received_total().Value();
     reg.messages_received_total().Inc(100);
-    REQUIRE(reg.messages_received_total().Value() == 100);
+    REQUIRE(reg.messages_received_total().Value() == messages_before + 100);
 
+    const auto db_before = reg.db_requests_total().Value();
     reg.db_requests_total().Inc(10);
-    REQUIRE(reg.db_requests_total().Value() == 10);
+    REQUIRE(reg.db_requests_total().Value() == db_before + 10);
 }
 
 TEST_CASE("Built-in gauge can be set and read", "[monitoring][builtin]") {

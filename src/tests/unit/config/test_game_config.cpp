@@ -570,6 +570,23 @@ TEST_CASE("Lua config.get reads server config values", "[game_config][lua]") {
     REQUIRE(result == "5.0");
 }
 
+TEST_CASE("Lua config.get reads server db_required", "[game_config][lua]") {
+    auto& cfg = ConfigManager::Instance();
+    REQUIRE(cfg.LoadServerFromString(R"({
+        "http": { "timeout_sec": 5.0 },
+        "msgpack": { "max_nesting_depth": 16 },
+        "db_required": true,
+        "scripts_dir": "."
+    })"));
+
+    ScriptVM vm;
+    script::ExportConfigBindings(vm);
+
+    std::string result;
+    REQUIRE(vm.DoString("return tostring(config.get('server.db_required'))", "test", nullptr, &result));
+    REQUIRE(result == "true");
+}
+
 TEST_CASE("Lua config.get reads server resource limits", "[game_config][lua]") {
     auto& cfg = ConfigManager::Instance();
     REQUIRE(cfg.LoadServerFromString(R"({

@@ -192,6 +192,7 @@ class CLOUD_ENGINE_API Engine {
 	ConfigChangeSet pending_config_changes_;
 	std::atomic<bool> config_changes_pending_{false};
 	std::string config_dir_;
+	int config_reload_callback_id_ = 0;
 };
 
 }  // namespace engine

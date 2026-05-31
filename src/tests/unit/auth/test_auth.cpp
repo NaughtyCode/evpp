@@ -126,6 +126,17 @@ TEST_CASE("TokenAuthBackend generates unique session IDs", "[auth][token]") {
 	REQUIRE(r1.success == true);
 	REQUIRE(r2.success == true);
 	REQUIRE(r1.session_id != r2.session_id);
+	REQUIRE(r1.session_id.size() == 32);
+	REQUIRE(r2.session_id.size() == 32);
+}
+
+TEST_CASE("GenerateSecureSessionId returns opaque 128-bit hex ids", "[auth][token]") {
+	auto id = GenerateSecureSessionId();
+	REQUIRE(id.size() == 32);
+	for (char ch : id) {
+		REQUIRE(((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')));
+	}
+	REQUIRE(id != GenerateSecureSessionId());
 }
 
 TEST_CASE("TokenAuthBackend rejects unknown token", "[auth][token]") {
@@ -239,6 +250,18 @@ TEST_CASE("TokenAuthBackend empty token string", "[auth][token]") {
 	auto result = backend.Authenticate("token", params);
 	REQUIRE(result.success == true);
 	REQUIRE(result.entity_id == "entity_empty_token");
+}
+
+TEST_CASE("JwtAuthBackend rejects tokens when secret is empty", "[auth][jwt]") {
+	JwtAuthBackend backend;
+
+	std::map<std::string, std::string> params;
+	params["token"] = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJlbnRpdHlfMSJ9.invalid";
+
+	auto result = backend.Authenticate("jwt", params);
+	REQUIRE(result.success == false);
+	REQUIRE(result.reason == "invalid jwt token");
+	REQUIRE(result.session_id.empty());
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
