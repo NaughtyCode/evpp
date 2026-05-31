@@ -2,10 +2,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <sstream>
 
 #include "runtime/config/path_resolver.h"
@@ -35,6 +37,32 @@ bool IsFloat(const std::string& s) {
 
 bool IsBool(const std::string& s) {
     return s == "true" || s == "false" || s == "TRUE" || s == "FALSE";
+}
+
+bool ParseIntStrict(const std::string& s, int& out) {
+    std::string v = s;
+    char* end = nullptr;
+    errno = 0;
+    long value = std::strtol(v.c_str(), &end, 10);
+    if (errno != 0 || end == v.c_str() || *end != '\0' ||
+        value < std::numeric_limits<int>::min() ||
+        value > std::numeric_limits<int>::max()) {
+        return false;
+    }
+    out = static_cast<int>(value);
+    return true;
+}
+
+bool ParseDoubleStrict(const std::string& s, double& out) {
+    std::string v = s;
+    char* end = nullptr;
+    errno = 0;
+    double value = std::strtod(v.c_str(), &end);
+    if (errno != 0 || end == v.c_str() || *end != '\0') {
+        return false;
+    }
+    out = value;
+    return true;
 }
 
 bool ReadCompositeJsonValue(const std::string& json, size_t& pos, std::string& value) {
@@ -151,6 +179,7 @@ bool ConfigTable::LoadFromJson(const std::string& path) {
 
     rows_.clear();
     columns_.clear();
+    indexes_.clear();
     std::unordered_map<std::string, size_t> col_index;
 
     while (pos < json.size()) {
@@ -306,6 +335,7 @@ bool ConfigTable::LoadFromCsv(const std::string& path) {
     }
 
     columns_.clear();
+    indexes_.clear();
     std::stringstream header_ss(line);
     std::string col_name;
     while (std::getline(header_ss, col_name, ',')) {
@@ -399,7 +429,8 @@ int ConfigTable::GetInt(const std::string& key_column, const std::string& key_va
     if (!row) return default_val;
     auto it = row->find(value_column);
     if (it == row->end() || it->second.empty()) return default_val;
-    return static_cast<int>(std::strtol(it->second.c_str(), nullptr, 10));
+    int value = default_val;
+    return ParseIntStrict(Trim(it->second), value) ? value : default_val;
 }
 
 double ConfigTable::GetFloat(const std::string& key_column, const std::string& key_value,
@@ -408,7 +439,8 @@ double ConfigTable::GetFloat(const std::string& key_column, const std::string& k
     if (!row) return default_val;
     auto it = row->find(value_column);
     if (it == row->end() || it->second.empty()) return default_val;
-    return std::strtod(it->second.c_str(), nullptr);
+    double value = default_val;
+    return ParseDoubleStrict(Trim(it->second), value) ? value : default_val;
 }
 
 bool ConfigTable::GetBool(const std::string& key_column, const std::string& key_value,

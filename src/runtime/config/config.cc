@@ -6,6 +6,8 @@
 #include <fstream>
 #include <regex>
 #include <sstream>
+#include <system_error>
+#include <type_traits>
 
 #include <glaze/glaze.hpp>
 
@@ -173,14 +175,32 @@ bool ConfigManager::LoadServerFromString(const std::string& json) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: server config validation failed: {}", vr.errors);
 		return false;
 	}
+
+	MongoDbConfig new_mongo_dev;
+	MongoDbConfig new_mongo_public;
+	bool dev_loaded = false;
+	bool public_loaded = false;
+	if (!temp.mongodb_dev.empty()) {
+		dev_loaded = LoadMongoDbConfigFromFile(temp.mongodb_dev, new_mongo_dev);
+		if (!dev_loaded) return false;
+		CheckPlaintextCredentials(new_mongo_dev.connection.uri, "mongodb_dev");
+	}
+	if (!temp.mongodb_public.empty()) {
+		public_loaded = LoadMongoDbConfigFromFile(temp.mongodb_public, new_mongo_public);
+		if (!public_loaded) return false;
+		CheckPlaintextCredentials(new_mongo_public.connection.uri, "mongodb_public");
+	}
 	{
 		std::lock_guard<std::shared_mutex> lock(config_mutex_);
 		previous_server_config_ = server_config_;
 		server_config_ = std::move(temp);
+		mongo_dev_config_ = std::move(new_mongo_dev);
+		mongo_public_config_ = std::move(new_mongo_public);
+		mongo_dev_loaded_ = dev_loaded;
+		mongo_public_loaded_ = public_loaded;
 		has_previous_ = true;
 		new_server = server_config_;
 	}
-	LoadMongoDbConfigsFromServer();
 	NotifyReloadCallbacks(Diff(old_runtime, old_runtime, old_server, new_server));
 	return true;
 }
@@ -247,13 +267,31 @@ bool ConfigManager::LoadServerFromFile(const std::string& path) {
 		if (auto* l = GetLogger()) ENGINE_LOG_ERROR(l, "ConfigManager: server config validation failed [{}]: {}", path, vr.errors);
 		return false;
 	}
+
+	MongoDbConfig new_mongo_dev;
+	MongoDbConfig new_mongo_public;
+	bool dev_loaded = false;
+	bool public_loaded = false;
+	if (!temp.mongodb_dev.empty()) {
+		dev_loaded = LoadMongoDbConfigFromFile(temp.mongodb_dev, new_mongo_dev);
+		if (!dev_loaded) return false;
+		CheckPlaintextCredentials(new_mongo_dev.connection.uri, "mongodb_dev");
+	}
+	if (!temp.mongodb_public.empty()) {
+		public_loaded = LoadMongoDbConfigFromFile(temp.mongodb_public, new_mongo_public);
+		if (!public_loaded) return false;
+		CheckPlaintextCredentials(new_mongo_public.connection.uri, "mongodb_public");
+	}
 	{
 		std::lock_guard<std::shared_mutex> lock(config_mutex_);
 		previous_server_config_ = server_config_;
 		server_config_ = std::move(temp);
+		mongo_dev_config_ = std::move(new_mongo_dev);
+		mongo_public_config_ = std::move(new_mongo_public);
+		mongo_dev_loaded_ = dev_loaded;
+		mongo_public_loaded_ = public_loaded;
 		has_previous_ = true;
 	}
-	LoadMongoDbConfigsFromServer();
 	return true;
 }
 
@@ -414,7 +452,9 @@ bool ConfigManager::Load(const std::string& config_dir) {
 		std::lock_guard<std::shared_mutex> lock(config_mutex_);
 		runtime_config_.environment = EnvironmentToString(active_environment_);
 	}
-	ApplyProfileOverlay(config_dir);
+	if (!ApplyProfileOverlay(config_dir)) {
+		return false;
+	}
 
 	// Client and server configs are optional — one may not exist
 	// depending on the build target.  Check existence first to avoid
@@ -425,6 +465,9 @@ bool ConfigManager::Load(const std::string& config_dir) {
 	std::string client_path = config_dir + kClientConfigFile;
 	if (std::filesystem::exists(client_path, ec)) {
 		have_client = LoadClientFromFile(client_path);
+		if (!have_client) {
+			return false;
+		}
 		// Layer 3: load user overrides from <user_data>/settings.json.
 		// Best-effort — failure doesn't invalidate the config.
 		if (have_client) {
@@ -439,6 +482,9 @@ bool ConfigManager::Load(const std::string& config_dir) {
 	std::string server_path = config_dir + kServerConfigFile;
 	if (std::filesystem::exists(server_path, ec)) {
 		have_server = LoadServerFromFile(server_path);
+		if (!have_server) {
+			return false;
+		}
 	}
 
 	// Cross-field validation after all configs are loaded.
@@ -452,14 +498,14 @@ bool ConfigManager::Load(const std::string& config_dir) {
 	return true;
 }
 
-void ConfigManager::ApplyProfileOverlay(const std::string& config_dir) {
+bool ConfigManager::ApplyProfileOverlay(const std::string& config_dir) {
 	std::string env_str = EnvironmentToString(active_environment_);
 	std::string profile_path = config_dir + "/profiles/" + env_str + ".json";
 
 	std::error_code ec;
 	if (!std::filesystem::exists(profile_path, ec)) {
 		// No profile file for this environment — that's fine, use base config.
-		return;
+		return true;
 	}
 
 	// Read profile JSON (partial config — only overrides relevant fields).
@@ -475,11 +521,19 @@ void ConfigManager::ApplyProfileOverlay(const std::string& config_dir) {
 		if (auto* l = GetLogger())
 			ENGINE_LOG_ERROR(l, "ConfigManager: failed to load profile [{}]: {}",
 							 profile_path, glz::format_error(err, buf));
-		return;
+		return false;
 	}
 
 	// Restore the environment field (profile overlay may have overwritten it).
 	profile_overlay.environment = env_str;
+	InterpolateConfigStrings(profile_overlay);
+	auto vr = ConfigValidator::Validate(profile_overlay);
+	if (!vr.valid) {
+		if (auto* l = GetLogger())
+			ENGINE_LOG_ERROR(l, "ConfigManager: invalid profile [{}]: {}",
+							 profile_path, vr.errors);
+		return false;
+	}
 
 	{
 		std::lock_guard<std::shared_mutex> lock(config_mutex_);
@@ -488,6 +542,7 @@ void ConfigManager::ApplyProfileOverlay(const std::string& config_dir) {
 
 	if (auto* l = GetLogger())
 		ENGINE_LOG_INFO(l, "ConfigManager: applied profile overlay [{}]", profile_path);
+	return true;
 }
 
 // ── Diff helper ────────────────────────────────────────────────────────────
@@ -498,14 +553,12 @@ template <typename T>
 std::string ToString(const T& val) {
 	if constexpr (std::is_same_v<T, std::string>) {
 		return val;
-	} else if constexpr (std::is_same_v<T, int>) {
-		return std::to_string(val);
 	} else if constexpr (std::is_same_v<T, double>) {
-		return std::to_string(val);
-	} else if constexpr (std::is_same_v<T, size_t>) {
 		return std::to_string(val);
 	} else if constexpr (std::is_same_v<T, bool>) {
 		return val ? "true" : "false";
+	} else if constexpr (std::is_integral_v<T>) {
+		return std::to_string(val);
 	} else {
 		return "<complex>";
 	}
@@ -565,6 +618,30 @@ ConfigChangeSet ConfigManager::Diff(const RuntimeConfig& old_rt,
 	EmitChange(changes, "mongodb_public", old_srv.mongodb_public, new_srv.mongodb_public);
 	EmitChange(changes, "active_mongodb", old_srv.active_mongodb, new_srv.active_mongodb);
 	EmitChange(changes, "db_service", old_srv.db_service, new_srv.db_service);
+	EmitChange(changes, "shutdown_timeout_sec",
+			   ToString(old_srv.shutdown_timeout_sec), ToString(new_srv.shutdown_timeout_sec));
+	EmitChange(changes, "connection_drain_timeout_sec",
+			   ToString(old_srv.connection_drain_timeout_sec),
+			   ToString(new_srv.connection_drain_timeout_sec));
+	EmitChange(changes, "max_connections",
+			   ToString(old_srv.max_connections), ToString(new_srv.max_connections));
+	EmitChange(changes, "pid_file", old_srv.pid_file, new_srv.pid_file);
+	EmitChange(changes, "resource_limits.max_message_size",
+			   ToString(old_srv.resource_limits.max_message_size),
+			   ToString(new_srv.resource_limits.max_message_size));
+	EmitChange(changes, "resource_limits.max_buffer_capacity",
+			   ToString(old_srv.resource_limits.max_buffer_capacity),
+			   ToString(new_srv.resource_limits.max_buffer_capacity));
+	EmitChange(changes, "resource_limits.max_http_body_size",
+			   ToString(old_srv.resource_limits.max_http_body_size),
+			   ToString(new_srv.resource_limits.max_http_body_size));
+	EmitChange(changes, "resource_limits.max_msgpack_depth",
+			   ToString(old_srv.resource_limits.max_msgpack_depth),
+			   ToString(new_srv.resource_limits.max_msgpack_depth));
+	EmitChange(changes, "instance.id", old_srv.instance.id, new_srv.instance.id);
+	EmitChange(changes, "instance.region", old_srv.instance.region, new_srv.instance.region);
+	EmitChange(changes, "instance.zone", old_srv.instance.zone, new_srv.instance.zone);
+	EmitChange(changes, "instance.cluster", old_srv.instance.cluster, new_srv.instance.cluster);
 
 	return changes;
 }
@@ -609,11 +686,19 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 			auto err = glz::read_file_json(profile_overlay, profile_path, buf2);
 			if (!err) {
 				profile_overlay.environment = EnvironmentToString(active_environment_);
+				InterpolateConfigStrings(profile_overlay);
+				auto vr = ConfigValidator::Validate(profile_overlay);
+				if (!vr.valid) {
+					ENGINE_LOG_ERROR(logger, "ConfigManager: reload invalid profile [{}]: {}",
+									 profile_path, vr.errors);
+					return false;
+				}
 				new_runtime = std::move(profile_overlay);
 				ENGINE_LOG_INFO(logger, "ConfigManager: reload applied profile overlay [{}]", profile_path);
 			} else {
 				ENGINE_LOG_ERROR(logger, "ConfigManager: reload failed to load profile [{}]: {}",
 								 profile_path, glz::format_error(err, buf2));
+				return false;
 			}
 		}
 	}
@@ -626,6 +711,12 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 		auto ec3 = glz::read_file_json(new_client, client_path, buf);
 		if (!ec3) {
 			InterpolateConfigStrings(new_client);
+			auto vr = ConfigValidator::ValidateClient(new_client);
+			if (!vr.valid) {
+				ENGINE_LOG_ERROR(logger, "ConfigManager: reload validation failed for client.json: {}",
+								 vr.errors);
+				return false;
+			}
 			have_client = true;
 			// Layer 3: load user overrides on top of factory settings.
 			std::string user_path = platform::GetUserSettingsPath(config::kDefaultWindowTitle);
@@ -641,6 +732,10 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 				}
 			}
 			new_client.first_run_completed = true;
+		} else {
+			ENGINE_LOG_ERROR(logger, "ConfigManager: reload parse error for client.json: {}",
+							 glz::format_error(ec3, buf));
+			return false;
 		}
 	}
 
@@ -655,6 +750,7 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 		} else {
 			ENGINE_LOG_ERROR(logger, "ConfigManager: reload parse error for server.json: {}",
 							 glz::format_error(ec3, buf));
+			return false;
 		}
 	}
 	if (have_server) {
@@ -673,9 +769,35 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 	if (have_server) {
 		if (!new_server.mongodb_dev.empty()) {
 			dev_loaded = LoadMongoDbConfigFromFile(new_server.mongodb_dev, new_mongo_dev);
+			if (!dev_loaded) {
+				ENGINE_LOG_ERROR(logger,
+								 "ConfigManager: reload failed because mongodb_dev [{}] could not be loaded",
+								 new_server.mongodb_dev);
+				return false;
+			}
 		}
 		if (!new_server.mongodb_public.empty()) {
 			public_loaded = LoadMongoDbConfigFromFile(new_server.mongodb_public, new_mongo_public);
+			if (!public_loaded) {
+				ENGINE_LOG_ERROR(logger,
+								 "ConfigManager: reload failed because mongodb_public [{}] could not be loaded",
+								 new_server.mongodb_public);
+				return false;
+			}
+		}
+	}
+
+	{
+		ServerConfig current_server;
+		if (!have_server) {
+			std::shared_lock<std::shared_mutex> lock(config_mutex_);
+			current_server = server_config_;
+		}
+		auto vr = ConfigValidator::ValidateCross(new_runtime, have_server ? new_server : current_server);
+		if (!vr.valid) {
+			ENGINE_LOG_ERROR(logger, "ConfigManager: reload cross-field validation failed: {}",
+							 vr.errors);
+			return false;
 		}
 	}
 
@@ -724,6 +846,7 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 							entry.field_path, entry.old_value, entry.new_value);
 		}
 		ENGINE_LOG_INFO(logger, "ConfigManager: config reloaded ({} fields changed)", changes.size());
+		lock.unlock();
 		NotifyReloadCallbacks(changes);
 	}
 	return true;
@@ -872,6 +995,7 @@ bool ConfigManager::ReloadMongoDbConfigs() {
 }
 
 int ConfigManager::RegisterReloadCallback(ReloadCallback callback) {
+	if (!callback) return 0;
 	std::lock_guard<std::mutex> lock(callbacks_mutex_);
 	int id = next_callback_id_++;
 	callbacks_.emplace_back(id, std::move(callback));
@@ -1000,20 +1124,42 @@ bool ConfigManager::IsAutoReloadEnabled() const {
 	return config_watcher_ && config_watcher_->IsRunning();
 }
 
-void ConfigManager::LoadMongoDbConfigsFromServer() {
+bool ConfigManager::LoadMongoDbConfigsFromServer() {
 	// Called after server_config_ is populated (from string, file, or
 	// programmatic assignment).  Suppress error output — the files may
 	// legitimately not exist yet (e.g. first run before cluster setup).
-	if (!server_config_.mongodb_dev.empty()) {
-		mongo_dev_loaded_ =
-			LoadMongoDbConfigFromFile(server_config_.mongodb_dev, mongo_dev_config_);
-		if (mongo_dev_loaded_) CheckPlaintextCredentials(mongo_dev_config_.connection.uri, "mongodb_dev");
+	std::string dev_path;
+	std::string public_path;
+	{
+		std::shared_lock<std::shared_mutex> lock(config_mutex_);
+		dev_path = server_config_.mongodb_dev;
+		public_path = server_config_.mongodb_public;
 	}
-	if (!server_config_.mongodb_public.empty()) {
-		mongo_public_loaded_ =
-			LoadMongoDbConfigFromFile(server_config_.mongodb_public, mongo_public_config_);
-		if (mongo_public_loaded_) CheckPlaintextCredentials(mongo_public_config_.connection.uri, "mongodb_public");
+
+	MongoDbConfig new_dev;
+	MongoDbConfig new_public;
+	bool dev_loaded = false;
+	bool public_loaded = false;
+
+	if (!dev_path.empty()) {
+		dev_loaded = LoadMongoDbConfigFromFile(dev_path, new_dev);
+		if (!dev_loaded) return false;
+		CheckPlaintextCredentials(new_dev.connection.uri, "mongodb_dev");
 	}
+	if (!public_path.empty()) {
+		public_loaded = LoadMongoDbConfigFromFile(public_path, new_public);
+		if (!public_loaded) return false;
+		CheckPlaintextCredentials(new_public.connection.uri, "mongodb_public");
+	}
+
+	{
+		std::lock_guard<std::shared_mutex> lock(config_mutex_);
+		mongo_dev_config_ = std::move(new_dev);
+		mongo_public_config_ = std::move(new_public);
+		mongo_dev_loaded_ = dev_loaded;
+		mongo_public_loaded_ = public_loaded;
+	}
+	return true;
 }
 
 // ── Env-var interpolation ────────────────────────────────────────────────

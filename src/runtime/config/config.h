@@ -618,11 +618,11 @@ class CLOUD_ENGINE_API ConfigManager : public IConfigManager {
 
 	// Apply environment profile overlay on top of the currently loaded
 	// runtime config. Reads profiles/{env}.json and merges matching fields.
-	void ApplyProfileOverlay(const std::string& config_dir);
+	bool ApplyProfileOverlay(const std::string& config_dir);
 
 	// Shared loading helper: after server config is populated, load
 	// any referenced mongodb config files.
-	void LoadMongoDbConfigsFromServer();
+	bool LoadMongoDbConfigsFromServer();
 
 	// Notify all registered reload callbacks with the given change set.
 	void NotifyReloadCallbacks(const ConfigChangeSet& changes);

@@ -101,6 +101,17 @@ int l_config_get(lua_State* L) {
     if (p == "server.mongodb_public")         return PushConfigValue(L, srv.mongodb_public);
     if (p == "server.msgpack.max_nesting_depth") return PushConfigValue(L, srv.msgpack.max_nesting_depth);
     if (p == "server.msgpack.max_payload_size")  return PushConfigValue(L, srv.msgpack.max_payload_size);
+    if (p == "server.resource_limits.max_message_size") return PushConfigValue(L, static_cast<lua_Integer>(srv.resource_limits.max_message_size));
+    if (p == "server.resource_limits.max_buffer_capacity") return PushConfigValue(L, static_cast<lua_Integer>(srv.resource_limits.max_buffer_capacity));
+    if (p == "server.resource_limits.max_http_body_size") return PushConfigValue(L, static_cast<lua_Integer>(srv.resource_limits.max_http_body_size));
+    if (p == "server.resource_limits.max_msgpack_depth") return PushConfigValue(L, static_cast<lua_Integer>(srv.resource_limits.max_msgpack_depth));
+    if (p == "server.tcp_keepalive.idle_sec") return PushConfigValue(L, srv.tcp_keepalive.idle_sec);
+    if (p == "server.tcp_keepalive.interval_sec") return PushConfigValue(L, srv.tcp_keepalive.interval_sec);
+    if (p == "server.tcp_keepalive.count") return PushConfigValue(L, srv.tcp_keepalive.count);
+    if (p == "server.instance.id") return PushConfigValue(L, srv.instance.id);
+    if (p == "server.instance.region") return PushConfigValue(L, srv.instance.region);
+    if (p == "server.instance.zone") return PushConfigValue(L, srv.instance.zone);
+    if (p == "server.instance.cluster") return PushConfigValue(L, srv.instance.cluster);
 
     lua_pushnil(L);
     return 1;

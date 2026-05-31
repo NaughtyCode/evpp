@@ -176,6 +176,21 @@ TEST_CASE("ConfigTable GetInt by key column", "[game_config][table]") {
     REQUIRE(table.GetInt("id", "99", "hp", -1) == -1);
 }
 
+TEST_CASE("ConfigTable GetInt returns default for malformed numeric field", "[game_config][table]") {
+    TempDir tmp("game_config_bad_int_test");
+    tmp.write("data.json", R"([
+        {"id": 1, "hp": "100abc"},
+        {"id": 2, "hp": 200}
+    ])");
+
+    ConfigTable table;
+    REQUIRE(table.LoadFromJson(tmp.file("data.json")));
+    table.BuildIndex("id");
+
+    REQUIRE(table.GetInt("id", "1", "hp", -1) == -1);
+    REQUIRE(table.GetInt("id", "2", "hp", -1) == 200);
+}
+
 TEST_CASE("ConfigTable GetFloat by key column", "[game_config][table]") {
     TempDir tmp("game_config_float_test");
     tmp.write("data.json", R"([
@@ -189,6 +204,19 @@ TEST_CASE("ConfigTable GetFloat by key column", "[game_config][table]") {
 
     REQUIRE(table.GetFloat("id", "1", "rate") == Catch::Approx(1.5));
     REQUIRE(table.GetFloat("id", "2", "rate") == Catch::Approx(2.75));
+}
+
+TEST_CASE("ConfigTable GetFloat returns default for malformed numeric field", "[game_config][table]") {
+    TempDir tmp("game_config_bad_float_test");
+    tmp.write("data.json", R"([
+        {"id": 1, "rate": "1.5x"}
+    ])");
+
+    ConfigTable table;
+    REQUIRE(table.LoadFromJson(tmp.file("data.json")));
+    table.BuildIndex("id");
+
+    REQUIRE(table.GetFloat("id", "1", "rate", -1.0) == Catch::Approx(-1.0));
 }
 
 TEST_CASE("ConfigTable GetBool by key column", "[game_config][table]") {
@@ -540,6 +568,29 @@ TEST_CASE("Lua config.get reads server config values", "[game_config][lua]") {
     std::string result;
     REQUIRE(vm.DoString("return tostring(config.get('server.http.timeout_sec'))", "test", nullptr, &result));
     REQUIRE(result == "5.0");
+}
+
+TEST_CASE("Lua config.get reads server resource limits", "[game_config][lua]") {
+    auto& cfg = ConfigManager::Instance();
+    REQUIRE(cfg.LoadServerFromString(R"({
+        "http": { "timeout_sec": 5.0 },
+        "msgpack": { "max_nesting_depth": 16 },
+        "scripts_dir": ".",
+        "resource_limits": {
+            "max_message_size": 131072,
+            "max_buffer_capacity": 262144,
+            "max_http_body_size": 1048576,
+            "max_msgpack_depth": 32
+        }
+    })"));
+
+    ScriptVM vm;
+    script::ExportConfigBindings(vm);
+
+    std::string result;
+    REQUIRE(vm.DoString("return tostring(config.get('server.resource_limits.max_message_size'))",
+                        "test", nullptr, &result));
+    REQUIRE(result == "131072");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

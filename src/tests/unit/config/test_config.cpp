@@ -6,6 +6,56 @@
 #include "runtime/config/config_validator.h"
 #include "runtime/config/platform_paths.h"
 
+namespace {
+
+struct TempConfigDir {
+    std::filesystem::path root;
+
+    explicit TempConfigDir(const std::string& name)
+        : root(std::filesystem::temp_directory_path() / name) {
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+        std::filesystem::create_directories(root / "runtime", ec);
+        std::filesystem::create_directories(root / "client", ec);
+        std::filesystem::create_directories(root / "server", ec);
+        std::filesystem::create_directories(root / "profiles", ec);
+    }
+
+    ~TempConfigDir() {
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+    }
+
+    std::string path() const { return root.string(); }
+
+    void write(const std::filesystem::path& relative, const std::string& content) {
+        std::filesystem::create_directories((root / relative).parent_path());
+        std::ofstream out(root / relative);
+        out << content;
+    }
+};
+
+const char* kValidRuntimeJson = R"({
+    "resource_dir": "resources",
+    "log": { "dir": "logs", "level": "info" },
+    "frame": { "target_fps": 30, "interval_ms": 33 },
+    "scripts_dir": "resources/script/runtime"
+})";
+
+const char* kValidClientJson = R"({
+    "scripts_dir": "resources/script/client",
+    "render": { "backend": "opengl", "max_fps": 60 }
+})";
+
+const char* kValidServerJson = R"({
+    "http": { "timeout_sec": 5.0 },
+    "msgpack": { "max_nesting_depth": 16 },
+    "scripts_dir": "resources/script/server",
+    "admin_port": 0
+})";
+
+}  // namespace
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ConfigManager: JSON string loading
 // ═══════════════════════════════════════════════════════════════════════════
@@ -122,6 +172,17 @@ TEST_CASE("ConfigValidator rejects unknown sandbox_level", "[config][validation]
     })"));
 }
 
+TEST_CASE("ConfigValidator rejects unknown environment", "[config][validation]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    REQUIRE_FALSE(cfg.LoadRuntimeFromString(R"({
+        "resource_dir": ".",
+        "log": { "dir": "." },
+        "frame": { "target_fps": 30 },
+        "scripts_dir": ".",
+        "environment": "prodction"
+    })"));
+}
+
 TEST_CASE("ConfigValidator accepts known sandbox levels", "[config][validation]") {
     auto& cfg = engine::ConfigManager::Instance();
     REQUIRE(cfg.LoadRuntimeFromString(R"({
@@ -195,6 +256,24 @@ TEST_CASE("ConfigValidator rejects msgpack.max_nesting_depth = 0", "[config][val
         "http": { "timeout_sec": 5.0 },
         "msgpack": { "max_nesting_depth": 0 },
         "scripts_dir": "."
+    })"));
+}
+
+TEST_CASE("ConfigValidator rejects invalid operational server settings", "[config][validation]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    REQUIRE_FALSE(cfg.LoadServerFromString(R"({
+        "http": { "timeout_sec": 5.0 },
+        "msgpack": { "max_nesting_depth": 16 },
+        "scripts_dir": ".",
+        "admin_port": 8081,
+        "admin_bind_address": "",
+        "active_mongodb": "staging",
+        "resource_limits": {
+            "max_message_size": 1024,
+            "max_buffer_capacity": 512,
+            "max_http_body_size": 1024,
+            "max_msgpack_depth": 16
+        }
     })"));
 }
 
@@ -488,6 +567,72 @@ TEST_CASE("ValidateOnly returns valid for good config dir", "[config][validate]"
     // May be valid or invalid depending on whether config files exist on disk.
     // The key is that it doesn't crash and returns a result.
     REQUIRE((result.valid || !result.valid));
+}
+
+TEST_CASE("Reload rejects invalid client config and keeps previous values", "[config][reload]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    TempConfigDir dir("evpp_config_reload_bad_client");
+    dir.write("runtime/runtime.json", kValidRuntimeJson);
+    dir.write("client/client.json", kValidClientJson);
+    dir.write("server/server.json", kValidServerJson);
+
+    REQUIRE(cfg.Load(dir.path()));
+    REQUIRE(cfg.GetClientConfig().render.max_fps == 60);
+
+    dir.write("client/client.json", R"({
+        "scripts_dir": "resources/script/client",
+        "render": { "backend": "missing_backend", "max_fps": 144 }
+    })");
+
+    REQUIRE_FALSE(cfg.Reload(dir.path()));
+    REQUIRE(cfg.GetClientConfig().render.max_fps == 60);
+    REQUIRE(cfg.GetClientConfig().render.backend == "opengl");
+}
+
+TEST_CASE("Reload rejects invalid profile overlay and keeps previous runtime", "[config][reload]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    TempConfigDir dir("evpp_config_reload_bad_profile");
+    dir.write("runtime/runtime.json", kValidRuntimeJson);
+    dir.write("server/server.json", kValidServerJson);
+
+    cfg.SetActiveEnvironment(engine::Environment::production);
+    REQUIRE(cfg.Load(dir.path()));
+    REQUIRE(cfg.GetRuntimeConfig().frame.target_fps == 30);
+
+    dir.write("profiles/production.json", R"({
+        "resource_dir": "resources",
+        "log": { "dir": "logs", "level": "info" },
+        "frame": { "target_fps": 30, "interval_ms": 33 },
+        "scripts_dir": ""
+    })");
+
+    bool reload_ok = cfg.Reload(dir.path());
+    cfg.SetActiveEnvironment(engine::Environment::development);
+    REQUIRE_FALSE(reload_ok);
+    REQUIRE(cfg.GetRuntimeConfig().frame.target_fps == 30);
+}
+
+TEST_CASE("Reload rejects missing referenced MongoDB config and keeps server", "[config][reload]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    TempConfigDir dir("evpp_config_reload_bad_mongo");
+    dir.write("runtime/runtime.json", kValidRuntimeJson);
+    dir.write("server/server.json", kValidServerJson);
+
+    cfg.SetActiveEnvironment(engine::Environment::development);
+    REQUIRE(cfg.Load(dir.path()));
+    REQUIRE(cfg.GetServerConfig().mongodb_dev.empty());
+
+    dir.write("server/server.json", R"({
+        "http": { "timeout_sec": 5.0 },
+        "msgpack": { "max_nesting_depth": 16 },
+        "scripts_dir": "resources/script/server",
+        "admin_port": 0,
+        "mongodb_dev": "does/not/exist.json"
+    })");
+
+    REQUIRE_FALSE(cfg.Reload(dir.path()));
+    REQUIRE(cfg.GetServerConfig().mongodb_dev.empty());
+    REQUIRE_FALSE(cfg.IsMongoDbDevLoaded());
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

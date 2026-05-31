@@ -1,5 +1,6 @@
 #include "runtime/config/config_validator.h"
 
+#include <cctype>
 #include <cstdio>
 
 #include "runtime/core/log/log.h"
@@ -15,6 +16,22 @@ const std::unordered_set<std::string> kValidSandboxLevels = {
 
 const std::unordered_set<std::string> kValidLogLevels = {
 	"trace", "debug", "info", "warn", "error", "critical"
+};
+
+const std::unordered_set<std::string> kValidEnvironments = {
+	"development", "dev", "staging", "stage", "production", "prod"
+};
+
+const std::unordered_set<std::string> kValidMongoSelections = {
+	"", "dev", "public"
+};
+
+const std::unordered_set<std::string> kValidLogRotationFrequencies = {
+	"", "daily", "hourly", "minutely"
+};
+
+const std::unordered_set<std::string> kValidLogRotationNamingSchemes = {
+	"index", "date", "date_and_time"
 };
 
 const std::unordered_set<std::string> kValidRenderBackends = {
@@ -59,6 +76,7 @@ ConfigValidator::Result ConfigValidator::Validate(const RuntimeConfig& config) {
 	CheckNotEmpty(r, config.resource_dir, "resource_dir");
 	CheckNotEmpty(r, config.scripts_dir, "scripts_dir");
 	CheckEnum(r, config.sandbox_level, kValidSandboxLevels, "sandbox_level");
+	CheckEnum(r, config.environment, kValidEnvironments, "environment");
 
 	if (config.log.rotation_size_mb < 1 || config.log.rotation_size_mb > 10240) {
 		r.valid = false;
@@ -72,6 +90,27 @@ ConfigValidator::Result ConfigValidator::Validate(const RuntimeConfig& config) {
 		r.errors += "log.max_backup_files must be in [0, 1000]";
 	}
 	CheckEnum(r, config.log.level, kValidLogLevels, "log.level");
+	CheckEnum(r, config.log.rotation_frequency, kValidLogRotationFrequencies,
+			  "log.rotation_frequency");
+	CheckEnum(r, config.log.rotation_naming_scheme, kValidLogRotationNamingSchemes,
+			  "log.rotation_naming_scheme");
+	CheckRange(r, config.log.rotation_interval, 1, 1440, "log.rotation_interval");
+	if (!config.log.rotation_time_daily.empty()) {
+		const bool valid_time =
+			config.log.rotation_time_daily.size() == 5 &&
+			config.log.rotation_time_daily[2] == ':' &&
+			std::isdigit(static_cast<unsigned char>(config.log.rotation_time_daily[0])) &&
+			std::isdigit(static_cast<unsigned char>(config.log.rotation_time_daily[1])) &&
+			std::isdigit(static_cast<unsigned char>(config.log.rotation_time_daily[3])) &&
+			std::isdigit(static_cast<unsigned char>(config.log.rotation_time_daily[4]));
+		int hour = valid_time ? std::stoi(config.log.rotation_time_daily.substr(0, 2)) : -1;
+		int minute = valid_time ? std::stoi(config.log.rotation_time_daily.substr(3, 2)) : -1;
+		if (!valid_time || hour > 23 || minute > 59) {
+			r.valid = false;
+			if (!r.errors.empty()) r.errors += "; ";
+			r.errors += "log.rotation_time_daily must be HH:MM";
+		}
+	}
 
 	// Cross-field: target_fps and interval_ms should be consistent
 	if (config.frame.target_fps > 0 && config.frame.interval_ms > 0) {
@@ -102,6 +141,7 @@ ConfigValidator::Result ConfigValidator::ValidateServer(const ServerConfig& conf
 	// admin_port: 0 (disabled) or [1, 65535]
 	if (config.admin_port != 0) {
 		CheckRange(r, config.admin_port, 1, 65535, "admin_port");
+		CheckNotEmpty(r, config.admin_bind_address, "admin_bind_address");
 	}
 
 	// http
@@ -144,6 +184,22 @@ ConfigValidator::Result ConfigValidator::ValidateServer(const ServerConfig& conf
 		if (!r.errors.empty()) r.errors += "; ";
 		r.errors += "resource_limits.max_msgpack_depth must be > 0";
 	}
+	if (config.resource_limits.max_buffer_capacity < config.resource_limits.max_message_size) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "resource_limits.max_buffer_capacity must be >= max_message_size";
+	}
+	CheckRange(r, config.shutdown_timeout_sec, 1, 3600, "shutdown_timeout_sec");
+	CheckRange(r, config.connection_drain_timeout_sec, 0, 3600,
+			   "connection_drain_timeout_sec");
+	CheckRange(r, config.max_connections, 0, 10000000, "max_connections");
+	CheckRange(r, config.config_webhook_timeout_sec, 1, 300,
+			   "config_webhook_timeout_sec");
+	CheckRange(r, config.tcp_keepalive.idle_sec, 0, 86400, "tcp_keepalive.idle_sec");
+	CheckRange(r, config.tcp_keepalive.interval_sec, 0, 86400,
+			   "tcp_keepalive.interval_sec");
+	CheckRange(r, config.tcp_keepalive.count, 0, 100, "tcp_keepalive.count");
+	CheckEnum(r, config.active_mongodb, kValidMongoSelections, "active_mongodb");
 	if (config.resource_limits.max_message_size > 1024 * 1024 * 1024) {
 		CheckWarning(r, true,
 			"resource_limits.max_message_size=" + std::to_string(config.resource_limits.max_message_size) +
