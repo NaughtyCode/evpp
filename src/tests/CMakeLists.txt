@@ -163,6 +163,7 @@ set_target_properties(engine_runtime_test_objects PROPERTIES FOLDER "tests/embed
 set(ENGINE_CLIENT_API_TEST_SOURCES
     ${ENGINE_ROOT}/client/client.cpp
     ${ENGINE_ROOT}/client/client_log.cpp
+    ${ENGINE_ROOT}/client/client_runtime.cpp
     ${ENGINE_ROOT}/client/client_timer.cpp
     ${ENGINE_ROOT}/client/client_net.cpp
     ${ENGINE_ROOT}/client/client_udp.cpp

@@ -254,6 +254,7 @@ endif()
 add_library(GameClient SHARED
     client.cpp
     client_log.cpp
+    client_runtime.cpp
     client_timer.cpp
     client_net.cpp
     client_udp.cpp

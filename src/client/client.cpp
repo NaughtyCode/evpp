@@ -23,8 +23,11 @@
 #include "runtime/evpp/event_loop.h"
 #include "runtime/vm/vm.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
+#include <new>
 
 /* =========================================================================
  * Version
@@ -57,7 +60,18 @@ extern "C" game_error_t game_client_init(game_client_t* client,
     auto& cfg_mgr = engine::ConfigManager::Instance();
 
     if (config_dir && *config_dir) {
-        cfg_mgr.Load(config_dir);
+        try {
+            if (!cfg_mgr.Load(config_dir)) {
+                set_error_f(client, "failed to load config directory: %s", config_dir);
+                return GAME_ERR_GENERIC;
+            }
+        } catch (const std::exception& ex) {
+            set_error_f(client, "failed to load config directory: %s", ex.what());
+            return GAME_ERR_GENERIC;
+        } catch (...) {
+            set_error(client, "failed to load config directory");
+            return GAME_ERR_GENERIC;
+        }
     }
 
     /* WinSock must be initialised before creating the EventLoop because
@@ -84,11 +98,30 @@ extern "C" game_error_t game_client_init(game_client_t* client,
     }
     client->owns_loop = true;
 
-    const auto& runtime_cfg = cfg_mgr.GetRuntimeConfig();
-    const auto& client_cfg = cfg_mgr.GetClientConfig();
-    engine.Init(runtime_cfg, client_cfg.scripts_dir, loop);
+    try {
+        const auto runtime_cfg = cfg_mgr.GetRuntimeConfig();
+        const auto client_cfg = cfg_mgr.GetClientConfig();
+        engine.Init(runtime_cfg, client_cfg.scripts_dir, loop);
+    } catch (const std::exception& ex) {
+        set_error_f(client, "engine init failed: %s", ex.what());
+        delete loop;
+        client->owns_loop = false;
+#ifdef _WIN32
+        WSACleanup();
+#endif
+        return GAME_ERR_GENERIC;
+    } catch (...) {
+        set_error(client, "engine init failed");
+        delete loop;
+        client->owns_loop = false;
+#ifdef _WIN32
+        WSACleanup();
+#endif
+        return GAME_ERR_GENERIC;
+    }
 
     client->initialized = true;
+    clear_error(client);
     return GAME_OK;
 }
 
@@ -96,7 +129,16 @@ extern "C" game_error_t game_client_tick(game_client_t* client) {
     if (!client || !client->initialized) return GAME_ERR_INVALID_ARG;
 
     auto& engine = engine::Engine::Instance();
-    engine.Tick();
+    try {
+        engine.Tick();
+    } catch (const std::exception& ex) {
+        set_error_f(client, "engine tick failed: %s", ex.what());
+        return GAME_ERR_GENERIC;
+    } catch (...) {
+        set_error(client, "engine tick failed");
+        return GAME_ERR_GENERIC;
+    }
+    clear_error(client);
     return GAME_OK;
 }
 
@@ -104,7 +146,16 @@ extern "C" game_error_t game_client_run(game_client_t* client) {
     if (!client || !client->initialized) return GAME_ERR_INVALID_ARG;
 
     auto& engine = engine::Engine::Instance();
-    engine.Run();  /* blocks until Shutdown() */
+    try {
+        engine.Run();  /* blocks until Shutdown() */
+    } catch (const std::exception& ex) {
+        set_error_f(client, "engine run failed: %s", ex.what());
+        return GAME_ERR_GENERIC;
+    } catch (...) {
+        set_error(client, "engine run failed");
+        return GAME_ERR_GENERIC;
+    }
+    clear_error(client);
     return GAME_OK;
 }
 
@@ -113,6 +164,7 @@ extern "C" game_error_t game_client_stop(game_client_t* client) {
 
     auto& engine = engine::Engine::Instance();
     engine.Shutdown();  /* thread-safe signal to stop the event loop */
+    clear_error(client);
     return GAME_OK;
 }
 
@@ -126,7 +178,11 @@ extern "C" void game_client_destroy(game_client_t** client) {
         /* Save the loop pointer before Cleanup() sets loop_ to nullptr. */
         evpp::EventLoop* loop = engine.GetEventLoop();
 
-        engine.Cleanup();
+        try {
+            engine.Cleanup();
+        } catch (...) {
+            /* Destructors and FFI shutdown paths must not throw across C ABI. */
+        }
 
         if (c->owns_loop && loop) {
             delete loop;
@@ -182,6 +238,7 @@ extern "C" game_error_t game_client_do_string(game_client_t* client,
         }
         return GAME_ERR_SCRIPT;
     }
+    clear_error(client);
     return GAME_OK;
 }
 
@@ -209,6 +266,7 @@ extern "C" game_error_t game_client_do_file(game_client_t* client,
         }
         return GAME_ERR_SCRIPT;
     }
+    clear_error(client);
     return GAME_OK;
 }
 
@@ -225,6 +283,7 @@ extern "C" game_error_t game_client_register_function(
     }
 
     vm->RegisterFunction(name, reinterpret_cast<lua_CFunction>(func));
+    clear_error(client);
     return GAME_OK;
 }
 
@@ -239,9 +298,15 @@ extern "C" int game_client_last_error(game_client_t* client,
     std::lock_guard<std::mutex> lock(client->error_mutex);
     if (client->last_error.empty()) return 0;
 
-    int n = std::snprintf(buf, static_cast<size_t>(buf_size), "%s",
-                          client->last_error.c_str());
-    return (n > 0) ? n : 0;
+    const size_t cap = static_cast<size_t>(buf_size);
+    const size_t copied = std::min(client->last_error.size(), cap - 1);
+    std::memcpy(buf, client->last_error.data(), copied);
+    buf[copied] = '\0';
+    return static_cast<int>(copied);
+}
+
+extern "C" void game_client_clear_error(game_client_t* client) {
+    clear_error(client);
 }
 
 extern "C" void* game_client_get_lua_state(game_client_t* client) {

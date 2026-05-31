@@ -73,6 +73,7 @@ int l_import_loaded(lua_State* L) {
 		lua_pushvalue(L, -2);  // orig, copy, k, v, k
 		lua_pushvalue(L, -2);  // orig, copy, k, v, k, v
 		lua_rawset(L, -5);	// orig, copy, k
+		lua_pop(L, 1);  // pop original value, keep key for next()
 	}
 	lua_remove(L, -2);	// copy
 	return 1;

@@ -105,4 +105,10 @@ inline void set_error_f(game_client_t* e, const char* fmt, ...) {
     e->last_error = buf;
 }
 
+inline void clear_error(game_client_t* e) {
+    if (!e) return;
+    std::lock_guard<std::mutex> lock(e->error_mutex);
+    e->last_error.clear();
+}
+
 #endif /* CLIENT_INTERNAL_H */

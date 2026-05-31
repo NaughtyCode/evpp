@@ -68,9 +68,9 @@ extern "C" {
  * ========================================================================= */
 
 #define CLIENT_VERSION_MAJOR 1
-#define CLIENT_VERSION_MINOR 0
+#define CLIENT_VERSION_MINOR 1
 #define CLIENT_VERSION_PATCH 0
-#define CLIENT_VERSION_STRING "1.0.0"
+#define CLIENT_VERSION_STRING "1.1.0"
 
 CLIENT_API const char* game_version(void);
 
@@ -89,6 +89,7 @@ typedef enum {
     GAME_ERR_NETWORK          = -7,  /* Network-level failure (connect, DNS) */
     GAME_ERR_ALREADY_EXISTS   = -8,  /* Resource already created/connected */
     GAME_ERR_OUT_OF_MEMORY    = -9,  /* Memory allocation failed */
+    GAME_ERR_BUFFER_TOO_SMALL = -10, /* Caller-provided output buffer too small */
 } game_error_t;
 
 /* =========================================================================
@@ -103,6 +104,7 @@ typedef struct game_udp_client_s game_udp_client_t; /* UDP client               
 typedef struct game_udp_server_s game_udp_server_t; /* UDP server                */
 typedef struct game_kcp_client_s game_kcp_client_t; /* KCP client                */
 typedef struct game_kcp_server_s game_kcp_server_t; /* KCP server                */
+typedef struct game_aoi_s        game_aoi_t;        /* AOI manager instance     */
 
 /* =========================================================================
  * Callback typedefs
@@ -307,6 +309,292 @@ typedef int (*game_lua_cfunction_t)(void* lua_state);
 
 CLIENT_API game_error_t game_client_register_function(
     game_client_t* client, const char* name, game_lua_cfunction_t func);
+
+/** Execute a Lua string and stringify the first return value.
+ *
+ *  out_len receives the required byte length, excluding the trailing NUL.
+ *  Passing out_buf=NULL or out_cap=0 performs a size query. If out_buf is
+ *  too small, GAME_ERR_BUFFER_TOO_SMALL is returned and out_len is still set.
+ */
+CLIENT_API game_error_t game_client_eval_string(game_client_t* client,
+                                                 const char* script,
+                                                 char* out_buf,
+                                                 int out_cap,
+                                                 int* out_len,
+                                                 char* error_out,
+                                                 int error_size);
+
+/* =========================================================================
+ * Runtime config
+ * ========================================================================= */
+
+CLIENT_API game_error_t game_config_load_runtime_json(game_client_t* client,
+                                                       const char* json);
+
+CLIENT_API game_error_t game_config_load_client_json(game_client_t* client,
+                                                      const char* json);
+
+CLIENT_API game_error_t game_config_apply_client_overrides_json(
+    game_client_t* client, const char* json);
+
+CLIENT_API game_error_t game_config_load_server_json(game_client_t* client,
+                                                      const char* json);
+
+CLIENT_API game_error_t game_config_reload(game_client_t* client,
+                                            const char* config_dir);
+
+CLIENT_API bool game_config_validate(game_client_t* client,
+                                      char* errors_buf, int errors_cap,
+                                      char* warnings_buf, int warnings_cap);
+
+CLIENT_API game_error_t game_config_dump(game_client_t* client,
+                                          char* out_buf, int out_cap,
+                                          int* out_len);
+
+CLIENT_API game_error_t game_config_get_string(game_client_t* client,
+                                                const char* path,
+                                                char* out_buf, int out_cap,
+                                                int* out_len);
+
+CLIENT_API game_error_t game_config_get_int(game_client_t* client,
+                                             const char* path,
+                                             int64_t* out_value);
+
+CLIENT_API game_error_t game_config_get_double(game_client_t* client,
+                                                const char* path,
+                                                double* out_value);
+
+CLIENT_API game_error_t game_config_get_bool(game_client_t* client,
+                                              const char* path,
+                                              bool* out_value);
+
+/* =========================================================================
+ * JSON and MessagePack
+ * ========================================================================= */
+
+CLIENT_API game_error_t game_json_validate(game_client_t* client,
+                                            const char* json,
+                                            bool allow_comments,
+                                            char* error_out,
+                                            int error_size);
+
+CLIENT_API game_error_t game_json_minify(game_client_t* client,
+                                          const char* json,
+                                          bool allow_comments,
+                                          char* out_buf,
+                                          int out_cap,
+                                          int* out_len);
+
+CLIENT_API game_error_t game_json_prettify(game_client_t* client,
+                                            const char* json,
+                                            bool allow_comments,
+                                            char* out_buf,
+                                            int out_cap,
+                                            int* out_len);
+
+CLIENT_API game_error_t game_msgpack_pack_json(game_client_t* client,
+                                                const char* json,
+                                                uint8_t* out_buf,
+                                                int out_cap,
+                                                int* out_len);
+
+CLIENT_API game_error_t game_msgpack_unpack_to_json(game_client_t* client,
+                                                     const uint8_t* data,
+                                                     int data_len,
+                                                     char* out_buf,
+                                                     int out_cap,
+                                                     int* out_len);
+
+/* =========================================================================
+ * Auth
+ * ========================================================================= */
+
+CLIENT_API game_error_t game_auth_set_token_backend(game_client_t* client);
+
+CLIENT_API game_error_t game_auth_add_token(game_client_t* client,
+                                             const char* token,
+                                             const char* entity_id);
+
+CLIENT_API game_error_t game_auth_authenticate_token(game_client_t* client,
+                                                      const char* token,
+                                                      char* entity_id_buf,
+                                                      int entity_id_cap,
+                                                      char* session_id_buf,
+                                                      int session_id_cap);
+
+CLIENT_API bool game_auth_validate_session(game_client_t* client,
+                                            const char* session_id);
+
+CLIENT_API game_error_t game_auth_revoke_session(game_client_t* client,
+                                                  const char* session_id);
+
+CLIENT_API game_error_t game_auth_grant_permission(game_client_t* client,
+                                                    const char* entity_id,
+                                                    const char* permission);
+
+CLIENT_API game_error_t game_auth_revoke_permission(game_client_t* client,
+                                                     const char* entity_id,
+                                                     const char* permission);
+
+CLIENT_API bool game_auth_has_permission(game_client_t* client,
+                                          const char* entity_id,
+                                          const char* permission);
+
+/* =========================================================================
+ * Metrics
+ * ========================================================================= */
+
+CLIENT_API game_error_t game_metrics_counter_inc(game_client_t* client,
+                                                  const char* name,
+                                                  int64_t delta);
+
+CLIENT_API game_error_t game_metrics_gauge_set(game_client_t* client,
+                                                const char* name,
+                                                int64_t value);
+
+CLIENT_API game_error_t game_metrics_gauge_inc(game_client_t* client,
+                                                const char* name,
+                                                int64_t delta);
+
+CLIENT_API game_error_t game_metrics_histogram_observe(game_client_t* client,
+                                                        const char* name,
+                                                        double value);
+
+CLIENT_API game_error_t game_metrics_export_prometheus(game_client_t* client,
+                                                        char* out_buf,
+                                                        int out_cap,
+                                                        int* out_len);
+
+CLIENT_API game_error_t game_metrics_export_json(game_client_t* client,
+                                                  char* out_buf,
+                                                  int out_cap,
+                                                  int* out_len);
+
+/* =========================================================================
+ * Entity
+ * ========================================================================= */
+
+CLIENT_API game_error_t game_entity_create(game_client_t* client,
+                                            uint64_t requested_id,
+                                            uint64_t* out_entity_id);
+
+CLIENT_API bool game_entity_exists(game_client_t* client,
+                                    uint64_t entity_id);
+
+CLIENT_API game_error_t game_entity_destroy(game_client_t* client,
+                                             uint64_t entity_id);
+
+CLIENT_API game_error_t game_entity_count(game_client_t* client,
+                                           uint64_t* out_count);
+
+CLIENT_API game_error_t game_entity_set_attr_string(game_client_t* client,
+                                                     uint64_t entity_id,
+                                                     const char* key,
+                                                     const char* value);
+
+CLIENT_API game_error_t game_entity_set_attr_int(game_client_t* client,
+                                                  uint64_t entity_id,
+                                                  const char* key,
+                                                  int64_t value);
+
+CLIENT_API game_error_t game_entity_set_attr_double(game_client_t* client,
+                                                     uint64_t entity_id,
+                                                     const char* key,
+                                                     double value);
+
+CLIENT_API game_error_t game_entity_set_attr_bool(game_client_t* client,
+                                                   uint64_t entity_id,
+                                                   const char* key,
+                                                   bool value);
+
+CLIENT_API game_error_t game_entity_get_attr_string(game_client_t* client,
+                                                     uint64_t entity_id,
+                                                     const char* key,
+                                                     char* out_buf,
+                                                     int out_cap,
+                                                     int* out_len);
+
+CLIENT_API game_error_t game_entity_get_attr_int(game_client_t* client,
+                                                  uint64_t entity_id,
+                                                  const char* key,
+                                                  int64_t* out_value);
+
+CLIENT_API game_error_t game_entity_get_attr_double(game_client_t* client,
+                                                     uint64_t entity_id,
+                                                     const char* key,
+                                                     double* out_value);
+
+CLIENT_API game_error_t game_entity_get_attr_bool(game_client_t* client,
+                                                   uint64_t entity_id,
+                                                   const char* key,
+                                                   bool* out_value);
+
+CLIENT_API game_error_t game_entity_remove_attr(game_client_t* client,
+                                                 uint64_t entity_id,
+                                                 const char* key);
+
+CLIENT_API game_error_t game_entity_attr_count(game_client_t* client,
+                                                uint64_t entity_id,
+                                                uint64_t* out_count);
+
+/* =========================================================================
+ * Space
+ * ========================================================================= */
+
+CLIENT_API game_error_t game_space_create(game_client_t* client,
+                                           const char* name,
+                                           uint64_t max_entities,
+                                           uint64_t max_players,
+                                           uint64_t* out_space_id);
+
+CLIENT_API game_error_t game_space_destroy(game_client_t* client,
+                                            uint64_t space_id);
+
+CLIENT_API game_error_t game_space_count(game_client_t* client,
+                                          uint64_t* out_count);
+
+/* =========================================================================
+ * AOI
+ * ========================================================================= */
+
+CLIENT_API game_error_t game_aoi_create(game_client_t* client,
+                                         float world_width,
+                                         float world_height,
+                                         float cell_size,
+                                         game_aoi_t** out_aoi);
+
+CLIENT_API void game_aoi_destroy(game_aoi_t** aoi);
+
+CLIENT_API game_error_t game_aoi_register_entity(game_aoi_t* aoi,
+                                                  uint64_t entity_id,
+                                                  float x,
+                                                  float y,
+                                                  float radius);
+
+CLIENT_API game_error_t game_aoi_move_entity(game_aoi_t* aoi,
+                                              uint64_t entity_id,
+                                              float x,
+                                              float y);
+
+CLIENT_API game_error_t game_aoi_unregister_entity(game_aoi_t* aoi,
+                                                    uint64_t entity_id);
+
+CLIENT_API game_error_t game_aoi_count(game_aoi_t* aoi,
+                                        uint64_t* out_count);
+
+CLIENT_API game_error_t game_aoi_query_radius(game_aoi_t* aoi,
+                                               float x,
+                                               float y,
+                                               float radius,
+                                               uint64_t* out_ids,
+                                               int out_cap,
+                                               int* out_count);
+
+CLIENT_API game_error_t game_aoi_get_visible(game_aoi_t* aoi,
+                                              uint64_t entity_id,
+                                              uint64_t* out_ids,
+                                              int out_cap,
+                                              int* out_count);
 
 /* =========================================================================
  * Logging
@@ -902,6 +1190,9 @@ CLIENT_API void game_kcp_server_set_session_timeout(
  */
 CLIENT_API int game_client_last_error(game_client_t* client,
                                            char* buf, int buf_size);
+
+/** Clear the last error string for this engine instance. */
+CLIENT_API void game_client_clear_error(game_client_t* client);
 
 /** Get the underlying lua_State* for advanced Lua C API usage.
  *  Use with caution — you are responsible for stack balance.
