@@ -91,6 +91,10 @@ add_unit_test(test_rpc_bind script/test_rpc_bind.cpp)
 add_test(NAME unit.rpc_bind COMMAND test_rpc_bind)
 set_tests_properties(unit.rpc_bind PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
+add_unit_test(test_json_bind script/test_json_bind.cpp)
+add_test(NAME unit.json_bind COMMAND test_json_bind)
+set_tests_properties(unit.json_bind PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
 # ── Auth tests ──────────────────────────────────────────────────────
 add_unit_test(test_auth auth/test_auth.cpp)
 add_test(NAME unit.auth COMMAND test_auth)

@@ -23,6 +23,14 @@ set_tests_properties(lua.msgpack PROPERTIES
 )
 
 # ── Net tests ───────────────────────────────────────────────────────
+add_test(NAME lua.json
+    COMMAND lua_test_runner "${LUA_TEST_DIR}/json/test_json.lua"
+)
+set_tests_properties(lua.json PROPERTIES
+    LABELS "lua" TIMEOUT 30
+    WORKING_DIRECTORY "${TEST_WORKING_DIR}"
+)
+
 add_test(NAME lua.net.client_server
     COMMAND lua_test_runner "${LUA_TEST_DIR}/net/test_client_server.lua"
 )

@@ -18,6 +18,7 @@
 #include "runtime/physics/physics_vm.h"
 #include "runtime/profiler/profiler_events.h"
 #include "runtime/script/import_bind.h"
+#include "runtime/script/json_bind.h"
 #include "runtime/script/timer_bind.h"
 #include "runtime/vm/custom_ptr_store.h"
 #include "runtime/vm/lua_error_handler.h"
@@ -101,6 +102,9 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
 
 	// Register physics API bindings
 	physics_bindings::Register(*script_vm_);
+
+	// Register Glaze JSON bindings for physics scripts.
+	script::ExportJson(*script_vm_);
 
 	// Register per-thread timer API (timer.timeout / interval / cancel)
 	physics_thread_.InitTimerManager();

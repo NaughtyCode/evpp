@@ -136,6 +136,7 @@ set(SCRIPT_SOURCES
     ${RUNTIME_DIR}/script/net_kcp_client_bind.cc ${RUNTIME_DIR}/script/net_kcp_client_bind.h
     ${RUNTIME_DIR}/script/net_kcp_server_bind.cc ${RUNTIME_DIR}/script/net_kcp_server_bind.h
     ${RUNTIME_DIR}/script/msgpack_bind.cc ${RUNTIME_DIR}/script/msgpack_bind.h
+    ${RUNTIME_DIR}/script/json_bind.cc ${RUNTIME_DIR}/script/json_bind.h
     ${RUNTIME_DIR}/script/import_bind.cc ${RUNTIME_DIR}/script/import_bind.h
     ${RUNTIME_DIR}/script/entity_bind.cc ${RUNTIME_DIR}/script/entity_bind.h
     ${RUNTIME_DIR}/script/space_bind.cc ${RUNTIME_DIR}/script/space_bind.h

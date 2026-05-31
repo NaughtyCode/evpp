@@ -72,6 +72,10 @@ This ensures `import("runtime.init")` resolves to `resources/script/runtime/init
 and `import("runtime.helpers")` resolves to `resources/script/runtime/helpers.lua`,
 regardless of whether the engine is running in client or server mode.
 
+## Lua API References
+
+- [Lua JSON API](lua-json-api.md)
+
 ## Engine::Init() Signature
 
 ```cpp

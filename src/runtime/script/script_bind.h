@@ -25,6 +25,7 @@ CLOUD_ENGINE_API void ExportLog(ScriptVM& vm);
 CLOUD_ENGINE_API void ExportTimer(ScriptVM& vm, TimerManager& tm);
 CLOUD_ENGINE_API void ExportNet(ScriptVM& vm);
 CLOUD_ENGINE_API void ExportMsgPack(ScriptVM& vm);
+CLOUD_ENGINE_API void ExportJson(ScriptVM& vm);
 CLOUD_ENGINE_API void ExportMongo(ScriptVM& vm);
 CLOUD_ENGINE_API void ExportDbService(ScriptVM& vm);
 

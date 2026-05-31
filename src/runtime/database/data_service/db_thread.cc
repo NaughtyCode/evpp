@@ -21,6 +21,7 @@
 #include "runtime/database/mongo/mongo_forward.h"
 #include "runtime/database/mongo_bind/mongo_bind.h"
 #include "runtime/script/import_bind.h"
+#include "runtime/script/json_bind.h"
 #include "runtime/script/timer_bind.h"
 
 namespace engine {
@@ -360,6 +361,9 @@ void DBThread::EventLoop() {
 
 		// 2c. MongoDB API bindings — mongoc.* / bson.* global tables (R10)
 		script::ExportMongo(script_vm_);
+
+		// 2c2. Glaze JSON bindings: json / json_safe global tables.
+		script::ExportJson(script_vm_);
 
 		// 2d. Wire global tables into the module system so require() works
 		if (!script_vm_.DoString("package.loaded.mongoc = mongoc; "

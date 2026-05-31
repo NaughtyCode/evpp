@@ -8,6 +8,7 @@
 #include "runtime/database/data_service/database_service.h"
 #include "runtime/database/data_service/db_script_vm.h"
 #include "runtime/database/data_service/db_service_main_bind.h"
+#include "runtime/script/json_bind.h"
 #include "runtime/vm/vm.h"
 
 extern "C" {
@@ -36,6 +37,22 @@ TEST_CASE("DBScriptVM frame callback keeps the Lua stack balanced", "[database][
         vm.CallFrameCallback(i + 1, 0.016);
         REQUIRE(lua_gettop(L) == baseline);
     }
+}
+
+TEST_CASE("DBScriptVM can host json bindings", "[database][data_service][json]") {
+    DBScriptVM vm;
+    script::ExportJson(vm);
+
+    std::string error;
+    std::string result;
+    REQUIRE(vm.DoString(
+        "local value = json.decode('{\"name\":\"db\",\"items\":[1,null]}')\n"
+        "return value.name .. '|' .. tostring(value.items[1]) .. '|' .. json.type(value.items[2])",
+        "=data_service_json_test",
+        &error,
+        &result));
+
+    REQUIRE(result == "db|1|null");
 }
 
 TEST_CASE("db_send_request rejects internal noop operation", "[database][data_service]") {

@@ -6,6 +6,7 @@
 #include "runtime/script/auth_bind.h"
 #include "runtime/config/config_bind.h"
 #include "runtime/script/import_bind.h"
+#include "runtime/script/json_bind.h"
 #include "runtime/script/log_bind.h"
 #if defined(ENGINE_MONGODB_ENABLED)
 #include "runtime/script/orm_bind.h"
@@ -51,6 +52,10 @@ void ExportAll(ScriptVM& vm, TimerManager& tm) {
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("msgpack");
 		ExportMsgPack(vm);
+	}
+	{
+		ENGINE_PROFILE_SCRIPT_EXPORT("json");
+		ExportJson(vm);
 	}
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("space");
