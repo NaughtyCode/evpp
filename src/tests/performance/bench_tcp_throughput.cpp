@@ -1,5 +1,7 @@
 #include <benchmark/benchmark.h>
 #include <runtime/evpp/event_loop.h>
+#include <runtime/evpp/buffer.h>
+#include <runtime/evpp/tcp_conn.h>
 #include <runtime/evpp/tcp_server.h>
 #include <runtime/evpp/tcp_client.h>
 

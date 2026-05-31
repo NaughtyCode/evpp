@@ -2,7 +2,7 @@
 # Performance benchmarks — Google Benchmark
 # ═══════════════════════════════════════════════════════════════════════════
 
-set(BENCH_LIBS benchmark::benchmark)
+set(BENCH_LIBS benchmark::benchmark_main)
 
 macro(add_bench name)
     add_executable(${name} ${ARGN})
@@ -21,6 +21,10 @@ add_test(NAME performance.bench_config COMMAND bench_config
 
 add_bench(bench_timer bench_timer.cpp)
 add_test(NAME performance.bench_timer COMMAND bench_timer
+    --benchmark_min_time=0.1s --benchmark_format=console)
+
+add_bench(bench_aoi bench_aoi.cpp)
+add_test(NAME performance.bench_aoi COMMAND bench_aoi
     --benchmark_min_time=0.1s --benchmark_format=console)
 
 add_bench(bench_msgpack bench_msgpack.cpp)

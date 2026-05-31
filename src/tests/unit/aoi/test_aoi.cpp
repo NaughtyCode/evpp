@@ -151,6 +151,27 @@ TEST_CASE("SpatialGrid::Remove is idempotent", "[aoi][spatial_grid]") {
     REQUIRE(grid.Size() == 0);
 }
 
+TEST_CASE("SpatialGrid keeps moved cell references valid after remove", "[aoi][spatial_grid]") {
+    SpatialGrid grid(1000.0f, 1000.0f, 100.0f);
+
+    grid.Insert(1, 10.0f, 10.0f);
+    grid.Insert(2, 20.0f, 20.0f);
+    grid.Insert(3, 30.0f, 30.0f);
+
+    grid.Remove(2);
+    grid.Update(3, 500.0f, 500.0f);
+
+    auto origin = grid.QueryRadius(0.0f, 0.0f, 100.0f);
+    REQUIRE(Contains(origin, 1));
+    REQUIRE_FALSE(Contains(origin, 2));
+    REQUIRE_FALSE(Contains(origin, 3));
+
+    auto moved = grid.QueryRadius(500.0f, 500.0f, 1.0f);
+    REQUIRE(moved.size() == 1);
+    REQUIRE(moved[0] == 3);
+    REQUIRE(grid.Size() == 2);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // SpatialGrid — update
 // ═══════════════════════════════════════════════════════════════════════════

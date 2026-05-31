@@ -44,12 +44,23 @@ private:
 		float y = 0.0f;
 	};
 
+	struct CellEntry {
+		entity::EntityId id = entity::kInvalidEntityId;
+		Position position;
+	};
+
+	struct CellRef {
+		int cell_index = 0;
+		size_t entry_index = 0;
+	};
+
 	int CellIndex(int col, int row) const;
 	int CellIndexForPosition(float x, float y) const;
 	void CellIndices(float x, float y, float radius,
 					 int& min_col, int& min_row,
 					 int& max_col, int& max_row) const;
 	bool TryGetPosition(entity::EntityId id, Position& position) const;
+	void RemoveCellEntry(const CellRef& ref);
 
 	float cell_size_;
 	float inv_cell_size_;
@@ -58,9 +69,8 @@ private:
 	float world_width_;
 	float world_height_;
 
-	std::vector<std::vector<entity::EntityId>> grid_;
-	std::unordered_map<entity::EntityId, int> entity_cell_;
-	std::unordered_map<entity::EntityId, Position> positions_;
+	std::vector<std::vector<CellEntry>> grid_;
+	std::unordered_map<entity::EntityId, CellRef> entity_cell_;
 };
 
 }  // namespace aoi

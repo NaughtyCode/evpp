@@ -101,10 +101,28 @@ void SpatialGrid::CellIndices(float x, float y, float radius,
 }
 
 bool SpatialGrid::TryGetPosition(entity::EntityId id, Position& position) const {
-	auto it = positions_.find(id);
-	if (it == positions_.end()) return false;
-	position = it->second;
+	auto it = entity_cell_.find(id);
+	if (it == entity_cell_.end()) return false;
+	const CellRef& ref = it->second;
+	const auto& cell = grid_[ref.cell_index];
+	if (ref.entry_index >= cell.size()) return false;
+	position = cell[ref.entry_index].position;
 	return true;
+}
+
+void SpatialGrid::RemoveCellEntry(const CellRef& ref) {
+	auto& cell = grid_[ref.cell_index];
+	if (ref.entry_index >= cell.size()) return;
+
+	const size_t last_index = cell.size() - 1;
+	if (ref.entry_index != last_index) {
+		cell[ref.entry_index] = cell[last_index];
+		auto moved_it = entity_cell_.find(cell[ref.entry_index].id);
+		if (moved_it != entity_cell_.end()) {
+			moved_it->second = CellRef{ref.cell_index, ref.entry_index};
+		}
+	}
+	cell.pop_back();
 }
 
 void SpatialGrid::Insert(entity::EntityId id, float x, float y) {
@@ -118,9 +136,9 @@ void SpatialGrid::Insert(entity::EntityId id, float x, float y) {
 
 	int idx = CellIndexForPosition(x, y);
 
-	grid_[idx].push_back(id);
-	entity_cell_[id] = idx;
-	positions_[id] = Position{x, y};
+	auto& cell = grid_[idx];
+	entity_cell_[id] = CellRef{idx, cell.size()};
+	cell.push_back(CellEntry{id, Position{x, y}});
 }
 
 void SpatialGrid::Update(entity::EntityId id, float x, float y) {
@@ -134,19 +152,22 @@ void SpatialGrid::Update(entity::EntityId id, float x, float y) {
 	}
 
 	int new_idx = CellIndexForPosition(x, y);
-	int old_idx = it->second;
+	const CellRef old_ref = it->second;
+	int old_idx = old_ref.cell_index;
 
-	positions_[id] = Position{x, y};
+	if (new_idx == old_idx) {
+		auto& cell = grid_[old_ref.cell_index];
+		if (old_ref.entry_index < cell.size()) {
+			cell[old_ref.entry_index].position = Position{x, y};
+		}
+		return;
+	}
 
-	if (new_idx == old_idx) return;
+	RemoveCellEntry(old_ref);
 
-	// Remove from old cell
-	auto& old_cell = grid_[old_idx];
-	old_cell.erase(std::remove(old_cell.begin(), old_cell.end(), id), old_cell.end());
-
-	// Insert into new cell
-	grid_[new_idx].push_back(id);
-	entity_cell_[id] = new_idx;
+	auto& new_cell = grid_[new_idx];
+	it->second = CellRef{new_idx, new_cell.size()};
+	new_cell.push_back(CellEntry{id, Position{x, y}});
 }
 
 void SpatialGrid::Remove(entity::EntityId id) {
@@ -154,12 +175,8 @@ void SpatialGrid::Remove(entity::EntityId id) {
 	auto it = entity_cell_.find(id);
 	if (it == entity_cell_.end()) return;
 
-	int idx = it->second;
-	auto& cell = grid_[idx];
-	cell.erase(std::remove(cell.begin(), cell.end(), id), cell.end());
-
+	RemoveCellEntry(it->second);
 	entity_cell_.erase(it);
-	positions_.erase(id);
 }
 
 std::vector<entity::EntityId> SpatialGrid::QueryRadius(float x, float y, float radius) const {
@@ -171,18 +188,24 @@ std::vector<entity::EntityId> SpatialGrid::QueryRadius(float x, float y, float r
 	int min_col, min_row, max_col, max_row;
 	CellIndices(x, y, radius, min_col, min_row, max_col, max_row);
 
+	size_t candidate_count = 0;
+	for (int row = min_row; row <= max_row; ++row) {
+		for (int col = min_col; col <= max_col; ++col) {
+			candidate_count += grid_[CellIndex(col, row)].size();
+		}
+	}
+
 	std::vector<entity::EntityId> result;
+	result.reserve(candidate_count);
 	float r2 = radius * radius;
 
 	for (int row = min_row; row <= max_row; ++row) {
 		for (int col = min_col; col <= max_col; ++col) {
-			for (auto id : grid_[CellIndex(col, row)]) {
-				Position position;
-				if (!TryGetPosition(id, position)) continue;
-				float dx = position.x - x;
-				float dy = position.y - y;
+			for (const auto& entry : grid_[CellIndex(col, row)]) {
+				float dx = entry.position.x - x;
+				float dy = entry.position.y - y;
 				if (dx * dx + dy * dy <= r2) {
-					result.push_back(id);
+					result.push_back(entry.id);
 				}
 			}
 		}
@@ -206,14 +229,27 @@ std::vector<entity::EntityId> SpatialGrid::QueryAOIAt(float x, float y) const {
 	int col = idx % cols_;
 	int row = idx / cols_;
 
+	size_t candidate_count = 0;
+	for (int dr = -1; dr <= 1; ++dr) {
+		for (int dc = -1; dc <= 1; ++dc) {
+			int nc = col + dc;
+			int nr = row + dr;
+			if (nc < 0 || nc >= cols_ || nr < 0 || nr >= rows_) continue;
+			candidate_count += grid_[CellIndex(nc, nr)].size();
+		}
+	}
+
 	std::vector<entity::EntityId> result;
+	result.reserve(candidate_count);
 	for (int dr = -1; dr <= 1; ++dr) {
 		for (int dc = -1; dc <= 1; ++dc) {
 			int nc = col + dc;
 			int nr = row + dr;
 			if (nc < 0 || nc >= cols_ || nr < 0 || nr >= rows_) continue;
 			const auto& cell = grid_[CellIndex(nc, nr)];
-			result.insert(result.end(), cell.begin(), cell.end());
+			for (const auto& entry : cell) {
+				result.push_back(entry.id);
+			}
 		}
 	}
 	return result;
@@ -224,7 +260,6 @@ void SpatialGrid::Clear() {
 		cell.clear();
 	}
 	entity_cell_.clear();
-	positions_.clear();
 }
 
 }  // namespace aoi
