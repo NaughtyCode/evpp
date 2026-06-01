@@ -205,6 +205,19 @@ typedef void (*game_kcp_message_cb_t)(const char* data, int data_len,
  */
 CLIENT_API game_error_t game_client_create(game_client_t** out_client);
 
+/** Override the log file prefix before game_client_init().
+ *
+ *  If not called by an executable host, the runtime config value
+ *  `log.log_filename` is used. GameClientApp sets this to its program name
+ *  by default and allows overriding it with --log_prefix=<prefix>.
+ *
+ *  @param client  engine handle from game_client_create
+ *  @param prefix  file name prefix, or NULL/empty to clear the override
+ *  @return GAME_OK on success
+ */
+CLIENT_API game_error_t game_client_set_log_prefix(game_client_t* client,
+                                                   const char* prefix);
+
 /** Initialise the engine: loads config, starts event loop, registers all
  *  Lua bindings, runs init scripts from the scripts directory.
  *

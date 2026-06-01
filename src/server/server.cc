@@ -40,9 +40,17 @@ struct WinSockGuard {
     }
 };
 
+std::string ProgramName(const char* argv0) {
+    std::filesystem::path path(argv0 ? argv0 : "");
+    std::string name = path.stem().string();
+    return name.empty() ? "GameServer" : name;
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
+    engine::SetCurrentThreadName("MainThread");
+
     std::fprintf(stderr, "[main] starting\n");
     WinSockGuard winsock_guard;
 
@@ -52,13 +60,19 @@ int main(int argc, char* argv[]) {
     //   3. Default: development (set by ConfigManager constructor)
     engine::Environment active_env = engine::EnvironmentFromEnvVar();
     std::string config_dir(engine::config::kConfigDir);
+    std::string log_prefix = ProgramName(argc > 0 ? argv[0] : nullptr);
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg.rfind("--env=", 0) == 0) {
             active_env = engine::ParseEnvironment(arg.substr(6));
         } else if (arg.rfind("--config_dir=", 0) == 0) {
             config_dir = arg.substr(13);
+        } else if (arg.rfind("--log_prefix=", 0) == 0) {
+            log_prefix = arg.substr(13);
         }
+    }
+    if (log_prefix.empty()) {
+        log_prefix = ProgramName(argc > 0 ? argv[0] : nullptr);
     }
     std::fprintf(stderr, "[main] environment: %s\n",
                  engine::EnvironmentToString(active_env));
@@ -86,6 +100,12 @@ int main(int argc, char* argv[]) {
         return static_cast<int>(engine::ExitCode::ConfigParseError);
     }
     std::fprintf(stderr, "[main] config loaded\n");
+
+    {
+        auto rt = engine::ConfigManager::Instance().GetRuntimeConfig();
+        rt.log.log_filename = log_prefix;
+        engine::ConfigManager::Instance().SetRuntimeOverride(rt);
+    }
 
     // ── PID file ────────────────────────────────────────────────────────
     std::string pid_path;

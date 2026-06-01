@@ -5,6 +5,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -36,6 +37,12 @@ int ParseIntArg(const std::string& value, int fallback) {
     }
 }
 
+std::string ProgramName(const char* argv0) {
+    std::filesystem::path path(argv0 ? argv0 : "");
+    std::string name = path.stem().string();
+    return name.empty() ? "GameClientApp" : name;
+}
+
 void PrintUsage(const char* exe) {
     std::cout
         << "Usage: " << exe << " [options]\n"
@@ -44,6 +51,7 @@ void PrintUsage(const char* exe) {
         << "  --script=<file>       Optional Lua file to run after client init\n"
         << "  --duration_ms=<ms>    Stop after this duration. 0 means run until signal\n"
         << "  --tick_ms=<ms>        Stop polling interval. Default: 16\n"
+        << "  --log_prefix=<name>   Log file prefix. Default: current program name\n"
         << "  --help                Show this help\n";
 }
 
@@ -52,6 +60,7 @@ void PrintUsage(const char* exe) {
 int main(int argc, char** argv) {
     std::string config_dir = "resources/config";
     std::string script_file;
+    std::string log_prefix = ProgramName(argc > 0 ? argv[0] : nullptr);
     int duration_ms = 0;
     int tick_ms = 16;
 
@@ -69,11 +78,17 @@ int main(int argc, char** argv) {
             duration_ms = ParseIntArg(arg.substr(std::strlen("--duration_ms=")), duration_ms);
         } else if (StartsWith(arg, "--tick_ms=")) {
             tick_ms = ParseIntArg(arg.substr(std::strlen("--tick_ms=")), tick_ms);
+        } else if (StartsWith(arg, "--log_prefix=")) {
+            log_prefix = arg.substr(std::strlen("--log_prefix="));
         } else {
             std::cerr << "unknown argument: " << arg << "\n";
             PrintUsage(argv[0]);
             return 2;
         }
+    }
+
+    if (log_prefix.empty()) {
+        log_prefix = ProgramName(argc > 0 ? argv[0] : nullptr);
     }
 
     if (tick_ms < 1) {
@@ -87,6 +102,13 @@ int main(int argc, char** argv) {
     game_error_t rc = game_client_create(&client);
     if (rc != GAME_OK || !client) {
         std::cerr << "game_client_create failed: " << rc << "\n";
+        return 1;
+    }
+
+    rc = game_client_set_log_prefix(client, log_prefix.c_str());
+    if (rc != GAME_OK) {
+        std::cerr << "game_client_set_log_prefix failed: " << rc << " " << LastError(client) << "\n";
+        game_client_destroy(&client);
         return 1;
     }
 

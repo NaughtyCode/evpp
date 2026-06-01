@@ -136,13 +136,13 @@ config.flush_changes()
 | `level` | `string` | `"info"` | Log level (trace/debug/info/warn/error/critical) |
 | `rotation_size_mb` | `int` | `100` | Size-based rotation threshold (MB) |
 | `max_backup_files` | `int` | `10` | Max rotated files to keep |
-| `format_pattern` | `string` | — | Log message format string |
+| `format_pattern` | `string` | — | Log message format string. Default includes `[thread_name:thread_id]` |
 | `rotation_frequency` | `string` | `""` | Time-based rotation: "daily", "hourly", "minutely" |
 | `rotation_interval` | `int` | `1` | Interval for hourly/minutely rotation |
 | `rotation_time_daily` | `string` | `"00:00"` | Daily rotation time (HH:MM) |
 | `rotation_naming_scheme` | `string` | `"date_and_time"` | Rotation naming: "index", "date", "date_and_time" |
 | `logger_name` | `string` | — | Logger instance name |
-| `log_filename` | `string` | `""` | Optional custom log filename |
+| `log_filename` | `string` | `""` | Optional log file prefix. Empty uses the current program name unless overridden by CLI |
 
 ### FrameConfig
 

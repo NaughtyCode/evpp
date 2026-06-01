@@ -104,7 +104,7 @@ struct PhysicsLogConfig {
 	int rotation_interval = 1;
 	std::string rotation_time_daily = "00:00";
 	std::string format_pattern =
-		"%(time) [%(thread_id)] [%(log_level_short_code)] [%(short_source_location)] "
+		"%(time) [%(thread_name):%(thread_id)] [%(log_level_short_code)] [%(short_source_location)] "
 		"[%(caller_function)] [%(logger)] %(message)";
 };
 

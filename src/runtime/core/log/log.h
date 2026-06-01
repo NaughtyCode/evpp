@@ -31,6 +31,8 @@ CLOUD_ENGINE_API void InitLogger(const LogConfig& config);
 
 CLOUD_ENGINE_API quill::Logger* CreateLogger(const LogConfig& config);
 
+CLOUD_ENGINE_API void SetCurrentThreadName(const std::string& name);
+
 CLOUD_ENGINE_API void ShutdownLogger();
 
 }  // namespace engine

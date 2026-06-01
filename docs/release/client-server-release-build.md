@@ -14,6 +14,15 @@ On Windows, the batch wrapper is also available:
 scripts\build_release.bat --smoke
 ```
 
+The packaged launcher scripts pass extra arguments through to the executable, so a custom log file prefix can be supplied externally:
+
+```bat
+run_server.bat --log_prefix=ShardA
+run_client.bat --log_prefix=ClientA
+```
+
+When `--log_prefix` is omitted, the default prefix is the current program name, for example `GameServer` or `GameClientApp`.
+
 The script configures and builds these release targets:
 
 - `GameServer`

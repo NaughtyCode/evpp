@@ -11,6 +11,7 @@
 #include <quill/Backend.h>
 #include <quill/Frontend.h>
 #include <quill/backend/BackendOptions.h>
+#include <quill/backend/BackendUtilities.h>
 #include <quill/sinks/ConsoleSink.h>
 #include <quill/sinks/RotatingFileSink.h>
 
@@ -22,6 +23,7 @@ namespace {
 
 std::atomic<bool> g_backend_started{false};
 std::atomic<bool> g_logger_active{false};
+thread_local bool t_thread_name_checked = false;
 
 quill::BackendOptions GetBackendOptions() {
 	constexpr auto kSleepDuration = std::chrono::microseconds{500};
@@ -133,16 +135,41 @@ void apply_log_level(quill::Logger* logger, const std::string& level) {
 		logger->set_log_level(quill::LogLevel::Info);
 }
 
+void ensure_current_thread_name(const char* fallback_name) {
+	if (t_thread_name_checked) {
+		return;
+	}
+	t_thread_name_checked = true;
+
+	try {
+		if (!quill::detail::get_thread_name().empty()) {
+			return;
+		}
+	} catch (...) {
+		// Best effort only. Try to set the fallback below.
+	}
+
+	try {
+		quill::detail::set_thread_name(fallback_name);
+	} catch (...) {
+		// Thread names are diagnostic metadata; logging must still work if
+		// the OS API is unavailable.
+	}
+}
+
 }  // namespace
 
 quill::Logger* GetLogger(const std::string& name) {
 	if (!g_logger_active.load(std::memory_order_acquire)) {
 		return nullptr;
 	}
+	ensure_current_thread_name("WorkerThread");
 	return quill::Frontend::get_logger(name);
 }
 
 quill::Logger* CreateLogger(const LogConfig& config) {
+	ensure_current_thread_name("WorkerThread");
+
 	if (!g_backend_started.exchange(true, std::memory_order_acq_rel)) {
 		quill::Backend::start(GetBackendOptions());
 	}
@@ -169,9 +196,25 @@ quill::Logger* CreateLogger(const LogConfig& config) {
 }
 
 void InitLogger(const LogConfig& config) {
+	ensure_current_thread_name("MainThread");
+
 	LogConfig root_cfg = config;
 	root_cfg.logger_name = "root";
 	CreateLogger(root_cfg);
+}
+
+void SetCurrentThreadName(const std::string& name) {
+	if (name.empty()) {
+		return;
+	}
+
+	try {
+		quill::detail::set_thread_name(name.c_str());
+		t_thread_name_checked = true;
+	} catch (...) {
+		// Thread names are optional diagnostic metadata.
+		t_thread_name_checked = true;
+	}
 }
 
 void ShutdownLogger() {

@@ -104,6 +104,8 @@ void FileWatcher::Stop() {
 }
 
 void FileWatcher::WatchLoop(int poll_interval_ms) {
+	SetCurrentThreadName("FileWatcher");
+
 	while (running_.load(std::memory_order_acquire)) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(poll_interval_ms));
 

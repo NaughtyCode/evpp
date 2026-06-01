@@ -25,7 +25,8 @@ resources/config/
 | `log.level` | string | `"info"` | Min log severity: trace, debug, info, warn, error, fatal |
 | `log.rotation_size_mb` | int | 100 | Max log file size before rotation (MB) |
 | `log.max_backup_files` | int | 10 | Number of rotated log files to retain |
-| `log.format_pattern` | string | quill pattern | Log message format (quill pattern syntax) |
+| `log.format_pattern` | string | quill pattern | Log message format. Default includes `[thread_name:thread_id]` |
+| `log.log_filename` | string | `""` | Optional log file prefix. Empty uses the current program name unless overridden by CLI |
 | `frame.target_fps` | int | 30 | Target frames per second (0 = use interval_ms) |
 | `frame.interval_ms` | int | 33 | Fallback frame interval in milliseconds |
 | `frame.slow_threshold_multiplier` | int | 2 | Multiplier of interval_ms for "slow frame" detection |
@@ -51,4 +52,5 @@ Config is loaded once at engine startup via `ConfigManager::Instance().Load("res
 which reads all three subdirectories (`runtime/`, `client/`, `server/`). Client and server
 configs are optional — only the runtime config is required.
 
-Server CLI arguments (`--log_dir=`, `--scripts_dir=`) override the corresponding JSON values.
+Server CLI arguments (`--log_dir=`, `--log_prefix=`, `--scripts_dir=`) override the corresponding JSON values.
+Client executable arguments support `--log_prefix=` as well.

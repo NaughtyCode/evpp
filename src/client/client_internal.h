@@ -27,6 +27,7 @@ struct game_client_s {
     bool               initialized = false;
     bool               owns_loop   = false;
     evpp::EventLoop*   loop        = nullptr;
+    std::string        log_prefix_override;
     std::string        last_error;
     mutable std::mutex error_mutex;
 };

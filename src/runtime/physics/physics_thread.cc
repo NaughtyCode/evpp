@@ -282,6 +282,8 @@ void PhysicsThread::VerifyIsPhysicsThread() const {
 // EventLoop - runs on the dedicated physics thread
 
 void PhysicsThread::EventLoop() {
+	SetCurrentThreadName("PhysicsThread");
+
 	// Capture the physics thread ID once, at the start of the event loop.
 	// Used by VerifyIsPhysicsThread() to assert that PT-only code (e.g.
 	// PhysicsSystem::UpdateScript) is actually executing on this thread.

@@ -65,12 +65,28 @@ cd artifacts\release\Release
 .\run_client.bat
 ```
 
+需要自定义日志文件前缀时，把 `--log_prefix=<name>` 传给启动脚本即可：
+
+```bat
+.\run_server.bat --log_prefix=ShardA
+.\run_client.bat --log_prefix=ClientA
+```
+
+未传 `--log_prefix` 时，默认前缀与当前程序名一致，例如 `GameServer`、`GameClientApp`。
+
 Linux/macOS 使用：
 
 ```sh
 cd artifacts/release/Release
 ./run_server.sh
 ./run_client.sh
+```
+
+Linux/macOS 同样可以传入：
+
+```sh
+./run_server.sh --log_prefix=ShardA
+./run_client.sh --log_prefix=ClientA
 ```
 
 ## 成功标志

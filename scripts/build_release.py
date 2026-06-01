@@ -122,20 +122,20 @@ def package(args: argparse.Namespace) -> Path:
     if is_windows():
         write_text(
             dist / "run_server.bat",
-            '@echo off\ncd /d "%~dp0"\nGameServer.exe --config_dir=resources/config\n',
+            '@echo off\ncd /d "%~dp0"\nGameServer.exe --config_dir=resources/config %*\n',
         )
         write_text(
             dist / "run_client.bat",
-            '@echo off\ncd /d "%~dp0"\nGameClientApp.exe --config_dir=resources/config\n',
+            '@echo off\ncd /d "%~dp0"\nGameClientApp.exe --config_dir=resources/config %*\n',
         )
     else:
         write_text(
             dist / "run_server.sh",
-            '#!/usr/bin/env sh\ncd "$(dirname "$0")"\n./GameServer --config_dir=resources/config\n',
+            '#!/usr/bin/env sh\ncd "$(dirname "$0")"\n./GameServer --config_dir=resources/config "$@"\n',
         )
         write_text(
             dist / "run_client.sh",
-            '#!/usr/bin/env sh\ncd "$(dirname "$0")"\n./GameClientApp --config_dir=resources/config\n',
+            '#!/usr/bin/env sh\ncd "$(dirname "$0")"\n./GameClientApp --config_dir=resources/config "$@"\n',
         )
         os.chmod(dist / "run_server.sh", 0o755)
         os.chmod(dist / "run_client.sh", 0o755)
@@ -203,10 +203,15 @@ def smoke(args: argparse.Namespace, dist: Path) -> None:
         if path.exists():
             path.unlink()
 
-    server_cmd = [str(dist / exe_name("GameServer")), "--config_dir=resources/config"]
+    server_cmd = [
+        str(dist / exe_name("GameServer")),
+        "--config_dir=resources/config",
+        "--log_prefix=GameServerSmoke",
+    ]
     client_cmd = [
         str(dist / exe_name("GameClientApp")),
         "--config_dir=resources/config",
+        "--log_prefix=GameClientSmoke",
         f"--duration_ms={args.client_duration_ms}",
         "--tick_ms=16",
     ]

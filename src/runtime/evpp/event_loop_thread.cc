@@ -2,6 +2,7 @@
 
 #include "runtime/evpp/event_loop_thread.h"
 #include "runtime/evpp/inner_pre.h"
+#include "runtime/core/log/log.h"
 
 namespace evpp {
 
@@ -42,6 +43,8 @@ bool EventLoopThread::Start(bool wait_thread_started, Functor pre, Functor post)
 }
 
 void EventLoopThread::Run(const Functor& pre, const Functor& post) {
+	engine::SetCurrentThreadName("EventLoopThread");
+
 	ENGINE_LOG_TRACE(
 		engine::GetLogger(), "this={} loop={}", (void*) this, (void*) event_loop_.get());
 	if (name_.empty()) {

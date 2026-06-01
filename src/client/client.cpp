@@ -51,6 +51,16 @@ extern "C" game_error_t game_client_create(game_client_t** out_client) {
     return GAME_OK;
 }
 
+extern "C" game_error_t game_client_set_log_prefix(game_client_t* client,
+                                                   const char* prefix) {
+    if (!client) return GAME_ERR_INVALID_ARG;
+    if (client->initialized) return GAME_ERR_ALREADY_EXISTS;
+
+    client->log_prefix_override = (prefix && *prefix) ? prefix : "";
+    clear_error(client);
+    return GAME_OK;
+}
+
 extern "C" game_error_t game_client_init(game_client_t* client,
                                          const char* config_dir) {
     if (!client) return GAME_ERR_INVALID_ARG;
@@ -72,6 +82,12 @@ extern "C" game_error_t game_client_init(game_client_t* client,
             set_error(client, "failed to load config directory");
             return GAME_ERR_GENERIC;
         }
+    }
+
+    if (!client->log_prefix_override.empty()) {
+        auto runtime_cfg = cfg_mgr.GetRuntimeConfig();
+        runtime_cfg.log.log_filename = client->log_prefix_override;
+        cfg_mgr.SetRuntimeOverride(runtime_cfg);
     }
 
     /* WinSock must be initialised before creating the EventLoop because

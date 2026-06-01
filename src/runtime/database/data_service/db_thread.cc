@@ -339,6 +339,8 @@ void DBThread::EnqueueResponse(DbResponse&& resp) {
 // init-phase failure).
 
 void DBThread::EventLoop() {
+	SetCurrentThreadName("DBThread-" + std::to_string(index_));
+
 	// ── Phase 1: Acquire MongoClient from shared pool ──────────────────
 	client_ = pool_->Pop();
 	if (!client_) {
