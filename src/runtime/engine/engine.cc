@@ -491,7 +491,8 @@ void Engine::Start() {
 #endif
 
 	frame_timer_ =
-		loop_->RunEvery(evpp::Duration(frame_interval_.count() * evpp::Duration::kMillisecond),
+		loop_->RunEvery(evpp::Duration(static_cast<int64_t>(frame_interval_.count()) *
+									   evpp::Duration::kMillisecond),
 						[this]() { Tick(); });
 
 	running_ = true;
@@ -578,7 +579,7 @@ void Engine::ApplyConfigChanges() {
 				if (frame_timer_ && running_ && loop_) {
 					frame_timer_->Cancel();
 					frame_timer_ = loop_->RunEvery(
-						evpp::Duration(frame_interval_.count() *
+						evpp::Duration(static_cast<int64_t>(frame_interval_.count()) *
 									   evpp::Duration::kMillisecond),
 						[this]() { Tick(); });
 				}

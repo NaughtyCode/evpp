@@ -19,7 +19,12 @@
 #pragma comment(lib, "bcrypt.lib")
 #else
 #include <cerrno>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <unistd.h>
+#if defined(__linux__) && !defined(__ANDROID__)
 #include <sys/random.h>
+#endif
 #endif
 
 #include "runtime/core/log/log.h"
@@ -148,6 +153,7 @@ bool FillSecureRandom(uint8_t* data, size_t size) {
 						   static_cast<ULONG>(size),
 						   BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0;
 #else
+#if defined(__linux__) && !defined(__ANDROID__)
 	size_t offset = 0;
 	while (offset < size) {
 		ssize_t n = getrandom(data + offset, size - offset, 0);
@@ -159,6 +165,29 @@ bool FillSecureRandom(uint8_t* data, size_t size) {
 		return false;
 	}
 	return true;
+#else
+	int flags = O_RDONLY;
+#ifdef O_CLOEXEC
+	flags |= O_CLOEXEC;
+#endif
+	int fd = open("/dev/urandom", flags);
+	if (fd < 0) return false;
+
+	size_t offset = 0;
+	while (offset < size) {
+		ssize_t n = read(fd, data + offset, size - offset);
+		if (n > 0) {
+			offset += static_cast<size_t>(n);
+			continue;
+		}
+		if (n < 0 && errno == EINTR) continue;
+		close(fd);
+		return false;
+	}
+
+	close(fd);
+	return true;
+#endif
 #endif
 }
 

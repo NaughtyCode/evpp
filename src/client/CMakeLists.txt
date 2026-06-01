@@ -100,15 +100,22 @@ if(MSVC)
 endif()
 
 # ── Platform libraries (from runtime) ─────────────────────────────────
-if(UNIX)
+if(CMAKE_SYSTEM_NAME STREQUAL "Android")
+    set(LIBRARIES event)
+elseif(UNIX)
     set(LIBRARIES event pthread)
 else()
     set(LIBRARIES event_core_static event_extra_static)
 endif()
 
 # ── Output paths ──────────────────────────────────────────────────────
-set (EXECUTABLE_OUTPUT_PATH ${ENGINE_ROOT}/../artifacts/bin)
-set (LIBRARY_OUTPUT_PATH ${ENGINE_ROOT}/../artifacts/lib)
+if(CMAKE_SYSTEM_NAME STREQUAL "Android")
+    set(EXECUTABLE_OUTPUT_PATH ${ENGINE_ROOT}/../artifacts/android/${ANDROID_ABI}/bin)
+    set(LIBRARY_OUTPUT_PATH ${ENGINE_ROOT}/../artifacts/android/${ANDROID_ABI}/lib)
+else()
+    set(EXECUTABLE_OUTPUT_PATH ${ENGINE_ROOT}/../artifacts/bin)
+    set(LIBRARY_OUTPUT_PATH ${ENGINE_ROOT}/../artifacts/lib)
+endif()
 set (CMAKE_MACOSX_RPATH 0)
 
 if(NOT TARGET copy_resources)
@@ -154,6 +161,9 @@ endif()
 
 # ── libevent (built from source) ──────────────────────────────────────
 if(NOT TARGET event_core_static)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Android")
+        set(EVENT__HAVE_PIPE2 OFF CACHE INTERNAL "pipe2 is not declared on all supported Android API levels" FORCE)
+    endif()
     set(EVENT__DISABLE_TESTS ON CACHE BOOL "Disable libevent tests")
     set(EVENT__DISABLE_REGRESS ON CACHE BOOL "Disable libevent regression tests")
     set(EVENT__DISABLE_SAMPLES ON CACHE BOOL "Disable libevent samples")
@@ -343,12 +353,21 @@ if(WIN32)
     target_link_libraries(GameClient PRIVATE ws2_32)
 endif()
 
-add_custom_command(TARGET GameClient POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "$<TARGET_FILE:GameClient>"
-    "${ENGINE_ROOT}/../artifacts/bin/$<CONFIG>/$<TARGET_FILE_NAME:GameClient>"
-    COMMENT "Copying GameClient.dll to bin/"
-)
+if(CMAKE_SYSTEM_NAME STREQUAL "Android")
+    add_custom_command(TARGET GameClient POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:GameClient>"
+        "${ENGINE_ROOT}/../artifacts/android/${ANDROID_ABI}/bin/$<CONFIG>/$<TARGET_FILE_NAME:GameClient>"
+        COMMENT "Copying GameClient.so to Android bin/"
+    )
+else()
+    add_custom_command(TARGET GameClient POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:GameClient>"
+        "${ENGINE_ROOT}/../artifacts/bin/$<CONFIG>/$<TARGET_FILE_NAME:GameClient>"
+        COMMENT "Copying GameClient.dll to bin/"
+    )
+endif()
 
 # ── Install ─────────────────────────────────────────────────────────────
 

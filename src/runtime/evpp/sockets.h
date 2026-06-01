@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#include <string>
+
 #include "runtime/core/engine_api.h"
 #include "runtime/evpp/sys_addrinfo.h"
 #include "runtime/evpp/sys_sockets.h"

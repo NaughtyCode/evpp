@@ -139,3 +139,7 @@ artifacts/build2/*
 build-vs/*
 src/thirdparty/JoltPhysics/JoltPhysics/Build/*
 
+artifacts/android-sdk/*
+artifacts/build-android/*
+
+artifacts/android/*
