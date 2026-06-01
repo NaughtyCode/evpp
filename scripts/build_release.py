@@ -25,6 +25,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = ROOT / "src"
+CS_DEMO_DIR = ROOT / "resources" / "demos" / "cs"
 
 
 def is_windows() -> bool:
@@ -92,6 +93,22 @@ def copy_file(src: Path, dst: Path) -> None:
     shutil.copy2(src, dst)
 
 
+def copy_tree_overlay(src: Path, dst: Path) -> None:
+    if not src.exists():
+        raise FileNotFoundError(f"required overlay not found: {src}")
+    shutil.copytree(src, dst, dirs_exist_ok=True)
+
+
+def remove_packaged_cs_demo(resources_dst: Path) -> None:
+    cs_demo_dst = resources_dst / "demos" / "cs"
+    if cs_demo_dst.exists():
+        shutil.rmtree(cs_demo_dst)
+
+    demos_dst = resources_dst / "demos"
+    if demos_dst.exists() and not any(demos_dst.iterdir()):
+        demos_dst.rmdir()
+
+
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8", newline="\n")
@@ -119,6 +136,12 @@ def package(args: argparse.Namespace) -> Path:
         shutil.rmtree(resources_dst)
     shutil.copytree(resources_src, resources_dst)
 
+    if args.include_cs_demo:
+        copy_tree_overlay(CS_DEMO_DIR / "config", resources_dst / "config")
+        copy_tree_overlay(CS_DEMO_DIR / "script", resources_dst / "demos" / "cs" / "script")
+    else:
+        remove_packaged_cs_demo(resources_dst)
+
     if is_windows():
         write_text(
             dist / "run_server.bat",
@@ -140,37 +163,48 @@ def package(args: argparse.Namespace) -> Path:
         os.chmod(dist / "run_server.sh", 0o755)
         os.chmod(dist / "run_client.sh", 0o755)
 
-    write_text(
-        dist / "README.md",
-        "\n".join(
+    readme_lines = [
+        "# Release Artifacts",
+        "",
+        "Start the server first, then the client.",
+        "",
+        "Windows:",
+        "",
+        "```bat",
+        "run_server.bat",
+        "run_client.bat",
+        "```",
+        "",
+        "Unix:",
+        "",
+        "```sh",
+        "./run_server.sh",
+        "./run_client.sh",
+        "```",
+        "",
+    ]
+    if args.include_cs_demo:
+        readme_lines.extend(
             [
-                "# Release Artifacts",
-                "",
-                "Start the server first, then the client.",
-                "",
-                "Windows:",
-                "",
-                "```bat",
-                "run_server.bat",
-                "run_client.bat",
-                "```",
-                "",
-                "Unix:",
-                "",
-                "```sh",
-                "./run_server.sh",
-                "./run_client.sh",
-                "```",
+                "This package includes the independent CS demo overlay.",
                 "",
                 "The CS handshake and gameplay round trip are implemented in Lua:",
                 "",
-                "- `resources/script/shared/cs_protocol.lua`",
-                "- `resources/script/server/init.lua`",
-                "- `resources/script/client/init.lua`",
+                "- `resources/demos/cs/script/shared/cs_protocol.lua`",
+                "- `resources/demos/cs/script/server/init.lua`",
+                "- `resources/demos/cs/script/client/init.lua`",
                 "",
             ]
-        ),
-    )
+        )
+    else:
+        readme_lines.extend(
+            [
+                "This package was created without the CS demo overlay.",
+                "Provide your own client/server script config before starting the programs.",
+                "",
+            ]
+        )
+    write_text(dist / "README.md", "\n".join(readme_lines))
 
     print(f"[release] packaged: {dist}")
     return dist
@@ -194,6 +228,9 @@ def read_log(path: Path) -> str:
 
 
 def smoke(args: argparse.Namespace, dist: Path) -> None:
+    if not args.include_cs_demo:
+        raise RuntimeError("--smoke requires the CS demo overlay; remove --no-cs-demo")
+
     host = "127.0.0.1"
     port = args.port
     server_log = dist / "server_smoke.log"
@@ -274,6 +311,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--with-mongodb", action="store_true")
     parser.add_argument("--with-physics", action="store_true")
     parser.add_argument("--with-profiler", action="store_true")
+    parser.add_argument(
+        "--no-cs-demo",
+        dest="include_cs_demo",
+        action="store_false",
+        help="Package base resources without the independent CS demo overlay",
+    )
     parser.add_argument("--smoke", action="store_true", help="Start server then client and verify Lua CS communication")
     parser.add_argument("--smoke-timeout", type=float, default=15.0)
     parser.add_argument("--client-duration-ms", type=int, default=4000)

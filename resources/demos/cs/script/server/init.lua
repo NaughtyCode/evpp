@@ -1,5 +1,6 @@
 -- Server entry script for the Lua-only client/server demo.
 
+import.addpath("resources/demos/cs/script")
 import("runtime.init")
 
 local TcpServer = import("runtime.net.server")
