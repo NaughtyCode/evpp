@@ -1,3 +1,5 @@
+#include "wsa_init.h"
+
 #include <benchmark/benchmark.h>
 #include <runtime/evpp/event_loop.h>
 #include <runtime/evpp/buffer.h>
@@ -13,11 +15,8 @@ static void BM_TCP_Throughput(benchmark::State& state) {
     int msg_size = static_cast<int>(state.range(0));
 
     for (auto _ : state) {
-        state.PauseTiming();
-
         evpp::EventLoop loop;
         std::atomic<int> received{0};
-        std::atomic<bool> done{false};
 
         auto* server = new evpp::TCPServer(&loop, "127.0.0.1:0", "BmEcho", 1);
         server->SetMessageCallback([&](const evpp::TCPConnPtr& conn, evpp::Buffer* msg) {
@@ -37,7 +36,6 @@ static void BM_TCP_Throughput(benchmark::State& state) {
 
         client->SetConnectionCallback([&](const evpp::TCPConnPtr& conn) {
             if (conn->IsConnected()) {
-                state.ResumeTiming();
                 conn->Send(payload);
             }
         });
@@ -45,7 +43,6 @@ static void BM_TCP_Throughput(benchmark::State& state) {
         client->SetMessageCallback([&](const evpp::TCPConnPtr&, evpp::Buffer*) {
             received++;
             if (received >= 100) {
-                state.PauseTiming();
                 loop.Stop();
             } else {
                 client->conn()->Send(payload);
@@ -53,7 +50,6 @@ static void BM_TCP_Throughput(benchmark::State& state) {
         });
 
         loop.RunAfter(5.0, [&]() {
-            state.PauseTiming();
             loop.Stop();
         });
         client->Connect();

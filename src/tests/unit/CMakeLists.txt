@@ -107,6 +107,10 @@ add_unit_test(test_mem_bind script/test_mem_bind.cpp)
 add_test(NAME unit.mem_bind COMMAND test_mem_bind)
 set_tests_properties(unit.mem_bind PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
+add_unit_test(test_script_bind script/test_script_bind.cpp)
+add_test(NAME unit.script_bind COMMAND test_script_bind)
+set_tests_properties(unit.script_bind PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
 # ── Auth tests ──────────────────────────────────────────────────────
 add_unit_test(test_auth auth/test_auth.cpp)
 add_test(NAME unit.auth COMMAND test_auth)
