@@ -304,6 +304,54 @@ TEST_CASE("db_bson preserves BSON doc shape metadata for docs it creates",
     REQUIRE(result == "true|array|0|true|document|zero|one|array|0|document|zero");
 }
 
+TEST_CASE("db_bson can explicitly wrap raw BSON docs as arrays or documents",
+          "[database][data_service][bson]") {
+    DBScriptVM vm;
+    script::ExportMongo(vm);
+    ExportDbRuntime(vm);
+
+    std::string error;
+    std::string result;
+    REQUIRE(vm.DoString(
+        "local b = require('db_bson')\n"
+        "local raw_empty = bson.new()\n"
+        "local raw_numeric = bson.new()\n"
+        "bson.append_int32(raw_numeric, '0', 10)\n"
+        "bson.append_int32(raw_numeric, '1', 20)\n"
+        "local doc, err = b.to_bson({\n"
+        "  empty_arr = b.array(raw_empty), empty_doc = b.document(raw_empty),\n"
+        "  forced_arr = b.array(raw_numeric), forced_doc = b.document(raw_numeric),\n"
+        "  code = b.code('return x', b.document(raw_numeric))\n"
+        "})\n"
+        "if not doc then return 'ERR:' .. tostring(err) end\n"
+        "local t, err2 = b.to_table(doc, { preserve_types = true })\n"
+        "if not t then return 'ERR2:' .. tostring(err2) end\n"
+        "local root_arr = assert(b.to_bson(b.array(raw_numeric)))\n"
+        "local root_table = assert(b.to_table(root_arr, { preserve_types = true }))\n"
+        "local json_arr = assert(b.to_json(b.array(raw_empty)))\n"
+        "local bad_scope, scope_err = b.to_bson({ code = b.code('return x', b.array(raw_numeric)) })\n"
+        "local mixed = b.array(raw_empty)\n"
+        "mixed.extra = 1\n"
+        "local bad_mixed, mixed_err = b.to_bson({ value = mixed })\n"
+        "return table.concat({ b.type(t.empty_arr), tostring(#t.empty_arr),\n"
+        "  b.type(t.empty_doc), tostring(t.empty_doc.missing == nil),\n"
+        "  b.type(t.forced_arr), tostring(t.forced_arr[1].value),\n"
+        "  tostring(t.forced_arr[2].value), b.type(t.forced_doc),\n"
+        "  tostring(t.forced_doc['0'].value), tostring(t.forced_doc['1'].value),\n"
+        "  b.type(t.code.scope), tostring(t.code.scope['0'].value),\n"
+        "  b.type(root_table), tostring(root_table[2].value), json_arr:sub(1, 1),\n"
+        "  tostring(bad_scope == nil), tostring(scope_err),\n"
+        "  tostring(bad_mixed == nil), tostring(mixed_err) }, '|')",
+        "=data_service_bson_raw_doc_wrapper_test",
+        &error,
+        &result));
+
+    REQUIRE(result ==
+            "array|0|document|true|array|10|20|document|10|20|document|10|array|20|[|"
+            "true|code scope must be a document table|true|"
+            "BSON document wrapper must not contain Lua fields");
+}
+
 TEST_CASE("db_bson rejects implicit sparse array tables",
           "[database][data_service][bson]") {
     DBScriptVM vm;

@@ -52,6 +52,7 @@ char kOptionsKey;
 char kIncrementKey;
 char kScopeKey;
 char kOidKey;
+char kBsonDocKey;
 
 enum class WrapperType : int {
 	None = 0,
@@ -88,6 +89,12 @@ enum class LuaTableShape {
 	DenseArray,
 	SparseArray,
 	Document,
+};
+
+enum class WrapperBsonDocumentResult {
+	NotPresent,
+	Copied,
+	Error,
 };
 
 struct ActiveTableGuard {
@@ -129,7 +136,7 @@ const char* WrapperTypeName(WrapperType type) {
 bool IsInternalKeyPointer(const void* ptr) {
 	return ptr == &kTypeKey || ptr == &kValueKey || ptr == &kSubtypeKey ||
 		   ptr == &kOptionsKey || ptr == &kIncrementKey || ptr == &kScopeKey ||
-		   ptr == &kOidKey;
+		   ptr == &kOidKey || ptr == &kBsonDocKey;
 }
 
 bool IsInternalTableKey(lua_State* L, int index) {
@@ -216,6 +223,13 @@ void SetRawNumberValue(lua_State* L, int table_index, const void* key, double va
 	lua_rawsetp(L, table_index, key);
 }
 
+void SetRawBsonDocumentValue(lua_State* L, int table_index, int doc_index) {
+	table_index = lua_absindex(L, table_index);
+	doc_index = lua_absindex(L, doc_index);
+	lua_pushvalue(L, doc_index);
+	lua_rawsetp(L, table_index, &kBsonDocKey);
+}
+
 bool GetRawStringValue(lua_State* L,
 					   int table_index,
 					   const void* key,
@@ -271,6 +285,33 @@ bool GetRawNumberValue(lua_State* L,
 	}
 
 	*out = static_cast<double>(lua_tonumber(L, -1));
+	lua_pop(L, 1);
+	return true;
+}
+
+bool GetRawBsonDocumentValue(lua_State* L,
+							 int table_index,
+							 mongo::BsonDocument** out,
+							 bool* found,
+							 std::string& error) {
+	table_index = lua_absindex(L, table_index);
+	lua_rawgetp(L, table_index, &kBsonDocKey);
+	if (lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+		*out = nullptr;
+		*found = false;
+		return true;
+	}
+
+	auto** doc = static_cast<mongo::BsonDocument**>(luaL_testudata(L, -1, kBsonDocMetaName));
+	if (!doc || !*doc) {
+		lua_pop(L, 1);
+		error = "BSON document wrapper contains an invalid bson.doc";
+		return false;
+	}
+
+	*out = *doc;
+	*found = true;
 	lua_pop(L, 1);
 	return true;
 }
@@ -674,6 +715,49 @@ bool ResolveBsonUserdataAsArray(lua_State* L, int userdata_index, const bson_t* 
 	return IsBsonArrayDocument(raw);
 }
 
+bool HasPublicTableFields(lua_State* L, int table_index) {
+	table_index = lua_absindex(L, table_index);
+	lua_pushnil(L);
+	while (lua_next(L, table_index) != 0) {
+		const bool is_public_key = !IsInternalTableKey(L, -2);
+		lua_pop(L, 1);
+		if (is_public_key) {
+			lua_pop(L, 1);
+			return true;
+		}
+	}
+	return false;
+}
+
+WrapperBsonDocumentResult CopyWrapperBsonDocumentIfPresent(lua_State* L,
+														   int table_index,
+														   bool as_array,
+														   mongo::BsonDocument& out,
+														   std::string& error) {
+	mongo::BsonDocument* wrapper_doc = nullptr;
+	bool found = false;
+	if (!GetRawBsonDocumentValue(L, table_index, &wrapper_doc, &found, error)) {
+		return WrapperBsonDocumentResult::Error;
+	}
+	if (!found) return WrapperBsonDocumentResult::NotPresent;
+
+	if (HasPublicTableFields(L, table_index)) {
+		error = "BSON document wrapper must not contain Lua fields";
+		return WrapperBsonDocumentResult::Error;
+	}
+
+	const auto* raw = static_cast<const bson_t*>(wrapper_doc->RawBson());
+	if (!ValidateBsonForLuaConversion(raw, error) ||
+		!ValidateBsonDocumentForCodec(raw, as_array, 0, error)) {
+		return WrapperBsonDocumentResult::Error;
+	}
+	if (!wrapper_doc->CopyTo(out)) {
+		error = "failed to copy BSON document wrapper";
+		return WrapperBsonDocumentResult::Error;
+	}
+	return WrapperBsonDocumentResult::Copied;
+}
+
 bool BuildBsonFromLuaTable(lua_State* L,
 						   int table_index,
 						   mongo::BsonDocument& out,
@@ -697,6 +781,14 @@ bool BuildBsonFromLuaTable(lua_State* L,
 	if (!active_guard.inserted) {
 		error = "Lua table cycle detected during BSON conversion";
 		return false;
+	}
+
+	const WrapperType wrapper_type = GetWrapperType(L, table_index);
+	if (wrapper_type == WrapperType::Array || wrapper_type == WrapperType::Document) {
+		const WrapperBsonDocumentResult wrapper_doc_result =
+			CopyWrapperBsonDocumentIfPresent(L, table_index, as_array, out, error);
+		if (wrapper_doc_result == WrapperBsonDocumentResult::Error) return false;
+		if (wrapper_doc_result == WrapperBsonDocumentResult::Copied) return true;
 	}
 
 	if (as_array) {
@@ -2089,9 +2181,13 @@ int l_type(lua_State* L) {
 int l_array(lua_State* L) {
 	if (lua_isnoneornil(L, 1)) {
 		lua_newtable(L);
-	} else {
-		luaL_checktype(L, 1, LUA_TTABLE);
+	} else if (lua_istable(L, 1)) {
 		lua_pushvalue(L, 1);
+	} else if (luaL_testudata(L, 1, kBsonDocMetaName)) {
+		lua_newtable(L);
+		SetRawBsonDocumentValue(L, -1, 1);
+	} else {
+		return luaL_error(L, "db_bson.array expects table, bson.doc, or nil");
 	}
 	SetWrapperType(L, -1, WrapperType::Array);
 	return 1;
@@ -2100,9 +2196,13 @@ int l_array(lua_State* L) {
 int l_document(lua_State* L) {
 	if (lua_isnoneornil(L, 1)) {
 		lua_newtable(L);
-	} else {
-		luaL_checktype(L, 1, LUA_TTABLE);
+	} else if (lua_istable(L, 1)) {
 		lua_pushvalue(L, 1);
+	} else if (luaL_testudata(L, 1, kBsonDocMetaName)) {
+		lua_newtable(L);
+		SetRawBsonDocumentValue(L, -1, 1);
+	} else {
+		return luaL_error(L, "db_bson.document expects table, bson.doc, or nil");
 	}
 	SetWrapperType(L, -1, WrapperType::Document);
 	return 1;

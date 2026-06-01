@@ -149,7 +149,8 @@ encoded as an array or document, so empty arrays and numeric-key documents round
 trip through `db_bson.to_table`/`db_bson.to_json`. Raw `bson.doc` userdata created
 by the lower-level `bson` module has no such metadata; pass `true` or
 `{ root_as_array = true }` when a raw empty root array must come back as a Lua
-array.
+array. For nested raw `bson.doc` values, wrap them with `db_bson.array(raw_doc)`
+or `db_bson.document(raw_doc)` to force the embedded BSON value shape.
 
 ### `db_bson.to_json(value [, root_as_array_or_options])`
 
@@ -183,32 +184,42 @@ Converts a Lua table or `bson.doc` userdata to legacy Extended JSON.
 
 ## Explicit Table Shape
 
-### `db_bson.array([table])`
+### `db_bson.array([table_or_doc])`
 
-Marks a table as a BSON array. If no table is passed, creates a new empty array
-wrapper.
+Marks a Lua table or raw `bson.doc` as a BSON array. If no value is passed,
+creates a new empty array wrapper.
 
 ```lua
+local raw = bson.new()
 local doc = assert(db_bson.to_bson({
     empty_items = db_bson.array({}),
     items = db_bson.array({ 10, 20 }),
+    raw_items = db_bson.array(raw),
 }))
 ```
 
-Arrays must be dense and 1-based. Sparse arrays fail during `to_bson`.
+Lua-table arrays must be dense and 1-based. Sparse arrays fail during `to_bson`.
+Raw `bson.doc` array wrappers must already contain dense zero-based BSON array
+keys.
 
-### `db_bson.document([table])`
+### `db_bson.document([table_or_doc])`
 
-Marks a table as a BSON document. This is useful when numeric keys should be
-encoded as document keys rather than array indexes.
+Marks a Lua table or raw `bson.doc` as a BSON document. This is useful when
+numeric keys should be encoded as document keys rather than array indexes, or
+when a raw nested `bson.doc` with numeric keys must not be treated as an array.
 
 ```lua
+local raw_numeric = bson.new()
+bson.append_int32(raw_numeric, "0", 10)
 local doc = assert(db_bson.to_bson({
     numeric_keys = db_bson.document({ [1] = "one" }),
+    raw_numeric_keys = db_bson.document(raw_numeric),
 }))
 ```
 
 Numeric document keys are converted to strings.
+Wrappers around raw `bson.doc` values are shape-only references; do not add Lua
+fields to those wrapper tables.
 
 ## BSON Scalar Wrappers
 
