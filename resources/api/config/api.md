@@ -37,6 +37,7 @@ Exposed paths:
 | Runtime top-level | `resource_dir`, `scripts_dir`, `sandbox_level`, `environment` |
 | Runtime log | `log.dir`, `log.level`, `log.rotation_size_mb`, `log.max_backup_files`, `log.format_pattern`, `log.rotation_frequency`, `log.rotation_interval`, `log.rotation_time_daily`, `log.rotation_naming_scheme`, `log.logger_name`, `log.log_filename` |
 | Runtime frame | `frame.target_fps`, `frame.interval_ms`, `frame.slow_threshold_multiplier` |
+| Runtime hot-reload | `hot_reload.enabled`, `hot_reload.startup_delay_ms`, `hot_reload.poll_interval_ms`, `hot_reload.debounce_ms` |
 | Client | `client.scripts_dir`, `client.network.server_address`, `client.network.server_port`, `client.network.reconnect_max_retries`, `client.network.reconnect_base_delay_ms`, `client.network.reconnect_max_delay_ms`, `client.network.timeout_ms`, `client.network.client_prediction`, `client.network.interpolation_delay_ms` |
 | Server | `server.http.timeout_sec`, `server.scripts_dir`, `server.admin_port`, `server.admin_bind_address`, `server.admin_metrics_enabled`, `server.shutdown_timeout_sec`, `server.connection_drain_timeout_sec`, `server.max_connections`, `server.pid_file`, `server.active_mongodb`, `server.db_service`, `server.mongodb_dev`, `server.mongodb_public`, `server.db_required` |
 | Server MessagePack | `server.msgpack.max_nesting_depth`, `server.msgpack.max_payload_size` |
@@ -124,6 +125,7 @@ config.flush_changes()
 | `resource_dir` | `string` | `"resources"` | Root resource directory |
 | `log` | `LogConfig` | — | Logging subsystem configuration |
 | `frame` | `FrameConfig` | — | Frame/timing configuration |
+| `hot_reload` | `HotReloadConfig` | — | Script hot-reload watcher configuration |
 | `scripts_dir` | `string` | `"resources/script/runtime"` | Runtime scripts directory |
 | `sandbox_level` | `string` | `"strict"` | Lua sandbox level |
 | `environment` | `string` | `"development"` | Deployment target used by environment/profile selection |
@@ -151,6 +153,15 @@ config.flush_changes()
 | `target_fps` | `int` | `30` | Target frames per second |
 | `interval_ms` | `int` | `33` | Frame interval in milliseconds |
 | `slow_threshold_multiplier` | `int` | `2` | Slow frame detection multiplier |
+
+### HotReloadConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | `bool` | `true` | Enables script hot-reload after runtime startup succeeds |
+| `startup_delay_ms` | `int` | `60000` | Delay after successful runtime startup before file watching starts |
+| `poll_interval_ms` | `int` | `1000` | File watcher polling interval after hot-reload leaves idle state |
+| `debounce_ms` | `int` | `300` | Per-file debounce window before validation and reload |
 
 ### ServerConfig
 

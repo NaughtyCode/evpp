@@ -140,6 +140,30 @@ TEST_CASE("FileWatcher detects newly created files", "[hotreload][filewatcher]")
 	REQUIRE(change_count.load() > 0);
 }
 
+TEST_CASE("FileWatcher priming ignores pre-existing files",
+          "[hotreload][filewatcher]") {
+	TempDir tmp("hotreload_prime_test");
+	tmp.write("old.lua", "return 1");
+
+	FileWatcher watcher;
+	watcher.WatchDirectory(tmp.path, ".lua");
+
+	std::atomic<int> change_count{0};
+	watcher.SetChangeCallback(
+		[&](const std::vector<std::string>&) { change_count++; });
+
+	watcher.PrimeKnownFiles();
+	watcher.Start(50);
+	std::this_thread::sleep_for(std::chrono::milliseconds(150));
+	REQUIRE(change_count.load() == 0);
+
+	tmp.write("new.lua", "return 42");
+	std::this_thread::sleep_for(std::chrono::milliseconds(150));
+
+	watcher.Stop();
+	REQUIRE(change_count.load() > 0);
+}
+
 // ============================================================================
 // FileWatcher — file modification detection
 // ============================================================================

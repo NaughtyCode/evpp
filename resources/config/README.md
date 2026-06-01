@@ -30,6 +30,10 @@ resources/config/
 | `frame.target_fps` | int | 30 | Target frames per second (0 = use interval_ms) |
 | `frame.interval_ms` | int | 33 | Fallback frame interval in milliseconds |
 | `frame.slow_threshold_multiplier` | int | 2 | Multiplier of interval_ms for "slow frame" detection |
+| `hot_reload.enabled` | bool | true | Enables script hot-reload after runtime startup succeeds |
+| `hot_reload.startup_delay_ms` | int | 60000 | Delay after successful runtime startup before script file watching starts |
+| `hot_reload.poll_interval_ms` | int | 1000 | Script file watcher scan interval after hot-reload leaves idle state |
+| `hot_reload.debounce_ms` | int | 300 | Per-file debounce window before hot-reload validates and reloads a changed script |
 | `scripts_dir` | string | `"resources/script/runtime"` | Shared runtime Lua scripts directory |
 
 ### client/client.json

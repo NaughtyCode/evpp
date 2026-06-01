@@ -91,6 +91,12 @@ int l_config_get(lua_State* L) {
     if (p == "frame.interval_ms")                return PushConfigValue(L, rt.frame.interval_ms);
     if (p == "frame.slow_threshold_multiplier")  return PushConfigValue(L, rt.frame.slow_threshold_multiplier);
 
+    // RuntimeConfig - hot_reload.*
+    if (p == "hot_reload.enabled")           return PushConfigValue(L, rt.hot_reload.enabled);
+    if (p == "hot_reload.startup_delay_ms")  return PushConfigValue(L, rt.hot_reload.startup_delay_ms);
+    if (p == "hot_reload.poll_interval_ms")  return PushConfigValue(L, rt.hot_reload.poll_interval_ms);
+    if (p == "hot_reload.debounce_ms")       return PushConfigValue(L, rt.hot_reload.debounce_ms);
+
     // ClientConfig - network settings used by Lua client/server CS demos.
     if (p == "client.scripts_dir")                         return PushConfigValue(L, client.scripts_dir);
     if (p == "client.network.server_address")              return PushConfigValue(L, client.network.server_address);

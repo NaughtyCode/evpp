@@ -283,6 +283,10 @@ bool lookup_config_scalar(const std::string& path, ConfigScalar& out) {
     if (is("frame.target_fps", "runtime.frame.target_fps")) { out = ConfigScalar::Int(rt.frame.target_fps); return true; }
     if (is("frame.interval_ms", "runtime.frame.interval_ms")) { out = ConfigScalar::Int(rt.frame.interval_ms); return true; }
     if (is("frame.slow_threshold_multiplier", "runtime.frame.slow_threshold_multiplier")) { out = ConfigScalar::Int(rt.frame.slow_threshold_multiplier); return true; }
+    if (is("hot_reload.enabled", "runtime.hot_reload.enabled")) { out = ConfigScalar::Bool(rt.hot_reload.enabled); return true; }
+    if (is("hot_reload.startup_delay_ms", "runtime.hot_reload.startup_delay_ms")) { out = ConfigScalar::Int(rt.hot_reload.startup_delay_ms); return true; }
+    if (is("hot_reload.poll_interval_ms", "runtime.hot_reload.poll_interval_ms")) { out = ConfigScalar::Int(rt.hot_reload.poll_interval_ms); return true; }
+    if (is("hot_reload.debounce_ms", "runtime.hot_reload.debounce_ms")) { out = ConfigScalar::Int(rt.hot_reload.debounce_ms); return true; }
 
     if (path == "client.scripts_dir") { out = ConfigScalar::String(cc.scripts_dir); return true; }
     if (path == "client.render.backend") { out = ConfigScalar::String(cc.render.backend); return true; }

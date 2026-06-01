@@ -123,6 +123,9 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	running_.store(false, std::memory_order_release);
 	initialized_.store(false, std::memory_order_release);
 	frame_count_.store(0, std::memory_order_release);
+	hot_reload_start_scheduled_ = false;
+	hot_reload_started_ = false;
+	hot_reload_enable_time_ = std::chrono::steady_clock::time_point{};
 
 	std::fprintf(stderr, "[engine] Init() begin\n");
 	std::fprintf(stderr, "[engine] InitLogger...\n");
@@ -153,7 +156,8 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 					"engine initializing, instance=[{}], environment=[{}], resource_dir=[{}], "
 					"log_dir=[{}], log_level=[{}], "
 					"runtime_scripts_dir=[{}], entry_scripts_dir=[{}], "
-					"frame_interval=[{}ms], library_mode=[{}]",
+					"frame_interval=[{}ms], hot_reload_enabled=[{}], "
+					"hot_reload_startup_delay=[{}ms], library_mode=[{}]",
 					sc.instance.id.empty() ? "(unset)" : sc.instance.id,
 					runtime_cfg.environment,
 					runtime_cfg.resource_dir,
@@ -162,6 +166,8 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 					runtime_cfg.scripts_dir,
 					entry_scripts_dir,
 					runtime_cfg.frame.interval_ms,
+					runtime_cfg.hot_reload.enabled,
+					runtime_cfg.hot_reload.startup_delay_ms,
 					library_mode);
 		}
 
@@ -309,8 +315,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 				} else {
 					ENGINE_LOG_ERROR(logger, "hot-reload FAILED: {}", file);
 				}
-			});
-		script_reloader_->Start();
+		});
 	}
 
 	last_frame_time_ = std::chrono::steady_clock::now();
@@ -372,6 +377,66 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 
 	initialized_.store(true, std::memory_order_release);
 	ENGINE_LOG_INFO(logger, "Init() complete");
+	ScheduleScriptHotReloadStart(runtime_cfg);
+}
+
+void Engine::ScheduleScriptHotReloadStart(const RuntimeConfig& runtime_cfg) {
+	auto* logger = GetLogger();
+
+	hot_reload_enabled_ = runtime_cfg.hot_reload.enabled;
+	hot_reload_startup_delay_ms_ = runtime_cfg.hot_reload.startup_delay_ms;
+	hot_reload_poll_interval_ms_ = runtime_cfg.hot_reload.poll_interval_ms;
+	hot_reload_debounce_ms_ = runtime_cfg.hot_reload.debounce_ms;
+
+	if (hot_reload_startup_delay_ms_ < 0) hot_reload_startup_delay_ms_ = 0;
+	if (hot_reload_poll_interval_ms_ < 1) hot_reload_poll_interval_ms_ = 1;
+	if (hot_reload_debounce_ms_ < 0) hot_reload_debounce_ms_ = 0;
+
+	hot_reload_started_ = false;
+	hot_reload_start_scheduled_ = false;
+	hot_reload_enable_time_ = std::chrono::steady_clock::time_point{};
+
+	if (!script_reloader_) {
+		ENGINE_LOG_WARN(logger, "ScriptReloader: unavailable, hot-reload remains idle");
+		return;
+	}
+	if (!hot_reload_enabled_) {
+		ENGINE_LOG_INFO(logger, "ScriptReloader: disabled by config, file watching remains idle");
+		return;
+	}
+
+	hot_reload_enable_time_ =
+		std::chrono::steady_clock::now() +
+		std::chrono::milliseconds(hot_reload_startup_delay_ms_);
+	hot_reload_start_scheduled_ = true;
+
+	ENGINE_LOG_INFO(logger,
+	                "ScriptReloader: idle after successful runtime startup; "
+	                "file watching will start in [{}ms] "
+	                "(poll=[{}ms], debounce=[{}ms])",
+	                hot_reload_startup_delay_ms_,
+	                hot_reload_poll_interval_ms_,
+	                hot_reload_debounce_ms_);
+}
+
+void Engine::MaybeStartScriptHotReload() {
+	if (!hot_reload_start_scheduled_ || hot_reload_started_ || !script_reloader_) return;
+	if (std::chrono::steady_clock::now() < hot_reload_enable_time_) return;
+
+	hot_reload_start_scheduled_ = false;
+	auto* logger = GetLogger();
+	try {
+		script_reloader_->Start(hot_reload_poll_interval_ms_, hot_reload_debounce_ms_);
+		hot_reload_started_ = true;
+		ENGINE_LOG_INFO(logger,
+		                "ScriptReloader: hot-reload file watching active after startup delay "
+		                "[{}ms]",
+		                hot_reload_startup_delay_ms_);
+	} catch (const std::exception& e) {
+		ENGINE_LOG_ERROR(logger, "ScriptReloader: failed to start file watching: {}", e.what());
+	} catch (...) {
+		ENGINE_LOG_ERROR(logger, "ScriptReloader: failed to start file watching: unknown error");
+	}
 }
 
 // Start -- standalone mode: arm frame timer and signal watchers
@@ -537,6 +602,10 @@ void Engine::ApplyConfigChanges() {
 			ENGINE_LOG_WARN(logger,
 				"engine: sandbox_level changed to {} — restart required for VM sandbox change",
 				entry.new_value);
+		} else if (entry.field_path.rfind("hot_reload.", 0) == 0) {
+			ENGINE_LOG_WARN(logger,
+				"engine: {} changed to {} — restart required for hot-reload scheduler change",
+				entry.field_path, entry.new_value);
 		}
 		// Other fields (resource_dir, server settings)
 		// are logged by ConfigManager::Reload() — consumers read them on demand.
@@ -592,6 +661,9 @@ void Engine::Cleanup() {
 	cleanup_phase_.store(CleanupPhase::PhysicsShutdown, std::memory_order_release);
 	PhysicsEngineBridge::Instance().Shutdown();
 	// Stop hot-reload before any VM teardown to prevent watcher thread from accessing Lua state.
+	hot_reload_start_scheduled_ = false;
+	hot_reload_started_ = false;
+	hot_reload_enable_time_ = std::chrono::steady_clock::time_point{};
 	if (script_reloader_) {
 		script_reloader_->Stop();
 		script_reloader_.reset();
@@ -714,6 +786,7 @@ void Engine::FrameLoop() {
 		ApplyConfigChanges();
 		config_changes_pending_.store(false, std::memory_order_release);
 	}
+	MaybeStartScriptHotReload();
 
 	auto frame_start = std::chrono::steady_clock::now();
 	auto elapsed =

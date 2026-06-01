@@ -69,6 +69,10 @@ TEST_CASE("ConfigManager loads RuntimeConfig from valid JSON", "[config][load]")
     REQUIRE(rt.log.level == "debug");
     REQUIRE(rt.frame.target_fps == 30);
     REQUIRE(rt.frame.interval_ms == 33);
+    REQUIRE(rt.hot_reload.enabled);
+    REQUIRE(rt.hot_reload.startup_delay_ms == 60000);
+    REQUIRE(rt.hot_reload.poll_interval_ms == 1000);
+    REQUIRE(rt.hot_reload.debounce_ms == 300);
     REQUIRE(rt.scripts_dir == "resources/script/runtime");
     REQUIRE(rt.sandbox_level == "strict");
 }
@@ -161,6 +165,24 @@ TEST_CASE("ConfigValidator rejects empty scripts_dir", "[config][validation]") {
         "log": { "dir": "." },
         "frame": { "target_fps": 30 },
         "scripts_dir": ""
+    })"));
+}
+
+TEST_CASE("ConfigValidator rejects invalid hot_reload timings", "[config][validation]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    REQUIRE_FALSE(cfg.LoadRuntimeFromString(R"({
+        "resource_dir": ".",
+        "log": { "dir": "." },
+        "frame": { "target_fps": 30 },
+        "hot_reload": { "startup_delay_ms": -1 },
+        "scripts_dir": "."
+    })"));
+    REQUIRE_FALSE(cfg.LoadRuntimeFromString(R"({
+        "resource_dir": ".",
+        "log": { "dir": "." },
+        "frame": { "target_fps": 30 },
+        "hot_reload": { "poll_interval_ms": 0 },
+        "scripts_dir": "."
     })"));
 }
 
@@ -470,6 +492,24 @@ TEST_CASE("Diff detects multiple changed fields", "[config][diff]") {
 
     auto changes = engine::ConfigManager::Diff(old_rt, new_rt, old_srv, new_srv);
     REQUIRE(changes.size() >= 3);
+}
+
+TEST_CASE("Diff detects hot_reload changes", "[config][diff]") {
+    engine::RuntimeConfig old_rt, new_rt;
+    engine::ServerConfig old_srv, new_srv;
+
+    new_rt.hot_reload.startup_delay_ms = 100;
+
+    auto changes = engine::ConfigManager::Diff(old_rt, new_rt, old_srv, new_srv);
+    bool found = false;
+    for (const auto& entry : changes) {
+        if (entry.field_path == "hot_reload.startup_delay_ms") {
+            REQUIRE(entry.old_value == "60000");
+            REQUIRE(entry.new_value == "100");
+            found = true;
+        }
+    }
+    REQUIRE(found);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

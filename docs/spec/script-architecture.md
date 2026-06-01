@@ -97,6 +97,7 @@ struct RuntimeConfig {
     std::string resource_dir = "resources";
     LogConfig log;
     FrameConfig frame;
+    HotReloadConfig hot_reload;  // default startup_delay_ms = 60000
     std::string scripts_dir = "resources/script/runtime";
 };
 
@@ -160,3 +161,6 @@ The runtime `scripts_dir` (used for import path derivation) is not overridden by
 - **Derived import path**: The import search root is derived from `runtime_cfg.scripts_dir`
   (parent directory), so `import("runtime.*")` always resolves correctly regardless
   of configuration.
+- **Delayed hot-reload watcher**: Script hot-reload starts in idle state during
+  `Engine::Init()`. After runtime startup succeeds, `hot_reload.startup_delay_ms`
+  controls when `FileWatcher` starts scanning for `.lua` changes.

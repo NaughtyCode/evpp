@@ -79,6 +79,12 @@ ConfigValidator::Result ConfigValidator::Validate(const RuntimeConfig& config) {
 	CheckRange(r, config.frame.interval_ms, 1, 10000, "frame.interval_ms");
 	CheckRange(r, config.frame.slow_threshold_multiplier, 1, 100,
 			   "frame.slow_threshold_multiplier");
+	CheckRange(r, config.hot_reload.startup_delay_ms, 0, 3600000,
+			   "hot_reload.startup_delay_ms");
+	CheckRange(r, config.hot_reload.poll_interval_ms, 1, 60000,
+			   "hot_reload.poll_interval_ms");
+	CheckRange(r, config.hot_reload.debounce_ms, 0, 60000,
+			   "hot_reload.debounce_ms");
 	CheckNotEmpty(r, config.resource_dir, "resource_dir");
 	CheckNotEmpty(r, config.scripts_dir, "scripts_dir");
 	CheckEnum(r, config.sandbox_level, kValidSandboxLevels, "sandbox_level");

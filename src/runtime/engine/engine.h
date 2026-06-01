@@ -154,6 +154,8 @@ class CLOUD_ENGINE_API Engine {
 
 	private:
 	void FrameLoop();
+	void ScheduleScriptHotReloadStart(const RuntimeConfig& runtime_cfg);
+	void MaybeStartScriptHotReload();
 
 	// The active event loop — either owned_loop_ or an external one.
 	evpp::EventLoop* loop_ = nullptr;
@@ -174,6 +176,13 @@ class CLOUD_ENGINE_API Engine {
 	std::unique_ptr<TimerManager> timer_mgr_;
 	std::unique_ptr<ScriptVM> script_vm_;
 	std::unique_ptr<ScriptReloader> script_reloader_;
+	bool hot_reload_enabled_ = true;
+	bool hot_reload_start_scheduled_ = false;
+	bool hot_reload_started_ = false;
+	std::chrono::steady_clock::time_point hot_reload_enable_time_{};
+	int hot_reload_startup_delay_ms_ = 60000;
+	int hot_reload_poll_interval_ms_ = 1000;
+	int hot_reload_debounce_ms_ = 300;
 	std::atomic<bool> initialized_{false};
 	std::atomic<CleanupPhase> cleanup_phase_{CleanupPhase::NotStarted};
 

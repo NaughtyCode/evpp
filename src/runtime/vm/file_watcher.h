@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
@@ -81,8 +82,7 @@ class CLOUD_ENGINE_API FileWatcher {
 	ChangeCallback callback_;
 
 	// Last recorded modification time per file path.
-	std::unordered_map<std::string,
-	                   std::chrono::system_clock::time_point> file_times_;
+	std::unordered_map<std::string, std::filesystem::file_time_type> file_times_;
 	// Known file set for new-file detection.
 	std::unordered_set<std::string> known_files_;
 

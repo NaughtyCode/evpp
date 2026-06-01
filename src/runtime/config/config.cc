@@ -603,6 +603,19 @@ ConfigChangeSet ConfigManager::Diff(const RuntimeConfig& old_rt,
 			   ToString(old_rt.frame.slow_threshold_multiplier),
 			   ToString(new_rt.frame.slow_threshold_multiplier));
 
+	// HotReloadConfig
+	EmitChange(changes, "hot_reload.enabled",
+			   ToString(old_rt.hot_reload.enabled), ToString(new_rt.hot_reload.enabled));
+	EmitChange(changes, "hot_reload.startup_delay_ms",
+			   ToString(old_rt.hot_reload.startup_delay_ms),
+			   ToString(new_rt.hot_reload.startup_delay_ms));
+	EmitChange(changes, "hot_reload.poll_interval_ms",
+			   ToString(old_rt.hot_reload.poll_interval_ms),
+			   ToString(new_rt.hot_reload.poll_interval_ms));
+	EmitChange(changes, "hot_reload.debounce_ms",
+			   ToString(old_rt.hot_reload.debounce_ms),
+			   ToString(new_rt.hot_reload.debounce_ms));
+
 	// ── ServerConfig fields ──────────────────────────────────────────
 	EmitChange(changes, "http.timeout_sec",
 			   ToString(old_srv.http.timeout_sec), ToString(new_srv.http.timeout_sec));

@@ -12,6 +12,12 @@
     "interval_ms": 33,
     "slow_threshold_multiplier": 2
   },
+  "hot_reload": {
+    "enabled": true,
+    "startup_delay_ms": 60000,
+    "poll_interval_ms": 1000,
+    "debounce_ms": 300
+  },
   "scripts_dir": "resources/script/runtime",
   "sandbox_level": "strict"
 }

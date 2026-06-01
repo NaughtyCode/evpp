@@ -120,12 +120,20 @@ struct FrameConfig {
 	int slow_threshold_multiplier = config::kDefaultSlowThresholdMultiplier;
 };
 
+struct HotReloadConfig {
+	bool enabled = true;
+	int startup_delay_ms = 60000;
+	int poll_interval_ms = 1000;
+	int debounce_ms = 300;
+};
+
 // Runtime (engine-level) config — shared by both client and server.
 // Loaded from resources/config/runtime/runtime.json.
 struct RuntimeConfig {
 	std::string resource_dir = config::kDefaultResourceDir;
 	LogConfig log;
 	FrameConfig frame;
+	HotReloadConfig hot_reload;
 	std::string scripts_dir = config::kDefaultRuntimeScriptsDir;
 	std::string sandbox_level = "strict";
 	std::string environment = "development";  // deployment target (dev/staging/prod)
@@ -211,8 +219,8 @@ struct PlatformConfig {
 // ── Runtime / Client / Server boundary ───────────────────────────────────
 //
 // RuntimeConfig  — shared by client and server builds.
-//                  log, frame, resource_dir, sandbox_level, scripts_dir,
-//                  environment.
+//                  log, frame, hot_reload, resource_dir, sandbox_level,
+//                  scripts_dir, environment.
 //
 // ClientConfig   — client-only. render, window, input, audio, network,
 //                  assets, ui, platform, scripts_dir.

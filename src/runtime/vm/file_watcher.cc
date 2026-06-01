@@ -76,7 +76,7 @@ void FileWatcher::PrimeKnownFiles() {
 			known_files_.insert(path_str);
 			auto ftime = std::filesystem::last_write_time(de, ec);
 			if (!ec) {
-				file_times_[path_str] = std::chrono::clock_cast<std::chrono::system_clock>(ftime);
+				file_times_[path_str] = ftime;
 			} else {
 				ec.clear();
 			}
@@ -132,24 +132,6 @@ void FileWatcher::WatchLoop(int poll_interval_ms) {
 	}
 }
 
-// Convert filesystem file_time_type to system_clock time_point.
-// Uses the approach: system_clock::now() - (file_clock::now() - ftime)
-// = system_clock::now() - age_of_file. This works correctly even when
-// the clocks have different epochs.
-// Clamp age to zero so files with timestamps in the future
-// do not produce a time_point far in the future.
-static std::chrono::system_clock::time_point ToSystemClock(
-    std::filesystem::file_time_type ftime) {
-	auto file_now = std::filesystem::file_time_type::clock::now();
-	auto sys_now = std::chrono::system_clock::now();
-	auto age = file_now - ftime;
-	if (age.count() < 0) {
-		age = decltype(age)::zero();
-	}
-	return sys_now - std::chrono::duration_cast<
-	                    std::chrono::system_clock::duration>(age);
-}
-
 std::vector<std::string> FileWatcher::ScanChanges() {
 	std::vector<std::string> changed;
 	std::error_code ec;
@@ -187,21 +169,19 @@ std::vector<std::string> FileWatcher::ScanChanges() {
 			auto ftime = std::filesystem::last_write_time(dir_entry, ec);
 			if (ec) { ec.clear(); continue; }
 
-			auto sctp = ToSystemClock(ftime);
-
 			// New file detection: report files not previously known.
 			if (known_files_.find(path_str) == known_files_.end()) {
 				known_files_.insert(path_str);
-				file_times_[path_str] = sctp;
+				file_times_[path_str] = ftime;
 				changed.push_back(path_str);
 				continue;
 			}
 
 			auto it_mtime = file_times_.find(path_str);
 			if (it_mtime == file_times_.end()) {
-				file_times_[path_str] = sctp;
-			} else if (sctp > it_mtime->second) {
-				it_mtime->second = sctp;
+				file_times_[path_str] = ftime;
+			} else if (ftime > it_mtime->second) {
+				it_mtime->second = ftime;
 				changed.push_back(path_str);
 			}
 		}
