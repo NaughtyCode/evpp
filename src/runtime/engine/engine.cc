@@ -112,6 +112,8 @@ ScriptVM& Engine::GetScriptVM() {
 void Engine::Init(const RuntimeConfig& runtime_cfg,
 				  const std::string& entry_scripts_dir,
 				  evpp::EventLoop* external_loop) {
+	const bool library_mode = external_loop != nullptr;
+
 	if (initialized_.load(std::memory_order_acquire) &&
 		!cleaned_up_.load(std::memory_order_acquire)) {
 		Cleanup();
@@ -160,7 +162,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 					runtime_cfg.scripts_dir,
 					entry_scripts_dir,
 					runtime_cfg.frame.interval_ms,
-					(external_loop != nullptr));
+					library_mode);
 		}
 
 	ENGINE_LOG_INFO(logger, "creating TimerManager...");
@@ -328,7 +330,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	// Start admin HTTP server (/health, /stats, /metrics) if configured.
 	{
 		auto server_cfg = ConfigManager::Instance().GetServerConfig();
-		if (server_cfg.admin_port > 0 && loop_) {
+		if (!library_mode && server_cfg.admin_port > 0 && loop_) {
 			std::string bind_addr = server_cfg.admin_bind_address.empty()
 										? "127.0.0.1" : server_cfg.admin_bind_address;
 			if (admin_server_.Start(loop_, server_cfg.admin_port, bind_addr)) {

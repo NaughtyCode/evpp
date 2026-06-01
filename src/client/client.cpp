@@ -97,6 +97,7 @@ extern "C" game_error_t game_client_init(game_client_t* client,
         return GAME_ERR_OUT_OF_MEMORY;
     }
     client->owns_loop = true;
+    client->loop = loop;
 
     try {
         const auto runtime_cfg = cfg_mgr.GetRuntimeConfig();
@@ -106,6 +107,7 @@ extern "C" game_error_t game_client_init(game_client_t* client,
         set_error_f(client, "engine init failed: %s", ex.what());
         delete loop;
         client->owns_loop = false;
+        client->loop = nullptr;
 #ifdef _WIN32
         WSACleanup();
 #endif
@@ -114,6 +116,7 @@ extern "C" game_error_t game_client_init(game_client_t* client,
         set_error(client, "engine init failed");
         delete loop;
         client->owns_loop = false;
+        client->loop = nullptr;
 #ifdef _WIN32
         WSACleanup();
 #endif
@@ -164,6 +167,9 @@ extern "C" game_error_t game_client_stop(game_client_t* client) {
 
     auto& engine = engine::Engine::Instance();
     engine.Shutdown();  /* thread-safe signal to stop the event loop */
+    if (client->owns_loop && client->loop) {
+        client->loop->Stop();
+    }
     clear_error(client);
     return GAME_OK;
 }
@@ -176,7 +182,7 @@ extern "C" void game_client_destroy(game_client_t** client) {
         auto& engine = engine::Engine::Instance();
 
         /* Save the loop pointer before Cleanup() sets loop_ to nullptr. */
-        evpp::EventLoop* loop = engine.GetEventLoop();
+        evpp::EventLoop* loop = c->loop ? c->loop : engine.GetEventLoop();
 
         try {
             engine.Cleanup();
@@ -187,6 +193,7 @@ extern "C" void game_client_destroy(game_client_t** client) {
         if (c->owns_loop && loop) {
             delete loop;
         }
+        c->loop = nullptr;
 #ifdef _WIN32
         WSACleanup();
 #endif

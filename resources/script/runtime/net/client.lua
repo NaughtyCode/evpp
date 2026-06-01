@@ -124,7 +124,7 @@ end
 function TcpClient:_bind_raw()
     local this = self
 
-    self._raw.on_connect = function()
+    self._raw.on_connect = function(_)
         this._state  = CONNECTED
         log_info("[TcpClient] connected to [" .. (this._addr or "?") .. "]")
         if this.on_connect then
@@ -132,13 +132,13 @@ function TcpClient:_bind_raw()
         end
     end
 
-    self._raw.on_message = function(data)
+    self._raw.on_message = function(_, data)
         if this.on_message then
             this:_safe_callback(this.on_message, data)
         end
     end
 
-    self._raw.on_close = function()
+    self._raw.on_close = function(_)
         if this._state == DISCONNECTED then
             return  -- already disconnected via disconnect()
         end

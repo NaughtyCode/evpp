@@ -64,6 +64,7 @@ int l_config_get(lua_State* L) {
 
     auto& cfg = ConfigManager::Instance();
     auto rt = cfg.GetRuntimeConfig();
+    auto client = cfg.GetClientConfig();
     auto srv = cfg.GetServerConfig();
 
     // RuntimeConfig - top-level
@@ -89,6 +90,17 @@ int l_config_get(lua_State* L) {
     if (p == "frame.target_fps")                 return PushConfigValue(L, rt.frame.target_fps);
     if (p == "frame.interval_ms")                return PushConfigValue(L, rt.frame.interval_ms);
     if (p == "frame.slow_threshold_multiplier")  return PushConfigValue(L, rt.frame.slow_threshold_multiplier);
+
+    // ClientConfig - network settings used by Lua client/server CS demos.
+    if (p == "client.scripts_dir")                         return PushConfigValue(L, client.scripts_dir);
+    if (p == "client.network.server_address")              return PushConfigValue(L, client.network.server_address);
+    if (p == "client.network.server_port")                 return PushConfigValue(L, client.network.server_port);
+    if (p == "client.network.reconnect_max_retries")       return PushConfigValue(L, client.network.reconnect_max_retries);
+    if (p == "client.network.reconnect_base_delay_ms")     return PushConfigValue(L, client.network.reconnect_base_delay_ms);
+    if (p == "client.network.reconnect_max_delay_ms")      return PushConfigValue(L, client.network.reconnect_max_delay_ms);
+    if (p == "client.network.timeout_ms")                  return PushConfigValue(L, client.network.timeout_ms);
+    if (p == "client.network.client_prediction")           return PushConfigValue(L, client.network.client_prediction);
+    if (p == "client.network.interpolation_delay_ms")      return PushConfigValue(L, client.network.interpolation_delay_ms);
 
     // ServerConfig
     if (p == "server.http.timeout_sec")       return PushConfigValue(L, srv.http.timeout_sec);

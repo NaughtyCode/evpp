@@ -110,7 +110,10 @@ Win32/Debug/ZERO_CHECK
 artifacts/bin/*
 artifacts/lib/*
 artifacts/build/*
+artifacts/build-release/*
+artifacts/release/*
 artifacts/tests/*
+__pycache__/
 
 logs/
 .claude/worktrees/*

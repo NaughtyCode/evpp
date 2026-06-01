@@ -184,13 +184,13 @@ function TcpServer:_bind_raw()
 
     -- Intercept new connections: create TcpConnection wrapper, track it,
     -- wire up per-connection callbacks, then notify user.
-    self._raw.on_connect = function(raw_conn, remote_addr)
+    self._raw.on_connect = function(_, raw_conn, remote_addr)
         local conn = TcpConnection(raw_conn, remote_addr)
         this._connections[raw_conn] = conn
 
         -- Per-connection message handler: prefer conn.on_message, fall
         -- back to server.on_message.
-        raw_conn.on_message = function(data)
+        raw_conn.on_message = function(_, data)
             if conn.on_message then
                 conn:_safe_callback(conn.on_message, data)
             elseif this.on_message then
@@ -200,7 +200,7 @@ function TcpServer:_bind_raw()
 
         -- Per-connection close handler: prefer conn.on_close, fall back
         -- to server.on_close. Always clean up tracking.
-        raw_conn.on_close = function(remote_addr)
+        raw_conn.on_close = function(_, remote_addr)
             if not conn._closed then
                 conn._closed = true
             end

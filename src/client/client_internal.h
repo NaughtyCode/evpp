@@ -15,6 +15,10 @@
 #include <mutex>
 #include <string>
 
+namespace evpp {
+class EventLoop;
+}
+
 /* =========================================================================
  * Concrete handle types
  * ========================================================================= */
@@ -22,6 +26,7 @@
 struct game_client_s {
     bool               initialized = false;
     bool               owns_loop   = false;
+    evpp::EventLoop*   loop        = nullptr;
     std::string        last_error;
     mutable std::mutex error_mutex;
 };

@@ -352,7 +352,16 @@ add_custom_command(TARGET GameClient POST_BUILD
 
 # ── Install ─────────────────────────────────────────────────────────────
 
-install(TARGETS GameClient
+add_executable(GameClientApp
+    client_main.cpp
+)
+
+add_dependencies(GameClientApp GameClient copy_resources)
+set_target_properties(GameClientApp PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
+target_include_directories(GameClientApp PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(GameClientApp PRIVATE GameClient)
+
+install(TARGETS GameClient GameClientApp
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

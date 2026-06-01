@@ -37,6 +37,7 @@ Exposed paths:
 | Runtime top-level | `resource_dir`, `scripts_dir`, `sandbox_level`, `environment` |
 | Runtime log | `log.dir`, `log.level`, `log.rotation_size_mb`, `log.max_backup_files`, `log.format_pattern`, `log.rotation_frequency`, `log.rotation_interval`, `log.rotation_time_daily`, `log.rotation_naming_scheme`, `log.logger_name`, `log.log_filename` |
 | Runtime frame | `frame.target_fps`, `frame.interval_ms`, `frame.slow_threshold_multiplier` |
+| Client | `client.scripts_dir`, `client.network.server_address`, `client.network.server_port`, `client.network.reconnect_max_retries`, `client.network.reconnect_base_delay_ms`, `client.network.reconnect_max_delay_ms`, `client.network.timeout_ms`, `client.network.client_prediction`, `client.network.interpolation_delay_ms` |
 | Server | `server.http.timeout_sec`, `server.scripts_dir`, `server.admin_port`, `server.admin_bind_address`, `server.admin_metrics_enabled`, `server.shutdown_timeout_sec`, `server.connection_drain_timeout_sec`, `server.max_connections`, `server.pid_file`, `server.active_mongodb`, `server.db_service`, `server.mongodb_dev`, `server.mongodb_public`, `server.db_required` |
 | Server MessagePack | `server.msgpack.max_nesting_depth`, `server.msgpack.max_payload_size` |
 | Server resource limits | `server.resource_limits.max_message_size`, `server.resource_limits.max_buffer_capacity`, `server.resource_limits.max_http_body_size`, `server.resource_limits.max_msgpack_depth` |
@@ -251,5 +252,5 @@ GetMongoDbPublicConfig()         → const MongoDbConfig&
 
 - ConfigManager is a singleton with a shared mutex for thread-safe reads
 - JSON keys match struct member names (snake_case for most, camelCase for MongoDB configs)
-- Lua `config.get()` currently exposes runtime and server scalar paths only; client config is available to native code through `GetClientConfig()`
+- Lua `config.get()` exposes runtime, selected client network paths, and server scalar paths.
 - Reload preserves current values on failure
