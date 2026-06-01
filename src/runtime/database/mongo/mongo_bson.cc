@@ -21,6 +21,24 @@ static_assert(alignof(BsonDocument) == alignof(bson_t), "BsonDocument alignment 
 static_assert(sizeof(BsonIter) >= sizeof(bson_iter_t),
 			  "BsonIter storage must be >= bson_iter_t size");
 
+namespace {
+
+void AdoptHeapBson(BsonDocument& result, bson_t* source) {
+	if (!source) return;
+
+	auto* dst = static_cast<bson_t*>(result.RawBson());
+	bson_destroy(dst);
+	// bson_steal destroys and may free heap-allocated source on success.
+	if (!bson_steal(dst, source)) {
+		bson_destroy(dst);
+		bson_init(dst);
+		bson_destroy(source);
+		bson_free(source);
+	}
+}
+
+}  // namespace
+
 // BsonDocument
 
 BsonDocument::BsonDocument() {
@@ -360,36 +378,21 @@ BsonDocument BsonDocument::NewFromJson(const char* json, size_t len) {
 	bson_t* b = bson_new_from_json(
 		reinterpret_cast<const uint8_t*>(json), static_cast<int64_t>(len), nullptr);
 	BsonDocument result;
-	if (b) {
-		bson_destroy(static_cast<bson_t*>(result.RawBson()));
-		bson_steal(static_cast<bson_t*>(result.RawBson()), b);
-		bson_destroy(b);
-		bson_free(b);
-	}
+	AdoptHeapBson(result, b);
 	return result;
 }
 
 BsonDocument BsonDocument::NewFromJson(const uint8_t* data, size_t len) {
 	bson_t* b = bson_new_from_json(data, static_cast<int64_t>(len), nullptr);
 	BsonDocument result;
-	if (b) {
-		bson_destroy(static_cast<bson_t*>(result.RawBson()));
-		bson_steal(static_cast<bson_t*>(result.RawBson()), b);
-		bson_destroy(b);
-		bson_free(b);
-	}
+	AdoptHeapBson(result, b);
 	return result;
 }
 
 BsonDocument BsonDocument::NewFromData(const uint8_t* data, size_t length) {
 	BsonDocument result;
 	bson_t* b = bson_new_from_data(data, length);
-	if (b) {
-		bson_destroy(static_cast<bson_t*>(result.RawBson()));
-		bson_steal(static_cast<bson_t*>(result.RawBson()), b);
-		bson_destroy(b);
-		bson_free(b);
-	}
+	AdoptHeapBson(result, b);
 	return result;
 }
 
@@ -400,24 +403,14 @@ BsonDocument BsonDocument::NewFromBuffer(uint8_t** buf,
 	BsonDocument result;
 	bson_t* b = bson_new_from_buffer(
 		buf, buf_len, reinterpret_cast<bson_realloc_func>(realloc_func), realloc_func_ctx);
-	if (b) {
-		bson_destroy(static_cast<bson_t*>(result.RawBson()));
-		bson_steal(static_cast<bson_t*>(result.RawBson()), b);
-		bson_destroy(b);
-		bson_free(b);
-	}
+	AdoptHeapBson(result, b);
 	return result;
 }
 
 BsonDocument BsonDocument::SizedNew(size_t size) {
 	BsonDocument result;
 	bson_t* b = bson_sized_new(size);
-	if (b) {
-		bson_destroy(static_cast<bson_t*>(result.RawBson()));
-		bson_steal(static_cast<bson_t*>(result.RawBson()), b);
-		bson_destroy(b);
-		bson_free(b);
-	}
+	AdoptHeapBson(result, b);
 	return result;
 }
 

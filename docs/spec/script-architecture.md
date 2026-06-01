@@ -75,6 +75,7 @@ regardless of whether the engine is running in client or server mode.
 ## Lua API References
 
 - [Lua JSON API](lua-json-api.md)
+- [DB BSON Table Codec API](../../resources/api/db_bson/api.md)
 
 ## Engine::Init() Signature
 

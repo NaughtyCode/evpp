@@ -298,6 +298,7 @@ source_group("database\\mongo_bind" FILES ${MONGO_BIND_SOURCES})
 # ── Database service (database/data_service/) ──────────────────────────
 set(DB_SERVICE_SOURCES
     ${RUNTIME_DIR}/database/data_service/database_service.cc ${RUNTIME_DIR}/database/data_service/database_service.h
+    ${RUNTIME_DIR}/database/data_service/bson_table_codec.cc ${RUNTIME_DIR}/database/data_service/bson_table_codec.h
     ${RUNTIME_DIR}/database/data_service/db_thread.cc ${RUNTIME_DIR}/database/data_service/db_thread.h
     ${RUNTIME_DIR}/database/data_service/db_script_vm.cc ${RUNTIME_DIR}/database/data_service/db_script_vm.h
     ${RUNTIME_DIR}/database/data_service/db_request.h

@@ -4,6 +4,7 @@
 #include "runtime/database/data_service/db_script_vm.h"
 
 #include "runtime/core/log/log.h"
+#include "runtime/database/data_service/bson_table_codec.h"
 #include "runtime/database/data_service/db_thread.h"
 #include "runtime/database/mongo/mongo_client.h"
 #include "runtime/database/mongo/mongo_client_pool.h"
@@ -257,6 +258,9 @@ void ExportDbLog(ScriptVM& vm, quill::Logger* logger) {
 
 void ExportDbRuntime(ScriptVM& vm) {
 	auto L = vm.GetState();
+
+	ExportDbBsonCodec(vm);
+
 	lua_pushlightuserdata(L, &vm);
 
 	lua_pushvalue(L, -1);
