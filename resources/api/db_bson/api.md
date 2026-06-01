@@ -304,7 +304,7 @@ Creates a BSON regex wrapper.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `pattern` | `string` | Regex pattern, no embedded NUL bytes |
-| `options` | `string` | Regex options (`i`, `m`, `x`, `l`, `s`, `u` only), no embedded NUL bytes, default `""` |
+| `options` | `string` | Regex options (`i`, `m`, `x`, `l`, `s`, `u` only), no embedded NUL bytes or duplicate flags, default `""` |
 
 Wrapper fields: `pattern`, `options`.
 

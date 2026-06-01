@@ -379,10 +379,6 @@ void SetWrapperNumberField(lua_State* L,
 	lua_setfield(L, table_index, field);
 }
 
-bool KeyHasEmbeddedNull(const char* key, size_t len) {
-	return std::memchr(key, '\0', len) != nullptr;
-}
-
 bool StringHasEmbeddedNull(std::string_view value) {
 	if (value.empty()) return false;
 	return std::memchr(value.data(), '\0', value.size()) != nullptr;
@@ -407,18 +403,28 @@ bool EnsureValidUtf8(std::string_view value,
 	return false;
 }
 
+bool ValidateBsonIntLength(size_t length, const char* label, std::string& error) {
+	if (length <= static_cast<size_t>(std::numeric_limits<int>::max())) return true;
+	error = std::string(label) + " is too large for BSON";
+	return false;
+}
+
 bool EnsureValidBsonCString(std::string_view value, const char* label, std::string& error) {
-	return EnsureNoEmbeddedNull(value, label, error) &&
+	return ValidateBsonIntLength(value.size(), label, error) &&
+		   EnsureNoEmbeddedNull(value, label, error) &&
 		   EnsureValidUtf8(value, false, label, error);
 }
 
 bool EnsureValidBsonText(std::string_view value, const char* label, std::string& error) {
-	return EnsureValidUtf8(value, true, label, error);
+	return ValidateBsonIntLength(value.size(), label, error) &&
+		   EnsureValidUtf8(value, true, label, error);
 }
 
 bool EnsureValidRegexOptions(std::string_view options, std::string& error) {
+	bool seen[256] = {};
 	for (const char option : options) {
-		switch (option) {
+		const auto option_index = static_cast<unsigned char>(option);
+		switch (option_index) {
 		case 'i':
 		case 'm':
 		case 'x':
@@ -430,14 +436,13 @@ bool EnsureValidRegexOptions(std::string_view options, std::string& error) {
 			error = "regex options may only contain i, m, x, l, s, or u";
 			return false;
 		}
+		if (seen[option_index]) {
+			error = "regex options must not contain duplicate flags";
+			return false;
+		}
+		seen[option_index] = true;
 	}
 	return true;
-}
-
-bool ValidateBsonIntLength(size_t length, const char* label, std::string& error) {
-	if (length <= static_cast<size_t>(std::numeric_limits<int>::max())) return true;
-	error = std::string(label) + " is too large for BSON";
-	return false;
 }
 
 bool AppendBsonSymbol(mongo::BsonDocument& parent,
@@ -648,11 +653,7 @@ bool LuaKeyToBsonKey(lua_State* L, int key_index, std::string& out, std::string&
 			error = "BSON key conversion failed";
 			return false;
 		}
-		if (KeyHasEmbeddedNull(key, len)) {
-			error = "BSON document keys must not contain embedded NUL bytes";
-			return false;
-		}
-		if (!EnsureValidUtf8(std::string_view(key, len), false, "BSON document keys", error)) {
+		if (!EnsureValidBsonCString(std::string_view(key, len), "BSON document keys", error)) {
 			return false;
 		}
 		out.assign(key, len);

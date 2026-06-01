@@ -604,6 +604,40 @@ TEST_CASE("db_bson rejects invalid regex options and invalid BSON text on read",
             "regex options may only contain i, m, x, l, s, or u|true|true|true|true|true|true");
 }
 
+TEST_CASE("db_bson rejects duplicate regex option flags",
+          "[database][data_service][bson]") {
+    DBScriptVM vm;
+    script::ExportMongo(vm);
+    ExportDbRuntime(vm);
+
+    std::string error;
+    std::string result;
+    REQUIRE(vm.DoString(
+        "local b = require('db_bson')\n"
+        "local dup_ctor, dup_ctor_err = b.regex('x', 'ii')\n"
+        "local regex = assert(b.regex('x', 'i'))\n"
+        "regex.options = 'ss'\n"
+        "local dup_wrapper, dup_wrapper_err = b.to_bson({ rx = regex })\n"
+        "local raw = bson.from_data(string.char(14, 0, 0, 0, 0x0B,\n"
+        "  string.byte('r'), string.byte('x'), 0, string.byte('x'), 0,\n"
+        "  string.byte('s'), string.byte('s'), 0, 0))\n"
+        "local dup_raw, dup_raw_err = b.to_table(raw)\n"
+        "local dup_json, dup_json_err = b.to_json(raw)\n"
+        "return table.concat({ tostring(dup_ctor == nil), tostring(dup_ctor_err),\n"
+        "  tostring(dup_wrapper == nil), tostring(dup_wrapper_err),\n"
+        "  tostring(dup_raw == nil), tostring(dup_raw_err),\n"
+        "  tostring(dup_json == nil), tostring(dup_json_err) }, '|')",
+        "=data_service_bson_duplicate_regex_options_test",
+        &error,
+        &result));
+
+    REQUIRE(result ==
+            "true|regex options must not contain duplicate flags|true|"
+            "regex options must not contain duplicate flags|true|"
+            "regex options must not contain duplicate flags|true|"
+            "regex options must not contain duplicate flags");
+}
+
 TEST_CASE("db_send_request rejects internal noop operation", "[database][data_service]") {
     ScriptVM vm;
     script::ExportDbService(vm);
