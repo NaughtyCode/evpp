@@ -20,6 +20,12 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../artifacts/bin)
 set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../artifacts/lib)
 set(CMAKE_MACOSX_RPATH 0)
 
+if(CMAKE_CONFIGURATION_TYPES)
+    set(ENGINE_RUNTIME_OUTPUT_DIR "${EXECUTABLE_OUTPUT_PATH}/$<CONFIG>")
+else()
+    set(ENGINE_RUNTIME_OUTPUT_DIR "${EXECUTABLE_OUTPUT_PATH}")
+endif()
+
 message(STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})
 message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
 
@@ -27,8 +33,8 @@ message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
 add_custom_target(copy_resources ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     "${CMAKE_CURRENT_SOURCE_DIR}/../resources"
-    "${EXECUTABLE_OUTPUT_PATH}/$<CONFIG>/resources"
-    COMMENT "Copying resources/ to bin/$<CONFIG>/"
+    "${ENGINE_RUNTIME_OUTPUT_DIR}/resources"
+    COMMENT "Copying resources/ to runtime output directory"
 )
 
 # ── Sub-projects ──────────────────────────────────────────────────────

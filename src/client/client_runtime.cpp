@@ -1196,6 +1196,9 @@ extern "C" game_error_t game_aoi_create(game_client_t* client,
                                          float world_height,
                                          float cell_size,
                                          game_aoi_t** out_aoi) {
+    if (out_aoi) {
+        *out_aoi = nullptr;
+    }
     if (!client || !out_aoi || !valid_positive_float(world_width) ||
         !valid_positive_float(world_height) || !valid_positive_float(cell_size)) {
         return GAME_ERR_INVALID_ARG;

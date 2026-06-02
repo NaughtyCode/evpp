@@ -126,12 +126,18 @@ else()
 endif()
 set (CMAKE_MACOSX_RPATH 0)
 
+if(CMAKE_CONFIGURATION_TYPES)
+    set(ENGINE_RUNTIME_OUTPUT_DIR "${EXECUTABLE_OUTPUT_PATH}/$<CONFIG>")
+else()
+    set(ENGINE_RUNTIME_OUTPUT_DIR "${EXECUTABLE_OUTPUT_PATH}")
+endif()
+
 if(NOT TARGET copy_resources)
     add_custom_target(copy_resources ALL
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${ENGINE_ROOT}/../resources"
-        "${EXECUTABLE_OUTPUT_PATH}/$<CONFIG>/resources"
-        COMMENT "Copying resources/ to bin/$<CONFIG>/"
+        "${ENGINE_RUNTIME_OUTPUT_DIR}/resources"
+        COMMENT "Copying resources/ to runtime output directory"
     )
 endif()
 

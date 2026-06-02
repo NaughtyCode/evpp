@@ -212,6 +212,9 @@ endfunction()
 function(configure_embedded_runtime_test_target name suite_macro)
     configure_engine_test_entry(${name} ${suite_macro})
     target_sources(${name} PRIVATE $<TARGET_OBJECTS:engine_runtime_test_objects>)
+    if(TARGET copy_resources)
+        add_dependencies(${name} copy_resources)
+    endif()
     target_link_directories(${name} PRIVATE "${CMAKE_BINARY_DIR}/libevent/lib/$<CONFIG>")
     target_link_libraries(${name} PRIVATE ${ENGINE_EMBEDDED_TEST_LINK_LIBS})
     if(ENGINE_PHYSICS_ENABLED)
@@ -234,6 +237,9 @@ function(configure_embedded_client_api_test_target name suite_macro)
         ${ENGINE_CLIENT_API_TEST_SOURCES}
         $<TARGET_OBJECTS:engine_runtime_test_objects>
     )
+    if(TARGET copy_resources)
+        add_dependencies(${name} copy_resources)
+    endif()
     target_compile_definitions(${name} PRIVATE CLIENT_BUILD)
     target_link_directories(${name} PRIVATE "${CMAKE_BINARY_DIR}/libevent/lib/$<CONFIG>")
     target_link_libraries(${name} PRIVATE ${ENGINE_EMBEDDED_TEST_LINK_LIBS})
@@ -251,8 +257,13 @@ function(configure_embedded_client_api_test_target name suite_macro)
     endif()
 endfunction()
 
-# Tests and resources are deployed to artifacts/bin/<config>/.
-set(TEST_WORKING_DIR "${EXECUTABLE_OUTPUT_PATH}/$<CONFIG>")
+# Tests and resources are deployed beside the test executables. Multi-config
+# generators append $<CONFIG>; single-config generators such as Ninja do not.
+if(CMAKE_CONFIGURATION_TYPES)
+    set(TEST_WORKING_DIR "${EXECUTABLE_OUTPUT_PATH}/$<CONFIG>")
+else()
+    set(TEST_WORKING_DIR "${EXECUTABLE_OUTPUT_PATH}")
+endif()
 
 # ── Sub-directories ─────────────────────────────────────────────────
 add_subdirectory(smoke)

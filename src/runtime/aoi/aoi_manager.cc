@@ -29,6 +29,12 @@ void ValidatePosition(float x, float y) {
 	}
 }
 
+void ValidateEntityId(entity::EntityId id) {
+	if (id == entity::kInvalidEntityId) {
+		throw std::invalid_argument("AOI entity id must be valid");
+	}
+}
+
 }  /* namespace */
 
 AOIManager::AOIManager(std::unique_ptr<SpatialGrid> grid)
@@ -41,6 +47,7 @@ AOIManager::AOIManager(std::unique_ptr<SpatialGrid> grid)
 void AOIManager::RegisterEntity(entity::EntityId id, float aoi_radius) {
 	ENGINE_PROFILE_AOI_REGISTER();
 	EnsureCanMutate();
+	ValidateEntityId(id);
 	ValidateRadius(aoi_radius);
 
 	const bool was_registered = aoi_radii_.find(id) != aoi_radii_.end();
@@ -56,6 +63,7 @@ void AOIManager::RegisterEntity(entity::EntityId id, float aoi_radius) {
 void AOIManager::UpsertEntity(entity::EntityId id, float x, float y, float aoi_radius) {
 	ENGINE_PROFILE_AOI_REGISTER();
 	EnsureCanMutate();
+	ValidateEntityId(id);
 	ValidateRadius(aoi_radius);
 	ValidatePosition(x, y);
 
@@ -104,6 +112,7 @@ void AOIManager::UpsertEntity(entity::EntityId id, float x, float y, float aoi_r
 void AOIManager::UpdateEntityRadius(entity::EntityId id, float aoi_radius) {
 	ENGINE_PROFILE_AOI_REGISTER();
 	EnsureCanMutate();
+	ValidateEntityId(id);
 	ValidateRadius(aoi_radius);
 
 	auto radius_it = aoi_radii_.find(id);
@@ -124,6 +133,7 @@ void AOIManager::UpdateEntityRadius(entity::EntityId id, float aoi_radius) {
 void AOIManager::UnregisterEntity(entity::EntityId id) {
 	ENGINE_PROFILE_AOI_UNREGISTER();
 	EnsureCanMutate();
+	ValidateEntityId(id);
 	auto radius_it = aoi_radii_.find(id);
 	if (radius_it == aoi_radii_.end()) return;
 
@@ -168,6 +178,7 @@ void AOIManager::UnregisterEntity(entity::EntityId id) {
 void AOIManager::OnEntityMove(entity::EntityId id, float x, float y) {
 	ENGINE_PROFILE_AOI_MOVE();
 	EnsureCanMutate();
+	ValidateEntityId(id);
 	if (aoi_radii_.find(id) == aoi_radii_.end()) return;
 	ValidatePosition(x, y);
 

@@ -383,6 +383,29 @@ TEST_CASE("AOIManager rejects invalid radius and positions", "[aoi][aoi_manager]
     REQUIRE_THROWS(mgr.OnEntityMove(1, std::numeric_limits<float>::quiet_NaN(), 10.0f));
 }
 
+TEST_CASE("SpatialGrid and AOIManager reject invalid entity id", "[aoi][edge]") {
+    SpatialGrid grid(1000.0f, 1000.0f, 100.0f);
+    REQUIRE_THROWS_AS(grid.Insert(engine::entity::kInvalidEntityId, 1.0f, 1.0f),
+                      std::invalid_argument);
+    REQUIRE_THROWS_AS(grid.Update(engine::entity::kInvalidEntityId, 1.0f, 1.0f),
+                      std::invalid_argument);
+    REQUIRE_THROWS_AS(grid.Remove(engine::entity::kInvalidEntityId),
+                      std::invalid_argument);
+
+    auto manager_grid = std::make_unique<SpatialGrid>(1000.0f, 1000.0f, 100.0f);
+    AOIManager mgr(std::move(manager_grid));
+    REQUIRE_THROWS_AS(mgr.RegisterEntity(engine::entity::kInvalidEntityId, 1.0f),
+                      std::invalid_argument);
+    REQUIRE_THROWS_AS(mgr.UpsertEntity(engine::entity::kInvalidEntityId, 1.0f, 1.0f, 1.0f),
+                      std::invalid_argument);
+    REQUIRE_THROWS_AS(mgr.UpdateEntityRadius(engine::entity::kInvalidEntityId, 1.0f),
+                      std::invalid_argument);
+    REQUIRE_THROWS_AS(mgr.OnEntityMove(engine::entity::kInvalidEntityId, 1.0f, 1.0f),
+                      std::invalid_argument);
+    REQUIRE_THROWS_AS(mgr.UnregisterEntity(engine::entity::kInvalidEntityId),
+                      std::invalid_argument);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // AOIManager — visibility
 // ═══════════════════════════════════════════════════════════════════════════

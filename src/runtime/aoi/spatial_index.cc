@@ -45,6 +45,12 @@ void ValidatePosition(float x, float y) {
 	}
 }
 
+void ValidateEntityId(entity::EntityId id) {
+	if (id == entity::kInvalidEntityId) {
+		throw std::invalid_argument("SpatialGrid entity id must be valid");
+	}
+}
+
 }  /* namespace */
 
 SpatialGrid::SpatialGrid(float world_width, float world_height, float cell_size)
@@ -132,6 +138,7 @@ void SpatialGrid::RemoveCellEntry(const CellRef& ref) {
 
 void SpatialGrid::Insert(entity::EntityId id, float x, float y) {
 	ENGINE_PROFILE_AOI_GRID_INSERT();
+	ValidateEntityId(id);
 	ValidatePosition(x, y);
 
 	if (entity_cell_.find(id) != entity_cell_.end()) {
@@ -148,6 +155,7 @@ void SpatialGrid::Insert(entity::EntityId id, float x, float y) {
 
 void SpatialGrid::Update(entity::EntityId id, float x, float y) {
 	ENGINE_PROFILE_AOI_GRID_UPDATE();
+	ValidateEntityId(id);
 	ValidatePosition(x, y);
 
 	auto it = entity_cell_.find(id);
@@ -177,6 +185,7 @@ void SpatialGrid::Update(entity::EntityId id, float x, float y) {
 
 void SpatialGrid::Remove(entity::EntityId id) {
 	ENGINE_PROFILE_AOI_GRID_REMOVE();
+	ValidateEntityId(id);
 	auto it = entity_cell_.find(id);
 	if (it == entity_cell_.end()) return;
 

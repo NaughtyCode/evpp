@@ -410,7 +410,11 @@ TEST_CASE("client_api: AOI boundary contracts", "[client_api][aoi]") {
 TEST_CASE("client_api: AOI oversized grid creation returns an error code", "[client_api][aoi]") {
     ClientHandle client;
 
-    game_aoi_t* aoi = nullptr;
+    game_aoi_t* aoi = reinterpret_cast<game_aoi_t*>(static_cast<uintptr_t>(1));
+    REQUIRE(game_aoi_create(client.ptr, -1.0f, 1000.0f, 1.0f, &aoi) == GAME_ERR_INVALID_ARG);
+    REQUIRE(aoi == nullptr);
+
+    aoi = reinterpret_cast<game_aoi_t*>(static_cast<uintptr_t>(1));
     REQUIRE(game_aoi_create(client.ptr, 1.0e20f, 1000.0f, 1.0f, &aoi) == GAME_ERR_GENERIC);
     REQUIRE(aoi == nullptr);
 }
