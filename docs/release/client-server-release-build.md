@@ -97,6 +97,19 @@ Server example:
 run_server.bat --env=production --log_prefix=ShardA
 ```
 
+Multiple server processes can run from the same release directory by giving each
+process a distinct instance id and admin port:
+
+```bat
+GameServer.exe --instance_id=shard-a --admin_port=18081
+GameServer.exe --instance_id=shard-b --admin_port=18082
+```
+
+When `--instance_id` is set, the default PID file `server.pid` is automatically
+resolved to `server-<instance_id>.pid`, and the default log prefix is suffixed
+with the instance id. Use `--pid_file=<path>` for an explicit PID file, or
+`--disable_pid_file` to disable PID locking for that process.
+
 Client example:
 
 ```bat

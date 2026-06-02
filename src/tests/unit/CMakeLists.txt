@@ -81,6 +81,10 @@ add_unit_test(test_evpp_utilities network/test_evpp_utilities.cpp)
 add_test(NAME unit.network.evpp_utilities COMMAND test_evpp_utilities)
 set_tests_properties(unit.network.evpp_utilities PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
+add_unit_test(test_pid_file core/test_pid_file.cpp)
+add_test(NAME unit.core.pid_file COMMAND test_pid_file)
+set_tests_properties(unit.core.pid_file PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
 # ── Entity tests ────────────────────────────────────────────────────
 add_unit_test(test_entity entity/test_entity.cpp)
 add_test(NAME unit.entity COMMAND test_entity)

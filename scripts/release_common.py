@@ -403,6 +403,9 @@ def write_readme(
         ]
         runtime_args = [
             "`--env=<development|staging|production>`",
+            "`--instance_id=<id>`",
+            "`--pid_file=<path>` / `--disable_pid_file`",
+            "`--admin_port=<port>`",
             "`--log_prefix=<name>`",
             "`--scripts_dir=<dir>`",
         ]

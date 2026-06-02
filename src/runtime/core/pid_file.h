@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cerrno>
 #include <cstdio>
+#include <cstring>
+#include <filesystem>
 #include <string>
 
 #ifdef _WIN32
@@ -28,10 +31,38 @@ public:
     // If the file is already locked by another process, returns false
     // and sets *error_out (if non-null).
     static bool WritePidFile(const std::string& path, std::string* error_out = nullptr) {
+        if (path.empty()) {
+            if (error_out) *error_out = "PID file path is empty";
+            return false;
+        }
+
+#ifdef _WIN32
+        if (GetHandle() != INVALID_HANDLE_VALUE) {
+            if (error_out) *error_out = "PID file already active in this process";
+            return false;
+        }
+#else
+        if (GetFd() >= 0) {
+            if (error_out) *error_out = "PID file already active in this process";
+            return false;
+        }
+#endif
+
+        std::filesystem::path pid_path(path);
+        auto parent = pid_path.parent_path();
+        if (!parent.empty()) {
+            std::error_code ec;
+            std::filesystem::create_directories(parent, ec);
+            if (ec) {
+                if (error_out) *error_out = "Failed to create PID file directory: " + ec.message();
+                return false;
+            }
+        }
+
 #ifdef _WIN32
         HANDLE h = CreateFileA(path.c_str(),
                                GENERIC_WRITE,
-                               0,  // exclusive access
+                               FILE_SHARE_READ,  // allow readers, block competing writers/deleters
                                nullptr,
                                CREATE_ALWAYS,
                                FILE_ATTRIBUTE_NORMAL,
