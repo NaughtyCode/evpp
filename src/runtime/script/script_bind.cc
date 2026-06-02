@@ -8,7 +8,7 @@
 #include "runtime/script/import_bind.h"
 #include "runtime/script/json_bind.h"
 #include "runtime/script/log_bind.h"
-#if defined(ENGINE_MONGODB_ENABLED)
+#if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
 #include "runtime/script/orm_bind.h"
 #endif
 #include "runtime/script/rpc_bind.h"
@@ -20,7 +20,7 @@
 #if defined(ENGINE_MEM_STATS_ENABLED)
 #include "runtime/script/mem_bind.h"
 #endif
-#if defined(ENGINE_MONGODB_ENABLED)
+#if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
 #include "runtime/database/data_service/db_service_main_bind.h"
 #include "runtime/database/mongo_bind/mongo_bind.h"
 #endif
@@ -65,7 +65,7 @@ void ExportAll(ScriptVM& vm, TimerManager& tm) {
 		ENGINE_PROFILE_SCRIPT_EXPORT("aoi");
 		ExportAOI(vm);
 	}
-#if defined(ENGINE_MONGODB_ENABLED)
+#if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("orm");
 		ExportOrm(vm);
@@ -93,7 +93,7 @@ void ExportAll(ScriptVM& vm, TimerManager& tm) {
 		ENGINE_PROFILE_SCRIPT_EXPORT("import");
 		engine::ExportImport(vm);
 	}
-#if defined(ENGINE_MONGODB_ENABLED)
+#if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("mongo");
 		ExportMongo(vm);

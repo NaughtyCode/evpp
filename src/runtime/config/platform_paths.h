@@ -3,6 +3,8 @@
 #include <cstdlib>
 #include <string>
 
+#include "runtime/core/engine_api.h"
+
 namespace engine::platform {
 
 // Returns the platform-specific user data directory for the application.
@@ -16,7 +18,7 @@ namespace engine::platform {
 //
 // On unknown platforms, returns "./user_data/" as a safe fallback.
 inline std::string GetUserDataPath(const std::string& app_name) {
-#if defined(_WIN32)
+#if ENGINE_PLATFORM_WINDOWS
     const char* appdata = std::getenv("APPDATA");
     if (appdata && appdata[0] != '\0') {
         return std::string(appdata) + "\\" + app_name + "\\";
@@ -28,16 +30,22 @@ inline std::string GetUserDataPath(const std::string& app_name) {
     }
     return std::string(".\\user_data\\") + app_name + "\\";
 
-#elif defined(__APPLE__)
-    // macOS and iOS both define __APPLE__. TARGET_OS_IPHONE distinguishes iOS.
-    // For iOS, the path is set at runtime by the ObjC/Swift layer.
+#elif ENGINE_PLATFORM_IOS
+    // iOS host apps should pass the sandbox path through config.
+    return "./user_data/" + app_name + "/";
+
+#elif ENGINE_PLATFORM_ANDROID
+    // Android host apps should pass the internal files path through config.
+    return "./user_data/" + app_name + "/";
+
+#elif ENGINE_PLATFORM_MACOS
     const char* home = std::getenv("HOME");
     if (home && home[0] != '\0') {
         return std::string(home) + "/Library/Application Support/" + app_name + "/";
     }
     return "./user_data/" + app_name + "/";
 
-#elif defined(__linux__)
+#elif ENGINE_PLATFORM_LINUX
     const char* home = std::getenv("HOME");
     if (home && home[0] != '\0') {
         return std::string(home) + "/.local/share/" + app_name + "/";

@@ -31,6 +31,13 @@ if(NOT DEFINED ENGINE_ROOT)
     get_filename_component(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}" DIRECTORY)
 endif()
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Android" OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    if(ENGINE_MONGODB_ENABLED)
+        message(STATUS "ENGINE_MONGODB_ENABLED forced OFF on mobile platform ${CMAKE_SYSTEM_NAME}")
+    endif()
+    set(ENGINE_MONGODB_ENABLED OFF CACHE BOOL "Enable MongoDB driver support" FORCE)
+endif()
+
 include(${ENGINE_ROOT}/runtime/CMakeLists.txt)
 include(${ENGINE_ROOT}/cmake/JoltPhysics.cmake)
 

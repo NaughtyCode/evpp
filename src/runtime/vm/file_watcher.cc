@@ -4,10 +4,13 @@
 #include <chrono>
 #include <filesystem>
 #include <thread>
+#include <utility>
 
 #include "runtime/core/log/log.h"
 
 namespace engine {
+
+#if ENGINE_FILE_WATCHER_ENABLED
 
 FileWatcher::FileWatcher() = default;
 
@@ -199,5 +202,58 @@ std::vector<std::string> FileWatcher::ScanChanges() {
 
 	return changed;
 }
+
+#else
+
+FileWatcher::FileWatcher() = default;
+
+FileWatcher::~FileWatcher() {
+	Stop();
+}
+
+void FileWatcher::WatchDirectory(const std::string& path,
+                                  const std::string& extension) {
+	watch_entries_.push_back({path, extension});
+
+	auto* logger = GetLogger();
+	if (logger) {
+		ENGINE_LOG_INFO(logger,
+		                "FileWatcher: disabled on [{}], ignoring watch dir [{}]",
+		                ENGINE_PLATFORM_NAME,
+		                path);
+	}
+}
+
+void FileWatcher::SetChangeCallback(ChangeCallback callback) {
+	callback_ = std::move(callback);
+}
+
+void FileWatcher::Start(int) {
+	running_.store(false, std::memory_order_release);
+
+	auto* logger = GetLogger();
+	if (logger) {
+		ENGINE_LOG_INFO(logger,
+		                "FileWatcher: disabled on [{}], not starting",
+		                ENGINE_PLATFORM_NAME);
+	}
+}
+
+void FileWatcher::PrimeKnownFiles() {
+}
+
+void FileWatcher::Stop() {
+	running_.store(false, std::memory_order_release);
+	thread_.reset();
+}
+
+void FileWatcher::WatchLoop(int) {
+}
+
+std::vector<std::string> FileWatcher::ScanChanges() {
+	return {};
+}
+
+#endif
 
 }  // namespace engine

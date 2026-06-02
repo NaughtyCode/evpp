@@ -26,7 +26,7 @@
 #include "runtime/engine/engine.h"
 #include "runtime/entity/entity_manager.h"
 #include "runtime/monitoring/metrics.h"
-#if defined(ENGINE_MONGODB_ENABLED)
+#if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
 #include "runtime/database/data_service/database_service.h"
 #include "runtime/database/data_service/db_service_config.h"
 #include "runtime/database/mongo/mongo_error.h"
@@ -188,7 +188,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	}
 
 	// ---- MongoDB driver initialization ----
-#if defined(ENGINE_MONGODB_ENABLED)
+#if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
 	{
 		bool mongo_ok = mongo::MongoSystem::Instance().Initialize();
 		ENGINE_LOG_INFO(logger, "mongo system initialized, ok=[{}]", mongo_ok);
@@ -404,6 +404,13 @@ void Engine::ScheduleScriptHotReloadStart(const RuntimeConfig& runtime_cfg) {
 		ENGINE_LOG_INFO(logger, "ScriptReloader: disabled by config, file watching remains idle");
 		return;
 	}
+#if !ENGINE_FILE_WATCHER_ENABLED
+	ENGINE_LOG_INFO(logger,
+	                "ScriptReloader: file watching disabled on [{}], "
+	                "hot-reload remains idle",
+	                ENGINE_PLATFORM_NAME);
+	return;
+#endif
 
 	hot_reload_enable_time_ =
 		std::chrono::steady_clock::now() +
@@ -672,7 +679,7 @@ void Engine::Cleanup() {
 	check_timeout("PhysicsShutdown");
 
 	cleanup_phase_.store(CleanupPhase::DatabaseShutdown, std::memory_order_release);
-#if defined(ENGINE_MONGODB_ENABLED)
+#if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
 	DatabaseService::Instance().Shutdown();
 	mongo::MongoSystem::Instance().Shutdown();
 #endif

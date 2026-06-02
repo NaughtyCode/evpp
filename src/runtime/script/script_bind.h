@@ -26,8 +26,10 @@ CLOUD_ENGINE_API void ExportTimer(ScriptVM& vm, TimerManager& tm);
 CLOUD_ENGINE_API void ExportNet(ScriptVM& vm);
 CLOUD_ENGINE_API void ExportMsgPack(ScriptVM& vm);
 CLOUD_ENGINE_API void ExportJson(ScriptVM& vm);
+#if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
 CLOUD_ENGINE_API void ExportMongo(ScriptVM& vm);
 CLOUD_ENGINE_API void ExportDbService(ScriptVM& vm);
+#endif
 
 // Shutdown: cancel all Lua-owned objects, release Lua references.
 // Call before destroying the ScriptVM.
@@ -42,7 +44,7 @@ CLOUD_ENGINE_API void ShutdownEntityBindings();
 CLOUD_ENGINE_API void ExportSpace(ScriptVM& vm, space::Space* current_space);
 
 CLOUD_ENGINE_API void ExportAOI(ScriptVM& vm);
-#if defined(ENGINE_MONGODB_ENABLED)
+#if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
 CLOUD_ENGINE_API void ExportOrm(ScriptVM& vm);
 #endif
 CLOUD_ENGINE_API void ExportRpc(ScriptVM& vm);

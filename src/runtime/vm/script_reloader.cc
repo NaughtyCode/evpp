@@ -49,6 +49,14 @@ void ScriptReloader::Start(int poll_interval_ms, int debounce_ms) {
 		return;
 	}
 
+#if !ENGINE_FILE_WATCHER_ENABLED
+	Stop();
+	auto* logger = GetLogger();
+	ENGINE_LOG_INFO(logger,
+	                "ScriptReloader: file watching disabled on [{}]",
+	                ENGINE_PLATFORM_NAME);
+	return;
+#else
 	// Stop any existing watcher and reset state for a clean restart.
 	Stop();
 	stopped_.store(false, std::memory_order_release);
@@ -91,6 +99,7 @@ void ScriptReloader::Start(int poll_interval_ms, int debounce_ms) {
 	                script_dirs_.size(),
 	                debounce_ms,
 	                loop_ ? "event_loop" : "direct");
+#endif
 }
 
 void ScriptReloader::Stop() {

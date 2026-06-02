@@ -86,7 +86,7 @@ TEST_CASE("ExportAll exposes optional Lua modules when their features are enable
 	ExportAllFixture f;
 	std::string result;
 
-#if defined(ENGINE_MONGODB_ENABLED)
+#if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
 	REQUIRE(f.RunLuaResult(
 		R"lua(
 local required = {

@@ -13,6 +13,13 @@ option(HTTPS "Enable HTTPS/SSL support" OFF)
 option(CMAKE_BENCHMARK_TESTING "Enable benchmark testing" OFF)
 option(ENGINE_WERROR "Treat compiler warnings as errors" OFF)
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Android" OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    if(ENGINE_MONGODB_ENABLED)
+        message(STATUS "ENGINE_MONGODB_ENABLED forced OFF on mobile platform ${CMAKE_SYSTEM_NAME}")
+    endif()
+    set(ENGINE_MONGODB_ENABLED OFF CACHE BOOL "Enable MongoDB driver support" FORCE)
+endif()
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # ENGINE_ROOT always points to the shared src/ directory.

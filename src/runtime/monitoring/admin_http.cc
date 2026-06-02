@@ -12,7 +12,7 @@
 #include "runtime/evpp/http/service.h"
 #include "runtime/monitoring/metrics.h"
 #include "runtime/physics/physics_engine_bridge.h"
-#if defined(ENGINE_MONGODB_ENABLED)
+#if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
 #include "runtime/database/data_service/database_service.h"
 #include "runtime/database/mongo/mongo_system.h"
 #endif
@@ -177,7 +177,7 @@ void HandleReadiness(evpp::EventLoop*, const evpp::http::ContextPtr& ctx,
 	bool all_healthy = true;
 
 	// DB health
-#if defined(ENGINE_MONGODB_ENABLED)
+#if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
 	{
 		auto server_cfg = ConfigManager::Instance().GetServerConfig();
 		if (!DatabaseService::Instance().IsRunning()) {
@@ -200,7 +200,7 @@ void HandleReadiness(evpp::EventLoop*, const evpp::http::ContextPtr& ctx,
 #endif
 
 	// MongoDB config/driver health
-#if defined(ENGINE_MONGODB_ENABLED)
+#if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
 	{
 		auto& cfg = ConfigManager::Instance();
 		bool mongo_loaded = cfg.IsMongoDbDevLoaded() || cfg.IsMongoDbPublicLoaded();
