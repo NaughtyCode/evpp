@@ -15,10 +15,18 @@ Client and server use the same release version:
 
 - Version file: `scripts/VERSION`
 
-The version file uses SemVer, for example `0.1.0`.
+The version file uses SemVer, for example `0.1.0`, and must be tracked by Git.
 
-Use `--version <semver>` for a one-off package version override, or
-`--bump-version major|minor|patch` to increment and persist the version file.
+Every release updates `scripts/VERSION` after packaging succeeds. The default
+update is a patch bump. Use `--bump-version major|minor|patch` to choose the
+part to bump, or `--version <semver>` to set a specific new version.
+
+Commit the version file with the release changes:
+
+```powershell
+git add scripts\VERSION
+git commit -m "Bump release version"
+```
 
 ```powershell
 python scripts\build_all_platforms_release.py --bump-version patch
@@ -109,3 +117,6 @@ python scripts\build_all_platforms_release.py --skip-configure --skip-build
 python -m py_compile scripts\release_common.py scripts\build_client_release.py scripts\build_server_release.py scripts\build_all_platforms_release.py scripts\build_release.py
 git diff --check
 ```
+
+The release commands above update `scripts/VERSION`; commit or restore that
+version change after verification.

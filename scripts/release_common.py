@@ -99,6 +99,20 @@ def capture(cmd: list[str], cwd: Path = ROOT) -> str:
     return result.stdout.strip()
 
 
+def command_succeeds(cmd: list[str], cwd: Path = ROOT) -> bool:
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=str(cwd),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError:
+        return False
+    return result.returncode == 0
+
+
 def rel(path: Path) -> str:
     resolved = path.resolve()
     try:
@@ -134,6 +148,13 @@ def write_version(path: Path, version: str) -> None:
     path.write_text(validate_version(version) + "\n", encoding="utf-8", newline="\n")
 
 
+def ensure_version_file_tracked(path: Path) -> None:
+    if not path.is_relative_to(ROOT):
+        raise RuntimeError(f"version file must be inside the repository: {path}")
+    if not command_succeeds(["git", "ls-files", "--error-unmatch", "--", rel(path)]):
+        raise RuntimeError(f"version file must be tracked by git before releasing: {rel(path)}")
+
+
 def bump_version(version: str, part: str) -> str:
     match = PLAIN_SEMVER_RE.fullmatch(version)
     if not match:
@@ -154,33 +175,36 @@ def bump_version(version: str, part: str) -> str:
     return f"{major}.{minor}.{patch}"
 
 
-def resolve_release_version(args: argparse.Namespace, *, persist_bump: bool = True) -> str:
+def resolve_release_version(args: argparse.Namespace, *, persist_update: bool = True) -> str:
+    ensure_version_file_tracked(args.version_file)
+
     if args.release_version_override and args.bump_version:
         raise ValueError("--version and --bump-version cannot be used together")
 
-    if args.release_version_override:
-        return validate_version(args.release_version_override)
-
     current = read_version(args.version_file)
-    if not args.bump_version:
-        return current
-
-    bumped = bump_version(current, args.bump_version)
-    if persist_bump:
-        write_version(args.version_file, bumped)
-        print(f"[release] bumped version: {current} -> {bumped} ({rel(args.version_file)})")
+    if args.release_version_override:
+        next_version = validate_version(args.release_version_override)
+        if next_version == current:
+            raise ValueError(f"--version must differ from the current release version: {current}")
     else:
-        args.pending_version_bump_from = current
-    return bumped
+        next_version = bump_version(current, args.bump_version or "patch")
+
+    if persist_update:
+        write_version(args.version_file, next_version)
+        print(f"[release] updated version: {current} -> {next_version} ({rel(args.version_file)})")
+    else:
+        args.pending_version_update_from = current
+    return next_version
 
 
-def persist_pending_version_bump(args: argparse.Namespace) -> None:
-    previous = getattr(args, "pending_version_bump_from", "")
-    if not previous or not getattr(args, "bump_version", ""):
+def persist_pending_version_update(args: argparse.Namespace) -> None:
+    previous = getattr(args, "pending_version_update_from", "")
+    if not previous:
         return
     write_version(args.version_file, args.release_version)
-    print(f"[release] bumped version: {previous} -> {args.release_version} ({rel(args.version_file)})")
-    args.pending_version_bump_from = ""
+    print(f"[release] updated version: {previous} -> {args.release_version} ({rel(args.version_file)})")
+    print(f"[release] commit the version file: git add {rel(args.version_file)} && git commit")
+    args.pending_version_update_from = ""
 
 
 def configure(args: argparse.Namespace) -> None:
@@ -488,7 +512,7 @@ def package(spec: ReleaseSpec, args: argparse.Namespace) -> Path:
     if existing_version:
         args.release_version = validate_version(existing_version)
     else:
-        args.release_version = resolve_release_version(args, persist_bump=False)
+        args.release_version = resolve_release_version(args, persist_update=False)
     print(f"[release] {spec.kind} version: {args.release_version}")
     dist = release_dist_dir(spec, args)
 
@@ -519,7 +543,7 @@ def package(spec: ReleaseSpec, args: argparse.Namespace) -> Path:
     if args.archive:
         create_archive(dist)
 
-    persist_pending_version_bump(args)
+    persist_pending_version_update(args)
     print(f"[release] packaged {spec.kind}: {dist}")
     return dist
 
@@ -552,7 +576,7 @@ def add_component_args(parser: argparse.ArgumentParser, spec: ReleaseSpec) -> No
         "--bump-version",
         choices=("major", "minor", "patch"),
         default="",
-        help="Bump and persist the version file before packaging",
+        help="Version part to bump after a successful release. Default: patch",
     )
 
 

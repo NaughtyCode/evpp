@@ -18,7 +18,7 @@ from release_common import (
     configure,
     normalize_args,
     package,
-    persist_pending_version_bump,
+    persist_pending_version_update,
     rel,
     resolve_release_version,
     resolve_required_artifacts,
@@ -48,7 +48,7 @@ def parse_args() -> argparse.Namespace:
         "--bump-version",
         choices=("major", "minor", "patch"),
         default="",
-        help="Bump and persist the unified version file before packaging",
+        help="Version part to bump after a successful release. Default: patch",
     )
     args = normalize_args(parser.parse_args())
     args.version_file = args.version_file.resolve()
@@ -84,6 +84,7 @@ def component_args(args: argparse.Namespace, spec, release_version: str) -> argp
     component.release_version = release_version
     component.release_version_override = ""
     component.bump_version = ""
+    component.pending_version_update_from = ""
     return component
 
 
@@ -124,7 +125,7 @@ def main() -> int:
     for spec in specs:
         resolve_required_artifacts(spec, search_dirs)
     validate_resources_available()
-    release_version = resolve_release_version(args, persist_bump=False)
+    release_version = resolve_release_version(args, persist_update=False)
     print(f"[release] version: {release_version}")
 
     packaged = []
@@ -135,7 +136,7 @@ def main() -> int:
 
     write_all_manifest(args, packaged)
     args.release_version = release_version
-    persist_pending_version_bump(args)
+    persist_pending_version_update(args)
     return 0
 
 
