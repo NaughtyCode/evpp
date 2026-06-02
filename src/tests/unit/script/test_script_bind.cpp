@@ -155,3 +155,66 @@ return table.concat({
 		result));
 	REQUIRE(result == "false,true,false,true,false");
 }
+
+TEST_CASE("import.loaded reports corrupted package state without crashing",
+		  "[script_bind][import]") {
+	ExportAllFixture f;
+	std::string result;
+
+	REQUIRE(f.RunLuaResult(
+		R"lua(
+local original_package = package
+local ok_missing, err_missing = pcall(function()
+    package = nil
+    return import.loaded()
+end)
+package = original_package
+
+local original_loaded = package.loaded
+local ok_bad_loaded, err_bad_loaded = pcall(function()
+    package.loaded = false
+    return import.loaded()
+end)
+package.loaded = original_loaded
+
+return table.concat({
+    tostring(ok_missing),
+    tostring(type(err_missing) == 'string' and err_missing:find('package table') ~= nil),
+    tostring(ok_bad_loaded),
+    tostring(type(err_bad_loaded) == 'string' and err_bad_loaded:find('package.loaded') ~= nil),
+}, ',')
+)lua",
+		result));
+	REQUIRE(result == "false,true,false,true");
+}
+
+TEST_CASE("cmsgpack handles cyclic tables and rejects oversized unpack arguments",
+		  "[script_bind][msgpack]") {
+	ExportAllFixture f;
+	std::string result;
+
+	REQUIRE(f.RunLuaResult(
+		R"lua(
+local cyclic = {}
+cyclic.self = cyclic
+local ok_cycle, packed_cycle = pcall(cmsgpack.pack, cyclic)
+
+local huge = 9223372036854775807
+local ok_offset, err_offset = pcall(cmsgpack.unpack_one, '', huge)
+local ok_limit, err_limit = pcall(cmsgpack.unpack_limit, '', huge)
+local value, safe_err = cmsgpack_safe.unpack_one('', huge)
+
+return table.concat({
+    tostring(ok_cycle),
+    tostring(type(packed_cycle) == 'string' and #packed_cycle > 0),
+    tostring(ok_offset),
+    tostring(type(err_offset) == 'string' and err_offset:find('offset') ~= nil),
+    tostring(ok_limit),
+    tostring(type(err_limit) == 'string' and err_limit:find('limit') ~= nil),
+    tostring(value == nil),
+    tostring(type(safe_err) == 'string' and safe_err:find('offset') ~= nil),
+}, ',')
+)lua",
+		result));
+	REQUIRE(result == "true,true,false,true,false,true,true,true");
+}

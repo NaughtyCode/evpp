@@ -135,6 +135,36 @@ return tostring(ok) .. ',' ..
 	REQUIRE(result == "false,true");
 }
 
+TEST_CASE("net.kcp_client validates tuning argument ranges", "[net_bind][kcp]") {
+	NetBindFixture f;
+	std::string result;
+	REQUIRE(f.RunLuaResult(
+		R"lua(
+local c = net.kcp_client.new()
+local ok_nodelay, err_nodelay = pcall(function()
+    return c:set_kcp_nodelay(2, 10, 0, 0)
+end)
+local ok_window, err_window = pcall(function()
+    return c:set_kcp_wnd_size(0, 32)
+end)
+local ok_mtu, err_mtu = pcall(function()
+    return c:set_kcp_mtu(0)
+end)
+c:close()
+
+return table.concat({
+    tostring(ok_nodelay),
+    tostring(type(err_nodelay) == 'string' and err_nodelay:find('nodelay') ~= nil),
+    tostring(ok_window),
+    tostring(type(err_window) == 'string' and err_window:find('sndwnd') ~= nil),
+    tostring(ok_mtu),
+    tostring(type(err_mtu) == 'string' and err_mtu:find('mtu') ~= nil),
+}, ',')
+)lua",
+		result));
+	REQUIRE(result == "false,true,false,true,false,true");
+}
+
 TEST_CASE("ShutdownNetBindings is idempotent without live transports", "[net_bind][shutdown]") {
 	NetBindFixture f;
 	script::ShutdownNetBindings();

@@ -7,6 +7,7 @@
 #endif
 
 #include <atomic>
+#include <climits>
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -40,6 +41,19 @@ struct KcpServerCtx {
 };
 
 const char* kKcpServerMetaName = "net.kcp_server.instance";
+
+int CheckKcpInt(lua_State* L,
+				int index,
+				const char* name,
+				int min_value,
+				int max_value = INT_MAX) {
+	const lua_Integer value = luaL_checkinteger(L, index);
+	if (value < static_cast<lua_Integer>(min_value) ||
+		value > static_cast<lua_Integer>(max_value)) {
+		return luaL_error(L, "%s out of range", name);
+	}
+	return static_cast<int>(value);
+}
 
 // Lightweight set of active KcpServerCtx pointers, used ONLY by
 // ShutdownKcpServerBindings to find and stop all servers during engine shutdown.
@@ -127,15 +141,16 @@ void ReleaseKcpServer(lua_State* L, KcpServerCtx* ctx) {
 	auto* loop = Engine::Instance().GetEventLoop();
 	if (loop && loop->IsRunning()) {
 		loop->RunInLoop([L, old_msg_ref, old_inst_ref, ctx] {
-			if (!g_kcp_alive.TryAcquire()) return;
-			if (old_msg_ref != LUA_NOREF) {
-				luaL_unref(L, LUA_REGISTRYINDEX, old_msg_ref);
-			}
-			if (old_inst_ref != LUA_NOREF) {
-				luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
+			if (g_kcp_alive.TryAcquire()) {
+				if (old_msg_ref != LUA_NOREF) {
+					luaL_unref(L, LUA_REGISTRYINDEX, old_msg_ref);
+				}
+				if (old_inst_ref != LUA_NOREF) {
+					luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
+				}
+				g_kcp_alive.Release();
 			}
 			CLOUDENGINE_MEM_DELETE(ctx);
-			g_kcp_alive.Release();
 		});
 	} else {
 		if (old_msg_ref != LUA_NOREF) {
@@ -320,10 +335,10 @@ int l_kcp_server_set_kcp_nodelay(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_server: closed");
-	int nodelay = static_cast<int>(luaL_checkinteger(L, 2));
-	int interval = static_cast<int>(luaL_checkinteger(L, 3));
-	int resend = static_cast<int>(luaL_checkinteger(L, 4));
-	int nc = static_cast<int>(luaL_checkinteger(L, 5));
+	int nodelay = CheckKcpInt(L, 2, "nodelay", 0, 1);
+	int interval = CheckKcpInt(L, 3, "interval", 0);
+	int resend = CheckKcpInt(L, 4, "resend", 0);
+	int nc = CheckKcpInt(L, 5, "nc", 0, 1);
 	ctx->server->SetKcpNodelay(nodelay, interval, resend, nc);
 	return 0;
 }
@@ -333,8 +348,8 @@ int l_kcp_server_set_kcp_wnd_size(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_server: closed");
-	int sndwnd = static_cast<int>(luaL_checkinteger(L, 2));
-	int rcvwnd = static_cast<int>(luaL_checkinteger(L, 3));
+	int sndwnd = CheckKcpInt(L, 2, "sndwnd", 1);
+	int rcvwnd = CheckKcpInt(L, 3, "rcvwnd", 1);
 	ctx->server->SetKcpWndSize(sndwnd, rcvwnd);
 	return 0;
 }
@@ -344,7 +359,7 @@ int l_kcp_server_set_kcp_mtu(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpServerCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_server: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_server: closed");
-	int mtu = static_cast<int>(luaL_checkinteger(L, 2));
+	int mtu = CheckKcpInt(L, 2, "mtu", 1);
 	ctx->server->SetKcpMtu(mtu);
 	return 0;
 }

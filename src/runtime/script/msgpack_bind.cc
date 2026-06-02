@@ -1,9 +1,12 @@
 ﻿#include "runtime/script/msgpack_bind.h"
 
+#include <climits>
 #include <cmath>
+#include <cstdio>
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "runtime/config/config.h"
@@ -54,7 +57,7 @@ struct EncodeBuf {
 
 	void Append(const unsigned char* s, size_t len) {
 		if (overflow) return;
-		if (max_size > 0 && data.size() + len > max_size) {
+		if (max_size > 0 && (data.size() > max_size || len > max_size - data.size())) {
 			overflow = true;
 			return;
 		}
@@ -114,6 +117,19 @@ void PushUnsigned(lua_State* L, uint64_t n) {
 	} else {
 		lua_pushnumber(L, static_cast<lua_Number>(n));
 	}
+}
+
+int CheckNonNegativeInt(lua_State* L, int index, const char* name) {
+	const lua_Integer value = luaL_checkinteger(L, index);
+	if (value < 0 || value > static_cast<lua_Integer>(INT_MAX)) {
+		return luaL_error(L, "%s out of range", name);
+	}
+	return static_cast<int>(value);
+}
+
+int OptNonNegativeInt(lua_State* L, int index, int default_value, const char* name) {
+	if (lua_isnoneornil(L, index)) return default_value;
+	return CheckNonNegativeInt(L, index, name);
 }
 
 // Test whether a lua_Number is exactly representable as int64.
@@ -272,7 +288,10 @@ void EncodeMap(EncodeBuf& buf, int64_t n) {
 
 // Lua → MessagePack encoding
 
-void EncodeLuaType(lua_State* L, EncodeBuf& buf, int level);
+bool EncodeLuaType(lua_State* L,
+				  EncodeBuf& buf,
+				  int level,
+				  std::string& error);
 
 void EncodeLuaString(lua_State* L, EncodeBuf& buf) {
 	size_t len = 0;
@@ -309,10 +328,15 @@ void EncodeLuaNull(EncodeBuf& buf) {
 }
 
 // Returns true if the table at stack top is a dense 1..N array.
-bool TableIsArray(lua_State* L) {
+bool TableIsArray(lua_State* L, bool& is_array, std::string& error) {
 	int stacktop = lua_gettop(L);
-	int count = 0;
-	lua_Integer max = 0;
+	size_t count = 0;
+	uint64_t max = 0;
+
+	if (!lua_checkstack(L, 1)) {
+		error = "msgpack encode: Lua stack overflow while inspecting table";
+		return false;
+	}
 
 	lua_pushnil(L);
 	while (lua_next(L, -2)) {
@@ -320,55 +344,100 @@ bool TableIsArray(lua_State* L) {
 		lua_Integer n = 0;
 		if (!lua_isinteger(L, -1) || (n = lua_tointeger(L, -1)) <= 0) {
 			lua_settop(L, stacktop);
-			return false;
+			is_array = false;
+			return true;
 		}
-		if (n > max) max = n;
+		const auto key = static_cast<uint64_t>(n);
+		if (key > max) max = key;
 		++count;
 	}
 	lua_settop(L, stacktop);
-	return max == count;
+	is_array = max == static_cast<uint64_t>(count);
+	return true;
 }
 
-void EncodeLuaTableAsArray(lua_State* L, EncodeBuf& buf, int level) {
+bool EncodeLuaTableAsArray(lua_State* L,
+						  EncodeBuf& buf,
+						  int level,
+						  std::string& error) {
 	size_t len = lua_rawlen(L, -1);
-	EncodeArray(buf, static_cast<int64_t>(len));
-	luaL_checkstack(L, 1, "in function EncodeLuaTableAsArray");
-	for (size_t j = 1; j <= len; ++j) {
-		lua_pushinteger(L, static_cast<lua_Integer>(j));
-		lua_gettable(L, -2);
-		EncodeLuaType(L, buf, level + 1);
+	if (len > 0xffffffffULL) {
+		error = "msgpack encode: array is too large";
+		return false;
 	}
+	EncodeArray(buf, static_cast<int64_t>(len));
+	if (!lua_checkstack(L, 1)) {
+		error = "msgpack encode: Lua stack overflow while reading array";
+		return false;
+	}
+	for (size_t j = 1; j <= len; ++j) {
+		lua_rawgeti(L, -1, static_cast<lua_Integer>(j));
+		if (!EncodeLuaType(L, buf, level + 1, error)) {
+			return false;
+		}
+	}
+	return true;
 }
 
-void EncodeLuaTableAsMap(lua_State* L, EncodeBuf& buf, int level) {
+bool EncodeLuaTableAsMap(lua_State* L,
+						EncodeBuf& buf,
+						int level,
+						std::string& error) {
 	size_t len = 0;
 
-	luaL_checkstack(L, 3, "in function EncodeLuaTableAsMap");
+	if (!lua_checkstack(L, 3)) {
+		error = "msgpack encode: Lua stack overflow while reading map";
+		return false;
+	}
 	lua_pushnil(L);
 	while (lua_next(L, -2)) {
 		lua_pop(L, 1);
 		++len;
+		if (len > 0xffffffffULL) {
+			lua_pop(L, 1);
+			error = "msgpack encode: map is too large";
+			return false;
+		}
 	}
 
 	EncodeMap(buf, static_cast<int64_t>(len));
 	lua_pushnil(L);
 	while (lua_next(L, -2)) {
 		lua_pushvalue(L, -2);
-		EncodeLuaType(L, buf, level + 1);  // encode key
-		EncodeLuaType(L, buf, level + 1);  // encode value
+		if (!EncodeLuaType(L, buf, level + 1, error)) {
+			lua_pop(L, 2);
+			return false;
+		}
+		if (!EncodeLuaType(L, buf, level + 1, error)) {
+			lua_pop(L, 1);
+			return false;
+		}
 	}
+	return true;
 }
 
-void EncodeLuaTable(lua_State* L, EncodeBuf& buf, int level) {
-	if (TableIsArray(L))
-		EncodeLuaTableAsArray(L, buf, level);
-	else
-		EncodeLuaTableAsMap(L, buf, level);
+bool EncodeLuaTable(lua_State* L,
+				   EncodeBuf& buf,
+				   int level,
+				   std::string& error) {
+	bool is_array = false;
+	if (!TableIsArray(L, is_array, error)) {
+		return false;
+	}
+
+	const bool ok = is_array
+						? EncodeLuaTableAsArray(L, buf, level, error)
+						: EncodeLuaTableAsMap(L, buf, level, error);
+	return ok;
 }
 
-void EncodeLuaType(lua_State* L, EncodeBuf& buf, int level) {
+bool EncodeLuaType(lua_State* L,
+				  EncodeBuf& buf,
+				  int level,
+				  std::string& error) {
 	int t = lua_type(L, -1);
 	if (t == LUA_TTABLE && level == GetMaxNesting()) t = LUA_TNIL;
+	bool ok = true;
 
 	switch (t) {
 	case LUA_TSTRING:
@@ -384,13 +453,14 @@ void EncodeLuaType(lua_State* L, EncodeBuf& buf, int level) {
 			EncodeLuaNumber(L, buf);
 		break;
 	case LUA_TTABLE:
-		EncodeLuaTable(L, buf, level);
+		ok = EncodeLuaTable(L, buf, level, error);
 		break;
 	default:
 		EncodeLuaNull(buf);
 		break;
 	}
 	lua_pop(L, 1);
+	return ok;
 }
 
 // MessagePack → Lua decoding
@@ -661,7 +731,7 @@ int UnpackFull(lua_State* L, int limit, int offset) {
 	}
 	if (static_cast<size_t>(offset) > len) {
 		return luaL_error(
-			L, "Start offset %d greater than input length %d.", offset, static_cast<int>(len));
+			L, "Start offset %d greater than input length %zu.", offset, len);
 	}
 
 	if (decode_all) limit = INT_MAX;
@@ -700,19 +770,40 @@ int l_msgpack_pack(lua_State* L) {
 		return luaL_argerror(L, 0, "MessagePack pack needs input.");
 	}
 
-	luaL_checkstack(L, nargs, "Too many arguments for MessagePack pack.");
+	if (!lua_checkstack(L, nargs)) {
+		return luaL_error(L, "Too many arguments for MessagePack pack.");
+	}
 
-	EncodeBuf buf;
-	buf.max_size = GetMaxPayloadSize();
-	for (int i = 1; i <= nargs; ++i) {
-		lua_pushvalue(L, i);
-		EncodeLuaType(L, buf, 0);
-		if (buf.overflow) {
-			return luaL_error(L, "msgpack encode: payload exceeds maximum size (%zu bytes)",
+	const int base_top = lua_gettop(L);
+	char error_buf[256] = {};
+	bool failed = false;
+	{
+		std::string error;
+		EncodeBuf buf;
+		buf.max_size = GetMaxPayloadSize();
+		for (int i = 1; i <= nargs; ++i) {
+			lua_pushvalue(L, i);
+			if (!EncodeLuaType(L, buf, 0, error)) {
+				std::snprintf(error_buf, sizeof(error_buf), "%s", error.c_str());
+				lua_settop(L, base_top);
+				failed = true;
+				break;
+			}
+			if (buf.overflow) {
+				std::snprintf(error_buf,
+							  sizeof(error_buf),
+							  "msgpack encode: payload exceeds maximum size (%zu bytes)",
 							  buf.max_size);
+				lua_settop(L, base_top);
+				failed = true;
+				break;
+			}
+			lua_pushlstring(L, reinterpret_cast<const char*>(buf.Data()), buf.Size());
+			buf.Clear();
 		}
-		lua_pushlstring(L, reinterpret_cast<const char*>(buf.Data()), buf.Size());
-		buf.Clear();
+	}
+	if (failed) {
+		return luaL_error(L, "%s", error_buf);
 	}
 	lua_concat(L, nargs);
 	return 1;
@@ -725,15 +816,15 @@ int l_msgpack_unpack(lua_State* L) {
 
 int l_msgpack_unpack_one(lua_State* L) {
 	ENGINE_PROFILE_SCOPE("engine.script", "MsgPackUnpackOne");
-	int offset = static_cast<int>(luaL_optinteger(L, 2, 0));
+	int offset = OptNonNegativeInt(L, 2, 0, "offset");
 	lua_pop(L, lua_gettop(L) - 1);
 	return UnpackFull(L, 1, offset);
 }
 
 int l_msgpack_unpack_limit(lua_State* L) {
 	ENGINE_PROFILE_SCOPE("engine.script", "MsgPackUnpackLimit");
-	int limit = static_cast<int>(luaL_checkinteger(L, 2));
-	int offset = static_cast<int>(luaL_optinteger(L, 3, 0));
+	int limit = CheckNonNegativeInt(L, 2, "limit");
+	int offset = OptNonNegativeInt(L, 3, 0, "offset");
 	lua_pop(L, lua_gettop(L) - 1);
 	return UnpackFull(L, limit, offset);
 }

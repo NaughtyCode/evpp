@@ -125,15 +125,16 @@ void ReleaseUdpServer(lua_State* L, UdpServerCtx* ctx) {
 		// Defer unref + delete so pending RunInLoop message callbacks
 		// (queued before Stop returned) execute before we free the refs.
 		loop->RunInLoop([L, old_msg_ref, old_inst_ref, ctx] {
-			if (!g_udp_alive.TryAcquire()) return;
-			if (old_msg_ref != LUA_NOREF) {
-				luaL_unref(L, LUA_REGISTRYINDEX, old_msg_ref);
-			}
-			if (old_inst_ref != LUA_NOREF) {
-				luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
+			if (g_udp_alive.TryAcquire()) {
+				if (old_msg_ref != LUA_NOREF) {
+					luaL_unref(L, LUA_REGISTRYINDEX, old_msg_ref);
+				}
+				if (old_inst_ref != LUA_NOREF) {
+					luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
+				}
+				g_udp_alive.Release();
 			}
 			CLOUDENGINE_MEM_DELETE(ctx);
-			g_udp_alive.Release();
 		});
 	} else {
 		if (old_msg_ref != LUA_NOREF) {

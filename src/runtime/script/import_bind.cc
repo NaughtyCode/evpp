@@ -63,8 +63,16 @@ int l_import_addpath(lua_State* L) {
 
 int l_import_loaded(lua_State* L) {
 	lua_getglobal(L, "package");
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 1);
+		return luaL_error(L, "import.loaded: package table is not available");
+	}
 	lua_getfield(L, -1, "loaded");
 	lua_remove(L, -2);
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 1);
+		return luaL_error(L, "import.loaded: package.loaded is not a table");
+	}
 	// Return a shallow copy so scripts can inspect what's loaded without
 	// accidentally mutating the real package.loaded table.
 	lua_newtable(L);  // orig, copy

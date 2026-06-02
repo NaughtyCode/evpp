@@ -6,6 +6,7 @@
 #endif
 #endif
 
+#include <climits>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -37,6 +38,19 @@ struct KcpClientCtx {
 };
 
 const char* kKcpClientMetaName = "net.kcp_client.instance";
+
+int CheckKcpInt(lua_State* L,
+				int index,
+				const char* name,
+				int min_value,
+				int max_value = INT_MAX) {
+	const lua_Integer value = luaL_checkinteger(L, index);
+	if (value < static_cast<lua_Integer>(min_value) ||
+		value > static_cast<lua_Integer>(max_value)) {
+		return luaL_error(L, "%s out of range", name);
+	}
+	return static_cast<int>(value);
+}
 
 // ── net.kcp_client.new([conv])  - instance_table ────────────────────
 // Creates an unconnected instance  - useful when KCP tuning is needed
@@ -236,10 +250,10 @@ int l_kcp_client_set_kcp_nodelay(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_client: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_client: closed");
-	int nodelay = static_cast<int>(luaL_checkinteger(L, 2));
-	int interval = static_cast<int>(luaL_checkinteger(L, 3));
-	int resend = static_cast<int>(luaL_checkinteger(L, 4));
-	int nc = static_cast<int>(luaL_checkinteger(L, 5));
+	int nodelay = CheckKcpInt(L, 2, "nodelay", 0, 1);
+	int interval = CheckKcpInt(L, 3, "interval", 0);
+	int resend = CheckKcpInt(L, 4, "resend", 0);
+	int nc = CheckKcpInt(L, 5, "nc", 0, 1);
 	ctx->client->SetKcpNodelay(nodelay, interval, resend, nc);
 	return 0;
 }
@@ -249,8 +263,8 @@ int l_kcp_client_set_kcp_wnd_size(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_client: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_client: closed");
-	int sndwnd = static_cast<int>(luaL_checkinteger(L, 2));
-	int rcvwnd = static_cast<int>(luaL_checkinteger(L, 3));
+	int sndwnd = CheckKcpInt(L, 2, "sndwnd", 1);
+	int rcvwnd = CheckKcpInt(L, 3, "rcvwnd", 1);
 	ctx->client->SetKcpWndSize(sndwnd, rcvwnd);
 	return 0;
 }
@@ -260,7 +274,7 @@ int l_kcp_client_set_kcp_mtu(lua_State* L) {
 	auto* ctx = GetCtxFromTable<KcpClientCtx>(L, 1);
 	if (!ctx) return luaL_error(L, "kcp_client: invalid context");
 	if (ctx->disposed) return luaL_error(L, "kcp_client: closed");
-	int mtu = static_cast<int>(luaL_checkinteger(L, 2));
+	int mtu = CheckKcpInt(L, 2, "mtu", 1);
 	ctx->client->SetKcpMtu(mtu);
 	return 0;
 }
