@@ -7,8 +7,7 @@ The script builds:
   - GameClientApp
 
 It then creates a self-contained release folder with resources and launcher
-scripts. Use --smoke to start server first, then client, and verify that the
-Lua CS handshake completes.
+scripts.
 """
 
 from __future__ import annotations
@@ -16,16 +15,13 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
-import socket
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = ROOT / "src"
-CS_DEMO_DIR = ROOT / "resources" / "demos" / "cs"
 
 
 def is_windows() -> bool:
@@ -93,22 +89,6 @@ def copy_file(src: Path, dst: Path) -> None:
     shutil.copy2(src, dst)
 
 
-def copy_tree_overlay(src: Path, dst: Path) -> None:
-    if not src.exists():
-        raise FileNotFoundError(f"required overlay not found: {src}")
-    shutil.copytree(src, dst, dirs_exist_ok=True)
-
-
-def remove_packaged_cs_demo(resources_dst: Path) -> None:
-    cs_demo_dst = resources_dst / "demos" / "cs"
-    if cs_demo_dst.exists():
-        shutil.rmtree(cs_demo_dst)
-
-    demos_dst = resources_dst / "demos"
-    if demos_dst.exists() and not any(demos_dst.iterdir()):
-        demos_dst.rmdir()
-
-
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8", newline="\n")
@@ -135,12 +115,6 @@ def package(args: argparse.Namespace) -> Path:
     if resources_dst.exists():
         shutil.rmtree(resources_dst)
     shutil.copytree(resources_src, resources_dst)
-
-    if args.include_cs_demo:
-        copy_tree_overlay(CS_DEMO_DIR / "config", resources_dst / "config")
-        copy_tree_overlay(CS_DEMO_DIR / "script", resources_dst / "demos" / "cs" / "script")
-    else:
-        remove_packaged_cs_demo(resources_dst)
 
     if is_windows():
         write_text(
@@ -182,119 +156,14 @@ def package(args: argparse.Namespace) -> Path:
         "./run_client.sh",
         "```",
         "",
+        "The package includes the base resources copied from `resources/`.",
+        "Configure `resources/config` or pass runtime options for project-specific scripts.",
+        "",
     ]
-    if args.include_cs_demo:
-        readme_lines.extend(
-            [
-                "This package includes the independent CS demo overlay.",
-                "",
-                "The CS handshake and gameplay round trip are implemented in Lua:",
-                "",
-                "- `resources/demos/cs/script/shared/cs_protocol.lua`",
-                "- `resources/demos/cs/script/server/init.lua`",
-                "- `resources/demos/cs/script/client/init.lua`",
-                "",
-            ]
-        )
-    else:
-        readme_lines.extend(
-            [
-                "This package was created without the CS demo overlay.",
-                "Provide your own client/server script config before starting the programs.",
-                "",
-            ]
-        )
     write_text(dist / "README.md", "\n".join(readme_lines))
 
     print(f"[release] packaged: {dist}")
     return dist
-
-
-def wait_for_port(host: str, port: int, timeout: float) -> bool:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            with socket.create_connection((host, port), timeout=0.25):
-                return True
-        except OSError:
-            time.sleep(0.1)
-    return False
-
-
-def read_log(path: Path) -> str:
-    if not path.exists():
-        return ""
-    return path.read_text(encoding="utf-8", errors="replace")
-
-
-def smoke(args: argparse.Namespace, dist: Path) -> None:
-    if not args.include_cs_demo:
-        raise RuntimeError("--smoke requires the CS demo overlay; remove --no-cs-demo")
-
-    host = "127.0.0.1"
-    port = args.port
-    server_log = dist / "server_smoke.log"
-    client_log = dist / "client_smoke.log"
-
-    for path in (server_log, client_log):
-        if path.exists():
-            path.unlink()
-
-    server_cmd = [
-        str(dist / exe_name("GameServer")),
-        "--config_dir=resources/config",
-        "--log_prefix=GameServerSmoke",
-    ]
-    client_cmd = [
-        str(dist / exe_name("GameClientApp")),
-        "--config_dir=resources/config",
-        "--log_prefix=GameClientSmoke",
-        f"--duration_ms={args.client_duration_ms}",
-        "--tick_ms=16",
-    ]
-
-    server_proc: subprocess.Popen[str] | None = None
-    try:
-        with server_log.open("w", encoding="utf-8", newline="\n") as server_out:
-            print("[release] starting server")
-            server_proc = subprocess.Popen(
-                server_cmd,
-                cwd=str(dist),
-                stdout=server_out,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
-
-        if not wait_for_port(host, port, args.smoke_timeout):
-            raise RuntimeError(f"server did not listen on {host}:{port}")
-
-        with client_log.open("w", encoding="utf-8", newline="\n") as client_out:
-            print("[release] starting client")
-            client_result = subprocess.run(
-                client_cmd,
-                cwd=str(dist),
-                stdout=client_out,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=args.smoke_timeout,
-            )
-        if client_result.returncode != 0:
-            raise RuntimeError(f"client exited with code {client_result.returncode}")
-
-        combined = read_log(server_log) + "\n" + read_log(client_log)
-        if "CS_CLIENT_SUCCESS" not in combined:
-            raise RuntimeError(
-                "smoke run did not observe CS_CLIENT_SUCCESS; see server_smoke.log and client_smoke.log"
-            )
-        print("[release] smoke passed: client connected to server and completed Lua CS round trip")
-    finally:
-        if server_proc and server_proc.poll() is None:
-            server_proc.terminate()
-            try:
-                server_proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                server_proc.kill()
-                server_proc.wait(timeout=5)
 
 
 def parse_args() -> argparse.Namespace:
@@ -311,16 +180,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--with-mongodb", action="store_true")
     parser.add_argument("--with-physics", action="store_true")
     parser.add_argument("--with-profiler", action="store_true")
-    parser.add_argument(
-        "--no-cs-demo",
-        dest="include_cs_demo",
-        action="store_false",
-        help="Package base resources without the independent CS demo overlay",
-    )
-    parser.add_argument("--smoke", action="store_true", help="Start server then client and verify Lua CS communication")
-    parser.add_argument("--smoke-timeout", type=float, default=15.0)
-    parser.add_argument("--client-duration-ms", type=int, default=4000)
-    parser.add_argument("--port", type=int, default=7777)
     return parser.parse_args()
 
 
@@ -334,9 +193,7 @@ def main() -> int:
     if not args.skip_build:
         build(args)
 
-    dist = package(args)
-    if args.smoke:
-        smoke(args, dist)
+    package(args)
     return 0
 
 

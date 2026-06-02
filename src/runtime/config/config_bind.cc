@@ -97,7 +97,7 @@ int l_config_get(lua_State* L) {
     if (p == "hot_reload.poll_interval_ms")  return PushConfigValue(L, rt.hot_reload.poll_interval_ms);
     if (p == "hot_reload.debounce_ms")       return PushConfigValue(L, rt.hot_reload.debounce_ms);
 
-    // ClientConfig - network settings used by Lua client/server CS demos.
+    // ClientConfig - network settings used by Lua client/server scripts.
     if (p == "client.scripts_dir")                         return PushConfigValue(L, client.scripts_dir);
     if (p == "client.network.server_address")              return PushConfigValue(L, client.network.server_address);
     if (p == "client.network.server_port")                 return PushConfigValue(L, client.network.server_port);

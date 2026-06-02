@@ -37,14 +37,7 @@ The default delay is `60000` ms.
   - Passed: 23 assertions in 10 test cases.
 - `artifacts\bin\Debug\test_config.exe "[config]"`
   - Passed: 229 assertions in 68 test cases.
-- `cmd /c scripts\build_cs_demo_release.bat --skip-configure --smoke-timeout 25 --client-duration-ms 4000`
-  - Passed: client connected to server and completed the Lua CS round trip.
-  - Server/client logs showed `ScriptReloader: idle ... [60000ms]`.
-  - No `FileWatcher: starting` log appeared during the 4 second default-delay smoke run.
 - Temporary release-artifact delay test with `startup_delay_ms=500`,
   `poll_interval_ms=100`, and `debounce_ms=50`.
   - Passed: watcher started after the configured delay.
   - Passed: no pre-existing Lua files were reported as changed after priming.
-- `cmd /c scripts\build_cs_demo_release.bat --skip-configure --skip-build --smoke-timeout 25 --client-duration-ms 4000`
-  - Passed and restored the final release artifact to the default `60000ms`
-    hot-reload startup delay.
