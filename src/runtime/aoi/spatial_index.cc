@@ -45,7 +45,7 @@ void ValidatePosition(float x, float y) {
 	}
 }
 
-}  // namespace
+}  /* namespace */
 
 SpatialGrid::SpatialGrid(float world_width, float world_height, float cell_size)
 	: cell_size_(ValidateCellSize(cell_size))
@@ -71,6 +71,10 @@ int SpatialGrid::CellIndex(int col, int row) const {
 }
 
 int SpatialGrid::CellIndexForPosition(float x, float y) const {
+	/**
+	 * Clamp only the grid lookup coordinate. The stored Position keeps the
+	 * original x/y so precise radius checks preserve out-of-bounds semantics.
+	 */
 	const auto clamp_axis = [this](float value, int limit) {
 		const double scaled = std::floor(static_cast<double>(value) *
 										 static_cast<double>(inv_cell_size_));
@@ -87,6 +91,7 @@ int SpatialGrid::CellIndexForPosition(float x, float y) const {
 void SpatialGrid::CellIndices(float x, float y, float radius,
 							   int& min_col, int& min_row,
 							   int& max_col, int& max_row) const {
+	/** Build a clamped cell rectangle for the query circle's bounding box. */
 	const auto clamp_axis = [this](double value, int limit) {
 		const double scaled = std::floor(value * static_cast<double>(inv_cell_size_));
 		if (scaled <= 0.0) return 0;
@@ -199,6 +204,10 @@ std::vector<entity::EntityId> SpatialGrid::QueryRadius(float x, float y, float r
 	result.reserve(candidate_count);
 	float r2 = radius * radius;
 
+	/**
+	 * Filter against the original stored positions rather than boundary-clamped
+	 * cell coordinates, which prevents false positives near world edges.
+	 */
 	for (int row = min_row; row <= max_row; ++row) {
 		for (int col = min_col; col <= max_col; ++col) {
 			for (const auto& entry : grid_[CellIndex(col, row)]) {
@@ -262,5 +271,5 @@ void SpatialGrid::Clear() {
 	entity_cell_.clear();
 }
 
-}  // namespace aoi
-}  // namespace engine
+}  /* namespace aoi */
+}  /* namespace engine */

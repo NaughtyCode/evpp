@@ -11,31 +11,40 @@
 namespace engine {
 namespace aoi {
 
-// Grid-based spatial index for AOI queries.
-// Divides the world into fixed-size cells for O(1) insert/update/remove
-// and O(cell_contents) range queries.
+/**
+ * Grid-based spatial index for bounded 2D AOI queries.
+ *
+ * The grid clamps coordinates only when choosing a cell. Stored entity
+ * positions keep the original x/y values, so precise radius checks still use
+ * the unclamped coordinates. Query result order follows cell scan and vector
+ * storage order and is intentionally not a protocol contract.
+ */
 class CLOUD_ENGINE_API SpatialGrid {
 public:
 	SpatialGrid(float world_width, float world_height, float cell_size);
 
-	// Add/update/remove an entity's position.
+	/** Add or replace an entity's position in the spatial grid. */
 	void Insert(entity::EntityId id, float x, float y);
+
+	/** Move an entity, inserting it when the id is not present. */
 	void Update(entity::EntityId id, float x, float y);
+
+	/** Remove an entity from the spatial grid. Missing ids are ignored. */
 	void Remove(entity::EntityId id);
 
-	// Query entities within radius of a point.
+	/** Return every entity within radius of a point, including any caller id. */
 	std::vector<entity::EntityId> QueryRadius(float x, float y, float radius) const;
 
-	// Get entities in same cell + neighboring cells (9-cell AOI).
+	/** Return same-cell and neighboring-cell candidates for an entity. */
 	std::vector<entity::EntityId> QueryAOI(entity::EntityId id) const;
 
-	// Get entities in same cell + neighboring cells for a position.
+	/** Return same-cell and neighboring-cell candidates for a position. */
 	std::vector<entity::EntityId> QueryAOIAt(float x, float y) const;
 
-	// Total entity count in the grid.
+	/** Return the total entity count in the grid. */
 	size_t Size() const { return entity_cell_.size(); }
 
-	// Clear all entities.
+	/** Remove all entities while keeping the allocated cell array reusable. */
 	void Clear();
 
 private:
@@ -73,5 +82,5 @@ private:
 	std::unordered_map<entity::EntityId, CellRef> entity_cell_;
 };
 
-}  // namespace aoi
-}  // namespace engine
+}  /* namespace aoi */
+}  /* namespace engine */

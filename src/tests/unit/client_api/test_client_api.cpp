@@ -347,3 +347,62 @@ TEST_CASE("client_api: AOI register move query visible and unregister", "[client
     game_aoi_destroy(&aoi);
     REQUIRE(aoi == nullptr);
 }
+
+TEST_CASE("client_api: AOI boundary contracts", "[client_api][aoi]") {
+    ClientHandle client;
+
+    game_aoi_t* aoi = nullptr;
+    REQUIRE(game_aoi_create(client.ptr, 500.0f, 500.0f, 50.0f, &aoi) == GAME_OK);
+    REQUIRE(aoi != nullptr);
+
+    REQUIRE(game_aoi_register_entity(aoi, 1, 100.0f, 100.0f, 100.0f) == GAME_OK);
+    REQUIRE(game_aoi_register_entity(aoi, 2, 150.0f, 100.0f, 1.0f) == GAME_OK);
+    REQUIRE(game_aoi_register_entity(aoi, 3, 300.0f, 100.0f, 10.0f) == GAME_OK);
+
+    uint64_t ids[4] = {};
+    int id_count = 0;
+
+    REQUIRE(game_aoi_get_visible(aoi, 1, nullptr, 0, &id_count) == GAME_OK);
+    REQUIRE(id_count == 1);
+
+    REQUIRE(game_aoi_get_visible(aoi, 2, ids, 4, &id_count) == GAME_OK);
+    REQUIRE_FALSE(contains_id(ids, id_count, 1));
+
+    REQUIRE(game_aoi_query_radius(aoi, 100.0f, 100.0f, 0.0f, ids, 4, &id_count) == GAME_OK);
+    REQUIRE(id_count == 1);
+    REQUIRE(contains_id(ids, id_count, 1));
+
+    REQUIRE(game_aoi_query_radius(aoi, 125.0f, 100.0f, 100.0f, nullptr, 0, &id_count) ==
+            GAME_OK);
+    REQUIRE(id_count == 2);
+
+    uint64_t tiny[1] = {};
+    REQUIRE(game_aoi_query_radius(aoi, 125.0f, 100.0f, 100.0f, tiny, 1, &id_count) ==
+            GAME_ERR_BUFFER_TOO_SMALL);
+    REQUIRE(id_count == 2);
+
+    REQUIRE(game_aoi_query_radius(aoi, 125.0f, 100.0f, 100.0f, nullptr, 0, nullptr) ==
+            GAME_ERR_INVALID_ARG);
+    REQUIRE(game_aoi_query_radius(aoi, 125.0f, 100.0f, 100.0f, ids, -1, &id_count) ==
+            GAME_ERR_INVALID_ARG);
+
+    REQUIRE(game_aoi_register_entity(aoi, 1, 300.0f, 100.0f, 20.0f) == GAME_OK);
+    uint64_t count = 0;
+    REQUIRE(game_aoi_count(aoi, &count) == GAME_OK);
+    REQUIRE(count == 3);
+    REQUIRE(game_aoi_query_radius(aoi, 100.0f, 100.0f, 1.0f, ids, 4, &id_count) == GAME_OK);
+    REQUIRE_FALSE(contains_id(ids, id_count, 1));
+    REQUIRE(game_aoi_query_radius(aoi, 300.0f, 100.0f, 1.0f, ids, 4, &id_count) == GAME_OK);
+    REQUIRE(contains_id(ids, id_count, 1));
+
+    REQUIRE(game_aoi_update_radius(aoi, 1, 250.0f) == GAME_OK);
+    REQUIRE(game_aoi_get_visible(aoi, 1, ids, 4, &id_count) == GAME_OK);
+    REQUIRE(contains_id(ids, id_count, 2));
+    REQUIRE(contains_id(ids, id_count, 3));
+
+    REQUIRE(game_aoi_update_radius(aoi, 1, -1.0f) == GAME_ERR_INVALID_ARG);
+    REQUIRE(game_aoi_count(nullptr, &count) == GAME_ERR_INVALID_ARG);
+
+    game_aoi_destroy(&aoi);
+    REQUIRE(aoi == nullptr);
+}

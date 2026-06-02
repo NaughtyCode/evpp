@@ -10,5 +10,5 @@ namespace script {
 
 CLOUD_ENGINE_API void ExportAOI(ScriptVM& vm);
 
-}  // namespace script
-}  // namespace engine
+}  /* namespace script */
+}  /* namespace engine */

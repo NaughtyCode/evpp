@@ -153,7 +153,7 @@ int PushException(lua_State* L, const char* prefix, const std::exception& ex) {
 	return 2;
 }
 
-// aoi.init(world_width, world_height, cell_size)
+/** aoi.init(world_width, world_height, cell_size) */
 int l_aoi_init(lua_State* L) {
 	auto* state = StateFromUpvalue(L);
 	if (!state) return PushNotInitialized(L);
@@ -177,7 +177,7 @@ int l_aoi_init(lua_State* L) {
 	return 1;
 }
 
-// aoi.set_event_callback(function | nil)
+/** aoi.set_event_callback(function | nil) */
 int l_aoi_set_event_callback(lua_State* L) {
 	auto* state = StateFromUpvalue(L);
 	if (!state || !state->manager) return PushNotInitialized(L);
@@ -223,7 +223,7 @@ int l_aoi_set_event_callback(lua_State* L) {
 	return 1;
 }
 
-// aoi.register_entity(entity_id, x, y, aoi_radius)
+/** aoi.register_entity(entity_id, x, y, aoi_radius) */
 int l_aoi_register_entity(lua_State* L) {
 	auto* state = StateFromUpvalue(L);
 	if (!state || !state->manager) return PushNotInitialized(L);
@@ -236,15 +236,14 @@ int l_aoi_register_entity(lua_State* L) {
 											 "aoi_radius must be finite and non-negative");
 
 	try {
-		state->manager->RegisterEntity(id, radius);
-		state->manager->OnEntityMove(id, x, y);
+		state->manager->UpsertEntity(id, x, y, radius);
 	} catch (const std::exception& ex) {
 		return PushException(L, "AOI register_entity failed", ex);
 	}
 	return 0;
 }
 
-// aoi.update_entity(entity_id, x, y)
+/** aoi.update_entity(entity_id, x, y) */
 int l_aoi_update_entity(lua_State* L) {
 	auto* state = StateFromUpvalue(L);
 	if (!state || !state->manager) return PushNotInitialized(L);
@@ -262,7 +261,25 @@ int l_aoi_update_entity(lua_State* L) {
 	return 0;
 }
 
-// aoi.unregister_entity(entity_id)
+/** aoi.update_radius(entity_id, aoi_radius) */
+int l_aoi_update_radius(lua_State* L) {
+	auto* state = StateFromUpvalue(L);
+	if (!state || !state->manager) return PushNotInitialized(L);
+	if (IsInCallback(state)) return PushCallbackMutationError(L);
+
+	const entity::EntityId id = CheckEntityId(L, 1);
+	const float radius = CheckNonNegativeFloat(L, 2,
+											   "aoi_radius must be finite and non-negative");
+
+	try {
+		state->manager->UpdateEntityRadius(id, radius);
+	} catch (const std::exception& ex) {
+		return PushException(L, "AOI update_radius failed", ex);
+	}
+	return 0;
+}
+
+/** aoi.unregister_entity(entity_id) */
 int l_aoi_unregister_entity(lua_State* L) {
 	auto* state = StateFromUpvalue(L);
 	if (!state || !state->manager) return PushNotInitialized(L);
@@ -273,7 +290,7 @@ int l_aoi_unregister_entity(lua_State* L) {
 	return 0;
 }
 
-// aoi.get_visible(entity_id) -> {entity_id, ...}
+/** aoi.get_visible(entity_id) -> {entity_id, ...} */
 int l_aoi_get_visible(lua_State* L) {
 	auto* state = StateFromUpvalue(L);
 	if (!state || !state->manager) {
@@ -286,7 +303,7 @@ int l_aoi_get_visible(lua_State* L) {
 	return 1;
 }
 
-// aoi.query_radius(x, y, radius) -> {entity_id, ...}
+/** aoi.query_radius(x, y, radius) -> {entity_id, ...} */
 int l_aoi_query_radius(lua_State* L) {
 	auto* state = StateFromUpvalue(L);
 	if (!state || !state->manager) {
@@ -302,7 +319,7 @@ int l_aoi_query_radius(lua_State* L) {
 	return 1;
 }
 
-// aoi.count() -> number of registered entities
+/** aoi.count() -> number of registered entities */
 int l_aoi_count(lua_State* L) {
 	auto* state = StateFromUpvalue(L);
 	const size_t count = (state && state->manager) ? state->manager->EntityCount() : 0;
@@ -310,7 +327,7 @@ int l_aoi_count(lua_State* L) {
 	return 1;
 }
 
-// aoi.shutdown()
+/** aoi.shutdown() */
 int l_aoi_shutdown(lua_State* L) {
 	auto* state = StateFromUpvalue(L);
 	if (!state) return 0;
@@ -325,6 +342,7 @@ static const luaL_Reg kAOIFuncs[] = {
 	{"set_event_callback", l_aoi_set_event_callback},
 	{"register_entity",    l_aoi_register_entity},
 	{"update_entity",      l_aoi_update_entity},
+	{"update_radius",      l_aoi_update_radius},
 	{"unregister_entity",  l_aoi_unregister_entity},
 	{"get_visible",        l_aoi_get_visible},
 	{"query_radius",       l_aoi_query_radius},
@@ -333,7 +351,7 @@ static const luaL_Reg kAOIFuncs[] = {
 	{nullptr, nullptr}
 };
 
-}  // namespace
+}  /* namespace */
 
 void ExportAOI(ScriptVM& vm) {
 	auto* L = vm.GetState();
@@ -353,5 +371,5 @@ void ExportAOI(ScriptVM& vm) {
 	ENGINE_LOG_INFO(logger, "AOI API exported to Lua");
 }
 
-}  // namespace script
-}  // namespace engine
+}  /* namespace script */
+}  /* namespace engine */

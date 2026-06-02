@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,21 @@ namespace {
 
 bool Contains(const std::vector<EntityId>& values, EntityId id) {
 	return std::find(values.begin(), values.end(), id) != values.end();
+}
+
+struct EventRecord {
+	EntityId observer = 0;
+	EntityId target = 0;
+	bool entered = false;
+};
+
+bool HasEvent(const std::vector<EventRecord>& events,
+			  EntityId observer,
+			  EntityId target,
+			  bool entered) {
+	return std::find_if(events.begin(), events.end(), [&](const EventRecord& event) {
+		return event.observer == observer && event.target == target && event.entered == entered;
+	}) != events.end();
 }
 
 struct AOIBindFixture {
@@ -617,6 +633,138 @@ TEST_CASE("AOIManager::GetVisibleEntities for unknown entity returns empty", "[a
     REQUIRE(visible.empty());
 }
 
+TEST_CASE("SpatialGrid keeps raw out-of-bounds positions for precise radius filtering",
+          "[aoi][spatial_grid]") {
+    SpatialGrid grid(1000.0f, 1000.0f, 100.0f);
+
+    grid.Insert(1, 1500.0f, 1500.0f);
+
+    REQUIRE(Contains(grid.QueryRadius(1500.0f, 1500.0f, 1.0f), 1));
+    REQUIRE_FALSE(Contains(grid.QueryRadius(999.0f, 999.0f, 10.0f), 1));
+}
+
+TEST_CASE("SpatialGrid::QueryAOI is only a nine-cell candidate query", "[aoi][spatial_grid]") {
+    SpatialGrid grid(1000.0f, 1000.0f, 100.0f);
+
+    grid.Insert(1, 50.0f, 50.0f);
+    grid.Insert(2, 250.0f, 50.0f);
+
+    REQUIRE_FALSE(Contains(grid.QueryAOI(1), 2));
+    REQUIRE(Contains(grid.QueryRadius(50.0f, 50.0f, 250.0f), 2));
+}
+
+TEST_CASE("AOIManager raw radius query includes self while visible set excludes self",
+          "[aoi][aoi_manager]") {
+    auto grid = std::make_unique<SpatialGrid>(1000.0f, 1000.0f, 100.0f);
+    AOIManager mgr(std::move(grid));
+
+    mgr.UpsertEntity(1, 100.0f, 100.0f, 50.0f);
+
+    REQUIRE(Contains(mgr.QueryRadius(100.0f, 100.0f, 0.0f), 1));
+    REQUIRE_FALSE(Contains(mgr.GetVisibleEntities(1), 1));
+}
+
+TEST_CASE("AOIManager supports zero-radius visibility at the same coordinate",
+          "[aoi][aoi_manager]") {
+    auto grid = std::make_unique<SpatialGrid>(1000.0f, 1000.0f, 100.0f);
+    AOIManager mgr(std::move(grid));
+
+    mgr.UpsertEntity(1, 100.0f, 100.0f, 0.0f);
+    mgr.UpsertEntity(2, 100.0f, 100.0f, 0.0f);
+    mgr.UpsertEntity(3, 100.01f, 100.0f, 0.0f);
+
+    REQUIRE(Contains(mgr.GetVisibleEntities(1), 2));
+    REQUIRE_FALSE(Contains(mgr.GetVisibleEntities(1), 3));
+}
+
+TEST_CASE("AOIManager upsert updates radius and position without old-position transient events",
+          "[aoi][aoi_manager]") {
+    auto grid = std::make_unique<SpatialGrid>(1000.0f, 1000.0f, 100.0f);
+    AOIManager mgr(std::move(grid));
+
+    mgr.UpsertEntity(1, 0.0f, 0.0f, 1.0f);
+    mgr.UpsertEntity(2, 50.0f, 0.0f, 1.0f);
+    mgr.UpsertEntity(3, 200.0f, 0.0f, 1.0f);
+
+    std::vector<EventRecord> events;
+    mgr.SetEventCallback([&](EntityId observer, EntityId target, bool entered) {
+        events.push_back(EventRecord{observer, target, entered});
+    });
+
+    mgr.UpsertEntity(1, 200.0f, 0.0f, 60.0f);
+
+    REQUIRE_FALSE(HasEvent(events, 1, 2, true));
+    REQUIRE_FALSE(HasEvent(events, 1, 2, false));
+    REQUIRE(HasEvent(events, 1, 3, true));
+    REQUIRE(Contains(mgr.GetVisibleEntities(1), 3));
+    REQUIRE_FALSE(Contains(mgr.QueryRadius(0.0f, 0.0f, 1.0f), 1));
+}
+
+TEST_CASE("AOIManager update_radius changes only observer-side visibility",
+          "[aoi][aoi_manager]") {
+    auto grid = std::make_unique<SpatialGrid>(1000.0f, 1000.0f, 100.0f);
+    AOIManager mgr(std::move(grid));
+
+    mgr.UpsertEntity(1, 100.0f, 100.0f, 10.0f);
+    mgr.UpsertEntity(2, 130.0f, 100.0f, 10.0f);
+    REQUIRE_FALSE(Contains(mgr.GetVisibleEntities(1), 2));
+
+    mgr.UpdateEntityRadius(1, 40.0f);
+    REQUIRE(Contains(mgr.GetVisibleEntities(1), 2));
+    REQUIRE_FALSE(Contains(mgr.GetVisibleEntities(2), 1));
+
+    mgr.UpdateEntityRadius(1, 5.0f);
+    REQUIRE_FALSE(Contains(mgr.GetVisibleEntities(1), 2));
+}
+
+TEST_CASE("AOIManager unregister uses watchers to clear reverse visibility",
+          "[aoi][aoi_manager]") {
+    auto grid = std::make_unique<SpatialGrid>(1000.0f, 1000.0f, 100.0f);
+    AOIManager mgr(std::move(grid));
+
+    mgr.UpsertEntity(1, 100.0f, 100.0f, 100.0f);
+    mgr.UpsertEntity(2, 130.0f, 100.0f, 100.0f);
+    REQUIRE(Contains(mgr.GetVisibleEntities(1), 2));
+    REQUIRE(Contains(mgr.GetVisibleEntities(2), 1));
+
+    std::vector<EventRecord> events;
+    mgr.SetEventCallback([&](EntityId observer, EntityId target, bool entered) {
+        events.push_back(EventRecord{observer, target, entered});
+    });
+
+    mgr.UnregisterEntity(2);
+
+    REQUIRE(HasEvent(events, 1, 2, false));
+    REQUIRE(HasEvent(events, 2, 1, false));
+    REQUIRE_FALSE(Contains(mgr.GetVisibleEntities(1), 2));
+    REQUIRE_FALSE(Contains(mgr.QueryRadius(130.0f, 100.0f, 1.0f), 2));
+}
+
+TEST_CASE("AOIManager rejects C++ callback reentrant mutations and preserves state",
+          "[aoi][aoi_manager]") {
+    auto grid = std::make_unique<SpatialGrid>(1000.0f, 1000.0f, 100.0f);
+    AOIManager mgr(std::move(grid));
+
+    mgr.UpsertEntity(1, 100.0f, 100.0f, 100.0f);
+
+    bool blocked = false;
+    mgr.SetEventCallback([&](EntityId observer, EntityId target, bool entered) {
+        if (observer == 1 && target == 2 && entered) {
+            try {
+                mgr.OnEntityMove(1, 900.0f, 900.0f);
+            } catch (const std::logic_error&) {
+                blocked = true;
+            }
+        }
+    });
+
+    mgr.UpsertEntity(2, 120.0f, 100.0f, 10.0f);
+
+    REQUIRE(blocked);
+    REQUIRE(Contains(mgr.GetVisibleEntities(1), 2));
+    REQUIRE(Contains(mgr.QueryRadius(100.0f, 100.0f, 1.0f), 1));
+}
+
 TEST_CASE("Lua AOI binding exports module and symmetric callbacks", "[aoi][bind]") {
     AOIBindFixture f;
     std::string result;
@@ -674,17 +822,30 @@ TEST_CASE("Lua AOI binding rejects mutation from callbacks", "[aoi][bind]") {
 
     REQUIRE(f.RunLuaResult(
         "aoi.init(1000, 1000, 100)\n"
-        "blocked = false\n"
+        "blocked = {}\n"
         "aoi.set_event_callback(function()\n"
-        "  local ok, err = aoi.shutdown()\n"
-        "  blocked = ok == nil and string.find(err, 'mutation') ~= nil\n"
+        "  local calls = {\n"
+        "    function() return aoi.init(1000, 1000, 100) end,\n"
+        "    function() return aoi.register_entity(3, 300, 300, 10) end,\n"
+        "    function() return aoi.update_entity(1, 200, 200) end,\n"
+        "    function() return aoi.update_radius(1, 20) end,\n"
+        "    function() return aoi.unregister_entity(2) end,\n"
+        "    function() return aoi.set_event_callback(nil) end,\n"
+        "    function() return aoi.shutdown() end,\n"
+        "  }\n"
+        "  for i, fn in ipairs(calls) do\n"
+        "    local ok, err = fn()\n"
+        "    blocked[i] = ok == nil and string.find(err, 'mutation') ~= nil\n"
+        "  end\n"
         "end)\n"
         "aoi.register_entity(1, 100, 100, 50)\n"
         "aoi.register_entity(2, 110, 110, 50)\n"
-        "return tostring(blocked) .. ',' .. aoi.count()",
+        "local out = {}\n"
+        "for i = 1, 7 do out[i] = tostring(blocked[i]) end\n"
+        "return table.concat(out, ',') .. ',' .. aoi.count()",
         result));
 
-    REQUIRE(result == "true,2");
+    REQUIRE(result == "true,true,true,true,true,true,true,2");
 }
 
 TEST_CASE("Lua AOI binding rejects invalid init parameters", "[aoi][bind]") {
@@ -697,4 +858,68 @@ TEST_CASE("Lua AOI binding rejects invalid init parameters", "[aoi][bind]") {
         result));
 
     REQUIRE(result == "false,true");
+}
+
+TEST_CASE("Lua AOI binding init reset clears entities and old callback", "[aoi][bind]") {
+    AOIBindFixture f;
+    std::string result;
+
+    REQUIRE(f.RunLuaResult(
+        "aoi.init(1000, 1000, 100)\n"
+        "events = 0\n"
+        "aoi.set_event_callback(function() events = events + 1 end)\n"
+        "aoi.register_entity(1, 100, 100, 50)\n"
+        "aoi.init(500, 500, 50)\n"
+        "local after_reset = aoi.count()\n"
+        "aoi.register_entity(2, 100, 100, 50)\n"
+        "return after_reset .. ',' .. aoi.count() .. ',' .. events",
+        result));
+
+    REQUIRE(result == "0,1,0");
+}
+
+TEST_CASE("Lua AOI binding failed init preserves old manager state", "[aoi][bind]") {
+    AOIBindFixture f;
+    std::string result;
+
+    REQUIRE(f.RunLuaResult(
+        "aoi.init(1000, 1000, 100)\n"
+        "aoi.register_entity(1, 100, 100, 50)\n"
+        "local ok, err = aoi.init(1e20, 1000, 1)\n"
+        "return tostring(ok == nil) .. ',' .. tostring(string.find(err, 'AOI init failed') ~= nil)"
+        " .. ',' .. aoi.count()",
+        result));
+
+    REQUIRE(result == "true,true,1");
+}
+
+TEST_CASE("Lua AOI binding shutdown leaves query APIs in empty state", "[aoi][bind]") {
+    AOIBindFixture f;
+    std::string result;
+
+    REQUIRE(f.RunLuaResult(
+        "aoi.init(1000, 1000, 100)\n"
+        "aoi.register_entity(1, 100, 100, 50)\n"
+        "aoi.shutdown()\n"
+        "return aoi.count() .. ',' .. #aoi.get_visible(1) .. ',' .. #aoi.query_radius(100, 100, 10)",
+        result));
+
+    REQUIRE(result == "0,0,0");
+}
+
+TEST_CASE("Lua AOI binding update_radius changes observer visibility", "[aoi][bind]") {
+    AOIBindFixture f;
+    std::string result;
+
+    REQUIRE(f.RunLuaResult(
+        "aoi.init(1000, 1000, 100)\n"
+        "aoi.register_entity(1, 100, 100, 10)\n"
+        "aoi.register_entity(2, 130, 100, 10)\n"
+        "local before = #aoi.get_visible(1)\n"
+        "aoi.update_radius(1, 40)\n"
+        "local after = #aoi.get_visible(1)\n"
+        "return before .. ',' .. after",
+        result));
+
+    REQUIRE(result == "0,1");
 }

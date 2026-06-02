@@ -448,14 +448,17 @@ game_error_t copy_entity_ids(const std::vector<engine::entity::EntityId>& ids,
     }
 
     const int count = static_cast<int>(ids.size());
+    if (out_cap < 0) {
+        return GAME_ERR_INVALID_ARG;
+    }
+    if (!out_count && (!out_ids || out_cap == 0)) {
+        return GAME_ERR_INVALID_ARG;
+    }
     if (out_count) {
         *out_count = count;
     }
     if (!out_ids || out_cap == 0) {
         return GAME_OK;
-    }
-    if (out_cap < 0) {
-        return GAME_ERR_INVALID_ARG;
     }
     if (out_cap < count) {
         return GAME_ERR_BUFFER_TOO_SMALL;
@@ -1216,8 +1219,7 @@ extern "C" game_error_t game_aoi_register_entity(game_aoi_t* aoi,
         !valid_finite_float(radius)) {
         return GAME_ERR_INVALID_ARG;
     }
-    aoi->manager->RegisterEntity(static_cast<engine::entity::EntityId>(entity_id), radius);
-    aoi->manager->OnEntityMove(static_cast<engine::entity::EntityId>(entity_id), x, y);
+    aoi->manager->UpsertEntity(static_cast<engine::entity::EntityId>(entity_id), x, y, radius);
     return GAME_OK;
 }
 
@@ -1230,6 +1232,17 @@ extern "C" game_error_t game_aoi_move_entity(game_aoi_t* aoi,
         return GAME_ERR_INVALID_ARG;
     }
     aoi->manager->OnEntityMove(static_cast<engine::entity::EntityId>(entity_id), x, y);
+    return GAME_OK;
+}
+
+extern "C" game_error_t game_aoi_update_radius(game_aoi_t* aoi,
+                                                uint64_t entity_id,
+                                                float radius) {
+    if (!aoi || !aoi->manager || entity_id == engine::entity::kInvalidEntityId ||
+        radius < 0.0f || !valid_finite_float(radius)) {
+        return GAME_ERR_INVALID_ARG;
+    }
+    aoi->manager->UpdateEntityRadius(static_cast<engine::entity::EntityId>(entity_id), radius);
     return GAME_OK;
 }
 

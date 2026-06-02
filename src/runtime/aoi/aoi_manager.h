@@ -15,40 +15,55 @@
 namespace engine {
 namespace aoi {
 
-// Callback invoked when an entity enters or leaves another's AOI radius.
-// observer: the entity whose AOI detects the change
-// target: the entity that entered or left the observer's AOI
-// entered: true if target entered, false if target left
+/**
+ * Callback invoked when a target enters or leaves an observer's AOI radius.
+ *
+ * Visibility is directional: observer seeing target does not imply target
+ * seeing observer. The callback is synchronous and must not call mutating
+ * AOIManager APIs on the same manager.
+ */
 using AOIEventCallback = std::function<void(entity::EntityId observer,
 											 entity::EntityId target,
 											 bool entered)>;
 
-// AOIManager wraps SpatialGrid with AOI radius tracking and enter/leave events.
-// Each entity has an AOI radius. When entities move, the manager compares
-// visibility sets and fires callbacks for entities that entered or left.
+/**
+ * Single-zone AOI manager backed by a fixed 2D SpatialGrid.
+ *
+ * Each registered entity owns an observer-side AOI radius. visible_[observer]
+ * stores the targets currently visible to that observer, while watchers_[target]
+ * stores the reverse relation so unregistering a target does not require a full
+ * visible-table scan. This class is not internally thread-safe; callers must
+ * provide single-thread or phase ownership.
+ */
 class CLOUD_ENGINE_API AOIManager {
 public:
 	explicit AOIManager(std::unique_ptr<SpatialGrid> grid);
 
-	// Register entity with its interest radius.
+	/** Register an entity radius without assigning a position. */
 	void RegisterEntity(entity::EntityId id, float aoi_radius);
 
-	// Unregister entity, removing from grid and visibility tracking.
+	/** Register or update radius and position as one atomic AOI mutation. */
+	void UpsertEntity(entity::EntityId id, float x, float y, float aoi_radius);
+
+	/** Update only the observer-side AOI radius for a registered entity. */
+	void UpdateEntityRadius(entity::EntityId id, float aoi_radius);
+
+	/** Unregister entity, removing it from grid and both visibility tables. */
 	void UnregisterEntity(entity::EntityId id);
 
-	// Called when entity position changes.
+	/** Move a registered entity and recompute affected observer visibility. */
 	void OnEntityMove(entity::EntityId id, float x, float y);
 
-	// Get entities currently visible to this entity.
+	/** Return sorted targets currently visible to this observer, excluding self. */
 	std::vector<entity::EntityId> GetVisibleEntities(entity::EntityId id) const;
 
-	// Get entities within radius of a point.
+	/** Return raw radius-query results from the spatial grid. */
 	std::vector<entity::EntityId> QueryRadius(float x, float y, float radius) const;
 
-	// Subscribe to enter/leave events.
+	/** Subscribe to synchronous enter/leave events. */
 	void SetEventCallback(AOIEventCallback callback);
 
-	// Total registered entity count.
+	/** Return the number of registered AOI entities. */
 	size_t EntityCount() const { return aoi_radii_.size(); }
 
 private:
@@ -67,6 +82,9 @@ private:
 	void DispatchEvents(const std::vector<AOIEvent>& events);
 	void RecomputeMaxAOIRadius();
 	void AddObserversNear(float x, float y, std::unordered_set<entity::EntityId>& observers) const;
+	void EnsureCanMutate() const;
+	void RemoveWatcher(entity::EntityId target, entity::EntityId observer);
+	void AddWatcher(entity::EntityId target, entity::EntityId observer);
 
 	std::unique_ptr<SpatialGrid> grid_;
 	AOIEventCallback event_callback_;
@@ -74,8 +92,10 @@ private:
 	std::unordered_map<entity::EntityId, float> aoi_radii_;
 	std::unordered_map<entity::EntityId, Position> positions_;
 	std::unordered_map<entity::EntityId, std::unordered_set<entity::EntityId>> visible_;
+	std::unordered_map<entity::EntityId, std::unordered_set<entity::EntityId>> watchers_;
 	float max_aoi_radius_ = 0.0f;
+	bool dispatching_events_ = false;
 };
 
-}  // namespace aoi
-}  // namespace engine
+}  /* namespace aoi */
+}  /* namespace engine */

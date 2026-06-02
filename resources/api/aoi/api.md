@@ -42,7 +42,7 @@ Initializes the AOI system with a spatial grid.
 | `ok` | `boolean` | `int` (0/1 via `lua_pushboolean`) | `true` on success |
 | `nil, err` | `nil, string` | Lua stack values | Returned when AOI initialization fails after argument validation, for example an oversized grid allocation |
 
-无效参数会通过 `luaL_argerror` 抛出 Lua 参数错误。再次调用会先清理当前 AOI 实例、事件回调和已注册实体，然后创建新的空间索引。
+无效参数会通过 `luaL_argerror` 抛出 Lua 参数错误。再次调用会先构造新的空间索引和 AOI manager；构造成功后才清理并替换当前 AOI 实例、事件回调和已注册实体。构造失败返回 `nil, err`，旧 AOI 状态保持不变。
 
 ### `aoi.set_event_callback(callback_or_nil)`
 
@@ -75,7 +75,7 @@ Registers an entity in the AOI system and sets its position.
 | success | — | 成功无返回值 |
 | failure | `nil, string` | AOI 未初始化、回调内修改或底层异常时返回 `nil, err` |
 
-如果 AOI 未初始化，返回 `nil, "AOI not initialized"`。如果同一 `entity_id` 已存在，本接口是 upsert：先更新半径，再更新位置。不要把 re-register 当作普通移动接口使用；普通移动应调用 `aoi.update_entity`。
+如果 AOI 未初始化，返回 `nil, "AOI not initialized"`。如果同一 `entity_id` 已存在，本接口是 upsert：半径和位置会作为一次 AOI mutation 原子更新，不会先在旧位置产生临时 enter/leave。不要把 re-register 当作普通移动接口使用；普通移动应调用 `aoi.update_entity`，只改半径应调用 `aoi.update_radius`。
 
 ### `aoi.update_entity(entity_id, x, y)`
 
@@ -93,6 +93,22 @@ Updates an entity's position. It recomputes visibility for the mover and for nea
 | failure | `nil, string` | AOI 未初始化、回调内修改或底层异常时返回 `nil, err` |
 
 事件语义是方向性的：移动者进入静止 observer 的半径时，会触发 `observer -> mover` 的 enter；移动者自己的可见集合变化时，也会触发 `mover -> target` 的 enter/leave。
+
+### `aoi.update_radius(entity_id, aoi_radius)`
+
+Updates only an entity's observer-side visibility radius.
+
+| Parameter | Type | C Type | Description |
+|-----------|------|--------|-------------|
+| `entity_id` | `integer` | `lua_Integer` → `entity::EntityId` (via `luaL_checkinteger`) | Entity identifier |
+| `aoi_radius` | `number` | `float` (via `luaL_checknumber` + `static_cast<float>`) | New observer-side visibility radius |
+
+| Returns | Type | Description |
+|---------|------|-------------|
+| success | — | 成功无返回值 |
+| failure | `nil, string` | AOI 未初始化、回调内修改或底层异常时返回 `nil, err` |
+
+This recomputes only this observer's maintained visible set. Other observers are unaffected because the current implementation has no target-side aura.
 
 ### `aoi.unregister_entity(entity_id)`
 
@@ -163,6 +179,7 @@ Shuts down the AOI system, destroying the spatial grid and clearing all register
 | 所有实体操作 | entity_id | `integer` | `entity::EntityId` (uint64) | `luaL_checkinteger` + `static_cast<EntityId>` |
 | 位置相关 | x, y, new_x, new_y | `number` | `float` | `luaL_checknumber` + `static_cast<float>` |
 | `register_entity` | aoi_radius | `number` | `float` (default 100.0f) | `luaL_optnumber` + `static_cast<float>` |
+| `update_radius` | aoi_radius | `number` | `float` | `luaL_checknumber` + `static_cast<float>` |
 | `query_radius` | radius | `number` | `float` | `luaL_checknumber` + `static_cast<float>` |
 | `get_visible` / `query_radius` | 返回值 | `table` (array of integer) | `vector<EntityId>` → `lua_Integer` | `lua_pushinteger` + `lua_rawseti` |
 | `count` | 返回值 | `integer` | `size_t` → `lua_Integer` | `lua_pushinteger` |
@@ -192,6 +209,9 @@ end
 
 -- Update position (entity 1001 moves closer to 1003)
 aoi.update_entity(1001, 4900, 5000)
+
+-- Update observer-side AOI radius without moving the entity
+aoi.update_radius(1001, 250)
 
 -- Radius query (find all entities near a point)
 local nearby = aoi.query_radius(5000, 5000, 300)

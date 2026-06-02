@@ -304,7 +304,7 @@ visible[observer] = {target...}
 watchers[target] = {observer...}
 ```
 
-evpp3 当前 `UnregisterEntity` 会扫描 `visible_` 中所有 observer 来清除被删除实体。实体数较小时没问题；进入大区服后应增加 `watchers_`。
+evpp3 当前 `AOIManager` 已维护 `watchers_` 反向索引。`RecomputeVisibility` 在 enter/leave diff 时同步维护 `visible_[observer]` 和 `watchers_[target]`，`UnregisterEntity` 使用反向索引找到曾经看见被删除实体的 observers，避免删除路径全量扫描所有 visible 集合。
 
 ### 6.5 进入/离开抖动
 
@@ -339,11 +339,11 @@ evpp3 的 `QueryRadius` 会按半径覆盖格子，不依赖 9 宫格，因此�
 - `GetVisibleEntities(id)` 返回 `visible_[id]`，由 `RecomputeVisibility` 维护，会排除自身，并按 entity id 排序返回。
 - `QueryRadius`、`QueryAOI` 和 `QueryAOIAt` 不排序。结果顺序来自格子扫描和格内 `vector` 顺序，`swap-remove` 删除也会改变格内顺序；不能把它当网络协议顺序。
 - `aoi_radius = 0` 是合法半径，只能看到与 observer 同坐标的其他实体。
-- `register_entity` 对同一个 id 调用时实际是 upsert：先更新半径，再通过 `OnEntityMove` 更新位置。若该 id 已有旧位置，当前实现可能先基于旧位置重算一次自身可见集合，再按新位置重算受影响 observer。后续应明确 API 语义，避免脚本把它当作普通移动接口使用。
+- `register_entity` 对同一个 id 调用时实际是 upsert：Lua/C API 会通过 `AOIManager::UpsertEntity` 原子更新半径和位置，避免先在旧位置产生一轮临时 enter/leave。普通移动仍应使用 `update_entity` / `game_aoi_move_entity`；只改半径应使用 `aoi.update_radius` / `game_aoi_update_radius`。
 - `aoi.init` 在参数校验后会先构造新的 `SpatialGrid` 和 `AOIManager`；构造成功后才清理旧实例、旧回调和旧实体并替换为新实例。若构造失败并返回 `nil, err`，旧 AOI 状态仍保留。`aoi.shutdown` 会销毁 AOI 实例并清空回调。未初始化时，`get_visible` 和 `query_radius` 返回空表，`count` 返回 0。
 - Lua 绑定的无效参数通过 `luaL_argerror` 抛出 Lua 参数错误；`nil, err` 只用于未初始化、回调重入 guard 和捕获到底层异常的 mutation API。C++ API 使用异常或空结果，C Client API 使用 `game_error_t`，三层错误语义不能混写。
 - AOI 回调是同步调用。Lua 回调期间禁止再次调用 `register_entity`、`update_entity`、`unregister_entity`、`shutdown` 或 `set_event_callback` 修改 AOI，否则 Lua 绑定会返回 `nil, err`。
-- C++ `AOIManager::SetEventCallback` 没有回调重入 guard；如果 C++ 回调再次调用同一个 manager 修改 AOI，当前文档应视为未定义的上层误用，后续可加统一 reentrancy guard。
+- C++ `AOIManager::SetEventCallback` 现在有统一回调重入 guard。回调派发期间同一个 manager 的 mutation API 会抛出 `std::logic_error`；Lua 绑定会在进入 manager 前返回 `nil, err`。
 - `AOIManager` 和 `SpatialGrid` 没有内部锁，当前应按单线程或明确阶段所有权串行调用。若网络线程、逻辑线程、脚本线程都会触碰 AOI，需要先建立调度队列或 actor ownership。
 - `OnEntityMove` 会按 id 排序受影响 observer，但 `RecomputeVisibility` 内部用 `unordered_set` 计算目标差集，同一 observer 的多个 enter/leave 目标派发顺序不是稳定契约。若上层复制系统要求确定性，应在派发前按 target id 排序。
 - 当前没有 `space_id`、`layer_id`、`phase_id`、category、team、owner、visibility predicate。所有注册实体默认处于同一个逻辑世界。
@@ -544,6 +544,7 @@ C Client API：
 - `game_aoi_create` / `game_aoi_destroy`
 - `game_aoi_register_entity`
 - `game_aoi_move_entity`
+- `game_aoi_update_radius`
 - `game_aoi_unregister_entity`
 - `game_aoi_count`
 - `game_aoi_query_radius`
@@ -577,10 +578,10 @@ C Client API：
 1. 缺少 `space_id`、`layer_id`、`phase_id`。现在所有实体默认在同一世界，不能表达副本、频道、任务相位。
 2. 缺少逻辑过滤。阵营、队伍、隐身、对象类型、owner-only 状态无法参与 AOI。
 3. 缺少 target-side aura。当前 target 被当作点对象，不能表达“大型对象、音源、远景建筑可以被更远感知”的规则。
-4. 缺少反向 watchers。删除实体时扫描全部 `visible_`，大规模下会变成热点。
+4. 已增加反向 `watchers_` 索引。删除实体不再扫描全部 `visible_`，后续大规模优化应继续关注 watcher churn 和内存占用。
 5. 缺少批处理。每次移动立即重算并同步派发事件，移动频率高时会浪费 CPU。
 6. 缺少线程/阶段所有权模型。当前 AOI 不是线程安全组件，网络层、逻辑层和脚本层如果跨线程调用，必须先串行化。
-7. C++ callback 缺少重入保护。Lua 绑定有 guard，但直接使用 `AOIManager::SetEventCallback` 的 C++ 调用方仍可能在回调内递归修改 manager。
+7. 已增加 C++ callback 重入保护。回调内递归修改同一个 manager 会失败，不会破坏 `SpatialGrid`、`visible_` 或 `watchers_` 状态。
 8. 缺少复制调度。AOI 只返回列表，没有按连接预算、优先级、LOD 发包。
 9. 缺少热点保护。没有最大可见数、距离排序、区域限流、聚合或降级策略。
 10. 缺少静态/动态分层。大量静态对象会和移动对象混在同一个索引层。
@@ -606,7 +607,7 @@ C Client API：
 - `SpatialGrid` 构造参数校验、插入、重复插入更新、删除、跨格移动、`QueryRadius`、9 宫格 `QueryAOI`、越界坐标 clamp、负半径安全返回。
 - `AOIManager` 注册/注销计数、非法半径/位置、移动进入/离开、方向性可见、相同半径下的对称可见、未注册实体移动忽略、无回调时安全。
 - Lua 绑定导出、`aoi.count()`、跨 `ScriptVM` 状态隔离、回调异常恢复、回调内 `shutdown()` mutation guard、基本 symmetric callbacks、非法 init 参数。
-- C Client API 的 `game_aoi_create/register_entity/move_entity/query_radius/get_visible/unregister_entity/count` 基本路径。
+- C Client API 的 `game_aoi_create/register_entity/move_entity/update_radius/query_radius/get_visible/unregister_entity/count` 基本路径。
 - 性能基准覆盖均匀查询、拥挤格跨格更新和 `AOIManager` crowd move。
 
 仍缺少或需要加强：
@@ -648,7 +649,7 @@ C Client API：
   - C++ callback 重入修改同一个 manager 的禁止策略或 guard。
   - C Client API 的非法参数、空输出指针计数查询、容量不足、方向性可见和 upsert。
 - 给 `QueryAOI` 标注使用限制，避免被误用为任意半径查询。
-- 给 `register_entity` 明确“新增还是 upsert”。如果保留 upsert，应增加单独 `aoi.update_radius(entity_id, radius)`，避免注册接口承担移动和半径更新双重语义。
+- 给 `register_entity` 明确“新增还是 upsert”。当前保留 upsert，并已增加单独 `aoi.update_radius(entity_id, radius)` / `game_aoi_update_radius`，避免注册接口承担移动和半径更新双重语义。
 - 保持 API 文档和 C Client API 说明与实现同步：坐标越界 clamp、clamp 不改写原始坐标、`QueryRadius` 包含自身、`GetVisibleEntities` 排除自身、非线程安全、回调同步派发、回调期间禁止修改、`aoi.count()` 和 `aoi.shutdown()` 都应作为契约保留。
 - 增加事件顺序测试：enter 必须先于该 target 的移动 delta，leave 后不能再发送普通 delta。
 - 若网络层需要可复现事件顺序，应在 AOI 事件派发前排序目标 id；否则在 API 文档中声明同一 observer 的多目标事件顺序不稳定。
@@ -687,7 +688,7 @@ using VisibilityPredicate =
 - `QueryRadius` 只在同一 `AOIKey` 内查。
 - 距离判断可先按 `observer.enter_radius + target.aura_radius` 进入，按 `observer.leave_radius + target.aura_radius` 离开；不需要 target aura 的对象把 `aura_radius` 设为 0。
 - 再执行 category 和 gameplay predicate。
-- 增加 `watchers_` 反向表。
+- 保留并扩展当前 `watchers_` 反向表。
 - 支持空间切换：旧 key leave，新 key enter，不能跨 key 直接移动。
 - 支持静态层和动态层分开索引。
 
@@ -839,7 +840,7 @@ WorldPartition
 | 结果顺序 | `GetVisibleEntities` 排序；半径/9 格查询不承诺顺序 | 网络协议层显式排序和稳定事件批次 |
 | 初始化 | `aoi.init` 成功后替换旧实例；失败时保留旧实例 | 配置热切换、灰度空间迁移、失败回滚 |
 | 回调 | Lua 回调同步派发且有 mutation guard；C++ 回调无 guard | 统一事件队列、重入保护、异步批处理 |
-| 删除 | 清理自身 visible 并扫描其他 observer 的 visible | `watchers_` 反向索引，避免全量扫描 |
+| 删除 | 清理自身 visible，并通过 `watchers_` 找到看见自己的 observers | 更大规模下继续优化 watcher churn、分层索引和批量删除 |
 | 热点 | 无 `max_visible`、LOD、预算或降级 | 连接预算、距离排序、低频 LOD、实例迁移 |
 | 线程 | 无内部锁，要求单线程或阶段所有权 | actor ownership、任务队列、跨线程只投递命令 |
 | 复制 | AOI 只给候选和 enter/leave | spawn/delta/despawn 生命周期队列和复制预算 |
