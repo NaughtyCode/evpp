@@ -218,3 +218,27 @@ return table.concat({
 		result));
 	REQUIRE(result == "true,true,false,true,false,true,true,true");
 }
+
+TEST_CASE("space binding rejects negative identifiers before unsigned conversion",
+		  "[script_bind][space]") {
+	ExportAllFixture f;
+	std::string result;
+
+	REQUIRE(f.RunLuaResult(
+		R"lua(
+local ok_get = pcall(space.get, -1)
+local ok_destroy = pcall(space.destroy, -1)
+local ok_space = pcall(space.send, -1, 1, 'x')
+local ok_target = pcall(space.send, 1, -1, 'x')
+local ok_source = pcall(space.send, 1, 1, 'x', -1)
+return table.concat({
+    tostring(ok_get == false),
+    tostring(ok_destroy == false),
+    tostring(ok_space == false),
+    tostring(ok_target == false),
+    tostring(ok_source == false),
+}, ',')
+)lua",
+		result));
+	REQUIRE(result == "true,true,true,true,true");
+}

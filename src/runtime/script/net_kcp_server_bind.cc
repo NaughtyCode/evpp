@@ -62,6 +62,8 @@ std::unordered_set<KcpServerCtx*> g_kcp_server_ctxs;
 /* Lifetime guard: prevents RunInLoop callbacks from accessing a freed
  * lua_State during shutdown. See net_lifetime.h for the pattern. */
 static NetAliveGuard g_kcp_alive;
+static PendingRefTracker g_kcp_pending_unref;
+static lua_State* g_kcp_state = nullptr;
 
 // ── Bind the MessageHandler ─────────────────────────────────────────
 void BindKcpMessageHandler(KcpServerCtx* ctx) {
@@ -140,13 +142,17 @@ void ReleaseKcpServer(lua_State* L, KcpServerCtx* ctx) {
 
 	auto* loop = Engine::Instance().GetEventLoop();
 	if (loop && loop->IsRunning()) {
+		g_kcp_pending_unref.AddRef(old_msg_ref);
+		g_kcp_pending_unref.AddRef(old_inst_ref);
 		loop->RunInLoop([L, old_msg_ref, old_inst_ref, ctx] {
 			if (g_kcp_alive.TryAcquire()) {
 				if (old_msg_ref != LUA_NOREF) {
 					luaL_unref(L, LUA_REGISTRYINDEX, old_msg_ref);
+					g_kcp_pending_unref.RemoveRef(old_msg_ref);
 				}
 				if (old_inst_ref != LUA_NOREF) {
 					luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
+					g_kcp_pending_unref.RemoveRef(old_inst_ref);
 				}
 				g_kcp_alive.Release();
 			}
@@ -315,11 +321,13 @@ int l_kcp_server_set_on_message(lua_State* L) {
 
 	if (old_ref != LUA_NOREF) {
 		auto* loop = Engine::Instance().GetEventLoop();
-		if (loop) {
+		if (loop && loop->IsRunning()) {
 			lua_State* L_ptr = L;
+			g_kcp_pending_unref.AddRef(old_ref);
 			loop->RunInLoop([L_ptr, old_ref] {
 				if (!g_kcp_alive.TryAcquire()) return;
 				luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_ref);
+				g_kcp_pending_unref.RemoveRef(old_ref);
 				g_kcp_alive.Release();
 			});
 		} else {
@@ -428,6 +436,7 @@ const luaL_Reg kKcpServerFunctions[] = {
 void RegisterKcpServerMetaTable(lua_State* L) {
 	if (!L) return;
 
+	g_kcp_state = L;
 	g_kcp_alive.Reset();
 	RegisterInstanceMeta(L, kKcpServerMetaName, kKcpServerMethods, l_kcp_server_gc);
 }
@@ -449,6 +458,7 @@ void ShutdownKcpServerBindings() {
 	/* Step 2: Wait for all in-flight callbacks to finish their Lua
 	 * operations. After this returns, no callback is touching lua_State. */
 	g_kcp_alive.WaitDrain();
+	g_kcp_pending_unref.UnrefAll(g_kcp_state);
 
 	/* Step 3: Stop all servers. Recv threads join; any RunInLoop callbacks
 	 * queued between Shutdown and Stop will bail on TryAcquire. */
@@ -480,6 +490,7 @@ void ShutdownKcpServerBindings() {
 	} else {
 		ENGINE_LOG_DEBUG(logger, "ScriptBind: no active KCP server bindings to shut down");
 	}
+	g_kcp_state = nullptr;
 }
 
 }  // namespace script

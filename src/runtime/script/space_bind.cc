@@ -38,6 +38,15 @@ void SetCurrentSpace(lua_State* L, space::Space* current_space) {
 	lua_rawsetp(L, LUA_REGISTRYINDEX, &kCurrentSpaceRegistryKey);
 }
 
+uint64_t CheckPositiveId(lua_State* L, int index, const char* name) {
+	const lua_Integer value = luaL_checkinteger(L, index);
+	if (value <= 0) {
+		luaL_argerror(L, index, name);
+		return 0;
+	}
+	return static_cast<uint64_t>(value);
+}
+
 void PushSpaceInfo(lua_State* L, const space::Space& sp) {
 	lua_newtable(L);
 	lua_pushinteger(L, static_cast<lua_Integer>(sp.GetId()));
@@ -150,7 +159,8 @@ int l_space_create(lua_State* L) {
 
 // space.get(id) -> space info table or nil
 int l_space_get(lua_State* L) {
-	space::SpaceId id = static_cast<space::SpaceId>(luaL_checkinteger(L, 1));
+	space::SpaceId id =
+		static_cast<space::SpaceId>(CheckPositiveId(L, 1, "space id must be positive"));
 	auto* sp = space::SpaceManager::Instance().GetSpace(id);
 	if (!sp) {
 		lua_pushnil(L);
@@ -163,7 +173,8 @@ int l_space_get(lua_State* L) {
 
 // space.destroy(id)
 int l_space_destroy(lua_State* L) {
-	space::SpaceId id = static_cast<space::SpaceId>(luaL_checkinteger(L, 1));
+	space::SpaceId id =
+		static_cast<space::SpaceId>(CheckPositiveId(L, 1, "space id must be positive"));
 	auto* current = GetCurrentSpace(L);
 	if (current && current->GetId() == id) {
 		lua_pushnil(L);
@@ -177,9 +188,10 @@ int l_space_destroy(lua_State* L) {
 
 // space.send(space_id, target_entity, payload[, source_entity])
 int l_space_send(lua_State* L) {
-	space::SpaceId target = static_cast<space::SpaceId>(luaL_checkinteger(L, 1));
-	entity::EntityId target_entity =
-		static_cast<entity::EntityId>(luaL_checkinteger(L, 2));
+	space::SpaceId target =
+		static_cast<space::SpaceId>(CheckPositiveId(L, 1, "space id must be positive"));
+	entity::EntityId target_entity = static_cast<entity::EntityId>(
+		CheckPositiveId(L, 2, "target entity id must be positive"));
 	size_t len = 0;
 	const char* payload = luaL_checklstring(L, 3, &len);
 
@@ -199,7 +211,8 @@ int l_space_send(lua_State* L) {
 		msg.source_space = current->GetId();
 	}
 	if (!lua_isnoneornil(L, 4)) {
-		msg.source_entity = static_cast<entity::EntityId>(luaL_checkinteger(L, 4));
+		msg.source_entity = static_cast<entity::EntityId>(
+			CheckPositiveId(L, 4, "source entity id must be positive"));
 	}
 
 	space::SpaceMessageRouter::Instance().SendMessage(std::move(msg));

@@ -1,6 +1,7 @@
 #include "runtime/script/orm_bind.h"
 
 #include <cstdint>
+#include <limits>
 
 #include "runtime/core/log/log.h"
 #include "runtime/database/orm.h"
@@ -15,6 +16,31 @@ namespace engine {
 namespace script {
 
 namespace {
+
+void ReadFindOptionInt32(lua_State* L, int table_index, const char* field_name, int32_t& out) {
+	lua_getfield(L, table_index, field_name);
+	if (lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+		return;
+	}
+	if (!lua_isinteger(L, -1)) {
+		lua_pop(L, 1);
+		luaL_error(L, "orm find option '%s' must be an integer", field_name);
+		return;
+	}
+
+	const lua_Integer value = lua_tointeger(L, -1);
+	lua_pop(L, 1);
+	if (value < 0) {
+		out = 0;
+		return;
+	}
+	if (value > static_cast<lua_Integer>((std::numeric_limits<int32_t>::max)())) {
+		luaL_error(L, "orm find option '%s' is too large", field_name);
+		return;
+	}
+	out = static_cast<int32_t>(value);
+}
 
 // orm.define(collection_name, schema_table)
 int l_orm_define(lua_State* L) {
@@ -101,19 +127,8 @@ int l_orm_find(lua_State* L) {
 	}
 
 	if (lua_istable(L, 3)) {
-		lua_getfield(L, 3, "limit");
-		if (lua_isinteger(L, -1)) {
-			options.limit = static_cast<int32_t>(lua_tointeger(L, -1));
-			if (options.limit < 0) options.limit = 0;
-		}
-		lua_pop(L, 1);
-
-		lua_getfield(L, 3, "skip");
-		if (lua_isinteger(L, -1)) {
-			options.skip = static_cast<int32_t>(lua_tointeger(L, -1));
-			if (options.skip < 0) options.skip = 0;
-		}
-		lua_pop(L, 1);
+		ReadFindOptionInt32(L, 3, "limit", options.limit);
+		ReadFindOptionInt32(L, 3, "skip", options.skip);
 	}
 
 	auto results = database::OrmSession::Instance().Find(collection, query, options);
@@ -121,7 +136,7 @@ int l_orm_find(lua_State* L) {
 	lua_newtable(L);
 	for (size_t i = 0; i < results.size(); ++i) {
 		lua_pushstring(L, results[i].c_str());
-		lua_rawseti(L, -2, static_cast<int>(i + 1));
+		lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
 	}
 	return 1;
 }

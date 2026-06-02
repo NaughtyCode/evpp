@@ -52,6 +52,8 @@ std::unordered_set<UdpServerCtx*> g_udp_server_ctxs;
 /* Lifetime guard: prevents RunInLoop callbacks from accessing a freed
  * lua_State during shutdown. See net_lifetime.h for the pattern. */
 static NetAliveGuard g_udp_alive;
+static PendingRefTracker g_udp_pending_unref;
+static lua_State* g_udp_state = nullptr;
 
 // ── Bind the MessageHandler ─────────────────────────────────────────
 // ctx is guaranteed to be alive while the handler runs because
@@ -124,13 +126,17 @@ void ReleaseUdpServer(lua_State* L, UdpServerCtx* ctx) {
 	if (loop && loop->IsRunning()) {
 		// Defer unref + delete so pending RunInLoop message callbacks
 		// (queued before Stop returned) execute before we free the refs.
+		g_udp_pending_unref.AddRef(old_msg_ref);
+		g_udp_pending_unref.AddRef(old_inst_ref);
 		loop->RunInLoop([L, old_msg_ref, old_inst_ref, ctx] {
 			if (g_udp_alive.TryAcquire()) {
 				if (old_msg_ref != LUA_NOREF) {
 					luaL_unref(L, LUA_REGISTRYINDEX, old_msg_ref);
+					g_udp_pending_unref.RemoveRef(old_msg_ref);
 				}
 				if (old_inst_ref != LUA_NOREF) {
 					luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
+					g_udp_pending_unref.RemoveRef(old_inst_ref);
 				}
 				g_udp_alive.Release();
 			}
@@ -174,6 +180,9 @@ int l_udp_server_listen(lua_State* L) {
 	if (arg1_type == LUA_TNUMBER) {
 		lua_Integer port64 = luaL_checkinteger(L, 1);
 		if (port64 <= 0 || port64 > 65535) {
+			if (ctx->on_message_ref != LUA_NOREF) {
+				luaL_unref(L, LUA_REGISTRYINDEX, ctx->on_message_ref);
+			}
 			CLOUDENGINE_MEM_DELETE(ctx);
 			return luaL_error(L, "port out of range");
 		}
@@ -305,11 +314,13 @@ int l_udp_server_set_on_message(lua_State* L) {
 
 	if (old_ref != LUA_NOREF) {
 		auto* loop = Engine::Instance().GetEventLoop();
-		if (loop) {
+		if (loop && loop->IsRunning()) {
 			lua_State* L_ptr = L;
+			g_udp_pending_unref.AddRef(old_ref);
 			loop->RunInLoop([L_ptr, old_ref] {
 				if (!g_udp_alive.TryAcquire()) return;
 				luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_ref);
+				g_udp_pending_unref.RemoveRef(old_ref);
 				g_udp_alive.Release();
 			});
 		} else {
@@ -353,6 +364,7 @@ const luaL_Reg kUdpServerFunctions[] = {
 void RegisterUdpServerMetaTable(lua_State* L) {
 	if (!L) return;
 
+	g_udp_state = L;
 	g_udp_alive.Reset();
 	RegisterInstanceMeta(L, kUdpServerMetaName, kUdpServerMethods, l_udp_server_gc);
 }
@@ -375,6 +387,7 @@ void ShutdownUdpServerBindings() {
 	/* Step 2: Wait for all in-flight callbacks to finish their Lua
 	 * operations. After this returns, no callback is touching lua_State. */
 	g_udp_alive.WaitDrain();
+	g_udp_pending_unref.UnrefAll(g_udp_state);
 
 	/* Step 3: Stop all servers. Recv threads join; any RunInLoop callbacks
 	 * queued between Shutdown and Stop will bail on TryAcquire. */
@@ -406,6 +419,7 @@ void ShutdownUdpServerBindings() {
 	} else {
 		ENGINE_LOG_DEBUG(logger, "ScriptBind: no active UDP server bindings to shut down");
 	}
+	g_udp_state = nullptr;
 }
 
 }  // namespace script

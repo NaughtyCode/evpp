@@ -38,6 +38,7 @@ struct TimerCtx {
 struct TimerBindState {
 	std::unordered_map<TimerId, std::shared_ptr<TimerCtx>> ctxs;
 	TimerManager* timer_mgr = nullptr;
+	bool shutting_down = false;
 };
 
 // Each ScriptVM gets its own TimerBindState. The pointer is stored in the
@@ -89,7 +90,7 @@ int l_timer_timeout(lua_State* L) {
 	}
 
 	auto* state = GetTimerState(L);
-	if (!state) {
+	if (!state || state->shutting_down || !state->timer_mgr) {
 		return luaL_error(L, "timer: system not initialized");
 	}
 
@@ -153,7 +154,7 @@ int l_timer_interval(lua_State* L) {
 	}
 
 	auto* state = GetTimerState(L);
-	if (!state) {
+	if (!state || state->shutting_down || !state->timer_mgr) {
 		return luaL_error(L, "timer: system not initialized");
 	}
 
@@ -274,6 +275,7 @@ void ShutdownTimerBindings(ScriptVM& vm) {
 
 	auto* state = GetTimerState(L);
 	if (!state) return;
+	state->shutting_down = true;
 
 	auto* logger = GetLogger();
 
