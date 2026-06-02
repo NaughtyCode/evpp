@@ -1,329 +1,636 @@
-# 深度分析 Cell-based AOI
+# MMO AOI 技术深度分析与 evpp3 落地路线
 
-Cell-based AOI（基于单元格的兴趣区域）是 MMO 服务器中最主流、最工程化的 AOI 实现方式，俗称“九宫格”或“灯塔”。它将连续空间离散化为均匀网格，以极低的查询成本支撑数以千计的实体同步。本文将从数据结构、核心算法、性能权衡、工程变种到分布式扩展，进行系统性的深度拆解。
+更新日期：2026-06-02
 
-## 1. 核心思想与本质
+AOI（Area of Interest，兴趣区域）不是一个单独算法，而是 MMO 服务器用来回答“某个连接此刻应该接收哪些对象、哪些属性、以什么频率接收”的完整工程系统。公开资料能确认的共同趋势是：现代 MMO 很少只靠“九宫格”；生产架构通常由空间索引、逻辑可见性、复制调度、带宽预算、分区/副本和过载保护共同组成。
 
-Cell-based AOI 的本质是：用空间换时间，通过粗粒度的网格索引将全局遍历 `O(N²)` 降低为基于局部格子的潜在可见集遍历。
+本文基于公开的引擎文档、商业中间件文档、BigWorld 式 MMO 服务器资料、EVE Online 技术博客、AOI/Interest Management 学术综述，以及本仓库当前 `src/runtime/aoi` 实现，给出面向 evpp3 的技术判断和路线。
 
-- 世界被划分成边长为 `C` 的正方形格子。
-- 每个格子维护一个实体容器（列表或集合）。
-- 实体的“兴趣区域”（视野）是一个以其坐标为圆心、半径 `R` 的圆。
-- 查询时，只处理圆心周围的格子集合（圆形覆盖的格子），从中提取实体进行精确距离过滤。
+## 1. 结论先行
 
-这种方式利用了空间局部性：绝大多数交互都发生在邻近实体之间，而网格将邻近关系固化为一组格子坐标，使定位变为 `O(1)` 的哈希或数组访问。
+今天的 MMO AOI 主流结论如下：
 
-## 2. 数据结构设计
+1. 单区服、单地图、副本、野外小规模场景，首选均匀网格或空间哈希。它实现简单、缓存友好、查询成本稳定，是商业项目中最常见的基础层。
+2. 大世界不会只靠 AOI 解决扩容。它会先做地图分区、地图副本、频道、相位、战场实例或 Cell Server 分治，再在每个分区内部跑 AOI。
+3. 热点战斗是 AOI 的硬上限。所有人都在同一个兴趣区域内时，任何空间裁剪都会退化，必须配合人数上限、状态降级、更新优先级、低频 LOD、技能表现简化、战场实例或 EVE 式时间膨胀。
+4. 现代 AOI 的核心产物不是“附近实体列表”，而是每个连接的复制列表。Unreal Replication Graph、Photon Interest Key、Unity/Mirror 可见性系统都在把 AOI 从单纯距离查询提升为复制策略。
+5. 安全性和玩法规则是 AOI 的一部分。隐身、阵营、队伍、相位、视线遮挡、匹配房间、任务阶段都必须参与过滤，否则客户端会收到不该知道的状态。
+6. evpp3 当前实现适合作为 Zone 内的基础 AOI：固定二维网格、精确半径查询、方向性可见集合、Lua enter/leave 回调。它距离生产 MMO AOI 还缺少空间/层过滤、逻辑谓词、批处理调度、热点降级和分布式边界代理。
 
-### 2.1 格子的表示与存储
+## 2. 现代 MMO AOI 的分层模型
 
-```cpp
-// 格子坐标，可完美哈希
-struct GridCoord {
-    int x, y;
-    bool operator==(const GridCoord& o) const { return x == o.x && y == o.y; }
-};
-
-// 哈希函数
-struct GridCoordHash {
-    size_t operator()(const GridCoord& g) const {
-        return (size_t(g.x) * 73856093) ^ (size_t(g.y) * 19349663);
-    }
-};
-
-// 世界网格容器
-std::unordered_map<GridCoord, std::list<Entity*>, GridCoordHash> grid_map;
-```
-
-- 固定二维数组：适合边界固定的世界，速度快，但浪费内存。
-- 哈希表（空间哈希）：动态创建格子，内存按需分配，天然支持无限世界，是工业首选。
-
-每个格子内的实体容器通常采用双向链表（频繁插入删除，不需要随机访问），也可使用 `std::vector` 配合惰性删除。
-
-### 2.2 实体与视野关系
-
-每个实体维护两个集合，保证双向可见性：
-
-```cpp
-struct Entity {
-    int id;
-    float x, y;
-    float view_radius;   // 视野半径 R
-
-    // AOI 维护的关系
-    std::unordered_set<Entity*> observers;  // 我能看到的实体
-    std::unordered_set<Entity*> watchers;   // 能看到我的实体
-    GridCoord curr_grid;
-};
-```
-
-- `observers` 表示从“我”出发的可见集合，用于广播移动、技能给它们。
-- `watchers` 表示其他实体看到我，主要用于在我离开或销毁时通知对方。
-
-双向维护保证了通知的完整性：A 进入 B 的视野，会同时加入 `A.observers` 和 `B.watchers`，反之亦然。任何一方都能触发正确的 `Enter` / `Leave` 事件。
-
-## 3. 核心算法精细化剖析
-
-Cell-based AOI 的生命线是三种事件：进入场景、离开场景、移动。其中移动是最频繁且最复杂的。
-
-### 3.1 实体进入场景（Spawn）
-
-当一个新实体 `E` 加入世界：
-
-1. 计算 `E` 的格子坐标 `g = GridCoord(floor(x / C), floor(y / C))`，将 `E` 插入 `grid_map[g]`。
-2. 计算 `E` 的兴趣格子集合 `G`：以 `E` 为圆心，半径 `R` 的圆覆盖的所有格子。
-3. 遍历 `G` 中每一个格子 `cell` 内的所有实体 `other`。
-4. 若 `other != E` 且 `distance(E, other) <= R`：
-   - `E.observers.insert(other)`
-   - `other.watchers.insert(E)`
-   - 向 `E` 通知 `other` 的进入（发送 `other` 的完整创建信息）。
-   - 向 `other` 通知 `E` 的进入。
-
-若对称视野，同样将 `other` 加入 `E` 的观察者？这里其实只需单向触发：`E` 看到 `other`，同时 `other` 也应看到 `E`（因为距离对称），所以我们可以在 `other.watchers` 中插入 `E` 的同时，也把 `E` 插入 `other.observers`，并且给 `other` 发 `E` 的创建。这在第 3 步中由“向 other 通知”自然完成，并同时更新 `other` 的 `observers`。因此一个遍历即可双向建立关系。
-
-### 3.2 实体离开场景（Despawn）
-
-实体 `E` 离开世界：
-
-1. 从 `grid_map` 中移除 `E`。
-2. 遍历 `E.watchers` 中的每个实体 `other`：
-   - 从 `other.observers` 中移除 `E`。
-   - 向 `other` 发送 `Leave(E)` 事件。
-3. 遍历 `E.observers` 中的每个实体 `other`：
-   - 从 `other.watchers` 中移除 `E`。
-4. 清空 `E` 的两个集合。
-
-这里不再发 `Leave`，因为在上一步 `other` 作为 watcher 时已经收到离开通知。但需注意对称性：如果视野是非对称的，则需要遍历两个集合。通常对称设计仅遍历 `watchers` 就够了。
-
-### 3.3 实体移动（Move）：最复杂的核心
-
-移动是 AOI 的性能关键，每秒可能调用几十次。目标是增量更新可见集合，只触发变化的 `Enter` / `Leave` 事件。
-
-假设视野半径固定且对称，以下为精确且高效的算法：
-
-```cpp
-void Entity::on_move(float new_x, float new_y) {
-    GridCoord new_grid = compute_grid(new_x, new_y);
-
-    // 1. 格子变更处理
-    if (new_grid != curr_grid) {
-        grid_map[curr_grid].remove(this);
-        grid_map[new_grid].push_back(this);
-        curr_grid = new_grid;
-    }
-
-    // 2. 计算新兴趣格子集合 G_new（以 (new_x,new_y) 为圆心，R 为半径覆盖的格子）
-    auto G_new = calc_interest_grids(new_x, new_y, view_radius);
-
-    // 3. 构建新的潜在可见集合 new_observers
-    std::unordered_set<Entity*> new_observers;
-    for (auto& g : G_new) {
-        auto it = grid_map.find(g);
-        if (it == grid_map.end()) continue;
-        for (Entity* other : it->second) {
-            if (other == this) continue;
-            if (dist_sq(new_x, new_y, other->x, other->y) <= view_radius_sq) {
-                new_observers.insert(other);
-            }
-        }
-    }
-
-    // 4. 处理离开事件：旧可见但不在新可见中的实体
-    for (Entity* other : observers) {
-        if (new_observers.find(other) == new_observers.end()) {
-            // 双向移除
-            other->watchers.erase(this);
-
-            // 通知 other 我离开了他的视野
-            notify_leave(other, this);
-
-            // 若对称，也需要从 other.observers 移除？实际上当 other 收到 Leave 时会自行维护。
-            // 但为了数据一致性，这里直接维护：
-            other->observers.erase(this);
-        }
-    }
-
-    // 5. 处理进入事件：新可见但不在旧可见中的实体
-    for (Entity* other : new_observers) {
-        if (observers.find(other) == observers.end()) {
-            // 双向添加
-            observers.insert(other);
-            other->watchers.insert(this);
-
-            // 通知双方进入
-            notify_enter(this, other);
-            notify_enter(other, this);
-
-            // 对称更新 other.observers
-            other->observers.insert(this);
-        } else {
-            // 仍在视野内，仅转发移动同步
-            notify_move_update(other, this);
-        }
-    }
-
-    // 6. 替换 observers 为新集合（注意第5步中已经插入了新元素）
-    // 但为了正确，我们应该先清空旧 observers？上边已经遍历完，可以直接交换：
-    std::swap(observers, new_observers);
-    // 此时 new_observers 持有旧的 observers，函数结束释放。
-}
-```
-
-**为什么必须构建“新可见集合”而不是仅依赖格子差集？**
-
-移动前，兴趣格子为 `G_old`，移动后为 `G_new`。对于 `G_old ∩ G_new` 中的格子，虽然格子没变，但观察者实体发生了位移，原本在视野边缘的实体可能因为距离增大而离开视野。如果只处理 `G_new - G_old` 进入、`G_old - G_new` 离开，就会遗漏共同格子内因相对位移导致的视野变化。因此，正确做法是：
-
-1. 完全基于新位置、新半径计算新的可见集合 `new_observers`（通过遍历所有新兴趣格子并距离过滤）。
-2. 与旧集合 `observers` 做差集，产生事件。
-
-虽然这看起来每次移动都要扫描全部兴趣格子，但格子数量有限（通常 9~25 个），格子内实体密度在合理设计下也有限，整体 `O(Grids * Density)` 远好于 `O(N)`。
-
-**如何避免重复遍历同一格子内的实体？**
-
-遍历 `G_new` 时每个格子可能被多次访问（例如圆覆盖格子边界），但可用标记或直接构建一个 `unordered_set<Entity*>` 来去重，因为距离过滤后自然去重。
-
-### 3.4 视野半径变化
-
-当实体使用道具扩大视野时，需重新计算兴趣格子，执行类似移动的流程：构建新的可见集合，与旧的 diff，触发 `Enter` / `Leave`。唯一不同是坐标不变，无需更新格子。
-
-## 4. 格子尺寸 C 的数学与性能权衡
-
-这是 Cell-based AOI 最重要且最常被误解的参数。
-
-设视野半径为 `R`，格子边长为 `C`。兴趣区域覆盖的格子数量约为：
+生产系统通常按下面的流水线工作：
 
 ```text
-N_g ≈ (2⌈R / C⌉ + 1)^2
+连接/玩家
+  -> 世界分区：Region、Zone、Map Instance、Cell Server、Shard、Channel
+  -> 空间候选：Grid、Spatial Hash、Quadtree、BVH、Portal/PVS
+  -> 逻辑过滤：阵营、队伍、相位、隐身、任务、房间、对象类型、权限
+  -> 复制调度：可靠 enter/leave、状态快照、增量属性、移动包、RPC、优先级
+  -> 预算控制：每连接字节预算、每 tick CPU 预算、距离 LOD、最大同屏数
+  -> 客户端生命周期：spawn、despawn、hide、show、late join 同步
 ```
 
-- 若 `C = R`，则兴趣区覆盖 `3×3 = 9` 格（最经典“九宫格”）。
-- 若 `C = 0.5R`，覆盖 `5×5 = 25` 格。
-- 若 `C = 2R`，可能只覆盖 `1~4` 格，但格子内实体数量很大。
+这个模型解释了为什么“空间 AOI 算法正确”仍然可能不够：如果没有复制调度，热点区会把带宽打满；如果没有逻辑过滤，客户端会收到隐身单位；如果没有分区，主城或大规模战斗会把单进程压垮。
 
-CPU 开销取决于 `N_g * 格内平均实体数`。格内实体数 `N_cell` 正比于 `C² * 单位面积密度 ρ`。总遍历实体数：
+## 3. 公开资料中的技术信号
+
+| 系统/资料 | 可确认的技术点 | 对 MMO AOI 的启发 |
+| --- | --- | --- |
+| ACM/IBM Interest Management 综述 | Interest Management 是分布式虚拟环境和 MMOG 的核心扩展手段，需要在不同方案之间权衡延迟、带宽、准确性和成本。 | AOI 应被视为系统工程，不是单一数据结构。 |
+| Springer AOI in MMOG 条目 | AOI 是玩家感兴趣的虚拟世界部分，既可用于中心化 C/S 降低消息量，也可用于 P2P/分布式架构。 | 中心化 MMO 仍然需要 AOI，P2P 方案学术上丰富但商业 MMO 受反作弊限制。 |
+| Unreal Replication Graph | 用持久节点为每个连接构建复制列表，避免每个 Actor 对每个连接做逐一判断。Fortnite 级别的 Actor 数量需要这种复制图。 | 大型在线游戏需要“按角色/状态/空间预分组”的复制层。 |
+| Unity Netcode NetworkObject Visibility | 可见对象会在客户端保持 spawned clone；隐藏对象会被 despawn/destroy，并停止网络流量。 | AOI 直接驱动客户端对象生命周期，不只是减少移动包。 |
+| Photon Fusion Interest Management | 使用 interest key 和 spatial hash AOI；全局对象绕过过滤，小房间可不启用 AOI。 | Key/频道式订阅适合把空间和玩法规则统一编码。 |
+| Mirror Interest Management | 内置 Spatial Hashing、Distance、Scene、Team、Match 等多种过滤器。 | 生产 AOI 常是“空间过滤 + 语义过滤”的组合。 |
+| BigWorld Server | CellApp 管理空间 Cell，边界附近创建 ghost，客户端实体按 AoI 构建更新包，并维护优先队列。 | 无缝世界需要 Cell/Ghost/Handoff，而不是把世界交给一个 AOI 网格。 |
+| EVE Online Time Dilation | 当单节点过载时减慢模拟时间，让任务队列保持可控。 | 当所有玩家挤进同一个 AOI 时，只能通过降级、限流或改变时间尺度保护公平性。 |
+| Guild Wars 2 Megaserver | 按区域和启发式把玩家放入地图实例，地图满时创建新实例。 | Megaserver/实例化是控制单 AOI 热点的运营和架构手段。 |
+| Agones/Kubernetes 游戏服务器编排 | 负责专用服务器进程的部署、伸缩和分配。 | 编排能扩容进程数，但不会替代进程内 AOI。 |
+
+## 4. AOI 的核心目标和成本模型
+
+没有 AOI 时，如果 `N` 个实体都需要相互同步，广播关系接近 `O(N^2)`。即使每个实体每秒只发很小的移动包，热点区也会迅速触发 CPU、带宽、序列化和客户端渲染瓶颈。
+
+AOI 的核心目标：
+
+- 降低服务器发送量：只向连接发送相关实体和相关属性。
+- 降低服务器计算量：避免每 tick 做全局 `entity x connection` 判断。
+- 降低客户端负载：未进入 AOI 的对象不创建、不更新、不渲染。
+- 降低作弊面：客户端不接收不该知道的隐藏状态。
+- 保持体验连续：enter/leave 不抖动，边界和瞬移不丢事件。
+
+均匀网格的粗略成本：
 
 ```text
-N_g * ρ * C²
+候选实体数 = 查询覆盖格子数 * 格内平均实体数
+格内平均实体数 ≈ 单位面积密度 ρ * C^2
+查询覆盖格子数 ≈ (2 * ceil(R / C) + 1)^2
 ```
 
-将 `N_g` 近似为 `(2R / C + 1)² ≈ 4R² / C²`（`C` 较小时），带入得：
+其中 `R` 是兴趣半径，`C` 是格子边长。`C` 太大时格内实体过多，距离过滤成本高；`C` 太小时格子访问和跨格维护成本高。精确半径查询可以让 `C` 比 `R` 小一些；如果只用固定 9 宫格查询，则必须保证格子尺寸和可视半径的关系不漏查。
+
+## 5. AOI 算法谱系
+
+### 5.1 全局广播
+
+适用场景：4 人合作、小房间、大厅状态、少量全局单例对象。
+
+优点是简单可靠，缺点是没有扩展性。Photon 文档也明确指出，小型房间或必须全员可见的 GameState 适合全局兴趣。MMO 主世界不能依赖它，但它仍适合公告、天气、全局 Boss 阶段、服务器时间等少量状态。
+
+### 5.2 距离暴力检测
+
+适用场景：几十到一两百对象的副本、测试、原型。
+
+做法是每个 observer 遍历所有对象，按距离过滤。实现成本最低，但 `O(N^2)` 随人数平方增长，不适合持续在线的大区。
+
+### 5.3 均匀网格与空间哈希
+
+适用场景：大多数 2D/2.5D MMORPG 野外、城镇、副本、开放地图。
+
+做法：
+
+- 把世界划分为固定尺寸格子。
+- 实体按位置插入格子。
+- 查询时只扫描半径覆盖的格子，再做精确距离过滤。
+
+主要变体：
+
+- 固定二维数组：适合尺寸固定、地图不大的场景。访问快，内存可预估。
+- 稀疏哈希网格：适合超大地图或空旷世界，只为有实体的格子分配内存。
+- 3D 网格：适合飞行、太空、体素、垂直楼层真实参与交互的场景。
+- Paged grid：大地图按 page 分配小数组，兼顾稀疏和缓存局部性。
+
+evpp3 当前 `SpatialGrid` 使用固定二维数组，适合“一个有限地图/副本内 AOI”。如果后续目标是无缝大世界，应新增稀疏或分页网格，而不是把固定数组无限扩大。
+
+### 5.4 分层网格和热点细分
+
+适用场景：同一地图既有稀疏野外，也有密集主城或集结点。
+
+做法：
+
+- 常规区域用粗网格。
+- 某格实体数超过阈值后，局部启用二级小网格。
+- 不同半径对象进入不同层，例如玩家、怪物、远景单位、巨型 Boss 分开索引。
+
+分层网格比四叉树更适合高频移动实体，因为局部分桶更新简单，内存可控。它的难点是阈值、迁移和查询合并。
+
+### 5.5 四叉树、八叉树、BVH、R-tree
+
+适用场景：密度差异极大、查询区域形状复杂、静态对象多、地图结构复杂。
+
+优点是可以自适应空间密度。缺点是移动实体频繁重插、树结构维护复杂、缓存局部性不稳定。对 MMORPG 中高频移动的玩家实体，四叉树通常不是第一选择；对静态物件、建筑、触发器、区域多边形、导航辅助查询则很有价值。
+
+### 5.6 Sweep、十字链表和排序轴
+
+适用场景：2D 空间、半径变化频繁、实体数中等、需要精确邻近关系。
+
+它通过按 X/Y 轴维护有序链表或数组，移动时局部交换，查询时查找轴向范围交集。理论上优雅，但在热点、重叠坐标和大量瞬移时维护成本高。工程上通常不如网格稳定。
+
+### 5.7 Portal、PVS、视线和遮挡
+
+适用场景：室内 MMO、地牢、建筑多、竞技/潜行玩法、防作弊要求高。
+
+距离可见不等于网络可见。墙后敌人、隐身单位、不同楼层、房间门关闭时都不应下发完整状态。常见做法：
+
+- 粗 AOI 用网格找候选。
+- 再用房间/portal/PVS/LOS 做二次过滤。
+- 对可能作弊敏感的信息，只下发低精度或延迟状态。
+
+这类过滤通常成本较高，应只对玩家连接和关键对象执行，不应对所有 NPC 互相执行。
+
+### 5.8 Interest Group、频道和 Key 订阅
+
+适用场景：地图块、房间、战场、队伍、频道、相位、分布式路由。
+
+Photon 的 interest key 思路、Photon Server 的 Interest Groups、以及许多自研网关，本质都是把可见性编码为频道订阅。对象发布到某些 key，连接订阅某些 key，路由层只转发 key 匹配的更新。
+
+优点：
+
+- 与网络层天然匹配。
+- 可以把空间格子、队伍、场景、相位统一成订阅维度。
+- 便于分布式路由和跨进程边界同步。
+
+缺点：
+
+- key 粒度过粗会多发。
+- key 粒度过细会造成订阅频繁变更。
+- 多维规则组合需要谨慎设计，避免遗漏或重复。
+
+### 5.9 Replication Graph 和复制节点
+
+适用场景：大型多人动作游戏、Battle Royale、Actor 数量远大于玩家数的场景。
+
+Unreal Replication Graph 的重要启发是：不要让每个 Actor 每帧对每个连接回答“我是否相关”。更好的方式是把 Actor 按空间、类型、状态、生命周期放进持久节点，由节点缓存和构建连接复制列表。
+
+MMO 自研系统可以采用类似结构：
 
 ```text
-4R² / C² * ρ * C² = 4R²ρ
+ReplicationRoot
+  SpatialNode(space_id, grid)
+  AlwaysRelevantNode(world state, weather, match clock)
+  OwnerNode(inventory, private quest state)
+  TeamNode(party, guild, raid)
+  DormancyNode(static objects, doors, resource nodes)
+  CombatPriorityNode(damage source, target, projectiles)
 ```
 
-这意味着当 `C` 较小时，遍历实体总数与 `C` 无关，只取决于视野面积和密度。但实际遍历时还要加上格子容器访问开销和 `N_g` 的循环开销，所以 `C` 不能太小。另外，移动时更换格子的频率与 `C` 成反比：`C` 越小，跨格子移动越频繁，格子增减维护开销上升。
+AOI 只负责给出候选集合；最终是否发送、发送哪些属性、以多高频率发送，交给复制图或复制调度器。
 
-工程最佳实践：
+### 5.10 逻辑过滤
 
-- 通常取 `C ≈ R` 至 `C ≈ 1.2R`，使得兴趣区稳定在 9 格左右。
-- 若视野半径差异大（不同实体视野不同），要么按最大半径设计 `C`，要么采用多层网格（后述）。
-- 内存：哈希表仅在实体存在的格子分配，密度高时内存也极为有限。
+现代 MMO 的实际可见性一般是：
 
-## 5. 高级工程实践与优化
+```text
+visible(observer, target) =
+    same_space(observer, target)
+ && same_layer_or_phase(observer, target)
+ && spatially_close(observer, target)
+ && category_allowed(observer, target)
+ && gameplay_rule_allowed(observer, target)
+ && security_rule_allowed(observer, target)
+```
 
-### 5.1 移动消息合并与脏标记
+常见逻辑维度：
 
-客户端上行移动频率高达 15~30Hz，但 AOI 更新不需要如此高频。服务器可以采用：
+- `space_id`：地图、副本、战场、房间。
+- `layer_id`：频道、分线、地图实例。
+- `phase_id`：任务阶段、剧情相位、动态世界状态。
+- 阵营/队伍/公会/团队。
+- 隐身、潜行、伪装、观察者权限。
+- 对象类型：玩家、NPC、掉落物、投射物、技能效果、环境对象。
+- 私有状态：背包、任务目标、私有掉落，只能 owner 可见。
 
-- 脏标记：每次收到移动同步时只更新实体坐标并设置 `aoi_dirty = true`。
-- 定时批处理：固定 100~200ms 的 tick 内，统一处理所有脏实体的 AOI 更新。
-- 在 tick 之间，直接向现有的 `observers` 广播瞬移或移动的轻量包，但不触发 `Enter` / `Leave`。
+如果这些规则不进入 AOI，网络层就会把不该知道的状态发给客户端。
 
-此举可将 AOI 计算量降低 5~10 倍。
+## 6. Cell-based AOI 的工程细节
 
-### 5.2 视野缓冲区（Ghost Buffer）
+Cell-based AOI 仍然是 MMO 最实用的基础层。它的核心是用空间局部性把全局遍历变成局部候选扫描。
 
-为了避免快速穿越边界导致的“闪现”感，实际判断离开时使用一个略大的半径 `R_leave = R + d`，而进入使用 `R_enter = R`。这样实体进入后很难立即因微小晃动离开，表现更平滑。
+### 6.1 数据结构
 
-### 5.3 热点密度削减
-
-主城等区域可能出现数百个玩家聚集在同一格子。此时单格遍历退化为 `O(N²)` 比较。解决方案：
-
-- 二级网格：当某格子内实体数超过阈值（如 50），动态将该格子细分为 `2×2` 或 `3×3` 子格，内部使用小网格索引。AOI 查询时先定位到大格，再经子格筛选。
-- 可见数量限制：按距离排序，只保留最近的 `K` 个（如 50 个）实体在 `observers` 中。远距离玩家被强制 `Leave`，直到位置移动重新进入。MMO 常用此法，“同屏人数上限”。
-- 全量标记 + 增量通知：对热点区域，不再维护复杂的 `observers` 集合，而是当该区域任一实体变化时，向区域内所有实体广播完整状态快照？这违背 AOI 初衷，仅限极端情况。
-
-### 5.4 距离计算优化
-
-使用平方距离比较，避免开方：
+典型结构：
 
 ```cpp
-float dx = a.x - b.x;
-float dy = a.y - b.y;
-bool in_range = (dx*dx + dy*dy) <= R_sq;
+struct EntityAOI {
+    EntityId id;
+    float x;
+    float y;
+    float radius;
+    CellCoord cell;
+    std::unordered_set<EntityId> visible;   // 我当前能看到谁
+};
+
+struct Cell {
+    std::vector<EntityEntry> entries;
+};
 ```
 
-对于九宫格，可先对矩形包围盒进行快速剔除，再加精确圆判断。
+生产实现通常使用 `vector + swap-remove + entity -> cell/index`，避免链表的内存碎片和缓存 miss。evpp3 当前 `SpatialGrid` 正是这种设计：每个实体记录 `CellRef{cell_index, entry_index}`，移动跨格时用尾元素覆盖删除。
 
-### 5.5 跨天梯移动的“滑步”问题
+### 6.2 Spawn
 
-若实体一次移动跨越多格，直接调用 `on_move` 会导致瞬间离开许多格子，引发大量 `Enter` / `Leave`。需要将其拆分成多步插值移动，或容忍瞬间移动仅计算最终状态（常见于瞬移技能）。合理设计是瞬移时直接离开再进入，接受全量通知。
+实体首次进入：
 
-## 6. 非对称视野与静态实体
+1. 校验位置、半径、空间。
+2. 插入空间索引。
+3. 查询自身半径内候选。
+4. 对每个候选执行逻辑过滤。
+5. 生成 `Enter(observer, target)` 事件。
+6. 发送目标完整初始快照，而不是只发移动增量。
 
-### 6.1 非对称视野
+如果系统采用方向性可见性，`A` 看到 `B` 不代表 `B` 看到 `A`。如果设计要求对称视野，应统一半径或显式建立双向关系。
 
-玩家视野半径 20 米，NPC 视野可能只有 10 米，导致 A 能看到 B，B 看不到 A。Cell-based 下处理变得复杂：
+### 6.3 Move
 
-- 不能再用双向对称的 `observers` / `watchers` 简单共享。
-- 必须为每个实体独立维护自己的 `observers`，并且移动时只更新自己的 `observers`。通知对方时，只负责对方的 `watchers`。
-- 实现时，A 移动后计算 `new_observers_A`，与旧 `observers_A` diff，更新自己集合；同时对进入的 B，调用 `B.add_watcher(A)`，但不更新 `B.observers`，因为 B 可能看不见 A。B 的 watcher 记录的是“能看到 B 的实体”，用于 B 销毁时通知。
+移动是 AOI 的热点路径。正确做法是基于新位置重新构建该 observer 的新可见集合，并与旧集合 diff：
 
-多数商业项目为了避免复杂性，会统一视野半径，或对同一类型实体强制相同半径。
+```cpp
+new_visible = QueryRadius(new_position, radius)
+new_visible = FilterByRules(observer, new_visible)
 
-### 6.2 静态实体（NPC、采集物）
+entered = new_visible - old_visible
+left    = old_visible - new_visible
+stayed  = new_visible & old_visible
 
-大量静态 NPC 不需要高频移动更新。可以让它们也在网格中，并按照正常 AOI 进入/离开通知玩家。为了提高性能，可将静态实体放入单独的静止网格层，移动的实体在计算兴趣格子时同时查询动态和静态两层。
+old_visible = new_visible
+```
 
-## 7. 分布式无缝世界的 Cell-based AOI
+只比较新旧格子差集是不够的，因为共同格子中的实体也可能因距离变化进入或离开边缘。
 
-当世界由多个服务器进程（Cell Server）分片管理时，网格成为天然的分布式单元。
+对方向性 AOI，还要处理“移动者影响了哪些其他 observer”。evpp3 当前 `AOIManager::OnEntityMove` 的策略是：
 
-### 7.1 基于网格的分区
+- 移动者自己一定受影响。
+- 旧位置附近、当前位置附近、最大 AOI 半径内的 observer 也可能受影响。
+- 对受影响 observer 排序后逐一 `RecomputeVisibility`。
 
-将世界按固定大网格（如 `100×100` 米）划分为多个 MapCell，每个 MapCell 由一个进程负责。进程内部仍然使用精细的 Cell-based AOI（如 20 米的格子）。边界区域的玩家需要看见相邻 MapCell 的实体。
+这是合理的单进程实现，成本取决于 `max_aoi_radius_` 覆盖范围内的候选数量。后续如果半径差异很大，应改成按 AOI profile 分层查询，避免一个超大半径实体拖高所有移动成本。
 
-### 7.2 边界代理（Ghost/Proxy）
+### 6.4 Despawn
 
-每个 MapCell 在边界向外延伸至少一个最大视野半径的区域，构建相邻 Cell 的代理实体。
+实体离开：
 
-- 相邻 Cell 将边界附近的实体状态同步为代理对象，放入本 Cell 的 AOI 网格中。
-- 本 Cell 玩家在 AOI 查询时就能自然看到代理实体，触发 `Enter` / `Leave`，如同本地实体。
-- 当实体跨过边界，执行实体迁移（Handoff）：从旧 Cell 销毁，在新 Cell 创建，代理转正，原有观察者通过 AOI 机制自动更新。
+- 对自己可见集合中的目标发送 `Leave(self, target)`。
+- 对所有曾经看到自己的 observer 发送 `Leave(observer, self)`。
+- 从空间索引和可见表彻底移除。
 
-要点：重叠区域的宽度必须大于最大视野半径，保证边界两侧玩家能够互相看见。
+为了避免 `O(N)` 扫描全部 visible 集合，生产系统通常维护反向 watchers：
 
-### 7.3 兴趣订阅与 Cell 网关
+```text
+visible[observer] = {target...}
+watchers[target] = {observer...}
+```
 
-更高级的架构中，Cell 不直接维护 AOI 实体，而是将 AOI 抽象为“订阅矩形”。每个 Cell 向一个路由层订阅其关注区域（本 Cell 区域 + 边界缓冲区），由路由层负责推送实体变更。这种思想在 SpatialOS 等分布式游戏引擎中广泛应用。
+evpp3 当前 `UnregisterEntity` 会扫描 `visible_` 中所有 observer 来清除被删除实体。实体数较小时没问题；进入大区服后应增加 `watchers_`。
 
-## 8. 与其他算法的对比与混合使用
+### 6.5 进入/离开抖动
 
-| 特性 | Cell-based | 十字链表 | 四叉树 |
+边界抖动会导致 enter/leave 高频切换。常见修复：
+
+```text
+进入半径 R_enter = R
+离开半径 R_leave = R + hysteresis
+```
+
+这会让实体进入后必须离得更远才离开，减少网络事件和客户端对象闪烁。
+
+### 6.6 格子尺寸选择
+
+如果使用精确 `QueryRadius`，格子尺寸不是必须等于可视半径。更实用的选择方式：
+
+- 目标格内实体数：普通区域 8 到 32，热点区域不要超过 64。
+- `C` 可取常见玩家视野半径的 `0.5R` 到 `1.0R`。
+- 如果大量实体半径差异大，按 profile 分多层网格，而不是用最大半径决定全局 `C`。
+- 如果使用固定 9 宫格 `QueryAOI`，则必须证明 `C` 与最大查询半径不会漏查；否则用半径覆盖格子扫描。
+
+evpp3 的 `QueryRadius` 会按半径覆盖格子，不依赖 9 宫格，因此更安全。`QueryAOI` 是 9 格便捷接口，应在文档中明确仅适合 `cell_size >= query_radius` 一类受控场景。
+
+## 7. 复制调度：AOI 之后真正发什么
+
+AOI 输出候选集合后，还需要决定发送内容和频率。
+
+推荐把实体更新分为几类：
+
+| 类型 | 可靠性 | 频率 | 示例 |
 | --- | --- | --- | --- |
-| 结构复杂度 | 低 | 高 | 中高 |
-| 移动更新成本 | `O(Grids * Density)` 稳定 | `O(N)` 冒泡排序，重叠坐标退化 | 重插频繁，不稳定 |
-| 支持动态半径 | 需重新计算格子集合，代价小 | 天生支持 | 支持 |
-| 内存占用 | 按需哈希，极小 | 严格 `O(N)` 节点 | 动态分配，碎片多 |
-| 密集场景 | 退化为 `O(N²)`，但可二级细分 | 冒泡灾难 | 树深增加，插入慢 |
-| 分布式友好度 | 极高，天然分区 | 难分割 | 中等 |
+| 生命周期 | 可靠、有序 | 变化时 | spawn、despawn、enter、leave |
+| 战斗关键 | 可靠或高优先 | 即时或高频 | 伤害、技能命中、死亡、控制 |
+| 移动状态 | 可丢弃、最新值覆盖旧值 | 5 到 20 Hz | 位置、朝向、速度 |
+| 外观/社交 | 可靠但低频 | 变化时 | 装备外观、称号、表情 |
+| 远距实体 | 低频、聚合 | 1 到 3 Hz | 远处玩家、背景 NPC |
+| 静态对象 | Dormant | 变化时 | 门、采集物、场景机关 |
 
-混合方案：对于大地图野外，使用基于哈希的 Cell-based AOI；对于特定副本，可以采用固定小网格；主城热点动态启用二级网格或十字链表辅助。
+每个连接应有发送预算：
 
-## 9. 常见陷阱与经验
+```text
+connection_budget_bytes_per_tick
+connection_budget_entities_per_tick
+critical_queue
+normal_queue
+low_priority_queue
+```
 
-- 忘记移除旧格子：移动时若格子变化，一定要从旧格子的容器中删除实体，否则导致悬空指针和无限增长。
-- 迭代器失效：在遍历格子内实体时，如果触发了其他实体的移动或销毁导致格子容器变化，会引发崩溃。对策是临时拷贝格子实体列表，或将实际变更操作延迟。
-- `Enter` / `Leave` 事件重复：由于视野变化，同一 tick 可能多次进出，需确保幂等性，最好在单次 AOI 更新中综合处理。
-- 视线穿透：当实体 A 和 B 距离略大于 `R` 且 A 移动靠近，但 B 恰好在 A 移动的方向上，基于栅格的方法不会漏报，只要兴趣格子正确包含。
-- 内存泄露：实体销毁时必须彻底清除其在网格和所有观察者集合中的引用。
+当预算不足时，不应随机丢包，而应按优先级降级：
 
-## 10. 总结
+1. 先保证自己、目标、攻击者、被攻击者、队友、附近危险物。
+2. 再发送近距离玩家和 NPC。
+3. 最后发送远距离外观、非关键移动、环境装饰。
+4. 超出最大同屏数量时，按距离、威胁度、社交关系、目标锁定决定保留集合。
 
-Cell-based AOI 以粗粒度空间分桶 + 精确距离过滤的简洁哲学，达成了性能、实现难度和扩展性的完美平衡。它在绝大多数 MMO 服务器架构中作为基石存在，支撑着数千实体同屏的流畅体验。
+## 8. 分布式大世界 AOI
 
-- 核心要点：选择格子边长约等于视野半径，维护双向可见集合，移动时全量重建潜在可见集合并与旧集合 diff。
-- 瓶颈突破：通过脏标记批处理、热点二级索引、分布式 Cell 代理，可以线性扩展到万人同服无缝世界。
+### 8.1 Zone 和 Map Instance
 
-掌握 Cell-based AOI 的精髓，意味着你能够驾驭从单服房间到无缝大世界的各种 AOI 需求，它是服务器技术栈中名副其实的“九宫格之魂”。
+大多数 MMORPG 会先把世界拆为地图或区域。每个 Zone 由一个进程或一组进程负责。Zone 内再用 AOI。这样能把“全世界 N”拆成“每张地图 n”。
+
+地图副本和 Megaserver 不是 AOI，但它们是控制 AOI 输入规模的关键手段。地图满了开新实例，比尝试让一个 AOI 支撑无限玩家更现实。
+
+### 8.2 Cell Server、Ghost 和 Handoff
+
+无缝大世界的典型模式：
+
+- 世界被拆成多个 Cell。
+- 每个 Cell 对内部实体有权威。
+- Cell 边界附近的实体会在邻居 Cell 创建 ghost。
+- 玩家 AOI 跨边界时，从本地真实实体和邻居 ghost 构建可见列表。
+- 实体跨 Cell 时执行 handoff，权威从旧 Cell 转移到新 Cell。
+
+BigWorld 文档公开描述了这种结构：CellApp 管理 Cell，边界附近创建 ghost，客户端实体周期性构建 AOI 更新包，CellAppMgr 可以通过改变 Cell 尺寸做负载均衡。
+
+关键工程约束：
+
+- ghost 区宽度必须覆盖最大可见半径和必要的预测距离。
+- ghost 只保存远端查询和表现所需状态，不能拥有权威逻辑。
+- handoff 必须保证消息有序，避免旧 Cell 和新 Cell 同时接受客户端命令。
+- 跨边界技能、投射物、仇恨和寻路要有明确权威归属。
+
+### 8.3 动态负载均衡
+
+Cell 可以固定边界，也可以按负载调整：
+
+- 低负载 Cell 扩大，减少进程间同步。
+- 高负载 Cell 缩小，把部分实体 offload 到邻居。
+- 热点战斗如果所有实体仍在同一小区域，继续切分会受到交互密度限制。
+
+动态边界对实现要求很高。它需要 ghost、handoff、路由、状态迁移、跨 Cell 查询和监控体系先成熟。
+
+### 8.4 过载保护
+
+当所有人聚到同一个 AOI，空间过滤会失效。可选手段：
+
+- 人数上限：地图上限、战场上限、区域排队。
+- 连接预算：限制每连接每 tick 最大发送实体数。
+- 低频 LOD：远处玩家降到 1 到 3 Hz。
+- 聚合表现：远处人群变成团块、旗帜、计数或低精度状态。
+- 技能/投射物降级：非关键特效不广播或只广播给近处。
+- 时间膨胀：像 EVE Online 一样减慢模拟时间以保持队列可控和公平。
+
+这些是玩法和技术共同决策，不是 AOI 数据结构能单独解决的问题。
+
+## 9. 当前 evpp3 AOI 实现评估
+
+相关文件：
+
+- `src/runtime/aoi/spatial_index.h`
+- `src/runtime/aoi/spatial_index.cc`
+- `src/runtime/aoi/aoi_manager.h`
+- `src/runtime/aoi/aoi_manager.cc`
+- `src/runtime/script/aoi_bind.cc`
+- `resources/api/aoi/api.md`
+
+### 9.1 当前能力
+
+`SpatialGrid`：
+
+- 固定宽高二维网格。
+- `vector<vector<CellEntry>>` 存储。
+- `entity_cell_` 保存实体到格子和下标的映射。
+- 插入、跨格更新、删除使用 `swap-remove`。
+- `QueryRadius` 先算半径覆盖格子，再用平方距离精确过滤。
+- `QueryAOI` 和 `QueryAOIAt` 返回 9 宫格候选。
+- 越界位置会 clamp 到边界格。
+
+`AOIManager`：
+
+- 保存 `aoi_radii_`、`positions_`、`visible_`。
+- 每个 observer 独立维护可见集合，语义是方向性可见。
+- 移动时重算移动者和旧/新位置附近可能受影响的 observer。
+- enter/leave 事件通过回调同步派发。
+- `max_aoi_radius_` 用于找可能受移动影响的 observer。
+
+Lua 绑定：
+
+- `aoi.init(world_width, world_height, cell_size)`
+- `aoi.register_entity(entity_id, x, y, aoi_radius)`
+- `aoi.update_entity(entity_id, x, y)`
+- `aoi.unregister_entity(entity_id)`
+- `aoi.get_visible(entity_id)`
+- `aoi.query_radius(x, y, radius)`
+- `aoi.set_event_callback(callback)`
+
+### 9.2 优点
+
+- 简洁，适合作为 Zone 内 AOI 基础。
+- 查询使用精确半径，不容易出现 9 宫格漏查。
+- 删除和跨格移动的数据结构高效。
+- 输入校验覆盖 NaN、无限值和非法尺寸。
+- `OnEntityMove` 会重算受影响 observer，不是只重算移动者自己。
+
+### 9.3 需要修正或补强的地方
+
+1. 文档语义需要统一。当前实现是方向性可见，`A` 半径大能看到 `B`，不代表 `B` 能看到 `A`。如果 API 文档说“双向”，应修改文档或强制对称规则。
+2. 缺少 `space_id`、`layer_id`、`phase_id`。现在所有实体默认在同一世界，不能表达副本、频道、任务相位。
+3. 缺少逻辑过滤。阵营、队伍、隐身、对象类型、owner-only 状态无法参与 AOI。
+4. 缺少反向 watchers。删除实体时扫描全部 `visible_`，大规模下会变成热点。
+5. 缺少批处理。每次移动立即重算并同步派发事件，移动频率高时会浪费 CPU。
+6. 缺少复制调度。AOI 只返回列表，没有按连接预算、优先级、LOD 发包。
+7. 缺少热点保护。没有最大可见数、距离排序、区域限流、聚合或降级策略。
+8. 缺少静态/动态分层。大量静态对象会和移动对象混在同一个索引层。
+9. 缺少 Z/楼层/遮挡。当前是二维距离，无法表达多楼层、飞行或墙体视线。
+10. 固定数组不适合无限大世界。超大地图会浪费内存或触发格子数安全上限。
+
+## 10. evpp3 推荐路线
+
+### P0：澄清语义和测试
+
+目标：让当前 AOI 成为可信的单区服基础。
+
+- 明确方向性可见：`visible_[observer]` 表示 observer 能看到 target。
+- 更新 `resources/api/aoi/api.md` 中“双向”相关描述。
+- 增加测试：
+  - A 半径大、B 半径小的非对称可见。
+  - 注册后立即移动触发 enter。
+  - 半径变更后的 enter/leave。
+  - 删除实体后所有 observer 收到 leave。
+  - 越界坐标 clamp 行为。
+- 给 `QueryAOI` 标注使用限制，避免被误用为任意半径查询。
+
+### P1：空间和规则过滤
+
+目标：支持真实 MMO 的地图、副本和玩法可见性。
+
+新增结构建议：
+
+```cpp
+struct AOIKey {
+    uint32_t space_id;
+    uint16_t layer_id;
+    uint16_t phase_id;
+};
+
+struct AOIProfile {
+    float enter_radius;
+    float leave_radius;
+    uint32_t category_mask;
+    uint32_t visible_category_mask;
+    uint32_t max_visible;
+};
+
+using VisibilityPredicate =
+    std::function<bool(EntityId observer, EntityId target)>;
+```
+
+实现建议：
+
+- 每个 `AOIKey` 一个 `SpatialGrid` 或 `SpatialHashGrid`。
+- `AOIManager::RegisterEntity` 带 `space/layer/phase/profile`。
+- `QueryRadius` 只在同一 `AOIKey` 内查。
+- 再执行 category 和 gameplay predicate。
+- 增加 `watchers_` 反向表。
+
+### P2：批处理和复制调度
+
+目标：把 AOI 从“查询列表”升级为“连接复制输入”。
+
+建议：
+
+- 移动只更新位置并标 dirty。
+- 每 50 到 200 ms 批处理 dirty 实体。
+- enter/leave 可靠派发，移动状态走最新值覆盖。
+- 为每个连接维护优先队列和预算。
+- 支持 `AOIUpdateScheme`：
+  - critical：每 tick。
+  - near：10 Hz。
+  - mid：5 Hz。
+  - far：1 到 2 Hz。
+  - dormant：变化时。
+- 静态对象和动态对象分层索引。
+
+### P3：热点保护
+
+目标：主城和团战不把服务器打爆。
+
+建议：
+
+- `max_visible`：每个 observer 最多保留 K 个同类目标。
+- 距离排序加权：距离、战斗关系、队伍、目标锁定、威胁度。
+- 区域密度超过阈值时启用二级网格。
+- 远距实体降为低频或聚合状态。
+- 监控候选数、实际可见数、enter/leave churn、发送预算耗尽次数。
+
+### P4：分布式 Cell 和 Ghost
+
+目标：无缝大世界。
+
+前置条件：P1 到 P3 稳定后再做。
+
+建议：
+
+- 定义 Cell 权威边界和 ghost 边界。
+- ghost 宽度大于最大 AOI 半径和移动预测距离。
+- Cell 间同步只发送 ghost 必需属性。
+- handoff 使用事务式流程：冻结旧权威、迁移状态、新权威确认、路由切换、旧权威释放。
+- Base/Proxy 层隔离客户端，不让客户端感知 Cell 切换。
+
+## 11. 指标和压测
+
+AOI 必须可观测。建议至少记录：
+
+- `aoi.entities`
+- `aoi.cells.active`
+- `aoi.cell.max_entities`
+- `aoi.query.count`
+- `aoi.query.candidates`
+- `aoi.query.result_count`
+- `aoi.visible.total`
+- `aoi.enter.count`
+- `aoi.leave.count`
+- `aoi.dirty.count`
+- `aoi.recompute.duration_us`
+- `aoi.dispatch.duration_us`
+- `aoi.connection.bytes_budget_used`
+- `aoi.connection.entity_budget_dropped`
+
+压测场景：
+
+1. 均匀分布 10k、50k、100k 实体。
+2. 主城热点：100、500、1000 实体挤在一个或几个格子。
+3. 边界移动：大量实体穿越格子边界。
+4. 瞬移：实体跨越多个格子。
+5. 大小半径混合：普通玩家和超大视野实体混合。
+6. 删除风暴：大量实体同时 despawn。
+7. 队伍/相位/隐身逻辑过滤。
+8. late join：新连接进入热点区的初始快照预算。
+
+## 12. 常见陷阱
+
+- 把客户端渲染裁剪当成 AOI。客户端不渲染不代表服务器可以把状态发过去。
+- 只做距离过滤，忘记相位、队伍、隐身和权限。
+- 只更新移动者的 visible，忘记移动者也会进入/离开别人的 AOI。
+- enter/leave 与移动增量乱序，客户端收到移动包时对象还未 spawn。
+- 事件回调中再次修改 AOI，导致迭代器失效或递归事件。
+- 热点区不设上限，最终所有候选都互相可见。
+- 用一个全局最大半径拖慢所有查询。
+- 删除实体时只从网格删除，忘记清理 visible/watchers。
+- 固定 9 宫格查询用于任意半径，导致漏查。
+- 试图用 Kubernetes 或云伸缩替代进程内 AOI。编排只能增加房间/地图进程，不能降低单热点内的 N² 交互。
+
+## 13. 推荐架构摘要
+
+evpp3 可以按下面的最终形态演进：
+
+```text
+AOISystem
+  AOISpaceRegistry
+    AOISpace(space_id, layer_id, phase_id)
+      SpatialIndex
+        DenseGrid | SparseHashGrid | PagedGrid
+      EntityTable
+      VisibleTable
+      WatcherTable
+      DirtyQueue
+      RuleFilters
+      Metrics
+
+ReplicationSystem
+  ConnectionState
+    interest_profile
+    reliable_lifecycle_queue
+    priority_state_queue
+    byte_budget
+    entity_budget
+
+WorldPartition
+  ZoneServer
+  CellServer
+  GhostReplicator
+  HandoffCoordinator
+```
+
+短期保留当前 `SpatialGrid + AOIManager` 是正确选择。它应作为“单 Zone 内精确半径 AOI”的基础，而不是直接承担全世界扩展。下一步最有价值的是语义修正、空间/层隔离、反向 watchers 和批处理调度。
+
+## 14. 参考资料
+
+- IBM Research / ACM Computing Surveys: [Interest management for distributed virtual environments: A survey](https://research.ibm.com/publications/interest-management-for-distributed-virtual-environments-a-survey)
+- Springer: [Area of Interest Management in Massively Multiplayer Online Games](https://link.springer.com/rwe/10.1007/978-3-319-08234-9_239-1)
+- Epic Games: [Replication Graph in Unreal Engine](https://dev.epicgames.com/documentation/unreal-engine/replication-graph-in-unreal-engine)
+- Unity Multiplayer: [Netcode for GameObjects Object visibility](https://docs-multiplayer.unity3d.com/netcode/2.0.0/basics/object-visibility/)
+- Photon Fusion Unreal: [Interest Management](https://doc.photonengine.com/fusion-unreal/current/manual/replication/interest-management)
+- Photon Server: [Interest Groups](https://doc.photonengine.com/server/current/applications/loadbalancing/interestgroups)
+- Photon Blog: [Photon Fusion Area of Interest sample](https://blog.photonengine.com/new-photon-fusion-area-of-interest-sample/)
+- Mirror Networking: [Interest Management](https://mirror-networking.gitbook.io/docs/manual/interest-management)
+- BigWorld Server Overview: [Design Introduction](https://howarduong.github.io/github.io/doc/html/server_overview/ch04.html)
+- BigWorld Server Release Notes: [AOI callbacks and update scheme notes](https://howarduong.github.io/github.io/doc/release_notes_server.html)
+- EVE Online: [Introducing Time Dilation](https://www.eveonline.com/news/view/introducing-time-dilation-tidi)
+- Guild Wars 2: [Continued Improvements to the Megaserver System](https://www.guildwars2.com/en/news/continued-improvements-to-the-megaserver-system/)
+- Agones: [Overview](https://agones.dev/site/docs/overview/)
