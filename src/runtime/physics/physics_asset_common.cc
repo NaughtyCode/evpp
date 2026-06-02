@@ -3,6 +3,7 @@
 #include "runtime/physics/physics_asset_common.h"
 
 #include <cmath>
+#include <limits>
 
 namespace engine {
 
@@ -42,7 +43,8 @@ bool IsFiniteDoubleVec(const std::vector<double>& values, size_t expected) {
 		return false;
 	}
 	for (double value : values) {
-		if (!std::isfinite(value)) {
+		if (!std::isfinite(value) ||
+			std::abs(value) > static_cast<double>((std::numeric_limits<JPH::Real>::max)())) {
 			return false;
 		}
 	}

@@ -2,6 +2,7 @@
 
 #include "runtime/physics/physics_assets.h"
 
+#include <cmath>
 #include <fstream>
 #include <iterator>
 #include <unordered_set>
@@ -52,6 +53,26 @@ PhysicsSceneBodyRecord MakeBodyRecord(const BodySettingsResult& settings_result,
 	record.angular_velocity = settings_result.settings.mAngularVelocity;
 	record.dynamic = settings_result.dynamic;
 	return record;
+}
+
+bool ValidateSceneMaterials(const std::vector<MaterialEntry>& materials, std::string& out_error) {
+	std::unordered_set<std::string> names;
+	for (const auto& material : materials) {
+		if (material.name.empty()) {
+			out_error = "material name must not be empty";
+			return false;
+		}
+		if (!names.insert(material.name).second) {
+			out_error = "duplicate material name: " + material.name;
+			return false;
+		}
+		if (!std::isfinite(material.friction) || material.friction < 0.0f ||
+			!std::isfinite(material.restitution) || material.restitution < 0.0f) {
+			out_error = "invalid material properties: " + material.name;
+			return false;
+		}
+	}
+	return true;
 }
 
 }  // namespace
@@ -274,6 +295,9 @@ AssetLoadResult AssetLoader::LoadScene(const std::string& json_path,
 
 	MaterialTable combined_materials = material_table;
 	if (!scene.materials.empty()) {
+		if (!ValidateSceneMaterials(scene.materials, result.error)) {
+			return result;
+		}
 		combined_materials.Register(scene.materials);
 	}
 

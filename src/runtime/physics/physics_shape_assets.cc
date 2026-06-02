@@ -26,13 +26,17 @@ namespace engine {
 namespace {
 
 bool IsFiniteVec3(const glz::generic& value) {
-	if (!value.is_array() || value.size() < 3) {
+	if (!value.is_array() || value.size() != 3) {
 		return false;
 	}
+	constexpr double kMaxFloat = static_cast<double>(std::numeric_limits<float>::max());
 	return value[0u].is_number() && value[1u].is_number() && value[2u].is_number() &&
 		   std::isfinite(value[0u].template get<double>()) &&
 		   std::isfinite(value[1u].template get<double>()) &&
-		   std::isfinite(value[2u].template get<double>());
+		   std::isfinite(value[2u].template get<double>()) &&
+		   std::abs(value[0u].template get<double>()) <= kMaxFloat &&
+		   std::abs(value[1u].template get<double>()) <= kMaxFloat &&
+		   std::abs(value[2u].template get<double>()) <= kMaxFloat;
 }
 
 bool ReadUint32(const glz::generic& value, uint32_t& out_value) {
@@ -149,24 +153,34 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 			return false;
 		}
 		double value = p[key].template get<double>();
-		if (!std::isfinite(value)) {
-			result.error = key + " must be a finite number";
+		if (!std::isfinite(value) ||
+			std::abs(value) > static_cast<double>(std::numeric_limits<float>::max())) {
+			result.error = key + " must be a finite float-range number";
 			return false;
 		}
 		out_value = value;
 		return true;
 	};
-	auto get_arr = [&](const std::string& key) -> glz::generic& {
-		static glz::generic empty;
-		if (p.contains(key) && p[key].is_array()) {
-			return p[key];
+	auto read_arr = [&](const std::string& key, glz::generic*& out_value) -> bool {
+		out_value = nullptr;
+		if (!p.contains(key)) {
+			return true;
 		}
-		return empty;
+		if (!p[key].is_array()) {
+			result.error = key + " must be an array";
+			return false;
+		}
+		out_value = &p[key];
+		return true;
 	};
 
 	JPH::RefConst<JPH::PhysicsMaterial> material_ref;
 	const JPH::PhysicsMaterial* material = nullptr;
 	if (def.material && !def.material->empty()) {
+		if (!material_table.Has(*def.material)) {
+			result.error = "unknown material: " + *def.material;
+			return result;
+		}
 		material_ref = material_table.Get(*def.material);
 		material = material_ref.GetPtr();
 	}
@@ -183,15 +197,18 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 			!read_num("halfZ", half_extent, hz)) {
 			return result;
 		}
-		auto& he_arr = get_arr("halfExtent");
-		if (he_arr.is_array() && he_arr.size() >= 3) {
-			if (!IsFiniteVec3(he_arr)) {
+		glz::generic* he_arr = nullptr;
+		if (!read_arr("halfExtent", he_arr)) {
+			return result;
+		}
+		if (he_arr) {
+			if (!IsFiniteVec3(*he_arr)) {
 				result.error = "box halfExtent must be [x, y, z] finite numbers";
 				return result;
 			}
-			hx = he_arr[0u].template get<double>();
-			hy = he_arr[1u].template get<double>();
-			hz = he_arr[2u].template get<double>();
+			hx = (*he_arr)[0u].template get<double>();
+			hy = (*he_arr)[1u].template get<double>();
+			hz = (*he_arr)[2u].template get<double>();
 		}
 		if (!IsPositiveFinite(hx) || !IsPositiveFinite(hy) || !IsPositiveFinite(hz)) {
 			result.error = "box half extents must be finite and > 0";
@@ -261,10 +278,13 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 		}
 	} else if (type == "convex_hull" || type == "convexHull") {
 		JPH::Array<JPH::Vec3> points;
-		auto& pts_arr = get_arr("points");
-		if (pts_arr.is_array()) {
-			for (size_t i = 0; i < pts_arr.size(); ++i) {
-				auto& pt = pts_arr[unsigned(i)];
+		glz::generic* pts_arr = nullptr;
+		if (!read_arr("points", pts_arr)) {
+			return result;
+		}
+		if (pts_arr) {
+			for (size_t i = 0; i < pts_arr->size(); ++i) {
+				auto& pt = (*pts_arr)[unsigned(i)];
 				if (!IsFiniteVec3(pt)) {
 					result.error = "convex_hull point must be [x, y, z] finite numbers";
 					return result;
@@ -288,10 +308,13 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 	} else if (type == "mesh" || type == "mesh_shape") {
 		JPH::VertexList vertices;
 		JPH::IndexedTriangleList triangles;
-		auto& verts_arr = get_arr("vertices");
-		if (verts_arr.is_array()) {
-			for (size_t i = 0; i < verts_arr.size(); ++i) {
-				auto& v = verts_arr[unsigned(i)];
+		glz::generic* verts_arr = nullptr;
+		if (!read_arr("vertices", verts_arr)) {
+			return result;
+		}
+		if (verts_arr) {
+			for (size_t i = 0; i < verts_arr->size(); ++i) {
+				auto& v = (*verts_arr)[unsigned(i)];
 				if (!IsFiniteVec3(v)) {
 					result.error = "mesh vertex must be [x, y, z] finite numbers";
 					return result;
@@ -301,14 +324,17 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 									  static_cast<float>(v[2u].template get<double>()));
 			}
 		}
-		auto& tris_arr = get_arr("triangles");
-		if (tris_arr.is_array()) {
-			for (size_t i = 0; i < tris_arr.size(); ++i) {
-				auto& t = tris_arr[unsigned(i)];
+		glz::generic* tris_arr = nullptr;
+		if (!read_arr("triangles", tris_arr)) {
+			return result;
+		}
+		if (tris_arr) {
+			for (size_t i = 0; i < tris_arr->size(); ++i) {
+				auto& t = (*tris_arr)[unsigned(i)];
 				uint32_t i0 = 0;
 				uint32_t i1 = 0;
 				uint32_t i2 = 0;
-				if (!t.is_array() || t.size() < 3 || !ReadUint32(t[0u], i0) ||
+				if (!t.is_array() || t.size() != 3 || !ReadUint32(t[0u], i0) ||
 					!ReadUint32(t[1u], i1) || !ReadUint32(t[2u], i2)) {
 					result.error = "mesh triangle must be [i0, i1, i2] non-negative integer indices";
 					return result;
@@ -326,15 +352,23 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 		}
 
 		JPH::MeshShapeSettings settings(vertices, triangles);
-		auto& mats_arr = get_arr("materials");
-		if (mats_arr.is_array()) {
+		glz::generic* mats_arr = nullptr;
+		if (!read_arr("materials", mats_arr)) {
+			return result;
+		}
+		if (mats_arr) {
 			std::vector<std::string> mat_names;
-			for (size_t i = 0; i < mats_arr.size(); ++i) {
-				if (!mats_arr[unsigned(i)].is_string()) {
+			for (size_t i = 0; i < mats_arr->size(); ++i) {
+				if (!(*mats_arr)[unsigned(i)].is_string()) {
 					result.error = "mesh materials entries must be strings";
 					return result;
 				}
-				mat_names.push_back(mats_arr[unsigned(i)].template get<std::string>());
+				std::string name = (*mats_arr)[unsigned(i)].template get<std::string>();
+				if (!material_table.Has(name)) {
+					result.error = "mesh material not found: " + name;
+					return result;
+				}
+				mat_names.push_back(std::move(name));
 			}
 			settings.mMaterials = material_table.CreateList(mat_names);
 		}
@@ -349,8 +383,20 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 		JPH::HeightFieldShapeSettings settings;
 		bool has_height_samples = false;
 		std::string data_path;
+		if (p.contains("dataFile") && !p["dataFile"].is_string()) {
+			result.error = "height_field dataFile must be a string";
+			return result;
+		}
 		if (p.contains("dataFile") && p["dataFile"].is_string()) {
 			data_path = p["dataFile"].template get<std::string>();
+		}
+		glz::generic* samples_arr = nullptr;
+		if (!read_arr("samples", samples_arr)) {
+			return result;
+		}
+		if (!data_path.empty() && samples_arr) {
+			result.error = "height_field requires either dataFile or samples, not both";
+			return result;
 		}
 		if (!data_path.empty()) {
 			data_path = ResolveAssetPath(assets_dir, data_path);
@@ -400,22 +446,29 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 				result.error = "height_field: failed to read data file: " + data_path;
 				return result;
 			}
+			for (float sample : samples) {
+				if (!std::isfinite(sample)) {
+					result.error = "height_field: data file contains non-finite samples: " + data_path;
+					return result;
+				}
+			}
 			settings.mHeightSamples = std::move(samples);
 			settings.mSampleCount = sample_count;
 			has_height_samples = true;
 		}
 
-		auto& samples_arr = get_arr("samples");
-		if (samples_arr.is_array()) {
+		if (samples_arr) {
 			JPH::Array<float> samples;
-			for (size_t i = 0; i < samples_arr.size(); ++i) {
-				if (!samples_arr[unsigned(i)].is_number()) {
+			for (size_t i = 0; i < samples_arr->size(); ++i) {
+				if (!(*samples_arr)[unsigned(i)].is_number()) {
 					result.error = "height_field samples entries must be numbers";
 					return result;
 				}
-				double sample = samples_arr[unsigned(i)].template get<double>();
-				if (!std::isfinite(sample)) {
-					result.error = "height_field samples entries must be finite";
+				double sample = (*samples_arr)[unsigned(i)].template get<double>();
+				if (!std::isfinite(sample) ||
+					std::abs(sample) >
+						static_cast<double>(std::numeric_limits<float>::max())) {
+					result.error = "height_field samples entries must be finite float-range numbers";
 					return result;
 				}
 				samples.push_back(static_cast<float>(sample));
@@ -449,35 +502,55 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 			return result;
 		}
 
-		auto& off_arr = get_arr("offset");
-		if (off_arr.is_array() && off_arr.size() >= 3) {
-			if (!IsFiniteVec3(off_arr)) {
+		glz::generic* off_arr = nullptr;
+		if (!read_arr("offset", off_arr)) {
+			return result;
+		}
+		if (off_arr) {
+			if (!IsFiniteVec3(*off_arr)) {
 				result.error = "height_field offset must be [x, y, z] finite numbers";
 				return result;
 			}
-			settings.mOffset = JPH::Vec3(static_cast<float>(off_arr[0u].template get<double>()),
-										 static_cast<float>(off_arr[1u].template get<double>()),
-										 static_cast<float>(off_arr[2u].template get<double>()));
+			settings.mOffset = JPH::Vec3(static_cast<float>((*off_arr)[0u].template get<double>()),
+										 static_cast<float>((*off_arr)[1u].template get<double>()),
+										 static_cast<float>((*off_arr)[2u].template get<double>()));
 		}
-		auto& scale_arr = get_arr("scale");
-		if (scale_arr.is_array() && scale_arr.size() >= 3) {
-			if (!IsFiniteVec3(scale_arr)) {
+		glz::generic* scale_arr = nullptr;
+		if (!read_arr("scale", scale_arr)) {
+			return result;
+		}
+		if (scale_arr) {
+			if (!IsFiniteVec3(*scale_arr)) {
 				result.error = "height_field scale must be [x, y, z] finite numbers";
 				return result;
 			}
-			settings.mScale = JPH::Vec3(static_cast<float>(scale_arr[0u].template get<double>()),
-										static_cast<float>(scale_arr[1u].template get<double>()),
-										static_cast<float>(scale_arr[2u].template get<double>()));
+			double sx = (*scale_arr)[0u].template get<double>();
+			double sy = (*scale_arr)[1u].template get<double>();
+			double sz = (*scale_arr)[2u].template get<double>();
+			if (!IsPositiveFinite(sx) || !IsPositiveFinite(sy) || !IsPositiveFinite(sz)) {
+				result.error = "height_field scale components must be finite and > 0";
+				return result;
+			}
+			settings.mScale =
+				JPH::Vec3(static_cast<float>(sx), static_cast<float>(sy), static_cast<float>(sz));
 		}
-		auto& mats_arr = get_arr("materials");
-		if (mats_arr.is_array()) {
+		glz::generic* height_mats_arr = nullptr;
+		if (!read_arr("materials", height_mats_arr)) {
+			return result;
+		}
+		if (height_mats_arr) {
 			std::vector<std::string> mat_names;
-			for (size_t i = 0; i < mats_arr.size(); ++i) {
-				if (!mats_arr[unsigned(i)].is_string()) {
+			for (size_t i = 0; i < height_mats_arr->size(); ++i) {
+				if (!(*height_mats_arr)[unsigned(i)].is_string()) {
 					result.error = "height_field materials entries must be strings";
 					return result;
 				}
-				mat_names.push_back(mats_arr[unsigned(i)].template get<std::string>());
+				std::string name = (*height_mats_arr)[unsigned(i)].template get<std::string>();
+				if (!material_table.Has(name)) {
+					result.error = "height_field material not found: " + name;
+					return result;
+				}
+				mat_names.push_back(std::move(name));
 			}
 			settings.mMaterials = material_table.CreateList(mat_names);
 		}
@@ -490,15 +563,18 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 		}
 	} else if (type == "plane") {
 		JPH::Plane plane(JPH::Vec3::sAxisY(), 0.0f);
-		auto& n_arr = get_arr("normal");
-		if (n_arr.is_array() && n_arr.size() >= 3) {
-			if (!IsFiniteVec3(n_arr)) {
+		glz::generic* n_arr = nullptr;
+		if (!read_arr("normal", n_arr)) {
+			return result;
+		}
+		if (n_arr) {
+			if (!IsFiniteVec3(*n_arr)) {
 				result.error = "plane normal must be [x, y, z] finite numbers";
 				return result;
 			}
-			JPH::Vec3 normal(static_cast<float>(n_arr[0u].template get<double>()),
-							 static_cast<float>(n_arr[1u].template get<double>()),
-							 static_cast<float>(n_arr[2u].template get<double>()));
+			JPH::Vec3 normal(static_cast<float>((*n_arr)[0u].template get<double>()),
+							 static_cast<float>((*n_arr)[1u].template get<double>()),
+							 static_cast<float>((*n_arr)[2u].template get<double>()));
 			if (normal.LengthSq() <= 1.0e-12f) {
 				result.error = "plane normal must be non-zero";
 				return result;

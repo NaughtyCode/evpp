@@ -85,6 +85,9 @@ class CLOUD_ENGINE_API MaterialTable {
 	// Lookup a material by name. Returns sDefault if not found.
 	JPH::RefConst<JPH::PhysicsMaterial> Get(const std::string& name) const;
 
+	// Check whether a named material is registered.
+	bool Has(const std::string& name) const;
+
 	// Get all registered material names.
 	std::vector<std::string> GetNames() const;
 

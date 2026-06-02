@@ -54,6 +54,10 @@ JPH::RefConst<JPH::PhysicsMaterial> MaterialTable::Get(const std::string& name) 
 	return JPH::PhysicsMaterial::sDefault;
 }
 
+bool MaterialTable::Has(const std::string& name) const {
+	return materials_.find(name) != materials_.end();
+}
+
 std::vector<std::string> MaterialTable::GetNames() const {
 	std::vector<std::string> names;
 	names.reserve(materials_.size());

@@ -186,10 +186,11 @@ bool PhysicsSystem::Start() {
 
 		size_t failed = script_vm_->DoDirectory(scripts_dir_);
 		if (failed > 0) {
-			ENGINE_LOG_WARN(GetLogger(),
-							"PhysicsSystem: [{}] script(s) failed to load from [{}]",
-							failed,
-							scripts_dir_);
+			ENGINE_LOG_ERROR(GetLogger(),
+							 "PhysicsSystem: [{}] script(s) failed to load from [{}]",
+							 failed,
+							 scripts_dir_);
+			return false;
 		}
 		script_vm_->InitScript();
 		return true;
@@ -421,7 +422,9 @@ bool PhysicsSystem::ReloadThresholds() {
 
 bool PhysicsSystem::ReloadLogLevel() {
 	if (!config_manager_) return false;
-	return config_manager_->ReloadLogLevel(config_dir_);
+	if (!config_manager_->ReloadLogLevel(config_dir_)) return false;
+	physics_thread_.SetLogLevel(config_manager_->GetLogConfig().level);
+	return true;
 }
 
 // Synchronous query methods — thread-safe via Jolt BodyLockInterface

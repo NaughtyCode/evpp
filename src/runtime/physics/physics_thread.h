@@ -178,6 +178,7 @@ class PhysicsThread {
 		world_.SetThresholds(thresholds);
 		thresholds_config_ = thresholds;
 	}
+	void SetLogLevel(const std::string& level);
 
 	// ── PostStepCallback — invoked on PT after each world_.Step() ────
 	//
@@ -275,6 +276,7 @@ class PhysicsThread {
 	PhysicsLogConfig log_config_;  // [MT->] immutable after Start
 	std::string assets_path_;  // [MT->] immutable after Start
 	std::string restore_state_on_start_;  // [MT->] consumed once in EventLoop startup
+	bool has_start_config_ = false;  // [MT] true after Start captures configs
 
 	// Independent logger (owned by physics thread)
 	// logger_ pointer created in Start() (MT); thereafter only PT writes

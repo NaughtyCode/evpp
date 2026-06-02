@@ -105,6 +105,15 @@ void ContactListenerImpl::OnContactAdded(const JPH::Body& inBody1,
 										 const JPH::Body& inBody2,
 										 const JPH::ContactManifold& inManifold,
 										 JPH::ContactSettings& ioSettings) {
+	size_t count = std::min(
+		static_cast<size_t>(inManifold.mRelativeContactPointsOn1.size()),
+		static_cast<size_t>(inManifold.mRelativeContactPointsOn2.size()));
+	if (count == 0) {
+		PushRecord(inBody1.GetID().GetIndexAndSequenceNumber(),
+				   inBody2.GetID().GetIndexAndSequenceNumber(),
+				   CollisionEvent::Type::Start);
+		return;
+	}
 	JPH::RVec3 cp1 = inManifold.GetWorldSpaceContactPointOn1(0);
 	JPH::RVec3 cp2 = inManifold.GetWorldSpaceContactPointOn2(0);
 	PushRecord(inBody1.GetID().GetIndexAndSequenceNumber(),
@@ -122,8 +131,11 @@ void ContactListenerImpl::OnContactPersisted(const JPH::Body& inBody1,
 	// Collect all contact points for persisted contacts
 	JPH::RVec3 cp1_sum = JPH::RVec3::sZero();
 	JPH::RVec3 cp2_sum = JPH::RVec3::sZero();
-	int count = std::min(static_cast<int>(inManifold.mRelativeContactPointsOn1.size()), 4);
-	for (int i = 0; i < count; ++i) {
+	size_t count = std::min(
+		static_cast<size_t>(inManifold.mRelativeContactPointsOn1.size()),
+		static_cast<size_t>(inManifold.mRelativeContactPointsOn2.size()));
+	count = std::min(count, static_cast<size_t>(4));
+	for (size_t i = 0; i < count; ++i) {
 		cp1_sum += inManifold.GetWorldSpaceContactPointOn1(i);
 		cp2_sum += inManifold.GetWorldSpaceContactPointOn2(i);
 	}
@@ -371,6 +383,7 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 		if (!result.success) {
 			PHYSICS_LOG_ERROR(
 				logger_, "PhysicsWorld: failed to load assets [{}]: {}", assets_path, result.error);
+			ResetRuntimeState();
 			return false;
 		}
 		PHYSICS_LOG_INFO(logger_,
@@ -437,8 +450,9 @@ std::optional<uint32_t> PhysicsWorld::CreateBody(const std::string& proto_id,
 	uint32_t body_id = body->GetID().GetIndexAndSequenceNumber();
 	bi.AddBody(body->GetID(), JPH::EActivation::Activate);
 
-	// Register in object registry and initialize state snapshot
-	object_registry_.Register(body_id, proto_id);
+	// Runtime spawns can reuse the same prototype many times, so keep
+	// them addressable by body id without creating duplicate name mappings.
+	object_registry_.Register(body_id, "");
 	if (settings.mMotionType != JPH::EMotionType::Static) {
 		BodyStateSnapshot snap;
 		snap.position = settings.mPosition;

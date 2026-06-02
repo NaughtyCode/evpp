@@ -8,6 +8,8 @@
 #include <cstdio>
 #include <thread>
 
+#include <quill/core/LogLevel.h>
+
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -18,6 +20,29 @@
 #include "runtime/profiler/profiler_events.h"
 
 namespace engine {
+
+namespace {
+
+bool ApplyPhysicsLogLevel(quill::Logger* logger, const std::string& level) {
+	if (level == "trace") {
+		logger->set_log_level(quill::LogLevel::TraceL1);
+	} else if (level == "debug") {
+		logger->set_log_level(quill::LogLevel::Debug);
+	} else if (level == "info") {
+		logger->set_log_level(quill::LogLevel::Info);
+	} else if (level == "warn" || level == "warning") {
+		logger->set_log_level(quill::LogLevel::Warning);
+	} else if (level == "error") {
+		logger->set_log_level(quill::LogLevel::Error);
+	} else if (level == "fatal" || level == "critical") {
+		logger->set_log_level(quill::LogLevel::Critical);
+	} else {
+		return false;
+	}
+	return true;
+}
+
+}  // namespace
 
 // InitTimerManager — create per-thread TimerManager (MT, before Start)
 
@@ -73,6 +98,7 @@ bool PhysicsThread::Start(const PhysicsConfig& config,
 	log_config_ = log_config;
 	assets_path_ = assets_path;
 	restore_state_on_start_ = restore_state;
+	has_start_config_ = true;
 	healthy_.store(false, std::memory_order_release);
 
 	// Create independent logger
@@ -181,9 +207,14 @@ bool PhysicsThread::Recover(const std::string& saved_state) {
 		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: recovery cannot run on the physics thread");
 		return false;
 	}
+	if (!has_start_config_) {
+		ENGINE_LOG_WARN(GetLogger(),
+						"PhysicsThread: recovery requested before Start captured a configuration");
+		return false;
+	}
 
-	PHYSICS_LOG_WARN(logger_, "PhysicsThread: attempting recovery...");
-	PHYSICS_LOG_WARN(
+	ENGINE_LOG_WARN(logger_, "PhysicsThread: attempting recovery...");
+	ENGINE_LOG_WARN(
 		logger_, "PhysicsThread: was healthy=[{}], running=[{}]", healthy_.load(), running_.load());
 
 	// Stop the old thread (Stop joins, so the thread is fully done here).
@@ -197,11 +228,11 @@ bool PhysicsThread::Recover(const std::string& saved_state) {
 					assets_path_,
 					saved_state);
 	if (!ok) {
-		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: recovery failed Start() returned false");
+		ENGINE_LOG_ERROR(logger_, "PhysicsThread: recovery failed Start() returned false");
 		return false;
 	}
 
-	PHYSICS_LOG_INFO(logger_, "PhysicsThread: recovery complete");
+	ENGINE_LOG_INFO(logger_, "PhysicsThread: recovery complete");
 	return true;
 }
 
@@ -221,6 +252,18 @@ bool PhysicsThread::RestoreState(const std::string& data) {
 		return false;
 	}
 	return world_.RestoreState(data);
+}
+
+void PhysicsThread::SetLogLevel(const std::string& level) {
+	log_config_.level = level;
+	if (!logger_) {
+		return;
+	}
+	if (ApplyPhysicsLogLevel(logger_, level)) {
+		ENGINE_LOG_INFO(logger_, "PhysicsThread: log level reloaded to '{}'", level);
+	} else {
+		ENGINE_LOG_WARN(GetLogger(), "PhysicsThread: ignored invalid log level '{}'", level);
+	}
 }
 
 // EnqueueCommand

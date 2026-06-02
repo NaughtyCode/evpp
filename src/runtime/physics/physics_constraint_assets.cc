@@ -3,6 +3,7 @@
 #include "runtime/physics/physics_constraint_assets.h"
 
 #include <cmath>
+#include <limits>
 
 #include <Jolt/Physics/Constraints/DistanceConstraint.h>
 #include <Jolt/Physics/Constraints/FixedConstraint.h>
@@ -14,6 +15,16 @@
 namespace engine {
 
 namespace {
+
+bool IsFloatRange(double value) {
+	return std::isfinite(value) &&
+		   std::abs(value) <= static_cast<double>(std::numeric_limits<float>::max());
+}
+
+bool IsFloatRangeVec3(const std::vector<double>& values) {
+	return values.size() == 3 && IsFloatRange(values[0]) && IsFloatRange(values[1]) &&
+		   IsFloatRange(values[2]);
+}
 
 bool ResolveConstraintBody(const std::string& name,
 						   const PhysicsConstraintAssetFactory::BodyLookup& bodies,
@@ -58,8 +69,8 @@ ConstraintCreateResult PhysicsConstraintAssetFactory::CreateAndAddConstraint(
 		return result;
 	}
 
-	if (!IsFiniteDoubleVec(con.pivot, 3) || !IsFiniteDoubleVec(con.axis, 3) ||
-		!std::isfinite(con.limits.min) || !std::isfinite(con.limits.max) ||
+	if (!IsFiniteDoubleVec(con.pivot, 3) || !IsFloatRangeVec3(con.axis) ||
+		!IsFloatRange(con.limits.min) || !IsFloatRange(con.limits.max) ||
 		con.limits.min > con.limits.max || !std::isfinite(con.spring.frequency) ||
 		con.spring.frequency < 0.0f || !std::isfinite(con.spring.damping) ||
 		con.spring.damping < 0.0f) {
@@ -101,8 +112,8 @@ ConstraintCreateResult PhysicsConstraintAssetFactory::CreateAndAddConstraint(
 		settings.mLimitsMin = static_cast<float>(con.limits.min);
 		settings.mLimitsMax = static_cast<float>(con.limits.max);
 		if (con.axis2.has_value()) {
-			if (!IsFiniteDoubleVec(*con.axis2, 3)) {
-				result.error = "slider constraint axis2 must contain 3 finite numbers";
+			if (!IsFloatRangeVec3(*con.axis2)) {
+				result.error = "slider constraint axis2 must contain 3 finite float-range numbers";
 				return result;
 			}
 			settings.mSliderAxis2 = JPH::Vec3(static_cast<float>((*con.axis2)[0]),

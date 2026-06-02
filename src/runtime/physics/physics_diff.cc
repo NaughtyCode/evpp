@@ -93,6 +93,12 @@ std::optional<DiffPacket> GenerateDiff(uint32_t body_id,
 
 void ObjectRegistry::Register(uint32_t body_id, const std::string& asset_name) {
 	ENGINE_PROFILE_SCOPE("engine.physics", "ObjRegistryRegister");
+	if (!asset_name.empty()) {
+		auto name_it = name_to_id_.find(asset_name);
+		if (name_it != name_to_id_.end() && name_it->second != body_id) {
+			id_to_name_.erase(name_it->second);
+		}
+	}
 	// If this body_id was already registered with a different name,
 	// remove the stale name-to-id mapping before overwriting.
 	auto it = id_to_name_.find(body_id);

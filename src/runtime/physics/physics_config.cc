@@ -36,6 +36,11 @@ bool FileExists(const std::string& path) {
 	return f.good();
 }
 
+bool IsValidLogLevelName(const std::string& level) {
+	return level == "trace" || level == "debug" || level == "info" || level == "warn" ||
+		   level == "warning" || level == "error" || level == "fatal" || level == "critical";
+}
+
 }  // namespace
 
 // Load all 4 JSON files
@@ -301,6 +306,10 @@ bool PhysicsConfigManager::ValidateConfigs(std::string& error_out) const {
 	}
 
 	// PhysicsLogConfig validations
+	if (!IsValidLogLevelName(log_config_.level)) {
+		error_out = "log level must be one of: trace, debug, info, warn, warning, error, fatal, critical";
+		return false;
+	}
 	if (log_config_.max_file_size_mb < 1) {
 		error_out = "maxFileSizeMb must be > 0";
 		return false;
@@ -506,6 +515,12 @@ bool PhysicsConfigManager::ReloadLogLevel(const std::string& config_dir) {
 		ENGINE_LOG_ERROR(engine::GetLogger(),
 						 "PhysicsConfigManager: logging reload parse error: {}",
 						 glz::format_error(ec, buf));
+		return false;
+	}
+	if (!IsValidLogLevelName(new_cfg.level)) {
+		ENGINE_LOG_ERROR(engine::GetLogger(),
+						 "PhysicsConfigManager: invalid logging level '{}'",
+						 new_cfg.level);
 		return false;
 	}
 
