@@ -279,6 +279,33 @@ TEST_CASE("db_bson constructors return nil errors for malformed argument types",
             "dbpointer collection must be a string|true|dbpointer oid must be a string");
 }
 
+TEST_CASE("db_bson constructors reject numeric strings for typed arguments",
+          "[database][data_service][bson]") {
+    DBScriptVM vm;
+    script::ExportMongo(vm);
+    ExportDbRuntime(vm);
+
+    std::string error;
+    std::string result;
+    REQUIRE(vm.DoString(
+        "local b = require('db_bson')\n"
+        "local bad_i64, i64_err = b.int64('1')\n"
+        "local bad_double, double_err = b.double('1.5')\n"
+        "local bad_oid, oid_err = b.oid(123)\n"
+        "local bad_binary, binary_err = b.binary(123)\n"
+        "return table.concat({ tostring(bad_i64 == nil), tostring(i64_err),\n"
+        "  tostring(bad_double == nil), tostring(double_err),\n"
+        "  tostring(bad_oid == nil), tostring(oid_err),\n"
+        "  tostring(bad_binary == nil), tostring(binary_err) }, '|')",
+        "=data_service_bson_numeric_string_argument_test",
+        &error,
+        &result));
+
+    REQUIRE(result ==
+            "true|int64 value must be an integer|true|double value must be a number|"
+            "true|ObjectId must be a string|true|binary value must be a string");
+}
+
 TEST_CASE("db_bson rejects malformed BSON arrays when array mode is forced",
           "[database][data_service][bson]") {
     DBScriptVM vm;
@@ -953,6 +980,30 @@ TEST_CASE("db_send_request rejects internal noop operation", "[database][data_se
         &result));
 
     REQUIRE(result == "false|db_send_request: noop is an internal operation");
+}
+
+TEST_CASE("db_send_request rejects truncated and implicitly converted fields",
+          "[database][data_service]") {
+    ScriptVM vm;
+    script::ExportDbService(vm);
+
+    std::string error;
+    std::string result;
+    REQUIRE(vm.DoString(
+        "local nul = string.char(0)\n"
+        "local ok1, err1 = db_send_request({ operation = 'find' .. nul .. 'x' })\n"
+        "local ok2, err2 = db_send_request({ operation = 1.5 })\n"
+        "local ok3, err3 = db_send_request({ operation = 'find', database = 123 })\n"
+        "return table.concat({ tostring(ok1), tostring(err1), tostring(ok2), tostring(err2),\n"
+        "  tostring(ok3), tostring(err3) }, '|')",
+        "=data_service_strict_request_fields_test",
+        &error,
+        &result));
+
+    REQUIRE(result ==
+            "false|db_send_request: unknown operation name|false|"
+            "db_send_request: operation must be an integer or string|false|"
+            "db_send_request: database must be a string");
 }
 
 TEST_CASE("db_send_request validates allow_empty_filter type", "[database][data_service]") {

@@ -143,6 +143,36 @@ bool ParseJsonDoc(const std::string& json_str,
 	return true;
 }
 
+bool ContainsEmbeddedNull(const std::string& value) {
+	return value.find('\0') != std::string::npos;
+}
+
+bool RejectEmbeddedNullField(const std::string& value, const char* field_name, DbResponse* resp) {
+	if (!ContainsEmbeddedNull(value)) return false;
+	resp->success = false;
+	resp->error_message = std::string(field_name) + " must not contain embedded NUL bytes";
+	return true;
+}
+
+bool IsJsonWhitespace(char c) {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+}
+
+bool LooksLikeJsonArray(const std::string& json_str) {
+	for (char c : json_str) {
+		if (IsJsonWhitespace(c)) continue;
+		return c == '[';
+	}
+	return false;
+}
+
+bool ValidateJsonArrayText(const std::string& json_str, const char* field_name, DbResponse* resp) {
+	if (LooksLikeJsonArray(json_str)) return true;
+	resp->success = false;
+	resp->error_message = std::string(field_name) + " must be a JSON array";
+	return false;
+}
+
 }  // namespace
 
 // Construction / Destruction
@@ -571,6 +601,19 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 		}
 	}
 
+	if (req.operation != DbOperation::kExecuteScript) {
+		if (RejectEmbeddedNullField(req.database, "database", &resp)) {
+			EnqueueResponse(std::move(resp));
+			return;
+		}
+	}
+	if (req.operation != DbOperation::kExecuteScript && req.operation != DbOperation::kCommand) {
+		if (RejectEmbeddedNullField(req.collection, "collection", &resp)) {
+			EnqueueResponse(std::move(resp));
+			return;
+		}
+	}
+
 	// ── kExecuteScript path (no db/coll handles needed) ────────────────
 
 	if (req.operation == DbOperation::kExecuteScript) {
@@ -743,6 +786,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 			std::vector<const mongo::BsonDocument*> doc_ptrs;
 
 			mongo::BsonDocument arr;
+			if (!ValidateJsonArrayText(req.bson_data, "bson_data", &resp)) break;
 			if (!ParseJsonDoc(req.bson_data, "bson_data", &arr, &resp)) break;
 			if (!ValidateBsonArrayOfDocuments(arr, "bson_data", &resp)) break;
 			mongo::BsonIter iter(arr);
@@ -925,6 +969,7 @@ void DBThread::ProcessRequest(const DbRequest& req) {
 				break;
 			}
 			mongo::BsonDocument pipeline;
+			if (!ValidateJsonArrayText(pipe_json, pipe_field, &resp)) break;
 			if (!ParseJsonDoc(pipe_json, pipe_field, &pipeline, &resp)) break;
 			if (!ValidateBsonArrayOfDocuments(pipeline, pipe_field, &resp)) break;
 			auto* cursor = coll->Aggregate(pipeline, nullptr, nullptr);

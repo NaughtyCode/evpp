@@ -589,19 +589,12 @@ bool ReadLuaIntegerArgument(lua_State* L,
 							const char* label,
 							int64_t* out,
 							std::string& error) {
-	if (lua_isnoneornil(L, index)) {
+	if (!lua_isinteger(L, index)) {
 		error = std::string(label) + " must be an integer";
 		return false;
 	}
 
-	int is_number = 0;
-	const lua_Integer value = lua_tointegerx(L, index, &is_number);
-	if (!is_number) {
-		error = std::string(label) + " must be an integer";
-		return false;
-	}
-
-	*out = static_cast<int64_t>(value);
+	*out = static_cast<int64_t>(lua_tointeger(L, index));
 	return true;
 }
 
@@ -623,19 +616,12 @@ bool ReadLuaNumberArgument(lua_State* L,
 						   const char* label,
 						   double* out,
 						   std::string& error) {
-	if (lua_isnoneornil(L, index)) {
+	if (lua_type(L, index) != LUA_TNUMBER) {
 		error = std::string(label) + " must be a number";
 		return false;
 	}
 
-	int is_number = 0;
-	const lua_Number value = lua_tonumberx(L, index, &is_number);
-	if (!is_number) {
-		error = std::string(label) + " must be a number";
-		return false;
-	}
-
-	*out = static_cast<double>(value);
+	*out = static_cast<double>(lua_tonumber(L, index));
 	return true;
 }
 
@@ -645,7 +631,7 @@ bool ReadLuaStringArgument(lua_State* L,
 						   const char** out,
 						   size_t* length,
 						   std::string& error) {
-	if (lua_isnoneornil(L, index)) {
+	if (lua_type(L, index) != LUA_TSTRING) {
 		error = std::string(label) + " must be a string";
 		return false;
 	}

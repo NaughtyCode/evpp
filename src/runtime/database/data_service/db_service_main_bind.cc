@@ -2,9 +2,10 @@
 
 #include "runtime/database/data_service/db_service_main_bind.h"
 
-#include <cstring>
 #include <cstdint>
 #include <limits>
+#include <string>
+#include <string_view>
 
 #include "runtime/database/data_service/database_service.h"
 #include "runtime/vm/vm.h"
@@ -16,25 +17,27 @@ namespace {
 
 // ── String → DbOperation mapping (case-insensitive) ───────────────────────
 //
-// Lowercases the input string and matches against known operation names.
-// Returns false for unrecognized strings (no silent fallback to kNoOp).
+// Matches against known operation names without accepting embedded-NUL
+// truncation or fixed-buffer prefixes. Returns false for unrecognized strings
+// (no silent fallback to kNoOp).
 
-bool ParseOperationName(const char* s, DbOperation* out) {
-	if (!s || !out) return false;
-
-	// case-fold into buf
-	char buf[32];
-	int i = 0;
-	for (; s[i] && i < 31; ++i) {
-		char c = s[i];
-		buf[i] = (c >= 'A' && c <= 'Z') ? static_cast<char>(c + 32) : c;
+bool EqualsAsciiCaseInsensitive(std::string_view value, std::string_view expected) {
+	if (value.size() != expected.size()) return false;
+	for (size_t i = 0; i < value.size(); ++i) {
+		char c = value[i];
+		if (c >= 'A' && c <= 'Z') c = static_cast<char>(c + ('a' - 'A'));
+		if (c != expected[i]) return false;
 	}
-	buf[i] = '\0';
+	return true;
+}
 
-#define OP_MATCH(name, op)             \
-	if (std::strcmp(buf, name) == 0) { \
-		*out = DbOperation::op;        \
-		return true;                   \
+bool ParseOperationName(std::string_view s, DbOperation* out) {
+	if (!out) return false;
+
+#define OP_MATCH(name, op)                         \
+	if (EqualsAsciiCaseInsensitive(s, name)) {     \
+		*out = DbOperation::op;                    \
+		return true;                               \
 	}
 
 	OP_MATCH("find", kFind);
@@ -53,6 +56,29 @@ bool ParseOperationName(const char* s, DbOperation* out) {
 
 #undef OP_MATCH
 	return false;
+}
+
+bool ReadOptionalStringField(lua_State* L,
+							 int table_index,
+							 const char* field,
+							 std::string* out,
+							 std::string& error) {
+	lua_getfield(L, table_index, field);
+	if (lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+		return true;
+	}
+	if (lua_type(L, -1) != LUA_TSTRING) {
+		lua_pop(L, 1);
+		error = std::string("db_send_request: ") + field + " must be a string";
+		return false;
+	}
+
+	size_t len = 0;
+	const char* value = lua_tolstring(L, -1, &len);
+	out->assign(value ? value : "", value ? len : 0);
+	lua_pop(L, 1);
+	return true;
 }
 
 // ── Status query helpers ──────────────────────────────────────────────────
@@ -133,15 +159,23 @@ int l_db_send_request(lua_State* L) {
 			return 2;
 		}
 		req.operation = static_cast<DbOperation>(v);
-	} else if (lua_isstring(L, -1)) {
+	} else if (lua_type(L, -1) == LUA_TSTRING) {
+		size_t len = 0;
+		const char* op_name = lua_tolstring(L, -1, &len);
 		DbOperation op;
-		if (!ParseOperationName(lua_tostring(L, -1), &op)) {
+		if (!ParseOperationName(std::string_view(op_name ? op_name : "", op_name ? len : 0),
+								&op)) {
 			lua_pop(L, 1);
 			lua_pushboolean(L, 0);
 			lua_pushstring(L, "db_send_request: unknown operation name");
 			return 2;
 		}
 		req.operation = op;
+	} else if (lua_isnumber(L, -1)) {
+		lua_pop(L, 1);
+		lua_pushboolean(L, 0);
+		lua_pushstring(L, "db_send_request: operation must be an integer or string");
+		return 2;
 	} else {
 		lua_pop(L, 1);
 		lua_pushboolean(L, 0);
@@ -156,40 +190,16 @@ int l_db_send_request(lua_State* L) {
 		return 2;
 	}
 
-	// database
-	lua_getfield(L, 1, "database");
-	if (lua_isstring(L, -1)) {
-		req.database = lua_tostring(L, -1);
+	std::string string_error;
+	if (!ReadOptionalStringField(L, 1, "database", &req.database, string_error) ||
+		!ReadOptionalStringField(L, 1, "collection", &req.collection, string_error) ||
+		!ReadOptionalStringField(L, 1, "bson_data", &req.bson_data, string_error) ||
+		!ReadOptionalStringField(L, 1, "bson_data2", &req.bson_data2, string_error) ||
+		!ReadOptionalStringField(L, 1, "script", &req.script, string_error)) {
+		lua_pushboolean(L, 0);
+		lua_pushlstring(L, string_error.data(), string_error.size());
+		return 2;
 	}
-	lua_pop(L, 1);
-
-	// collection
-	lua_getfield(L, 1, "collection");
-	if (lua_isstring(L, -1)) {
-		req.collection = lua_tostring(L, -1);
-	}
-	lua_pop(L, 1);
-
-	// bson_data
-	lua_getfield(L, 1, "bson_data");
-	if (lua_isstring(L, -1)) {
-		req.bson_data = lua_tostring(L, -1);
-	}
-	lua_pop(L, 1);
-
-	// bson_data2
-	lua_getfield(L, 1, "bson_data2");
-	if (lua_isstring(L, -1)) {
-		req.bson_data2 = lua_tostring(L, -1);
-	}
-	lua_pop(L, 1);
-
-	// script
-	lua_getfield(L, 1, "script");
-	if (lua_isstring(L, -1)) {
-		req.script = lua_tostring(L, -1);
-	}
-	lua_pop(L, 1);
 
 	// limit
 	lua_getfield(L, 1, "limit");
@@ -295,9 +305,9 @@ int l_db_poll_response(lua_State* L) {
 	lua_setfield(L, -2, "success");
 	lua_pushinteger(L, static_cast<lua_Integer>(resp->error_code));
 	lua_setfield(L, -2, "error_code");
-	lua_pushstring(L, resp->error_message.c_str());
+	lua_pushlstring(L, resp->error_message.data(), resp->error_message.size());
 	lua_setfield(L, -2, "error_message");
-	lua_pushstring(L, resp->result_data.c_str());
+	lua_pushlstring(L, resp->result_data.data(), resp->result_data.size());
 	lua_setfield(L, -2, "result_data");
 	lua_pushinteger(L, static_cast<lua_Integer>(resp->affected_count));
 	lua_setfield(L, -2, "affected_count");
