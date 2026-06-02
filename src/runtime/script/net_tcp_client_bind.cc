@@ -159,21 +159,27 @@ int l_client_send(lua_State* L) {
 	size_t len = 0;
 	const char* data = luaL_checklstring(L, 2, &len);
 
-		if (len > ctx->codec.GetMaxMessageSize()) {
-			return luaL_error(L, "message size %zu exceeds limit %u",
-					 len, ctx->codec.GetMaxMessageSize());
-		}
-
-	auto conn = ctx->client->conn();
-	if (!conn || !conn->IsConnected()) {
-		return luaL_error(L, "client: not connected");
+	if (len > ctx->codec.GetMaxMessageSize()) {
+		return LuaError(L, "message size %zu exceeds limit %u",
+						len, ctx->codec.GetMaxMessageSize());
 	}
 
-		/* Encode with length-prefixed framing so the receiver can split messages */
-		std::string framed = ctx->codec.Encode(std::string(data, len));
-		if (!framed.empty()) {
-			conn->Send(framed.data(), framed.size());
+	bool sent = false;
+	{
+		auto conn = ctx->client->conn();
+		if (conn && conn->IsConnected()) {
+			/* Encode with length-prefixed framing so the receiver can split messages */
+			std::string framed = ctx->codec.Encode(std::string(data, len));
+			if (!framed.empty()) {
+				conn->Send(framed.data(), framed.size());
+			}
+			sent = true;
 		}
+	}
+
+	if (!sent) {
+		return luaL_error(L, "client: not connected");
+	}
 	return 0;
 }
 

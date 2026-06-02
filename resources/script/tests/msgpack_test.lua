@@ -599,20 +599,17 @@ eq(vtkn[1], "a")
 eq(vtkn[5], "e")
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 22. Circular table — should not cause stack overflow (max nesting = 16)
+-- 22. Circular table — should fail cleanly (max nesting = 16)
 -- ════════════════════════════════════════════════════════════════════════════
 
-start("circular table (max nesting = 16, should encode as nil beyond)")
+start("circular table (max nesting = 16, should error)")
 local a = {}
 local b = {a}
 a[1] = b   -- a = {b}, b = {a}, circular
-local okc, dc = pcall(mp.pack, a)
-ok(okc, "circular table should not crash")
-if okc then
-    -- It should produce valid MessagePack (circular ref becomes nil at max depth).
-    local vc = mp.unpack(dc)
-    ok(type(vc) == "table", "should decode as table")
-end
+local okc, errc = pcall(mp.pack, a)
+ok(not okc, "circular table should be rejected")
+ok(type(errc) == "string" and string.find(errc, "nesting depth") ~= nil,
+   "error message should mention nesting depth")
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- Final summary

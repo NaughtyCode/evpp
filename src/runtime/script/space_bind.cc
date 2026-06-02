@@ -59,102 +59,134 @@ void PushSpaceInfo(lua_State* L, const space::Space& sp) {
 	lua_setfield(L, -2, "player_count");
 }
 
-void ReadSizeField(lua_State* L,
+bool ReadSizeField(lua_State* L,
 				   int table_index,
 				   const char* field_name,
 				   size_t& out,
-				   bool allow_zero) {
+				   bool allow_zero,
+				   std::string& error) {
 	lua_getfield(L, table_index, field_name);
 	if (lua_isnil(L, -1)) {
 		lua_pop(L, 1);
-		return;
+		return true;
 	}
 
 	if (!lua_isinteger(L, -1)) {
-		luaL_error(L, "space config field '%s' must be an integer", field_name);
+		error = "space config field '" + std::string(field_name) + "' must be an integer";
+		lua_pop(L, 1);
+		return false;
 	}
 
 	lua_Integer value = lua_tointeger(L, -1);
 	lua_pop(L, 1);
 
 	if (value < 0 || (!allow_zero && value == 0)) {
-		luaL_error(L,
-				   "space config field '%s' must be %s",
-				   field_name,
-				   allow_zero ? "non-negative" : "positive");
+		error = "space config field '" + std::string(field_name) + "' must be " +
+				(allow_zero ? "non-negative" : "positive");
+		return false;
 	}
 
 	auto unsigned_value = static_cast<unsigned long long>(value);
 	if (unsigned_value > static_cast<unsigned long long>(std::numeric_limits<size_t>::max())) {
-		luaL_error(L, "space config field '%s' is too large", field_name);
+		error = "space config field '" + std::string(field_name) + "' is too large";
+		return false;
 	}
 
 	out = static_cast<size_t>(value);
+	return true;
 }
 
-void ReadScriptsField(lua_State* L, int table_index, std::vector<std::string>& scripts) {
+bool ReadScriptsField(lua_State* L,
+					  int table_index,
+					  std::vector<std::string>& scripts,
+					  std::string& error) {
 	lua_getfield(L, table_index, "scripts");
 	if (lua_isnil(L, -1)) {
 		lua_pop(L, 1);
-		return;
+		return true;
 	}
 
 	if (!lua_istable(L, -1)) {
-		luaL_error(L, "space config field 'scripts' must be an array table");
+		error = "space config field 'scripts' must be an array table";
+		lua_pop(L, 1);
+		return false;
 	}
 
-	lua_Integer count = luaL_len(L, -1);
-	for (lua_Integer i = 1; i <= count; ++i) {
-		lua_rawgeti(L, -1, i);
+	const size_t count = lua_rawlen(L, -1);
+	for (size_t i = 1; i <= count; ++i) {
+		lua_rawgeti(L, -1, static_cast<lua_Integer>(i));
 		if (!lua_isstring(L, -1)) {
-			std::string message =
-				"space config scripts[" + std::to_string(static_cast<long long>(i)) +
-				"] must be a string";
-			luaL_error(L, "%s", message.c_str());
+			error = "space config scripts[" + std::to_string(i) + "] must be a string";
+			lua_pop(L, 2);
+			return false;
 		}
-		scripts.emplace_back(lua_tostring(L, -1));
+		size_t len = 0;
+		const char* script = lua_tolstring(L, -1, &len);
+		scripts.emplace_back(script ? script : "", len);
 		lua_pop(L, 1);
 	}
 
 	lua_pop(L, 1);
+	return true;
 }
 
 // space.create(name, config)
 // config: { max_entities = N, max_players = N, scripts = {...} }
 int l_space_create(lua_State* L) {
 	const char* name = luaL_checkstring(L, 1);
-	space::SpaceConfig config;
-	config.name = name;
+	bool parse_failed = false;
+	int result_count = 0;
 
-	if (!lua_isnoneornil(L, 2)) {
-		luaL_checktype(L, 2, LUA_TTABLE);
-		int cfg_index = lua_absindex(L, 2);
-		ReadSizeField(L, cfg_index, "max_entities", config.max_entities, false);
-		ReadSizeField(L, cfg_index, "max_players", config.max_players, true);
-		ReadScriptsField(L, cfg_index, config.entry_scripts);
-	}
-
-	auto& manager = space::SpaceManager::Instance();
-	auto* sp = manager.CreateSpace(config);
-	if (!sp) {
-		lua_pushnil(L);
-		lua_pushstring(L, "failed to create space");
-		return 2;
-	}
-
-	if (!config.entry_scripts.empty()) {
+	{
+		space::SpaceConfig config;
+		config.name = name;
 		std::string error;
-		if (!sp->LoadScripts(config.entry_scripts, &error)) {
-			space::SpaceId id = sp->GetId();
-			manager.DestroySpace(id);
-			lua_pushnil(L);
+
+		if (!lua_isnoneornil(L, 2)) {
+			if (!lua_istable(L, 2)) {
+				error = "space config must be a table";
+			} else {
+				int cfg_index = lua_absindex(L, 2);
+				if (!ReadSizeField(L, cfg_index, "max_entities", config.max_entities, false, error) ||
+					!ReadSizeField(L, cfg_index, "max_players", config.max_players, true, error) ||
+					!ReadScriptsField(L, cfg_index, config.entry_scripts, error)) {
+					// error filled by helper
+				}
+			}
+		}
+
+		if (!error.empty()) {
 			lua_pushlstring(L, error.data(), error.size());
-			return 2;
+			parse_failed = true;
+		} else {
+			auto& manager = space::SpaceManager::Instance();
+			auto* sp = manager.CreateSpace(config);
+			if (!sp) {
+				lua_pushnil(L);
+				lua_pushstring(L, "failed to create space");
+				result_count = 2;
+			} else if (!config.entry_scripts.empty()) {
+				if (!sp->LoadScripts(config.entry_scripts, &error)) {
+					space::SpaceId id = sp->GetId();
+					manager.DestroySpace(id);
+					lua_pushnil(L);
+					lua_pushlstring(L, error.data(), error.size());
+					result_count = 2;
+				} else {
+					lua_pushinteger(L, static_cast<lua_Integer>(sp->GetId()));
+					result_count = 1;
+				}
+			} else {
+				lua_pushinteger(L, static_cast<lua_Integer>(sp->GetId()));
+				result_count = 1;
+			}
 		}
 	}
 
-	lua_pushinteger(L, static_cast<lua_Integer>(sp->GetId()));
-	return 1;
+	if (parse_failed) {
+		return lua_error(L);
+	}
+	return result_count;
 }
 
 // space.get(id) -> space info table or nil
@@ -196,10 +228,13 @@ int l_space_send(lua_State* L) {
 	const char* payload = luaL_checklstring(L, 3, &len);
 
 	if (len > kMaxSpacePayloadBytes) {
-		std::string message = "space payload exceeds maximum size (" +
-							  std::to_string(len) + " > " +
-							  std::to_string(kMaxSpacePayloadBytes) + ")";
-		return luaL_error(L, "%s", message.c_str());
+		{
+			std::string message = "space payload exceeds maximum size (" +
+								  std::to_string(len) + " > " +
+								  std::to_string(kMaxSpacePayloadBytes) + ")";
+			lua_pushlstring(L, message.data(), message.size());
+		}
+		return lua_error(L);
 	}
 
 	space::SpaceMessage msg;

@@ -175,12 +175,12 @@ int l_kcp_client_send(lua_State* L) {
 	size_t len = 0;
 
 	const char* data = luaL_checklstring(L, 2, &len);
-		{
-			uint32_t limit = ConfigManager::Instance().GetServerConfig().resource_limits.max_message_size;
-			if (len > limit) {
-				return luaL_error(L, "message size %zu exceeds limit %u", len, limit);
-			}
+	{
+		uint32_t limit = ConfigManager::Instance().GetServerConfig().resource_limits.max_message_size;
+		if (len > limit) {
+			return LuaError(L, "message size %zu exceeds limit %u", len, limit);
 		}
+	}
 
 	bool ok = ctx->client->Send(data, len);
 	lua_pushboolean(L, ok ? 1 : 0);
@@ -197,7 +197,7 @@ int l_kcp_client_do_request(lua_State* L) {
 	const char* data = luaL_checklstring(L, 2, &len);
 	uint32_t limit = ConfigManager::Instance().GetServerConfig().resource_limits.max_message_size;
 	if (len > limit) {
-		return luaL_error(L, "message size %zu exceeds limit %u", len, limit);
+		return LuaError(L, "message size %zu exceeds limit %u", len, limit);
 	}
 	lua_Integer t = luaL_optinteger(L, 3, 3000);
 	if (t < 0) {
@@ -324,7 +324,7 @@ int l_kcp_client_do_request_static(lua_State* L) {
 	const char* data = luaL_checklstring(L, 3, &len);
 	uint32_t limit = ConfigManager::Instance().GetServerConfig().resource_limits.max_message_size;
 	if (len > limit) {
-		return luaL_error(L, "message size %zu exceeds limit %u", len, limit);
+		return LuaError(L, "message size %zu exceeds limit %u", len, limit);
 	}
 	lua_Integer t = luaL_optinteger(L, 4, 3000);
 	if (t < 0) {

@@ -55,9 +55,18 @@ int l_auth_add_token(lua_State* L) {
 	const char* token = luaL_checkstring(L, 1);
 	const char* entity_id = luaL_checkstring(L, 2);
 
-	auto backend = EnsureTokenBackend();
-	if (!backend) return luaL_error(L, "failed to initialize token auth backend");
-	backend->AddToken(token, entity_id);
+	bool failed = false;
+	{
+		auto backend = EnsureTokenBackend();
+		if (!backend) {
+			lua_pushliteral(L, "failed to initialize token auth backend");
+			failed = true;
+		} else {
+			backend->AddToken(token, entity_id);
+		}
+	}
+	if (failed) return lua_error(L);
+
 	lua_pushboolean(L, 1);
 	return 1;
 }
@@ -83,9 +92,17 @@ int l_auth_grant_permission(lua_State* L) {
 	const char* entity_id = luaL_checkstring(L, 1);
 	const char* permission = luaL_checkstring(L, 2);
 
-	auto backend = EnsureAuthBackend();
-	if (!backend) return luaL_error(L, "failed to initialize auth backend");
-	backend->GrantPermission(entity_id, permission);
+	bool failed = false;
+	{
+		auto backend = EnsureAuthBackend();
+		if (!backend) {
+			lua_pushliteral(L, "failed to initialize auth backend");
+			failed = true;
+		} else {
+			backend->GrantPermission(entity_id, permission);
+		}
+	}
+	if (failed) return lua_error(L);
 
 	lua_pushboolean(L, 1);
 	return 1;
@@ -96,9 +113,17 @@ int l_auth_revoke_permission(lua_State* L) {
 	const char* entity_id = luaL_checkstring(L, 1);
 	const char* permission = luaL_checkstring(L, 2);
 
-	auto backend = EnsureAuthBackend();
-	if (!backend) return luaL_error(L, "failed to initialize auth backend");
-	backend->RevokePermission(entity_id, permission);
+	bool failed = false;
+	{
+		auto backend = EnsureAuthBackend();
+		if (!backend) {
+			lua_pushliteral(L, "failed to initialize auth backend");
+			failed = true;
+		} else {
+			backend->RevokePermission(entity_id, permission);
+		}
+	}
+	if (failed) return lua_error(L);
 
 	lua_pushboolean(L, 1);
 	return 1;
@@ -109,9 +134,18 @@ int l_auth_has_permission(lua_State* L) {
 	const char* entity_id = luaL_checkstring(L, 1);
 	const char* permission = luaL_checkstring(L, 2);
 
-	auto backend = EnsureAuthBackend();
-	if (!backend) return luaL_error(L, "failed to initialize auth backend");
-	bool has = backend->HasPermission(entity_id, permission);
+	bool failed = false;
+	bool has = false;
+	{
+		auto backend = EnsureAuthBackend();
+		if (!backend) {
+			lua_pushliteral(L, "failed to initialize auth backend");
+			failed = true;
+		} else {
+			has = backend->HasPermission(entity_id, permission);
+		}
+	}
+	if (failed) return lua_error(L);
 
 	lua_pushboolean(L, has ? 1 : 0);
 	return 1;
@@ -122,32 +156,46 @@ int l_auth_has_permission(lua_State* L) {
 // auth.authenticate(method, params_table) → ok, entity_id, session_id | nil, err
 int l_auth_authenticate(lua_State* L) {
 	const char* method = luaL_checkstring(L, 1);
-	std::map<std::string, std::string> params;
+	bool failed = false;
+	int result_count = 0;
 
-	if (lua_istable(L, 2)) {
-		int table_index = lua_absindex(L, 2);
-		lua_pushnil(L);
-		while (lua_next(L, table_index) != 0) {
-			if (lua_isstring(L, -2) && lua_isstring(L, -1)) {
-				params[lua_tostring(L, -2)] = lua_tostring(L, -1);
+	{
+		std::map<std::string, std::string> params;
+
+		if (lua_istable(L, 2)) {
+			int table_index = lua_absindex(L, 2);
+			lua_pushnil(L);
+			while (lua_next(L, table_index) != 0) {
+				if (lua_isstring(L, -2) && lua_isstring(L, -1)) {
+					params[lua_tostring(L, -2)] = lua_tostring(L, -1);
+				}
+				lua_pop(L, 1);
 			}
-			lua_pop(L, 1);
+		}
+
+		auto backend = EnsureAuthBackend();
+		if (!backend) {
+			lua_pushliteral(L, "failed to initialize auth backend");
+			failed = true;
+		} else {
+			auto result = backend->Authenticate(method, params);
+			if (result.success) {
+				lua_pushboolean(L, 1);
+				lua_pushstring(L, result.entity_id.c_str());
+				lua_pushstring(L, result.session_id.c_str());
+				result_count = 3;
+			} else {
+				lua_pushnil(L);
+				lua_pushstring(L,
+							   result.reason.empty() ? "authentication failed"
+													 : result.reason.c_str());
+				result_count = 2;
+			}
 		}
 	}
 
-	auto backend = EnsureAuthBackend();
-	if (!backend) return luaL_error(L, "failed to initialize auth backend");
-	auto result = backend->Authenticate(method, params);
-	if (result.success) {
-		lua_pushboolean(L, 1);
-		lua_pushstring(L, result.entity_id.c_str());
-		lua_pushstring(L, result.session_id.c_str());
-		return 3;
-	}
-
-	lua_pushnil(L);
-	lua_pushstring(L, result.reason.empty() ? "authentication failed" : result.reason.c_str());
-	return 2;
+	if (failed) return lua_error(L);
+	return result_count;
 }
 
 // auth.create_session(entity_id) → session_id

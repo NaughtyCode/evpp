@@ -12,6 +12,7 @@
 #include "runtime/config/config.h"
 #include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
+#include "runtime/script/bind_util.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {
@@ -436,28 +437,31 @@ bool EncodeLuaType(lua_State* L,
 				  int level,
 				  std::string& error) {
 	int t = lua_type(L, -1);
-	if (t == LUA_TTABLE && level == GetMaxNesting()) t = LUA_TNIL;
 	bool ok = true;
-
-	switch (t) {
-	case LUA_TSTRING:
-		EncodeLuaString(L, buf);
-		break;
-	case LUA_TBOOLEAN:
-		EncodeLuaBool(L, buf);
-		break;
-	case LUA_TNUMBER:
-		if (lua_isinteger(L, -1))
-			EncodeLuaInteger(L, buf);
-		else
-			EncodeLuaNumber(L, buf);
-		break;
-	case LUA_TTABLE:
-		ok = EncodeLuaTable(L, buf, level, error);
-		break;
-	default:
-		EncodeLuaNull(buf);
-		break;
+	if (t == LUA_TTABLE && level >= GetMaxNesting()) {
+		error = "msgpack encode: maximum nesting depth exceeded";
+		ok = false;
+	} else {
+		switch (t) {
+		case LUA_TSTRING:
+			EncodeLuaString(L, buf);
+			break;
+		case LUA_TBOOLEAN:
+			EncodeLuaBool(L, buf);
+			break;
+		case LUA_TNUMBER:
+			if (lua_isinteger(L, -1))
+				EncodeLuaInteger(L, buf);
+			else
+				EncodeLuaNumber(L, buf);
+			break;
+		case LUA_TTABLE:
+			ok = EncodeLuaTable(L, buf, level, error);
+			break;
+		default:
+			EncodeLuaNull(buf);
+			break;
+		}
 	}
 	lua_pop(L, 1);
 	return ok;
@@ -726,12 +730,11 @@ int UnpackFull(lua_State* L, int limit, int offset) {
 			L, "Invalid request to unpack with offset of %d and limit of %d.", offset, limit);
 	}
 	if (len > max_payload) {
-		return luaL_error(L, "msgpack decode: payload exceeds maximum size (%zu bytes)",
-						  max_payload);
+		return LuaError(L, "msgpack decode: payload exceeds maximum size (%zu bytes)",
+						max_payload);
 	}
 	if (static_cast<size_t>(offset) > len) {
-		return luaL_error(
-			L, "Start offset %d greater than input length %zu.", offset, len);
+		return LuaError(L, "Start offset %d greater than input length %zu.", offset, len);
 	}
 
 	if (decode_all) limit = INT_MAX;
@@ -803,7 +806,7 @@ int l_msgpack_pack(lua_State* L) {
 		}
 	}
 	if (failed) {
-		return luaL_error(L, "%s", error_buf);
+		return LuaError(L, "%s", error_buf);
 	}
 	lua_concat(L, nargs);
 	return 1;

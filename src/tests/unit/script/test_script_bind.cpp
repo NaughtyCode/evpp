@@ -188,7 +188,7 @@ return table.concat({
 	REQUIRE(result == "false,true,false,true");
 }
 
-TEST_CASE("cmsgpack handles cyclic tables and rejects oversized unpack arguments",
+TEST_CASE("cmsgpack rejects cyclic tables and oversized unpack arguments",
 		  "[script_bind][msgpack]") {
 	ExportAllFixture f;
 	std::string result;
@@ -197,7 +197,7 @@ TEST_CASE("cmsgpack handles cyclic tables and rejects oversized unpack arguments
 		R"lua(
 local cyclic = {}
 cyclic.self = cyclic
-local ok_cycle, packed_cycle = pcall(cmsgpack.pack, cyclic)
+local ok_cycle, err_cycle = pcall(cmsgpack.pack, cyclic)
 
 local huge = 9223372036854775807
 local ok_offset, err_offset = pcall(cmsgpack.unpack_one, '', huge)
@@ -206,7 +206,7 @@ local value, safe_err = cmsgpack_safe.unpack_one('', huge)
 
 return table.concat({
     tostring(ok_cycle),
-    tostring(type(packed_cycle) == 'string' and #packed_cycle > 0),
+    tostring(type(err_cycle) == 'string' and err_cycle:find('nesting depth') ~= nil),
     tostring(ok_offset),
     tostring(type(err_offset) == 'string' and err_offset:find('offset') ~= nil),
     tostring(ok_limit),
@@ -216,7 +216,7 @@ return table.concat({
 }, ',')
 )lua",
 		result));
-	REQUIRE(result == "true,true,false,true,false,true,true,true");
+	REQUIRE(result == "false,true,false,true,false,true,true,true");
 }
 
 TEST_CASE("space binding rejects negative identifiers before unsigned conversion",

@@ -10,6 +10,7 @@
 #include "runtime/core/log/log.h"
 #include "runtime/entity/entity.h"
 #include "runtime/entity/entity_manager.h"
+#include "runtime/script/bind_util.h"
 #include "runtime/vm/lua_error_handler.h"
 #include "runtime/vm/vm.h"
 
@@ -128,8 +129,7 @@ int l_entity_create(lua_State* L) {
 
 	auto* entity = EntityManager::Instance().CreateEntity(id);
 	if (!entity) {
-		return luaL_error(L, "entity id %" PRIu64 " already exists",
-						  static_cast<uint64_t>(id));
+		return LuaError(L, "entity id %" PRIu64 " already exists", static_cast<uint64_t>(id));
 	}
 
 	auto* ctx = CLOUDENGINE_MEM_NEW(EntityCtx);
@@ -270,6 +270,10 @@ int l_entity_set_attr(lua_State* L) {
 		return 0;
 	}
 
+	if (val_type != LUA_TNUMBER && val_type != LUA_TSTRING && val_type != LUA_TBOOLEAN) {
+		return luaL_error(L, "unsupported attribute type: %s", lua_typename(L, val_type));
+	}
+
 	entity::AttrValue val;
 	switch (val_type) {
 	case LUA_TNUMBER:
@@ -288,8 +292,6 @@ int l_entity_set_attr(lua_State* L) {
 	case LUA_TBOOLEAN:
 		val = static_cast<bool>(lua_toboolean(L, 3));
 		break;
-	default:
-		return luaL_error(L, "unsupported attribute type: %s", lua_typename(L, val_type));
 	}
 
 	entity->Attrs().Set(key, std::move(val));
@@ -435,49 +437,57 @@ int l_entity_add_timer(lua_State* L) {
 	luaL_checktype(L, 4, LUA_TFUNCTION);
 
 	lua_pushvalue(L, 4);
-	auto cb_ref = std::make_shared<LuaRegistryRef>();
-	cb_ref->L = L;
-	cb_ref->ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	bool failed = false;
+	{
+		auto cb_ref = std::make_shared<LuaRegistryRef>();
+		cb_ref->L = L;
+		cb_ref->ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-	EntityId eid = ctx->id;
-	auto tid_holder = std::make_shared<TimerId>(kInvalidTimerId);
+		EntityId eid = ctx->id;
+		auto tid_holder = std::make_shared<TimerId>(kInvalidTimerId);
 
-	auto timer_cb = [L, eid, cb_ref, repeat, tid_holder]() {
-		auto* ent = EntityManager::Instance().GetEntity(eid);
-		if (!ent || ent->GetState() != EntityState::Active) {
+		auto timer_cb = [L, eid, cb_ref, repeat, tid_holder]() {
+			auto* ent = EntityManager::Instance().GetEntity(eid);
+			if (!ent || ent->GetState() != EntityState::Active) {
+				if (!repeat) {
+					cb_ref->Release();
+					EraseTimerRef(eid, *tid_holder);
+				}
+				return;
+			}
+			if (cb_ref->ref == LUA_NOREF) return;
+
+			const int base_top = lua_gettop(L);
+			lua_rawgeti(L, LUA_REGISTRYINDEX, cb_ref->ref);
+			int msgh = PushLuaErrorHandlerForCall(L, 0);
+			if (lua_pcall(L, 0, 0, msgh) != LUA_OK) {
+				auto* logger = GetLogger();
+				ENGINE_LOG_ERROR(logger, "[entity] timer callback error: {}",
+								 lua_tostring(L, -1));
+			}
+			lua_settop(L, base_top);
 			if (!repeat) {
 				cb_ref->Release();
 				EraseTimerRef(eid, *tid_holder);
 			}
-			return;
-		}
-		if (cb_ref->ref == LUA_NOREF) return;
+		};
 
-		const int base_top = lua_gettop(L);
-		lua_rawgeti(L, LUA_REGISTRYINDEX, cb_ref->ref);
-		int msgh = PushLuaErrorHandlerForCall(L, 0);
-		if (lua_pcall(L, 0, 0, msgh) != LUA_OK) {
-			auto* logger = GetLogger();
-			ENGINE_LOG_ERROR(logger, "[entity] timer callback error: {}",
-							 lua_tostring(L, -1));
-		}
-		lua_settop(L, base_top);
-		if (!repeat) {
+		TimerId tid = entity->AddTimer(interval_ms, repeat, std::move(timer_cb));
+		if (tid == kInvalidTimerId) {
 			cb_ref->Release();
-			EraseTimerRef(eid, *tid_holder);
-		}
-	};
+			lua_pushliteral(L, "entity timer manager is not initialized or interval is invalid");
+			failed = true;
+		} else {
+			*tid_holder = tid;
+			ctx->timer_refs[tid] = cb_ref;
 
-	TimerId tid = entity->AddTimer(interval_ms, repeat, std::move(timer_cb));
-	if (tid == kInvalidTimerId) {
-		cb_ref->Release();
-		return luaL_error(L, "entity timer manager is not initialized or interval is invalid");
+			lua_pushinteger(L, static_cast<lua_Integer>(tid));
+		}
 	}
 
-	*tid_holder = tid;
-	ctx->timer_refs[tid] = cb_ref;
-
-	lua_pushinteger(L, static_cast<lua_Integer>(tid));
+	if (failed) {
+		return lua_error(L);
+	}
 	return 1;
 }
 

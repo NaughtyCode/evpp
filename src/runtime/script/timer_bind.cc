@@ -8,6 +8,7 @@
 #include "runtime/core/log/log.h"
 #include "runtime/core/timer/timer_core.h"
 #include "runtime/core/timer/timer_manager.h"
+#include "runtime/script/bind_util.h"
 #include "runtime/vm/lua_error_handler.h"
 #include "runtime/vm/vm.h"
 
@@ -86,7 +87,7 @@ int l_timer_timeout(lua_State* L) {
 	luaL_checktype(L, 2, LUA_TFUNCTION);
 
 	if (ms <= 0 || ms > kMaxTimerMs) {
-		return luaL_error(L, "timer delay out of range [1, %lld]", (long long) kMaxTimerMs);
+		return LuaError(L, "timer delay out of range [1, %lld]", (long long) kMaxTimerMs);
 	}
 
 	auto* state = GetTimerState(L);
@@ -97,50 +98,58 @@ int l_timer_timeout(lua_State* L) {
 	lua_pushvalue(L, 2);
 	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-	auto ctx = std::make_shared<TimerCtx>();
-	ctx->L = L;
-	ctx->ref = ref;
-	ctx->repeating = false;
-	ctx->owner = state;
+	bool failed = false;
+	{
+		auto ctx = std::make_shared<TimerCtx>();
+		ctx->L = L;
+		ctx->ref = ref;
+		ctx->repeating = false;
+		ctx->owner = state;
 
-	TimerId id =
-		state->timer_mgr->create_timer([ctx](HrTimerNode* /*timer*/) -> TimerResult {
-			// Keep ctx alive on the stack: call_lua_callback may trigger
-			// timer:cancel() which destroys the HrTimerNode (and this
-			// lambda's capture storage).  The local keep prevents the
-			// shared_ptr<Ctx> refcount from hitting zero until we return.
-			// Read keep->ref *after* the callback - the callback may call
-			// timer:cancel() which sets ref to LUA_NOREF and calls
-			// luaL_unref.  A stale snapshot would double-unref.
-			auto keep = ctx;
-			lua_State* L = keep->L;
-			TimerBindState* owner = keep->owner;
-			TimerId id = keep->id;
+		TimerId id =
+			state->timer_mgr->create_timer([ctx](HrTimerNode* /*timer*/) -> TimerResult {
+				// Keep ctx alive on the stack: call_lua_callback may trigger
+				// timer:cancel() which destroys the HrTimerNode (and this
+				// lambda's capture storage).  The local keep prevents the
+				// shared_ptr<Ctx> refcount from hitting zero until we return.
+				// Read keep->ref *after* the callback - the callback may call
+				// timer:cancel() which sets ref to LUA_NOREF and calls
+				// luaL_unref.  A stale snapshot would double-unref.
+				auto keep = ctx;
+				lua_State* L = keep->L;
+				TimerBindState* owner = keep->owner;
+				TimerId id = keep->id;
 
-			call_lua_callback(L, keep->ref);
+				call_lua_callback(L, keep->ref);
 
-			if (keep->ref != LUA_NOREF && L) {
-				luaL_unref(L, LUA_REGISTRYINDEX, keep->ref);
-			}
-			if (owner) {
-				owner->ctxs.erase(id);
-				if (owner->timer_mgr) {
-					owner->timer_mgr->destroy_timer(id);
+				if (keep->ref != LUA_NOREF && L) {
+					luaL_unref(L, LUA_REGISTRYINDEX, keep->ref);
 				}
-			}
-			return TimerResult::kNoRestart;
-		});
+				if (owner) {
+					owner->ctxs.erase(id);
+					if (owner->timer_mgr) {
+						owner->timer_mgr->destroy_timer(id);
+					}
+				}
+				return TimerResult::kNoRestart;
+			});
 
-	if (id == kInvalidTimerId) {
-		luaL_unref(L, LUA_REGISTRYINDEX, ref);
-		return luaL_error(L, "timer: failed to create timer");
+		if (id == kInvalidTimerId) {
+			luaL_unref(L, LUA_REGISTRYINDEX, ref);
+			lua_pushliteral(L, "timer: failed to create timer");
+			failed = true;
+		} else {
+			ctx->id = id;
+			state->ctxs[id] = ctx;
+			state->timer_mgr->start_timer_relative(id, ms_to_time(ms));
+
+			lua_pushinteger(L, static_cast<lua_Integer>(id));
+		}
 	}
 
-	ctx->id = id;
-	state->ctxs[id] = ctx;
-	state->timer_mgr->start_timer_relative(id, ms_to_time(ms));
-
-	lua_pushinteger(L, static_cast<lua_Integer>(id));
+	if (failed) {
+		return lua_error(L);
+	}
 	return 1;
 }
 
@@ -150,7 +159,7 @@ int l_timer_interval(lua_State* L) {
 	luaL_checktype(L, 2, LUA_TFUNCTION);
 
 	if (ms <= 0 || ms > kMaxTimerMs) {
-		return luaL_error(L, "timer delay out of range [1, %lld]", (long long) kMaxTimerMs);
+		return LuaError(L, "timer delay out of range [1, %lld]", (long long) kMaxTimerMs);
 	}
 
 	auto* state = GetTimerState(L);
@@ -161,44 +170,52 @@ int l_timer_interval(lua_State* L) {
 	lua_pushvalue(L, 2);
 	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-	auto ctx = std::make_shared<TimerCtx>();
-	ctx->L = L;
-	ctx->ref = ref;
-	ctx->repeating = true;
-	ctx->interval = ms_to_time(ms);
-	ctx->owner = state;
+	bool failed = false;
+	{
+		auto ctx = std::make_shared<TimerCtx>();
+		ctx->L = L;
+		ctx->ref = ref;
+		ctx->repeating = true;
+		ctx->interval = ms_to_time(ms);
+		ctx->owner = state;
 
-	TimerId id = state->timer_mgr->create_timer(
-		[ctx](HrTimerNode* timer) -> TimerResult {
-			// Stack-local keep prevents Ctx from being freed if the Lua
-			// callback self-cancels (which destroys this lambda's capture
-			// storage).  We read keep->ref after the call to detect
-			// cancellation and avoid kRestart (which would UAF on timer).
-			auto keep = ctx;
-			lua_State* L = keep->L;
-			Duration interval = keep->interval;
+		TimerId id = state->timer_mgr->create_timer(
+			[ctx](HrTimerNode* timer) -> TimerResult {
+				// Stack-local keep prevents Ctx from being freed if the Lua
+				// callback self-cancels (which destroys this lambda's capture
+				// storage).  We read keep->ref after the call to detect
+				// cancellation and avoid kRestart (which would UAF on timer).
+				auto keep = ctx;
+				lua_State* L = keep->L;
+				Duration interval = keep->interval;
 
-			call_lua_callback(L, keep->ref);
+				call_lua_callback(L, keep->ref);
 
-			if (keep->ref == LUA_NOREF) {
-				return TimerResult::kNoRestart;
-			}
-			timer->add_expires(interval);
-			return TimerResult::kRestart;
-		},
-		ClockId::kMonotonic,
-		TimerMode::kAbsolute | TimerMode::kRepeating);
+				if (keep->ref == LUA_NOREF) {
+					return TimerResult::kNoRestart;
+				}
+				timer->add_expires(interval);
+				return TimerResult::kRestart;
+			},
+			ClockId::kMonotonic,
+			TimerMode::kAbsolute | TimerMode::kRepeating);
 
-	if (id == kInvalidTimerId) {
-		luaL_unref(L, LUA_REGISTRYINDEX, ref);
-		return luaL_error(L, "timer: failed to create timer");
+		if (id == kInvalidTimerId) {
+			luaL_unref(L, LUA_REGISTRYINDEX, ref);
+			lua_pushliteral(L, "timer: failed to create timer");
+			failed = true;
+		} else {
+			ctx->id = id;
+			state->ctxs[id] = ctx;
+			state->timer_mgr->start_timer_relative(id, ms_to_time(ms));
+
+			lua_pushinteger(L, static_cast<lua_Integer>(id));
+		}
 	}
 
-	ctx->id = id;
-	state->ctxs[id] = ctx;
-	state->timer_mgr->start_timer_relative(id, ms_to_time(ms));
-
-	lua_pushinteger(L, static_cast<lua_Integer>(id));
+	if (failed) {
+		return lua_error(L);
+	}
 	return 1;
 }
 

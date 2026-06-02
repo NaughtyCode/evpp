@@ -104,10 +104,10 @@ int l_conn_send(lua_State* L) {
 	size_t len = 0;
 	const char* data = luaL_checklstring(L, 2, &len);
 
-		if (len > ctx->codec->GetMaxMessageSize()) {
-			return luaL_error(L, "message size %zu exceeds limit %u",
-				 len, ctx->codec->GetMaxMessageSize());
-		}
+	if (len > ctx->codec->GetMaxMessageSize()) {
+		return LuaError(L, "message size %zu exceeds limit %u",
+						len, ctx->codec->GetMaxMessageSize());
+	}
 
 	if (!ctx->conn->IsConnected()) {
 		return luaL_error(L, "conn: not connected");
@@ -330,40 +330,44 @@ int l_net_server_listen(lua_State* L) {
 		return luaL_error(L, "EventLoop not available");
 	}
 
-	auto sp = std::make_shared<ServerCtx>();
-	g_server_shared[sp.get()] = sp;
-	auto* ctx = sp.get();
-	ctx->L = L;
-	ctx->event_loop = loop;  // explicit DI instead of Engine::Instance()
+	const int base_top = lua_gettop(L);
+	bool failed = false;
 
-	PushInstanceTable(L, ctx, kServerMetaName);  // t
-
-	lua_pushvalue(L, -1);  // t, t
-	ctx->instance_ref = luaL_ref(L, LUA_REGISTRYINDEX);	 // t
-
-	// Create TCPServer — name is a temporary so std::string
-	// destructor runs before the Init()/Start() error paths below.
-	// thread_num=0: handle connections on the main EventLoop thread.
-	ctx->server = std::make_unique<evpp::TCPServer>(
-		loop, addr,
-		std::string("lua_server_") + std::to_string(reinterpret_cast<uintptr_t>(ctx)),
-		0);
-
-	// Apply connection limit from server config.
 	{
-		int max_conn = ConfigManager::Instance().GetServerConfig().max_connections;
-		if (max_conn > 0) {
-			ctx->server->SetMaxConnections(static_cast<uint32_t>(max_conn));
+		auto sp = std::make_shared<ServerCtx>();
+		g_server_shared[sp.get()] = sp;
+		auto* ctx = sp.get();
+		ctx->L = L;
+		ctx->event_loop = loop;  // explicit DI instead of Engine::Instance()
+
+		PushInstanceTable(L, ctx, kServerMetaName);  // t
+
+		lua_pushvalue(L, -1);  // t, t
+		ctx->instance_ref = luaL_ref(L, LUA_REGISTRYINDEX);	 // t
+
+		// Create TCPServer — name is a temporary so std::string
+		// destructor runs before the Init()/Start() error paths below.
+		// thread_num=0: handle connections on the main EventLoop thread.
+		ctx->server = std::make_unique<evpp::TCPServer>(
+			loop, addr,
+			std::string("lua_server_") + std::to_string(reinterpret_cast<uintptr_t>(ctx)),
+			0);
+
+		// Apply connection limit from server config.
+		{
+			int max_conn = ConfigManager::Instance().GetServerConfig().max_connections;
+			if (max_conn > 0) {
+				ctx->server->SetMaxConnections(static_cast<uint32_t>(max_conn));
+			}
 		}
-	}
 
-	auto* L_ptr = L;
-	int server_inst_ref = ctx->instance_ref;
-	ServerCtx* ctx_ptr = ctx;
+		auto* L_ptr = L;
+		int server_inst_ref = ctx->instance_ref;
+		ServerCtx* ctx_ptr = ctx;
 
-	// ── Connection callback (connect / disconnect) ─────────────────
-	ctx->server->SetConnectionCallback(
-		[L_ptr, server_inst_ref, ctx_ptr](const evpp::TCPConnPtr& conn) {
+		// ── Connection callback (connect / disconnect) ─────────────────
+		ctx->server->SetConnectionCallback(
+			[L_ptr, server_inst_ref, ctx_ptr](const evpp::TCPConnPtr& conn) {
 			if (conn->IsConnected()) {
 				// ── New connection ─────────────────────────────
 				// Skip new connections if server is shutting down.
@@ -446,10 +450,10 @@ int l_net_server_listen(lua_State* L) {
 
 				g_conn_shared.erase(conn_ctx);
 			}
-		});
+			});
 
-	// ── Message callback ──────────────────────────────────────────
-	ctx->server->SetMessageCallback([L_ptr](const evpp::TCPConnPtr& conn, evpp::Buffer* buf) {
+		// ── Message callback ──────────────────────────────────────────
+		ctx->server->SetMessageCallback([L_ptr](const evpp::TCPConnPtr& conn, evpp::Buffer* buf) {
 		auto* conn_ctx = conn->context().Get<ConnCtx*>();
 		if (!conn_ctx || conn_ctx->disposed) return;
 
@@ -465,35 +469,39 @@ int l_net_server_listen(lua_State* L) {
 					CallInstMethodTableStr(L_ptr, sv_ref, "on_message", conn_ref, data);
 				}
 			}
-	});
+		});
 
-	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger, "[net.server] init & start, addr=[{}]", addr);
+		auto* logger = GetLogger();
+		ENGINE_LOG_INFO(logger, "[net.server] init & start, addr=[{}]", addr);
 
-	if (!ctx->server->Init()) {
-		ctx->disposed = true;
-		luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
-		ctx->instance_ref = LUA_NOREF;
-		lua_pushnil(L);
-		lua_setfield(L, -2, "_ctx");
-		g_server_shared.erase(ctx);
-		return luaL_error(L, "server init failed");
+		auto fail = [&](const char* message) {
+			ctx->disposed = true;
+			luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
+			ctx->instance_ref = LUA_NOREF;
+			lua_pushnil(L);
+			lua_setfield(L, -2, "_ctx");
+			g_server_shared.erase(ctx);
+			lua_settop(L, base_top);
+			lua_pushstring(L, message);
+			failed = true;
+		};
+
+		if (!ctx->server->Init()) {
+			fail("server init failed");
+		} else if (!ctx->server->Start()) {
+			fail("server start failed");
+		} else {
+			// Track for shutdown
+			g_server_ctxs.insert(ctx);
+
+			return 1;  // return the server instance table
+		}
 	}
 
-	if (!ctx->server->Start()) {
-		ctx->disposed = true;
-		luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
-		ctx->instance_ref = LUA_NOREF;
-		lua_pushnil(L);
-		lua_setfield(L, -2, "_ctx");
-		g_server_shared.erase(ctx);
-		return luaL_error(L, "server start failed");
+	if (failed) {
+		return lua_error(L);
 	}
-
-	// Track for shutdown
-	g_server_ctxs.insert(ctx);
-
-	return 1;  // return the server instance table
+	return 0;
 }
 
 // ── Metatable registrations ──────────────────────────────────────────

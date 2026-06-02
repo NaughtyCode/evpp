@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <string>
 
 #include "runtime/core/log/log.h"
 #include "runtime/database/orm.h"
@@ -17,29 +18,34 @@ namespace script {
 
 namespace {
 
-void ReadFindOptionInt32(lua_State* L, int table_index, const char* field_name, int32_t& out) {
+bool ReadFindOptionInt32(lua_State* L,
+						 int table_index,
+						 const char* field_name,
+						 int32_t& out,
+						 std::string& error) {
 	lua_getfield(L, table_index, field_name);
 	if (lua_isnil(L, -1)) {
 		lua_pop(L, 1);
-		return;
+		return true;
 	}
 	if (!lua_isinteger(L, -1)) {
 		lua_pop(L, 1);
-		luaL_error(L, "orm find option '%s' must be an integer", field_name);
-		return;
+		error = "orm find option '" + std::string(field_name) + "' must be an integer";
+		return false;
 	}
 
 	const lua_Integer value = lua_tointeger(L, -1);
 	lua_pop(L, 1);
 	if (value < 0) {
 		out = 0;
-		return;
+		return true;
 	}
 	if (value > static_cast<lua_Integer>((std::numeric_limits<int32_t>::max)())) {
-		luaL_error(L, "orm find option '%s' is too large", field_name);
-		return;
+		error = "orm find option '" + std::string(field_name) + "' is too large";
+		return false;
 	}
 	out = static_cast<int32_t>(value);
+	return true;
 }
 
 // orm.define(collection_name, schema_table)
@@ -113,32 +119,48 @@ int l_orm_define(lua_State* L) {
 // orm.find(collection, query_table) → array of JSON documents
 int l_orm_find(lua_State* L) {
 	const char* collection = luaL_checkstring(L, 1);
-	database::Query query;
-	database::FindOptions options;
+	bool parse_failed = false;
+	int result_count = 0;
 
-	if (lua_istable(L, 2)) {
-		lua_pushnil(L);
-		while (lua_next(L, 2) != 0) {
-			if (lua_isstring(L, -2) && lua_isstring(L, -1)) {
-				query[lua_tostring(L, -2)] = lua_tostring(L, -1);
+	{
+		database::Query query;
+		database::FindOptions options;
+		std::string error;
+
+		if (lua_istable(L, 2)) {
+			lua_pushnil(L);
+			while (lua_next(L, 2) != 0) {
+				if (lua_isstring(L, -2) && lua_isstring(L, -1)) {
+					query[lua_tostring(L, -2)] = lua_tostring(L, -1);
+				}
+				lua_pop(L, 1);
 			}
-			lua_pop(L, 1);
+		}
+
+		if (lua_istable(L, 3)) {
+			if (!ReadFindOptionInt32(L, 3, "limit", options.limit, error) ||
+				!ReadFindOptionInt32(L, 3, "skip", options.skip, error)) {
+				// error filled by helper
+			}
+		}
+
+		if (!error.empty()) {
+			lua_pushlstring(L, error.data(), error.size());
+			parse_failed = true;
+		} else {
+			auto results = database::OrmSession::Instance().Find(collection, query, options);
+
+			lua_newtable(L);
+			for (size_t i = 0; i < results.size(); ++i) {
+				lua_pushstring(L, results[i].c_str());
+				lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+			}
+			result_count = 1;
 		}
 	}
 
-	if (lua_istable(L, 3)) {
-		ReadFindOptionInt32(L, 3, "limit", options.limit);
-		ReadFindOptionInt32(L, 3, "skip", options.skip);
-	}
-
-	auto results = database::OrmSession::Instance().Find(collection, query, options);
-
-	lua_newtable(L);
-	for (size_t i = 0; i < results.size(); ++i) {
-		lua_pushstring(L, results[i].c_str());
-		lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
-	}
-	return 1;
+	if (parse_failed) return lua_error(L);
+	return result_count;
 }
 
 // orm.find_by_id(collection, id) → JSON document or nil

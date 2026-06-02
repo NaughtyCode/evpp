@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 #include <unordered_set>
+#include <vector>
 
 #include <runtime/evpp/event_loop.h>
 #include <runtime/evpp/udp/udp_message.h>
@@ -38,6 +39,7 @@ struct UdpServerCtx {
 	// Atomic: written from main thread (listen/set_on_message/stop),
 	// read from RecvThread inside MessageHandler.
 	std::atomic<int> on_message_ref{LUA_NOREF};
+	std::vector<int> retired_message_refs;
 	bool disposed = false;
 };
 
@@ -113,6 +115,7 @@ void ReleaseUdpServer(lua_State* L, UdpServerCtx* ctx) {
 	// Atomically clear on_message_ref so no new message lambda captures
 	// the old ref after we begin teardown.
 	int old_msg_ref = ctx->on_message_ref.exchange(LUA_NOREF);
+	std::vector<int> retired_refs = std::move(ctx->retired_message_refs);
 
 	ctx->server->Stop(true);  // wait for recv threads to exit
 
@@ -124,15 +127,24 @@ void ReleaseUdpServer(lua_State* L, UdpServerCtx* ctx) {
 
 	auto* loop = Engine::Instance().GetEventLoop();
 	if (loop && loop->IsRunning()) {
-		// Defer unref + delete so pending RunInLoop message callbacks
-		// (queued before Stop returned) execute before we free the refs.
+		// Defer unref + delete so pending message callbacks queued before
+		// Stop returned execute before we free the refs.
 		g_udp_pending_unref.AddRef(old_msg_ref);
+		for (int ref : retired_refs) {
+			g_udp_pending_unref.AddRef(ref);
+		}
 		g_udp_pending_unref.AddRef(old_inst_ref);
-		loop->RunInLoop([L, old_msg_ref, old_inst_ref, ctx] {
+		loop->QueueInLoop([L, old_msg_ref, old_inst_ref, retired_refs = std::move(retired_refs), ctx] {
 			if (g_udp_alive.TryAcquire()) {
 				if (old_msg_ref != LUA_NOREF) {
 					luaL_unref(L, LUA_REGISTRYINDEX, old_msg_ref);
 					g_udp_pending_unref.RemoveRef(old_msg_ref);
+				}
+				for (int ref : retired_refs) {
+					if (ref != LUA_NOREF) {
+						luaL_unref(L, LUA_REGISTRYINDEX, ref);
+						g_udp_pending_unref.RemoveRef(ref);
+					}
 				}
 				if (old_inst_ref != LUA_NOREF) {
 					luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
@@ -145,6 +157,11 @@ void ReleaseUdpServer(lua_State* L, UdpServerCtx* ctx) {
 	} else {
 		if (old_msg_ref != LUA_NOREF) {
 			luaL_unref(L, LUA_REGISTRYINDEX, old_msg_ref);
+		}
+		for (int ref : retired_refs) {
+			if (ref != LUA_NOREF) {
+				luaL_unref(L, LUA_REGISTRYINDEX, ref);
+			}
 		}
 		if (old_inst_ref != LUA_NOREF) {
 			luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
@@ -298,9 +315,10 @@ int l_udp_server_set_on_message(lua_State* L) {
 		return luaL_error(L, "expected function or nil");
 	}
 
-	// Atomically swap old ref for LUA_NOREF so new message lambdas
-	// don't capture it; defer unref so pending RunInLoop tasks that
-	// already captured the old ref can still use it.
+	// Atomically swap old ref for LUA_NOREF so new message lambdas do not
+	// capture it. Keep old refs alive until stop/gc/shutdown because a recv
+	// thread may already have captured the old ref but not queued its
+	// RunInLoop callback yet.
 	int old_ref = ctx->on_message_ref.exchange(LUA_NOREF);
 
 	// Store new callback (or leave cleared if absent/nil)
@@ -313,19 +331,7 @@ int l_udp_server_set_on_message(lua_State* L) {
 	BindMessageHandler(ctx);
 
 	if (old_ref != LUA_NOREF) {
-		auto* loop = Engine::Instance().GetEventLoop();
-		if (loop && loop->IsRunning()) {
-			lua_State* L_ptr = L;
-			g_udp_pending_unref.AddRef(old_ref);
-			loop->RunInLoop([L_ptr, old_ref] {
-				if (!g_udp_alive.TryAcquire()) return;
-				luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_ref);
-				g_udp_pending_unref.RemoveRef(old_ref);
-				g_udp_alive.Release();
-			});
-		} else {
-			luaL_unref(L, LUA_REGISTRYINDEX, old_ref);
-		}
+		ctx->retired_message_refs.push_back(old_ref);
 	}
 
 	return 0;
@@ -401,12 +407,20 @@ void ShutdownUdpServerBindings() {
 		 * WaitDrain guarantees no callback is touching Lua state, and
 		 * TryAcquire=false guarantees no future callback will try. */
 		int old_msg_ref = ctx->on_message_ref.exchange(LUA_NOREF);
+		std::vector<int> retired_refs = std::move(ctx->retired_message_refs);
 		int old_inst_ref = ctx->instance_ref;
 		ctx->instance_ref = LUA_NOREF;
 		lua_State* L_ptr = ctx->L;
 
 		if (old_msg_ref != LUA_NOREF && L_ptr) {
 			luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_msg_ref);
+		}
+		if (L_ptr) {
+			for (int ref : retired_refs) {
+				if (ref != LUA_NOREF) {
+					luaL_unref(L_ptr, LUA_REGISTRYINDEX, ref);
+				}
+			}
 		}
 		if (old_inst_ref != LUA_NOREF && L_ptr) {
 			luaL_unref(L_ptr, LUA_REGISTRYINDEX, old_inst_ref);

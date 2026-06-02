@@ -21,6 +21,7 @@
 #include "runtime/config/config.h"
 #include "runtime/core/log/log.h"
 #include "runtime/engine/engine.h"
+#include "runtime/script/bind_util.h"
 #include "runtime/vm/vm.h"
 
 #include "runtime/vm/lua_error_handler.h"
@@ -177,7 +178,7 @@ int l_net_http_post(lua_State* L) {
 							  .GetServerConfig()
 							  .resource_limits.max_http_body_size;
 	if (body_len > max_body) {
-		return luaL_error(L, "HTTP body size %zu exceeds limit %u", body_len, max_body);
+		return LuaError(L, "HTTP body size %zu exceeds limit %u", body_len, max_body);
 	}
 
 	auto* loop = Engine::Instance().GetEventLoop();

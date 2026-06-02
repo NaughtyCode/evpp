@@ -45,7 +45,7 @@ uint32_t GetMaxUdpMessageSize() {
 int CheckUdpPayloadSize(lua_State* L, size_t len) {
 	const uint32_t limit = GetMaxUdpMessageSize();
 	if (len > limit) {
-		return luaL_error(L, "message size %zu exceeds limit %u", len, limit);
+		return LuaError(L, "message size %zu exceeds limit %u", len, limit);
 	}
 	return 0;
 }
