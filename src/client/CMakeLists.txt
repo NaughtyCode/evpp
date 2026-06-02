@@ -143,7 +143,7 @@ message (STATUS "EXECUTABLE_OUTPUT_PATH " ${EXECUTABLE_OUTPUT_PATH})
 message (STATUS "LIBRARY_OUTPUT_PATH " ${LIBRARY_OUTPUT_PATH})
 
 # ── Runtime source-file organization ──────────────────────────────────
-# Provides SERVERENGINE_SOURCES and per-module source lists.
+# Provides CLOUD_ENGINE_SOURCES and per-module source lists.
 include(${ENGINE_ROOT}/runtime/CMakeLists.txt)
 
 if(NOT TARGET engine_lua_static)
@@ -277,7 +277,7 @@ add_library(GameClient SHARED
     client_net.cpp
     client_udp.cpp
     client_kcp.cpp
-    ${SERVERENGINE_SOURCES}
+    ${CLOUD_ENGINE_SOURCES}
 )
 
 add_dependencies(GameClient copy_resources)

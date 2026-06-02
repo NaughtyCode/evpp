@@ -3,7 +3,7 @@
 # definitions for everything under src/runtime/.
 #
 # Provides:
-#   SERVERENGINE_SOURCES  — combined source list for runtime targets
+#   CLOUD_ENGINE_SOURCES  — combined source list for runtime targets
 #   Individual lists: LUA_SOURCES, LOG_SOURCES, TIMER_SOURCES, etc.
 
 # ENGINE_ROOT always points to the shared src/ directory.
@@ -312,7 +312,7 @@ source_group("database\\data_service" FILES ${DB_SERVICE_SOURCES})
 # Combined sources
 # ═══════════════════════════════════════════════════════════════════════
 
-set(SERVERENGINE_SOURCES
+set(CLOUD_ENGINE_SOURCES
     ${EXPORT_HEADER}
     ${MEM_SOURCES}
     ${LOG_SOURCES}
@@ -334,10 +334,10 @@ set(SERVERENGINE_SOURCES
 )
 
 if(ENGINE_MONGODB_ENABLED AND NOT (CMAKE_SYSTEM_NAME STREQUAL "Android" OR CMAKE_SYSTEM_NAME STREQUAL "iOS"))
-    list(APPEND SERVERENGINE_SOURCES ${MONGO_SOURCES} ${MONGO_BIND_SOURCES} ${DB_SERVICE_SOURCES} ${ORM_SOURCES}
+    list(APPEND CLOUD_ENGINE_SOURCES ${MONGO_SOURCES} ${MONGO_BIND_SOURCES} ${DB_SERVICE_SOURCES} ${ORM_SOURCES}
         ${RUNTIME_DIR}/script/orm_bind.cc ${RUNTIME_DIR}/script/orm_bind.h)
 endif()
 
 if(ENGINE_PHYSICS_ENABLED)
-    list(APPEND SERVERENGINE_SOURCES ${PHYSICS_CC})
+    list(APPEND CLOUD_ENGINE_SOURCES ${PHYSICS_CC})
 endif()

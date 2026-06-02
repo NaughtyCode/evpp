@@ -133,7 +133,7 @@ if(WIN32)
     list(APPEND ENGINE_EMBEDDED_TEST_LINK_LIBS ws2_32)
 endif()
 
-add_library(engine_runtime_test_objects OBJECT ${SERVERENGINE_SOURCES})
+add_library(engine_runtime_test_objects OBJECT ${CLOUD_ENGINE_SOURCES})
 target_include_directories(engine_runtime_test_objects PRIVATE ${TEST_COMMON_INCLUDES})
 target_link_libraries(engine_runtime_test_objects PRIVATE ${ENGINE_EMBEDDED_TEST_LINK_LIBS})
 target_compile_definitions(engine_runtime_test_objects PRIVATE

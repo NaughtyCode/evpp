@@ -293,7 +293,7 @@ endif()
 
 add_executable(GameServer
     server.cc
-    ${SERVERENGINE_SOURCES}
+    ${CLOUD_ENGINE_SOURCES}
 )
 
 add_dependencies(GameServer copy_resources)
