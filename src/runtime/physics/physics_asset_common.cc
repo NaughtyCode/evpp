@@ -127,6 +127,7 @@ std::string GetAssetDirectory(const std::string& asset_path) {
 
 std::string ResolveAssetPath(const std::string& assets_dir, const std::string& path) {
 	if (path.empty() || assets_dir.empty() || path[0] == '/' ||
+		path[0] == '\\' ||
 		(path.size() >= 2 && path[1] == ':')) {
 		return path;
 	}

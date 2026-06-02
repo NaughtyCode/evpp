@@ -193,8 +193,20 @@ void PhysicsThread::Stop() {
 		}
 		thread_->join();
 	}
+	{
+		PhysicsCommand discarded_command;
+		while (command_queue_.try_dequeue(discarded_command)) {
+		}
+		PhysicsFrameResult discarded_result;
+		while (result_queue_.try_dequeue(discarded_result)) {
+		}
+		result_sequence_.fetch_add(1, std::memory_order_release);
+	}
 	thread_.reset();
-	physics_thread_id_ = std::thread::id{};
+	{
+		std::lock_guard<std::mutex> lock(physics_thread_id_mutex_);
+		physics_thread_id_ = std::thread::id{};
+	}
 	healthy_.store(false, std::memory_order_release);
 
 	PHYSICS_LOG_INFO(logger_, "PhysicsThread: stopped");
@@ -302,21 +314,43 @@ std::unique_ptr<PhysicsFrameResult> PhysicsThread::TryDequeueResult() {
 }
 
 void PhysicsThread::NotifyResult() {
+	result_sequence_.fetch_add(1, std::memory_order_release);
 	result_cv_.notify_one();
 }
 
 void PhysicsThread::WaitForResult(std::chrono::milliseconds timeout) {
+	const uint64_t observed_sequence = result_sequence_.load(std::memory_order_acquire);
 	std::unique_lock<std::mutex> lock(result_cv_mutex_);
-	result_cv_.wait_for(lock, timeout);
+	result_cv_.wait_for(lock, timeout, [this, observed_sequence]() {
+		return result_sequence_.load(std::memory_order_acquire) != observed_sequence ||
+			   result_queue_.size_approx() > 0 ||
+			   !running_.load(std::memory_order_acquire);
+	});
 }
 
 // VerifyIsPhysicsThread - runtime guard for PT-only code
 
+bool PhysicsThread::IsPhysicsThread() const {
+	std::lock_guard<std::mutex> lock(physics_thread_id_mutex_);
+	return physics_thread_id_ != std::thread::id{} &&
+		   physics_thread_id_ == std::this_thread::get_id();
+}
+
 void PhysicsThread::VerifyIsPhysicsThread() const {
 	// Skip check if physics_thread_id_ hasn't been captured yet
 	// (default-constructed thread::id means "not a thread").
-	if (physics_thread_id_ != std::thread::id{}) {
-		assert(physics_thread_id_ == std::this_thread::get_id() &&
+	std::thread::id captured_id;
+	{
+		std::lock_guard<std::mutex> lock(physics_thread_id_mutex_);
+		captured_id = physics_thread_id_;
+	}
+	if (captured_id != std::thread::id{}) {
+		if (captured_id != std::this_thread::get_id()) {
+			if (logger_) {
+				PHYSICS_LOG_ERROR(logger_, "PhysicsThread: PT-only code called from wrong thread");
+			}
+		}
+		assert(captured_id == std::this_thread::get_id() &&
 			   "PhysicsThread: PT-only code called from wrong thread. "
 			   "This code must only execute on the dedicated physics thread.");
 	}
@@ -330,7 +364,10 @@ void PhysicsThread::EventLoop() {
 	// Capture the physics thread ID once, at the start of the event loop.
 	// Used by VerifyIsPhysicsThread() to assert that PT-only code (e.g.
 	// PhysicsSystem::UpdateScript) is actually executing on this thread.
-	physics_thread_id_ = std::this_thread::get_id();
+	{
+		std::lock_guard<std::mutex> lock(physics_thread_id_mutex_);
+		physics_thread_id_ = std::this_thread::get_id();
+	}
 
 	PHYSICS_LOG_INFO(logger_, "PhysicsThread: event loop started");
 
@@ -463,7 +500,7 @@ void PhysicsThread::EventLoop() {
 											 "PhysicsThread: frame pile-up, dropped frame [{}]",
 											 dropped.frame_id);
 						}
-						result_cv_.notify_one();
+						NotifyResult();
 					}
 					break;
 				}
@@ -490,6 +527,10 @@ void PhysicsThread::EventLoop() {
 
 	PHYSICS_LOG_INFO(logger_, "PhysicsThread: event loop exited");
 	shutdown_thread_resources();
+	{
+		std::lock_guard<std::mutex> lock(physics_thread_id_mutex_);
+		physics_thread_id_ = std::thread::id{};
+	}
 }
 
 }  // namespace engine

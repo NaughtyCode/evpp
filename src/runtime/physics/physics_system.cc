@@ -9,8 +9,10 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <limits>
 
 #include <Jolt/Math/Quat.h>
+#include <Jolt/Math/Real.h>
 #include <Jolt/Math/Vec3.h>
 
 #include "runtime/physics/physics_bindings.h"
@@ -28,8 +30,13 @@ namespace engine {
 
 namespace {
 
-bool IsFiniteVec3(double x, double y, double z) {
-	return std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
+bool IsFiniteReal(double value) {
+	return std::isfinite(value) &&
+		   std::abs(value) <= static_cast<double>((std::numeric_limits<JPH::Real>::max)());
+}
+
+bool IsFiniteRealVec3(double x, double y, double z) {
+	return IsFiniteReal(x) && IsFiniteReal(y) && IsFiniteReal(z);
 }
 
 bool IsFiniteVec3(float x, float y, float z) {
@@ -261,7 +268,7 @@ bool PhysicsSystem::EnqueueSpawn(const std::string& proto_id,
 								 float qw,
 								 uint64_t user_data) {
 	ENGINE_PROFILE_SCOPE("engine.physics", "EnqueueSpawn");
-	if (!is_initialized_ || proto_id.empty() || !IsFiniteVec3(x, y, z) ||
+	if (!is_initialized_ || proto_id.empty() || !IsFiniteRealVec3(x, y, z) ||
 		!IsFiniteQuat(qx, qy, qz, qw)) {
 		return false;
 	}
@@ -296,7 +303,7 @@ bool PhysicsSystem::EnqueueDestroy(uint32_t body_id) {
 
 bool PhysicsSystem::EnqueueApplyForce(
 	uint32_t body_id, float fx, float fy, float fz, double px, double py, double pz) {
-	if (!is_initialized_ || !IsFiniteVec3(fx, fy, fz) || !IsFiniteVec3(px, py, pz)) {
+	if (!is_initialized_ || !IsFiniteVec3(fx, fy, fz) || !IsFiniteRealVec3(px, py, pz)) {
 		return false;
 	}
 	if (physics_thread_.IsPhysicsThread()) {
@@ -460,7 +467,9 @@ bool PhysicsSystem::IsBodyActive(uint32_t body_id) const {
 
 std::optional<PhysicsSystem::RayCastResult> PhysicsSystem::RayCast(
 	double ox, double oy, double oz, double dx, double dy, double dz, float max_dist) const {
-	if (!is_initialized_ || !physics_thread_.IsRunning()) return std::nullopt;
+	if (!is_initialized_ || !physics_thread_.IsRunning() || !IsFiniteRealVec3(ox, oy, oz)) {
+		return std::nullopt;
+	}
 	auto hit = physics_thread_.GetWorld().RayCast(
 		JPH::RVec3(
 			static_cast<JPH::Real>(ox), static_cast<JPH::Real>(oy), static_cast<JPH::Real>(oz)),

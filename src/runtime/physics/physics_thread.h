@@ -17,6 +17,7 @@ before including this header."
 #include <atomic>
 #include <concurrentqueue.h>
 #include <condition_variable>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -132,10 +133,7 @@ class PhysicsThread {
 	bool IsRunning() const {
 		return running_.load(std::memory_order_acquire);
 	}
-	bool IsPhysicsThread() const {
-		return physics_thread_id_ != std::thread::id{} &&
-			   physics_thread_id_ == std::this_thread::get_id();
-	}
+	bool IsPhysicsThread() const;
 
 	// ── Thread verification ─────────────────────────────────────────
 	//
@@ -260,6 +258,7 @@ class PhysicsThread {
 
 	std::mutex result_cv_mutex_;
 	std::condition_variable result_cv_;
+	std::atomic<uint64_t> result_sequence_{0};
 
 	std::mutex health_cv_mutex_;
 	std::condition_variable health_cv_;
@@ -298,6 +297,7 @@ class PhysicsThread {
 
 	// Physics thread ID — captured at EventLoop() entry, used by
 	// VerifyIsPhysicsThread() to detect cross-thread misuse.
+	mutable std::mutex physics_thread_id_mutex_;
 	std::thread::id physics_thread_id_;	 // [PT] set once in EventLoop
 };
 

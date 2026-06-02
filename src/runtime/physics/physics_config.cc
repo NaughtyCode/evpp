@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 #include "runtime/core/log/log.h"
 #include "runtime/core/log/log_macros.h"
@@ -326,6 +327,32 @@ bool PhysicsConfigManager::ValidateConfigs(std::string& error_out) const {
 	if (physics_config_.layer_config.broad_phase_layers.empty()) {
 		error_out = "layerConfig.broadPhaseLayers must not be empty";
 		return false;
+	}
+	{
+		std::unordered_set<uint16_t> object_layer_values;
+		for (const auto& [name, value] : physics_config_.layer_config.object_layers) {
+			if (name.empty()) {
+				error_out = "object layer names must not be empty";
+				return false;
+			}
+			if (!object_layer_values.insert(value).second) {
+				error_out = "object layer values must be unique";
+				return false;
+			}
+		}
+	}
+	{
+		std::unordered_set<uint8_t> broad_phase_values;
+		for (const auto& [name, value] : physics_config_.layer_config.broad_phase_layers) {
+			if (name.empty()) {
+				error_out = "broad phase layer names must not be empty";
+				return false;
+			}
+			if (!broad_phase_values.insert(value).second) {
+				error_out = "broad phase layer values must be unique";
+				return false;
+			}
+		}
 	}
 	for (const auto& [name, value] : physics_config_.layer_config.broad_phase_layers) {
 		(void) name;
