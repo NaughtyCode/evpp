@@ -172,7 +172,10 @@ source_group("profiler" FILES ${PROFILER_SOURCES})
 # ── Physics ────────────────────────────────────────────────────────
 set(PHYSICS_HEADERS
     ${RUNTIME_DIR}/physics/physics_config.h ${RUNTIME_DIR}/physics/physics_commands.h ${RUNTIME_DIR}/physics/physics_layers.h
-    ${RUNTIME_DIR}/physics/physics_materials.h ${RUNTIME_DIR}/physics/physics_diff.h ${RUNTIME_DIR}/physics/physics_assets.h
+    ${RUNTIME_DIR}/physics/physics_materials.h ${RUNTIME_DIR}/physics/physics_diff.h
+    ${RUNTIME_DIR}/physics/physics_asset_common.h ${RUNTIME_DIR}/physics/physics_shape_assets.h
+    ${RUNTIME_DIR}/physics/physics_body_assets.h ${RUNTIME_DIR}/physics/physics_constraint_assets.h
+    ${RUNTIME_DIR}/physics/physics_scene_asset.h ${RUNTIME_DIR}/physics/physics_assets.h
     ${RUNTIME_DIR}/physics/physics_world.h ${RUNTIME_DIR}/physics/physics_thread.h ${RUNTIME_DIR}/physics/physics_system.h
     ${RUNTIME_DIR}/physics/physics_engine_bridge.h ${RUNTIME_DIR}/physics/physics_bindings.h
     ${RUNTIME_DIR}/physics/physics_vm.h ${RUNTIME_DIR}/physics/physics_log.h
@@ -182,7 +185,10 @@ source_group("physics" FILES ${PHYSICS_HEADERS})
 set(PHYSICS_CC
     ${RUNTIME_DIR}/physics/physics_config.cc ${RUNTIME_DIR}/physics/physics_commands.cc
     ${RUNTIME_DIR}/physics/physics_layers.cc ${RUNTIME_DIR}/physics/physics_materials.cc
-    ${RUNTIME_DIR}/physics/physics_diff.cc ${RUNTIME_DIR}/physics/physics_assets.cc
+    ${RUNTIME_DIR}/physics/physics_diff.cc ${RUNTIME_DIR}/physics/physics_asset_common.cc
+    ${RUNTIME_DIR}/physics/physics_shape_assets.cc ${RUNTIME_DIR}/physics/physics_body_assets.cc
+    ${RUNTIME_DIR}/physics/physics_constraint_assets.cc ${RUNTIME_DIR}/physics/physics_scene_asset.cc
+    ${RUNTIME_DIR}/physics/physics_assets.cc
     ${RUNTIME_DIR}/physics/physics_world.cc ${RUNTIME_DIR}/physics/physics_thread.cc
     ${RUNTIME_DIR}/physics/physics_system.cc ${RUNTIME_DIR}/physics/physics_engine_bridge.cc
     ${RUNTIME_DIR}/physics/physics_bindings.cc ${RUNTIME_DIR}/physics/physics_vm.cc

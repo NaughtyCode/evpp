@@ -374,8 +374,9 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 		}
 		PHYSICS_LOG_INFO(logger_,
 						 "PhysicsWorld: assets loaded -> "
-						 "[{}] static bodies, [{}] prototypes, [{}] constraints",
+						 "[{}] static bodies, [{}] dynamic bodies, [{}] prototypes, [{}] constraints",
 						 result.static_bodies_loaded,
+						 result.dynamic_bodies_loaded,
 						 result.dynamic_prototypes_loaded,
 						 result.constraints_loaded);
 
@@ -383,8 +384,16 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 		for (const auto& [proto_id, entry] : loader.GetPrototypes()) {
 			prototype_pool_[proto_id] = entry;
 		}
-		for (const auto& [body_id, asset_name] : loader.GetStaticBodyIds()) {
-			object_registry_.Register(body_id, asset_name);
+		for (const auto& record : loader.GetSceneBodyRecords()) {
+			object_registry_.Register(record.body_id, record.asset_id);
+			if (record.dynamic) {
+				BodyStateSnapshot snap;
+				snap.position = record.position;
+				snap.rotation = record.rotation;
+				snap.linear_velocity = record.linear_velocity;
+				snap.angular_velocity = record.angular_velocity;
+				state_snapshots_[record.body_id] = snap;
+			}
 		}
 	}
 
@@ -411,26 +420,8 @@ uint32_t PhysicsWorld::CreateBody(const std::string& proto_id,
 
 	const auto& proto = it->second;
 
-	JPH::BodyCreationSettings settings(
-		proto.shape, position, NormalizeOrIdentity(rotation), proto.motion_type, proto.object_layer);
-	if (proto.motion_type != JPH::EMotionType::Static && proto.mass > 0.0f) {
-		settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
-	}
-	settings.mMassPropertiesOverride.mMass = proto.mass;
-	settings.mFriction = proto.friction;
-	settings.mRestitution = proto.restitution;
-	settings.mLinearDamping = proto.linear_damping;
-	settings.mAngularDamping = proto.angular_damping;
-	settings.mGravityFactor = proto.gravity_factor;
-	settings.mMotionQuality = proto.motion_quality;
-	settings.mIsSensor = proto.is_sensor;
-	settings.mAllowSleeping = proto.allow_sleeping;
-	settings.mMaxLinearVelocity = proto.max_linear_velocity;
-	settings.mMaxAngularVelocity = proto.max_angular_velocity;
-
-	// Set allowed DOFs
-	settings.mAllowedDOFs = JPH::EAllowedDOFs(proto.allowed_dofs);
-	settings.mUserData = user_data;
+	JPH::BodyCreationSettings settings = PhysicsBodyAssetFactory::CreateBodySettingsFromPrototype(
+		proto, position, NormalizeOrIdentity(rotation), user_data);
 
 	JPH::BodyInterface& bi = system_->GetBodyInterface();
 	JPH::Body* body = bi.CreateBody(settings);
@@ -445,8 +436,8 @@ uint32_t PhysicsWorld::CreateBody(const std::string& proto_id,
 	// Register in object registry and initialize state snapshot
 	object_registry_.Register(body_id, proto_id);
 	BodyStateSnapshot snap;
-	snap.position = position;
-	snap.rotation = rotation;
+	snap.position = settings.mPosition;
+	snap.rotation = settings.mRotation;
 	snap.linear_velocity = JPH::Vec3::sZero();
 	snap.angular_velocity = JPH::Vec3::sZero();
 	state_snapshots_[body_id] = snap;
