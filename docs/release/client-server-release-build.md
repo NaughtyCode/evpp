@@ -1,43 +1,99 @@
 # Client/Server Release Build
 
-Use the Python release builder from the repository root:
+Release packages are split by platform:
+
+- Client: `scripts/build_client_release.py`
+- Server: `scripts/build_server_release.py`
+- All platforms: `scripts/build_all_platforms_release.py`
+
+The legacy `scripts/build_release.py` entry point is kept as an alias for the
+all-platform release script.
+
+## Version
+
+Client and server use the same release version:
+
+- Version file: `scripts/VERSION`
+
+The version file uses SemVer, for example `0.1.0`.
+
+Use `--version <semver>` for a one-off package version override, or
+`--bump-version major|minor|patch` to increment and persist the version file.
 
 ```powershell
-python scripts\build_release.py
+python scripts\build_all_platforms_release.py --bump-version patch
 ```
 
-On Windows, the batch wrapper is also available:
+## Commands
+
+Build and package the client:
+
+```powershell
+python scripts\build_client_release.py
+```
+
+Build and package the server:
+
+```powershell
+python scripts\build_server_release.py
+```
+
+Build and package both platforms in one run:
+
+```powershell
+python scripts\build_all_platforms_release.py
+```
+
+On Windows, batch wrappers are available:
 
 ```bat
+scripts\build_client_release.bat
+scripts\build_server_release.bat
+scripts\build_all_platforms_release.bat
 scripts\build_release.bat
 ```
 
-The packaged launcher scripts pass extra arguments through to the executable,
-so a custom log file prefix can be supplied externally:
+## Output
 
-```bat
-run_server.bat --log_prefix=ShardA
-run_client.bat --log_prefix=ClientA
-```
+Default output goes under `artifacts/release/<Config>/`:
 
-When `--log_prefix` is omitted, the default prefix is the current program name,
-for example `GameServer` or `GameClientApp`.
+- `GameCloudClient-<version>/`
+- `GameCloudServer-<version>/`
+- `all_platforms_manifest.json` when using the all-platform script
 
-The script configures and builds these release targets:
+Client packages contain:
+
+- `GameClientApp`
+- `GameClient`
+- `resources/`
+- `run_client`
+- `manifest.json`
+
+Server packages contain:
 
 - `GameServer`
-- `GameClient`
-- `GameClientApp`
+- `resources/`
+- `run_server`
+- `manifest.json`
 
-It packages them under `artifacts/release/<Config>/` with a copy of
-`resources/` and launcher scripts:
+Use `--flat-dist` to package under `artifacts/release/<Config>/client` or
+`artifacts/release/<Config>/server` without a versioned directory.
 
-- `run_server.bat` / `run_server.sh`
-- `run_client.bat` / `run_client.sh`
+## Runtime
 
-Start order is server first, then client. Project-specific client/server Lua
-scripts should live in `resources/script/...` or be selected through config or
-runtime overrides.
+The packaged launcher scripts pass extra arguments through to the executable.
+
+Server example:
+
+```bat
+run_server.bat --env=production --log_prefix=ShardA
+```
+
+Client example:
+
+```bat
+run_client.bat --log_prefix=ClientA
+```
 
 The C++ `GameClientApp` executable is only a host loop for `GameClient`; it
 contains no game communication behavior.
@@ -47,7 +103,9 @@ contains no game communication behavior.
 Useful checks from the repository root:
 
 ```powershell
-python scripts\build_release.py --skip-configure --skip-build
-python -m py_compile scripts\build_release.py
+python scripts\build_client_release.py --skip-configure --skip-build
+python scripts\build_server_release.py --skip-configure --skip-build
+python scripts\build_all_platforms_release.py --skip-configure --skip-build
+python -m py_compile scripts\release_common.py scripts\build_client_release.py scripts\build_server_release.py scripts\build_all_platforms_release.py scripts\build_release.py
 git diff --check
 ```

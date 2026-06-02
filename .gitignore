@@ -143,3 +143,4 @@ artifacts/android-sdk/*
 artifacts/build-android/*
 
 artifacts/android/*
+artifacts/release*/
