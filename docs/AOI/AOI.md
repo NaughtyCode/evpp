@@ -4,7 +4,17 @@
 
 AOI（Area of Interest，兴趣区域）不是一个单独算法，而是 MMO 服务器用来回答“某个连接此刻应该接收哪些对象、哪些属性、以什么频率接收”的完整工程系统。公开资料能确认的共同趋势是：现代 MMO 很少只靠“九宫格”；生产架构通常由空间索引、逻辑可见性、复制调度、带宽预算、分区/副本和过载保护共同组成。
 
-本文基于公开的引擎文档、商业中间件文档、BigWorld 式 MMO 服务器资料、EVE Online 技术博客、AOI/Interest Management 学术综述，以及本仓库当前 `src/runtime/aoi` 实现，给出面向 evpp3 的技术判断和路线。
+本文基于公开的引擎文档、商业中间件文档、BigWorld 式 MMO 服务器资料、EVE Online 技术博客、云游戏服务器编排资料、网络同步工程文章、AOI/Interest Management 学术综述，以及本仓库当前 `src/runtime/aoi` 实现，给出面向 evpp3 的技术判断和路线。
+
+## 0. 本轮审查方式
+
+本次按五个视角做多轮审查，并把修正直接合入正文：
+
+1. 资料准确性：校验公开资料是否仍可访问，去掉过度推断，给过时或特定版本资料加限定。
+2. MMO 完整性：补齐空间 AOI、逻辑可见性、复制调度、分区、热点保护、反作弊和运维编排之间的边界。
+3. 当前代码一致性：对照 `SpatialGrid`、`AOIManager`、Lua 绑定，明确当前实现的真实语义和边界。
+4. 工程落地性：把抽象建议收敛为 P0 到 P4 的接口、数据结构、测试和监控路线。
+5. 文档可维护性：补充术语、风险清单、资料限制和参考链接，避免读者把“行业趋势”误解为当前已实现能力。
 
 ## 1. 结论先行
 
@@ -40,13 +50,14 @@ AOI（Area of Interest，兴趣区域）不是一个单独算法，而是 MMO �
 | ACM/IBM Interest Management 综述 | Interest Management 是分布式虚拟环境和 MMOG 的核心扩展手段，需要在不同方案之间权衡延迟、带宽、准确性和成本。 | AOI 应被视为系统工程，不是单一数据结构。 |
 | Springer AOI in MMOG 条目 | AOI 是玩家感兴趣的虚拟世界部分，既可用于中心化 C/S 降低消息量，也可用于 P2P/分布式架构。 | 中心化 MMO 仍然需要 AOI，P2P 方案学术上丰富但商业 MMO 受反作弊限制。 |
 | Unreal Replication Graph | 用持久节点为每个连接构建复制列表，避免每个 Actor 对每个连接做逐一判断。Fortnite 级别的 Actor 数量需要这种复制图。 | 大型在线游戏需要“按角色/状态/空间预分组”的复制层。 |
-| Unity Netcode NetworkObject Visibility | 可见对象会在客户端保持 spawned clone；隐藏对象会被 despawn/destroy，并停止网络流量。 | AOI 直接驱动客户端对象生命周期，不只是减少移动包。 |
+| Unity Netcode NetworkObject Visibility | 可见对象会在客户端保持 spawned clone；隐藏对象会被 despawn/destroy，并停止网络流量；该概念页有版本差异，应按项目使用的包版本核对 API。 | AOI 直接驱动客户端对象生命周期，不只是减少移动包。 |
 | Photon Fusion Interest Management | 使用 interest key 和 spatial hash AOI；全局对象绕过过滤，小房间可不启用 AOI。 | Key/频道式订阅适合把空间和玩法规则统一编码。 |
 | Mirror Interest Management | 内置 Spatial Hashing、Distance、Scene、Team、Match 等多种过滤器。 | 生产 AOI 常是“空间过滤 + 语义过滤”的组合。 |
 | BigWorld Server | CellApp 管理空间 Cell，边界附近创建 ghost，客户端实体按 AoI 构建更新包，并维护优先队列。 | 无缝世界需要 Cell/Ghost/Handoff，而不是把世界交给一个 AOI 网格。 |
 | EVE Online Time Dilation | 当单节点过载时减慢模拟时间，让任务队列保持可控。 | 当所有玩家挤进同一个 AOI 时，只能通过降级、限流或改变时间尺度保护公平性。 |
 | Guild Wars 2 Megaserver | 按区域和启发式把玩家放入地图实例，地图满时创建新实例。 | Megaserver/实例化是控制单 AOI 热点的运营和架构手段。 |
-| Agones/Kubernetes 游戏服务器编排 | 负责专用服务器进程的部署、伸缩和分配。 | 编排能扩容进程数，但不会替代进程内 AOI。 |
+| Agones/Kubernetes 与 Amazon GameLift | 负责专用服务器进程的部署、伸缩、分配、匹配或会话放置。 | 编排和托管能扩容进程数，但不会替代进程内 AOI，也不能消除单热点的交互密度。 |
+| State Synchronization / Snapshot Replication 资料 | 网络同步需要优先级、带宽预算、最新值覆盖、量化和压缩。 | AOI 后面必须接复制调度，否则候选集正确也可能把带宽打满。 |
 
 ## 4. AOI 的核心目标和成本模型
 
@@ -305,6 +316,32 @@ evpp3 当前 `UnregisterEntity` 会扫描 `visible_` 中所有 observer 来清�
 
 evpp3 的 `QueryRadius` 会按半径覆盖格子，不依赖 9 宫格，因此更安全。`QueryAOI` 是 9 格便捷接口，应在文档中明确仅适合 `cell_size >= query_radius` 一类受控场景。
 
+### 6.7 当前 evpp3 实现的边界语义
+
+对照当前代码，需要明确以下行为：
+
+- `SpatialGrid` 是固定世界数组，不是稀疏哈希网格。构造时会按 `world_width / cell_size` 和 `world_height / cell_size` 分配全部格子，并有 `10,000,000` 格安全上限。
+- 坐标会被 clamp 到边界格。负坐标或超过世界尺寸的坐标不会被拒绝，而是落入最近边界格。这适合“世界边界内移动被上层约束”的场景，不适合表达“实体暂时不在地图内”。
+- `QueryRadius(x, y, radius)` 返回点半径内的所有实体；它是通用查询，不知道“调用者是谁”，因此不会自动排除调用者自身。
+- `GetVisibleEntities(id)` 返回 `visible_[id]`，由 `RecomputeVisibility` 维护，并会排除自身。
+- `aoi_radius = 0` 是合法半径，只能看到与 observer 同坐标的其他实体。
+- `register_entity` 对同一个 id 调用时实际是 upsert：先更新半径，再通过 `OnEntityMove` 更新位置。若该 id 已有旧位置，当前实现可能先基于旧位置重算一次自身可见集合，再按新位置重算受影响 observer。后续应明确 API 语义，避免脚本把它当作普通移动接口使用。
+- AOI 回调是同步调用。回调期间禁止再次调用 `register_entity`、`update_entity`、`unregister_entity`、`shutdown` 或 `set_event_callback` 修改 AOI，否则 Lua 绑定会返回 `nil, err`。
+- 当前没有 `space_id`、`layer_id`、`phase_id`、category、team、owner、visibility predicate。所有注册实体默认处于同一个逻辑世界。
+
+这些语义应同步写入 `resources/api/aoi/api.md`，否则 API 使用者容易误解当前 AOI 已具备分区、对称可见或逻辑过滤能力。
+
+### 6.8 半径、空间和规则变化
+
+生产 AOI 不能只处理 move，还要处理以下变化：
+
+- 半径变化：观察者能看到的目标集合变化，应重算该 observer 的 visible。
+- 空间变化：实体从一个 `space/layer/phase` 切到另一个时，应先从旧空间 despawn，再在新空间 spawn，避免跨副本可见。
+- 类型变化：隐身、阵营、队伍、owner-only、任务相位变化会改变逻辑过滤结果，需要重算相关 observer。
+- 大对象变化：巨型 Boss、世界建筑、远景目标可能有独立的 `appeal_radius` 或 `replication_radius`，不能简单套普通玩家视野。
+
+evpp3 当前只直接支持位置和半径；空间、规则和大对象半径需要在下一阶段扩展。
+
 ## 7. 复制调度：AOI 之后真正发什么
 
 AOI 输出候选集合后，还需要决定发送内容和频率。
@@ -336,6 +373,42 @@ low_priority_queue
 2. 再发送近距离玩家和 NPC。
 3. 最后发送远距离外观、非关键移动、环境装饰。
 4. 超出最大同屏数量时，按距离、威胁度、社交关系、目标锁定决定保留集合。
+
+### 7.1 生命周期事件顺序
+
+AOI 事件要和网络复制严格排序：
+
+```text
+Enter:
+  1. 可靠发送 spawn/full snapshot
+  2. 标记客户端对象已存在
+  3. 之后才能发送 movement / property delta / RPC
+
+Leave:
+  1. 停止排队普通 delta
+  2. 可靠发送 despawn/hide
+  3. 清理连接侧对象状态
+```
+
+如果移动增量先于 spawn 到达，客户端会收到未知对象更新；如果 leave 后仍有普通增量排队，客户端会出现对象复活或幽灵状态。复制系统应按对象和连接维护 lifecycle state。
+
+### 7.2 Late Join 和初始快照
+
+新连接进入热点区域时，初始快照通常比移动更新更昂贵。建议：
+
+- 首帧只发送玩家自身、控制目标、近距离关键对象和必要全局状态。
+- 其余对象按距离和优先级分批 spawn。
+- 对静态对象使用快照缓存或 chunk manifest，避免每个连接重新序列化。
+- 对高密度人群使用最大 spawn 数量和低频 LOD，先保证可玩性。
+
+### 7.3 最新值覆盖和可靠性
+
+BigWorld release notes 中的 `SendLatestOnly` 和 `IsReliable` 思路很适合 AOI 复制：
+
+- 移动、朝向、动画参数通常只需要最新值。
+- spawn、despawn、装备变化、技能命中、死亡必须可靠或具备确认机制。
+- 低优先级对象的多个待发送位置包应合并为一个最新状态。
+- 每个连接应统计被覆盖、被丢弃、被延迟的更新数量，作为热点降级信号。
 
 ## 8. 分布式大世界 AOI
 
@@ -386,6 +459,17 @@ Cell 可以固定边界，也可以按负载调整：
 - 时间膨胀：像 EVE Online 一样减慢模拟时间以保持队列可控和公平。
 
 这些是玩法和技术共同决策，不是 AOI 数据结构能单独解决的问题。
+
+### 8.5 云编排与 AOI 的边界
+
+Agones、GameLift、Kubernetes、FleetIQ、FlexMatch 这类系统负责“把玩家放到哪个服务器进程”和“如何扩缩专用服务器”。它们不能替代服务器进程内部的 AOI：
+
+- 编排能增加地图实例、房间实例或战场实例数量。
+- 匹配能控制每场人数、地域和延迟。
+- 自动伸缩能避免没有可用进程。
+- 但当 500 人已经进入同一个地图实例并聚到同一坐标，单进程内仍需要 AOI、复制预算和热点降级。
+
+因此架构上应把“会话放置/服务器分配”和“进程内 AOI”分成两个问题。
 
 ## 9. 当前 evpp3 AOI 实现评估
 
@@ -448,6 +532,18 @@ Lua 绑定：
 8. 缺少静态/动态分层。大量静态对象会和移动对象混在同一个索引层。
 9. 缺少 Z/楼层/遮挡。当前是二维距离，无法表达多楼层、飞行或墙体视线。
 10. 固定数组不适合无限大世界。超大地图会浪费内存或触发格子数安全上限。
+11. `register_entity` 对已有 id 的 upsert 行为未在 API 文档中清楚说明。
+12. 坐标 clamp 到边界格的行为未在 API 文档中说明，可能隐藏越界写入或脚本错误。
+13. `QueryRadius` 不排除调用者自身；调用方需要自行过滤。
+14. 缺少 enter/leave 与后续移动 delta 的连接侧顺序模型。
+
+### 9.4 当前文档与资料限制
+
+- BigWorld 资料来自 2012 年左右公开文档，但 Cell/Ghost/Handoff 仍是 MMO 分布式世界的经典参考。不能把 BigWorld 的具体进程名直接当作 evpp3 目标实现。
+- Unity Netcode 文档版本变化较快，Object Visibility 概念稳定，但具体 API 要按项目锁定的 package 版本核对。
+- Photon Fusion Unreal 的 interest key 资料适合说明 key 订阅和空间哈希策略；不同 Photon 产品线的 API 不完全相同。
+- EVE Time Dilation 是过载治理案例，不是 AOI 算法；它用于说明热点无法继续空间裁剪时的降级思路。
+- GameLift/Agones 是托管和编排层，不是 AOI 中间件。
 
 ## 10. evpp3 推荐路线
 
@@ -464,6 +560,9 @@ Lua 绑定：
   - 删除实体后所有 observer 收到 leave。
   - 越界坐标 clamp 行为。
 - 给 `QueryAOI` 标注使用限制，避免被误用为任意半径查询。
+- 给 `register_entity` 明确“新增还是 upsert”。如果保留 upsert，应增加单独 `aoi.update_radius(entity_id, radius)`，避免注册接口承担移动和半径更新双重语义。
+- 在 API 文档中说明坐标越界 clamp、`QueryRadius` 包含自身、回调同步派发和回调期间禁止修改。
+- 增加事件顺序测试：enter 必须先于该 target 的移动 delta，leave 后不能再发送普通 delta。
 
 ### P1：空间和规则过滤
 
@@ -481,9 +580,11 @@ struct AOIKey {
 struct AOIProfile {
     float enter_radius;
     float leave_radius;
+    float appeal_radius;
     uint32_t category_mask;
     uint32_t visible_category_mask;
     uint32_t max_visible;
+    uint8_t update_lod;
 };
 
 using VisibilityPredicate =
@@ -497,6 +598,8 @@ using VisibilityPredicate =
 - `QueryRadius` 只在同一 `AOIKey` 内查。
 - 再执行 category 和 gameplay predicate。
 - 增加 `watchers_` 反向表。
+- 支持空间切换：旧 key leave，新 key enter，不能跨 key 直接移动。
+- 支持静态层和动态层分开索引。
 
 ### P2：批处理和复制调度
 
@@ -515,6 +618,8 @@ using VisibilityPredicate =
   - far：1 到 2 Hz。
   - dormant：变化时。
 - 静态对象和动态对象分层索引。
+- 为连接建立 lifecycle state，防止 spawn/delta/despawn 乱序。
+- 对移动类属性使用 latest-only 合并。
 
 ### P3：热点保护
 
@@ -527,6 +632,7 @@ using VisibilityPredicate =
 - 区域密度超过阈值时启用二级网格。
 - 远距实体降为低频或聚合状态。
 - 监控候选数、实际可见数、enter/leave churn、发送预算耗尽次数。
+- 支持可配置热点策略：拒绝进入、排队、迁移实例、降低 LOD、限制同屏人数、时间膨胀。
 
 ### P4：分布式 Cell 和 Ghost
 
@@ -541,6 +647,7 @@ using VisibilityPredicate =
 - Cell 间同步只发送 ghost 必需属性。
 - handoff 使用事务式流程：冻结旧权威、迁移状态、新权威确认、路由切换、旧权威释放。
 - Base/Proxy 层隔离客户端，不让客户端感知 Cell 切换。
+- 明确跨 Cell 权威规则：技能、投射物、召唤物、仇恨、掉落和寻路不能同时由两个 Cell 决策。
 
 ## 11. 指标和压测
 
@@ -560,6 +667,10 @@ AOI 必须可观测。建议至少记录：
 - `aoi.dispatch.duration_us`
 - `aoi.connection.bytes_budget_used`
 - `aoi.connection.entity_budget_dropped`
+- `aoi.latest_only.coalesced`
+- `aoi.lifecycle.out_of_order_prevented`
+- `aoi.hotspot.active_regions`
+- `aoi.callback.errors`
 
 压测场景：
 
@@ -571,6 +682,10 @@ AOI 必须可观测。建议至少记录：
 6. 删除风暴：大量实体同时 despawn。
 7. 队伍/相位/隐身逻辑过滤。
 8. late join：新连接进入热点区的初始快照预算。
+9. re-register/upsert：已有 id 重新注册不同半径和位置。
+10. 越界输入：负坐标、超过世界宽高、边界半径查询。
+11. 回调重入：回调内尝试修改 AOI 应返回错误且不破坏状态。
+12. 生命周期顺序：spawn、delta、despawn 的连接侧排序。
 
 ## 12. 常见陷阱
 
@@ -584,6 +699,9 @@ AOI 必须可观测。建议至少记录：
 - 删除实体时只从网格删除，忘记清理 visible/watchers。
 - 固定 9 宫格查询用于任意半径，导致漏查。
 - 试图用 Kubernetes 或云伸缩替代进程内 AOI。编排只能增加房间/地图进程，不能降低单热点内的 N² 交互。
+- 把 re-register 当普通移动使用，导致半径和旧位置先触发一轮事件。
+- 忘记区分 `query_radius` 的通用查询和 `get_visible` 的观察者可见集合。
+- 忘记连接侧生命周期状态，导致 delta 早于 spawn 或晚于 despawn。
 
 ## 13. 推荐架构摘要
 
@@ -625,6 +743,7 @@ WorldPartition
 - Springer: [Area of Interest Management in Massively Multiplayer Online Games](https://link.springer.com/rwe/10.1007/978-3-319-08234-9_239-1)
 - Epic Games: [Replication Graph in Unreal Engine](https://dev.epicgames.com/documentation/unreal-engine/replication-graph-in-unreal-engine)
 - Unity Multiplayer: [Netcode for GameObjects Object visibility](https://docs-multiplayer.unity3d.com/netcode/2.0.0/basics/object-visibility/)
+- Unity Manual: [Netcode for GameObjects package versions](https://docs.unity3d.com/Manual/com.unity.netcode.gameobjects.html)
 - Photon Fusion Unreal: [Interest Management](https://doc.photonengine.com/fusion-unreal/current/manual/replication/interest-management)
 - Photon Server: [Interest Groups](https://doc.photonengine.com/server/current/applications/loadbalancing/interestgroups)
 - Photon Blog: [Photon Fusion Area of Interest sample](https://blog.photonengine.com/new-photon-fusion-area-of-interest-sample/)
@@ -634,3 +753,6 @@ WorldPartition
 - EVE Online: [Introducing Time Dilation](https://www.eveonline.com/news/view/introducing-time-dilation-tidi)
 - Guild Wars 2: [Continued Improvements to the Megaserver System](https://www.guildwars2.com/en/news/continued-improvements-to-the-megaserver-system/)
 - Agones: [Overview](https://agones.dev/site/docs/overview/)
+- Amazon GameLift Servers: [Documentation overview](https://aws.amazon.com/documentation-overview/gamelift/)
+- Gaffer On Games: [State Synchronization](https://gafferongames.com/post/state_synchronization/)
+- Gaffer On Games: [Snapshot Compression](https://gafferongames.com/post/snapshot_compression/)
