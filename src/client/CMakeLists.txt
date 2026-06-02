@@ -1,3 +1,4 @@
+# Top-level requirement: this project is for game client builds only; do not introduce game server-related functionality.
 cmake_minimum_required(VERSION 4.0)
 
 project(GameClient C CXX)
