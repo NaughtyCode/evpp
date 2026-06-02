@@ -570,6 +570,15 @@ CLIENT_API game_error_t game_space_count(game_client_t* client,
  * AOI
  * ========================================================================= */
 
+/* AOI uses a fixed 2D uniform grid and directional observer-side visibility.
+ * A registered entity's radius determines what that entity can see; it does
+ * not define how far other entities can see it.
+ *
+ * Coordinates outside the world bounds are assigned to the nearest boundary
+ * cell for indexing, while precise radius checks still use the original
+ * coordinates. All functions are synchronous and not internally thread-safe.
+ */
+
 CLIENT_API game_error_t game_aoi_create(game_client_t* client,
                                          float world_width,
                                          float world_height,
@@ -578,6 +587,9 @@ CLIENT_API game_error_t game_aoi_create(game_client_t* client,
 
 CLIENT_API void game_aoi_destroy(game_aoi_t** aoi);
 
+/* Register or update an entity. If entity_id already exists, this updates its
+ * radius and position; use game_aoi_move_entity for ordinary movement.
+ */
 CLIENT_API game_error_t game_aoi_register_entity(game_aoi_t* aoi,
                                                   uint64_t entity_id,
                                                   float x,
@@ -595,6 +607,10 @@ CLIENT_API game_error_t game_aoi_unregister_entity(game_aoi_t* aoi,
 CLIENT_API game_error_t game_aoi_count(game_aoi_t* aoi,
                                         uint64_t* out_count);
 
+/* Raw spatial radius query. The result is not sorted and includes every entity
+ * in range, including the caller's own entity if applicable. Passing out_ids
+ * as NULL or out_cap as 0 performs a count-only query via out_count.
+ */
 CLIENT_API game_error_t game_aoi_query_radius(game_aoi_t* aoi,
                                                float x,
                                                float y,
@@ -603,6 +619,10 @@ CLIENT_API game_error_t game_aoi_query_radius(game_aoi_t* aoi,
                                                int out_cap,
                                                int* out_count);
 
+/* Returns the maintained visible set for entity_id. The result is sorted by
+ * entity id and excludes entity_id itself. Passing out_ids as NULL or out_cap
+ * as 0 performs a count-only query via out_count.
+ */
 CLIENT_API game_error_t game_aoi_get_visible(game_aoi_t* aoi,
                                               uint64_t entity_id,
                                               uint64_t* out_ids,

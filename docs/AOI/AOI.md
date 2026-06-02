@@ -347,7 +347,7 @@ evpp3 的 `QueryRadius` 会按半径覆盖格子，不依赖 9 宫格，因此�
 - `OnEntityMove` 会按 id 排序受影响 observer，但 `RecomputeVisibility` 内部用 `unordered_set` 计算目标差集，同一 observer 的多个 enter/leave 目标派发顺序不是稳定契约。若上层复制系统要求确定性，应在派发前按 target id 排序。
 - 当前没有 `space_id`、`layer_id`、`phase_id`、category、team、owner、visibility predicate。所有注册实体默认处于同一个逻辑世界。
 
-这些语义应同步写入 `resources/api/aoi/api.md`，否则 API 使用者容易误解当前 AOI 已具备分区、对称可见或逻辑过滤能力。
+本轮已把这些语义同步到 `resources/api/aoi/api.md` 和 `src/client/client.h` 的 AOI 注释中。后续如果运行时代码新增分区、对称可见或逻辑过滤能力，应同步更新这两处契约文档和本文件的实现评估。
 
 ### 6.8 半径、空间和规则变化
 
@@ -558,40 +558,46 @@ C Client API：
 - 输入校验覆盖 NaN、无限值和非法尺寸。
 - `OnEntityMove` 会重算受影响 observer，不是只重算移动者自己。
 
-### 9.3 需要修正或补强的地方
+### 9.3 本轮已修正的文档问题
 
-1. 文档语义需要统一。当前实现是方向性可见，`A` 半径大能看到 `B`，不代表 `B` 能看到 `A`；但 `resources/api/aoi/api.md` 的 Overview 容易被读成互相可见，Notes 仍描述为 “visibility range in both directions”。应修改 API 文档或强制实现对称规则。
-2. API 文档的事件描述不完整。`update_entity` 实际会重算移动者和附近受影响 observer，因此移动 target 进入静止 observer 视野也会触发事件；`unregister_entity` 既会给被删除实体自己的 visible targets 发 leave，也会给曾经看到它的 observers 发 leave。
-3. API 文档没有区分三层错误语义。Lua 无效参数会抛 Lua 参数错误，未初始化和回调重入返回 `nil, err`；C++ API 抛异常或返回空集合；C Client API 返回 `game_error_t`。
-4. 查询结果顺序契约未说明。`GetVisibleEntities` 已排序，`QueryRadius` / `QueryAOI` 未排序，不能直接作为确定性协议顺序。
-5. 缺少 `space_id`、`layer_id`、`phase_id`。现在所有实体默认在同一世界，不能表达副本、频道、任务相位。
-6. 缺少逻辑过滤。阵营、队伍、隐身、对象类型、owner-only 状态无法参与 AOI。
-7. 缺少 target-side aura。当前 target 被当作点对象，不能表达“大型对象、音源、远景建筑可以被更远感知”的规则。
-8. 缺少反向 watchers。删除实体时扫描全部 `visible_`，大规模下会变成热点。
-9. 缺少批处理。每次移动立即重算并同步派发事件，移动频率高时会浪费 CPU。
-10. 缺少线程/阶段所有权模型。当前 AOI 不是线程安全组件，网络层、逻辑层和脚本层如果跨线程调用，必须先串行化。
-11. C++ callback 缺少重入保护。Lua 绑定有 guard，但直接使用 `AOIManager::SetEventCallback` 的 C++ 调用方仍可能在回调内递归修改 manager。
-12. 缺少复制调度。AOI 只返回列表，没有按连接预算、优先级、LOD 发包。
-13. 缺少热点保护。没有最大可见数、距离排序、区域限流、聚合或降级策略。
-14. 缺少静态/动态分层。大量静态对象会和移动对象混在同一个索引层。
-15. 缺少 Z/楼层/遮挡。当前是二维距离，无法表达多楼层、飞行或墙体视线。
-16. 固定数组不适合无限大世界。超大地图会浪费内存或触发格子数安全上限。
-17. `register_entity` 对已有 id 的 upsert 行为未在 API 文档中清楚说明。
-18. 坐标 clamp 到边界格的行为未在 API 文档中说明，可能隐藏越界写入或脚本错误；同时应说明 clamp 不改写原始坐标。
-19. `QueryRadius` 不排除调用者自身；调用方需要自行过滤。
-20. 缺少 enter/leave 与后续移动 delta 的连接侧顺序模型。
-21. 同一 observer 的多个 enter/leave 事件目标顺序未排序，不能作为确定性网络协议顺序使用。
-22. C Client API 仅暴露查询型 AOI 能力，未暴露 enter/leave 事件、批处理或复制预算；其头文件注释和外部文档也需要同步方向性可见、upsert、clamp、self-filter 这些语义。
+1. 统一方向性可见语义：`A` 半径大能看到 `B`，不代表 `B` 能看到 `A`；`resources/api/aoi/api.md` 不再描述为双向可见。
+2. 补全事件语义：`update_entity` 会重算移动者和附近受影响 observer，`unregister_entity` 会同时清理被删除实体自己的 visible 集合和其他 observer 对它的引用。
+3. 区分错误语义：Lua 无效参数是参数错误，未初始化和回调重入返回 `nil, err`，C Client API 返回 `game_error_t`。
+4. 明确结果顺序：`GetVisibleEntities` / `get_visible` 已排序，`QueryRadius` / `query_radius` / `QueryAOI` 不提供稳定顺序契约。
+5. 明确 `register_entity` 对已有 id 是 upsert，普通移动应使用 `update_entity` / `game_aoi_move_entity`。
+6. 明确坐标越界 clamp 到边界格，但精确距离仍使用原始坐标。
+7. 明确 `QueryRadius` 不排除自身，调用方需要自行过滤。
+8. 补齐 `aoi.init` 返回语义：参数错误仍是 Lua 参数错误，初始化阶段捕获到底层异常时返回 `nil, err`。
+9. 补充 C Client AOI 注释：方向性可见、upsert、clamp、count-only 查询、排序和 self-filter 语义已写入 `src/client/client.h`。
 
-### 9.4 当前文档与资料限制
+### 9.4 仍需代码或架构补强的地方
 
+1. 缺少 `space_id`、`layer_id`、`phase_id`。现在所有实体默认在同一世界，不能表达副本、频道、任务相位。
+2. 缺少逻辑过滤。阵营、队伍、隐身、对象类型、owner-only 状态无法参与 AOI。
+3. 缺少 target-side aura。当前 target 被当作点对象，不能表达“大型对象、音源、远景建筑可以被更远感知”的规则。
+4. 缺少反向 watchers。删除实体时扫描全部 `visible_`，大规模下会变成热点。
+5. 缺少批处理。每次移动立即重算并同步派发事件，移动频率高时会浪费 CPU。
+6. 缺少线程/阶段所有权模型。当前 AOI 不是线程安全组件，网络层、逻辑层和脚本层如果跨线程调用，必须先串行化。
+7. C++ callback 缺少重入保护。Lua 绑定有 guard，但直接使用 `AOIManager::SetEventCallback` 的 C++ 调用方仍可能在回调内递归修改 manager。
+8. 缺少复制调度。AOI 只返回列表，没有按连接预算、优先级、LOD 发包。
+9. 缺少热点保护。没有最大可见数、距离排序、区域限流、聚合或降级策略。
+10. 缺少静态/动态分层。大量静态对象会和移动对象混在同一个索引层。
+11. 缺少 Z/楼层/遮挡。当前是二维距离，无法表达多楼层、飞行或墙体视线。
+12. 固定数组不适合无限大世界。超大地图会浪费内存或触发格子数安全上限。
+13. 缺少 enter/leave 与后续移动 delta 的连接侧顺序模型。
+14. 同一 observer 的多个 enter/leave 事件目标顺序未排序，不能作为确定性网络协议顺序使用。
+15. C Client API 仅暴露查询型 AOI 能力，未暴露 enter/leave 事件、批处理或复制预算。
+
+### 9.5 当前文档与资料限制
+
+- 本轮链接检查日期：2026-06-02。第 14 节全部 19 个参考链接均可访问；其中 17 个原始 URL 直接返回 200，`docs.unity.com/multiplayer/netcode/netcode` 和旧 `docs-multiplayer.unity3d.com` 可经重定向后返回 200。后续维护时应重新检查，因为 Unity、Photon、AWS 和 Agones 文档会持续更新。
 - BigWorld 资料来自 2012 年左右公开文档，但 Cell/Ghost/Handoff 仍是 MMO 分布式世界的经典参考。不能把 BigWorld 的具体进程名直接当作 evpp3 目标实现。
 - Unity Netcode 的旧 `docs-multiplayer` 站点已转向新版 package 文档；Object Visibility 概念稳定，但具体 API 要以 `com.unity.netcode.gameobjects` 当前包文档和项目锁定版本为准。
 - Photon Fusion Unreal 的 interest key 资料适合说明 key 订阅和空间哈希策略；不同 Photon 产品线的 API 不完全相同。
 - EVE Time Dilation 是过载治理案例，不是 AOI 算法；它用于说明热点无法继续空间裁剪时的降级思路。
 - GameLift/Agones 是托管和编排层，不是 AOI 中间件。
 
-### 9.5 已有测试覆盖与剩余缺口
+### 9.6 已有测试覆盖与剩余缺口
 
 本轮对照 `src/tests/unit/aoi/test_aoi.cpp`、`src/tests/integration/entity/test_entity_aoi.cpp`、`src/tests/unit/client_api/test_client_api.cpp` 和 `src/tests/performance/bench_aoi.cpp`，当前测试已经覆盖：
 
@@ -608,7 +614,7 @@ C Client API：
 - Lua 回调重入目前只覆盖 `shutdown()`；还需要覆盖 `init`、`register_entity`、`update_entity`、`unregister_entity` 和 `set_event_callback`。
 - Lua 非法参数错误与 `nil, err` 返回路径的区分测试。
 - `QueryRadius` 包含自身的 API 语义测试。
-- `QueryRadius` / `QueryAOI` 未排序结果不作为协议顺序的契约测试或文档断言。
+- `QueryRadius` / `QueryAOI` 未排序结果不作为协议顺序的契约测试。
 - `aoi_radius = 0` 的同坐标可见测试。
 - 越界坐标原始位置参与精确距离过滤的测试。
 - 多目标 enter/leave 的稳定排序或明确非稳定契约测试。
@@ -624,10 +630,7 @@ C Client API：
 目标：让当前 AOI 成为可信的单区服基础。
 
 - 明确方向性可见：`visible_[observer]` 表示 observer 能看到 target。
-- 更新 `resources/api/aoi/api.md` 中“双向”相关描述，把当前语义改为“每个 observer 按自身半径独立判断；相同半径时通常表现为对称”。
-- 更新 `resources/api/aoi/api.md` 中 `update_entity` 和 `unregister_entity` 的事件说明：移动 target 会影响附近其他 observer，注销会同时清理被删除实体自己的 visible 集合和其他 observer 对它的引用。
-- 更新 `resources/api/aoi/api.md` 的错误语义：Lua 无效参数是参数错误，未初始化和回调重入才是 `nil, err`；C Client API 是 `game_error_t`。
-- 明确结果顺序：`get_visible` 返回排序列表，`query_radius` 和 `QueryAOI` 不提供顺序契约；网络层需要稳定顺序时必须显式排序。
+- 已完成文档同步：`resources/api/aoi/api.md` 和 `src/client/client.h` 已写明方向性可见、事件语义、错误语义、upsert、clamp、self-filter 和结果顺序。
 - 保留现有方向性可见、注册后可见、注销 leave、越界 clamp 测试作为回归用例，不再把这些已覆盖项当作缺口。
 - 补齐测试：
   - 已有 id 重新 `register_entity` 的 upsert 行为、半径变化和事件序列。
@@ -642,7 +645,7 @@ C Client API：
   - C Client API 的非法参数、空输出指针计数查询、容量不足、方向性可见和 upsert。
 - 给 `QueryAOI` 标注使用限制，避免被误用为任意半径查询。
 - 给 `register_entity` 明确“新增还是 upsert”。如果保留 upsert，应增加单独 `aoi.update_radius(entity_id, radius)`，避免注册接口承担移动和半径更新双重语义。
-- 在 API 文档和 C Client API 说明中同步坐标越界 clamp、clamp 不改写原始坐标、`QueryRadius` 包含自身、`GetVisibleEntities` 排除自身、非线程安全、回调同步派发、回调期间禁止修改、`aoi.count()` 和 `aoi.shutdown()`。
+- 保持 API 文档和 C Client API 说明与实现同步：坐标越界 clamp、clamp 不改写原始坐标、`QueryRadius` 包含自身、`GetVisibleEntities` 排除自身、非线程安全、回调同步派发、回调期间禁止修改、`aoi.count()` 和 `aoi.shutdown()` 都应作为契约保留。
 - 增加事件顺序测试：enter 必须先于该 target 的移动 delta，leave 后不能再发送普通 delta。
 - 若网络层需要可复现事件顺序，应在 AOI 事件派发前排序目标 id；否则在 API 文档中声明同一 observer 的多目标事件顺序不稳定。
 
