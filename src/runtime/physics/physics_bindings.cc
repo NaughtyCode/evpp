@@ -4,6 +4,7 @@
 #include "runtime/physics/physics_bindings.h"
 
 #include <cstring>
+#include <limits>
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Math/Quat.h>
@@ -41,6 +42,23 @@ JPH::Quat NormalizedOrIdentity(float x, float y, float z, float w) {
 	return q.LengthSq() > 1.0e-12f ? q.Normalized() : JPH::Quat::sIdentity();
 }
 
+uint32_t CheckUInt32(lua_State* L, int index, const char* name) {
+	lua_Integer value = luaL_checkinteger(L, index);
+	luaL_argcheck(L,
+				  value >= 0 &&
+					  static_cast<uint64_t>(value) <=
+						  static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()),
+				  index,
+				  name);
+	return static_cast<uint32_t>(value);
+}
+
+uint64_t CheckUInt64(lua_State* L, int index, const char* name) {
+	lua_Integer value = luaL_checkinteger(L, index);
+	luaL_argcheck(L, value >= 0, index, name);
+	return static_cast<uint64_t>(value);
+}
+
 // physics.spawn(proto_id, x, y, z, qx, qy, qz, qw[, user_data]) → body_id | nil, err
 
 int LuaSpawn(lua_State* L) {
@@ -54,7 +72,7 @@ int LuaSpawn(lua_State* L) {
 	float qy = static_cast<float>(luaL_checknumber(L, 6));
 	float qz = static_cast<float>(luaL_checknumber(L, 7));
 	float qw = static_cast<float>(luaL_checknumber(L, 8));
-	uint64_t user_data = lua_gettop(L) >= 9 ? static_cast<uint64_t>(luaL_checkinteger(L, 9)) : 0;
+	uint64_t user_data = lua_gettop(L) >= 9 ? CheckUInt64(L, 9, "user_data must be >= 0") : 0;
 
 	// Note: Spawn is enqueued asynchronously. body_id is assigned by the
 	// physics thread. The caller uses the returned body_id for later commands.
@@ -71,17 +89,17 @@ int LuaSpawn(lua_State* L) {
 		if (!world) {
 			return PushNilError(L, "physics world not available");
 		}
-		uint32_t body_id = world->CreateBody(
+		auto body_id = world->CreateBody(
 			proto_id,
 			JPH::RVec3(static_cast<JPH::Real>(x),
 					   static_cast<JPH::Real>(y),
 					   static_cast<JPH::Real>(z)),
 			NormalizedOrIdentity(qx, qy, qz, qw),
 			user_data);
-		if (body_id == 0 && !world->GetRegistry().Has(body_id)) {
+		if (!body_id.has_value()) {
 			return PushNilError(L, "spawn failed");
 		}
-		lua_pushinteger(L, body_id);
+		lua_pushinteger(L, *body_id);
 		return 1;
 	}
 
@@ -102,7 +120,7 @@ int LuaSpawn(lua_State* L) {
 int LuaDestroy(lua_State* L) {
 	if (!CheckInit(L)) return 2;
 
-	uint32_t body_id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+	uint32_t body_id = CheckUInt32(L, 1, "body_id must be a uint32");
 	auto* thread = PhysicsSystem::GetThreadFromState(L);
 	bool ok = false;
 	if (thread && thread->IsPhysicsThread()) {
@@ -121,7 +139,7 @@ int LuaDestroy(lua_State* L) {
 int LuaApplyForce(lua_State* L) {
 	if (!CheckInit(L)) return 2;
 
-	uint32_t body_id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+	uint32_t body_id = CheckUInt32(L, 1, "body_id must be a uint32");
 	float fx = static_cast<float>(luaL_checknumber(L, 2));
 	float fy = static_cast<float>(luaL_checknumber(L, 3));
 	float fz = static_cast<float>(luaL_checknumber(L, 4));
@@ -151,7 +169,7 @@ int LuaApplyForce(lua_State* L) {
 int LuaSetVelocity(lua_State* L) {
 	if (!CheckInit(L)) return 2;
 
-	uint32_t body_id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+	uint32_t body_id = CheckUInt32(L, 1, "body_id must be a uint32");
 	float vx = static_cast<float>(luaL_checknumber(L, 2));
 	float vy = static_cast<float>(luaL_checknumber(L, 3));
 	float vz = static_cast<float>(luaL_checknumber(L, 4));
@@ -173,7 +191,7 @@ int LuaSetVelocity(lua_State* L) {
 int LuaGetTransform(lua_State* L) {
 	if (!CheckInit(L)) return 2;
 
-	uint32_t body_id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+	uint32_t body_id = CheckUInt32(L, 1, "body_id must be a uint32");
 	auto t = PhysicsSystem::Instance().GetTransform(body_id);
 	if (!t.has_value()) {
 		PushNilError(L, "body not found");
@@ -194,7 +212,7 @@ int LuaGetTransform(lua_State* L) {
 int LuaGetVelocity(lua_State* L) {
 	if (!CheckInit(L)) return 2;
 
-	uint32_t body_id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+	uint32_t body_id = CheckUInt32(L, 1, "body_id must be a uint32");
 	auto v = PhysicsSystem::Instance().GetVelocity(body_id);
 	if (!v.has_value()) {
 		PushNilError(L, "body not found");
@@ -211,7 +229,7 @@ int LuaGetVelocity(lua_State* L) {
 int LuaIsActive(lua_State* L) {
 	if (!CheckInit(L)) return 2;
 
-	uint32_t body_id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+	uint32_t body_id = CheckUInt32(L, 1, "body_id must be a uint32");
 	lua_pushboolean(L, PhysicsSystem::Instance().IsBodyActive(body_id) ? 1 : 0);
 	return 1;
 }
@@ -253,6 +271,9 @@ int LuaSaveState(lua_State* L) {
 	if (!CheckInit(L)) return 2;
 
 	std::string data = PhysicsSystem::Instance().SaveState();
+	if (data.empty()) {
+		return PushNilError(L, "save_state failed");
+	}
 	lua_pushlstring(L, data.data(), data.size());
 	return 1;
 }

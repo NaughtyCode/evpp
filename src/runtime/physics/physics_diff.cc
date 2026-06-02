@@ -124,12 +124,12 @@ const std::string& ObjectRegistry::GetAssetName(uint32_t body_id) const {
 	return kEmptyString;
 }
 
-uint32_t ObjectRegistry::GetBodyId(const std::string& asset_name) const {
+std::optional<uint32_t> ObjectRegistry::GetBodyId(const std::string& asset_name) const {
 	auto it = name_to_id_.find(asset_name);
 	if (it != name_to_id_.end()) {
 		return it->second;
 	}
-	return 0;
+	return std::nullopt;
 }
 
 bool ObjectRegistry::Has(uint32_t body_id) const {
@@ -139,6 +139,19 @@ bool ObjectRegistry::Has(uint32_t body_id) const {
 void ObjectRegistry::Clear() {
 	id_to_name_.clear();
 	name_to_id_.clear();
+}
+
+void ObjectRegistry::PruneMissing(const std::unordered_set<uint32_t>& live_body_ids) {
+	for (auto it = id_to_name_.begin(); it != id_to_name_.end();) {
+		if (live_body_ids.find(it->first) == live_body_ids.end()) {
+			if (!it->second.empty()) {
+				name_to_id_.erase(it->second);
+			}
+			it = id_to_name_.erase(it);
+		} else {
+			++it;
+		}
+	}
 }
 
 }  // namespace engine

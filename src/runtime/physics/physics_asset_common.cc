@@ -89,7 +89,8 @@ bool BuildAllowedDofs(const std::vector<uint8_t>& dofs, uint8_t& out_mask, std::
 	out_mask = 0;
 	for (uint8_t dof : dofs) {
 		if (dof >= 6) {
-			continue;
+			out_error = "allowedDofs entries must be in [0, 5]";
+			return false;
 		}
 		out_mask |= static_cast<uint8_t>(1u << dof);
 	}

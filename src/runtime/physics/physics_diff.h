@@ -18,6 +18,7 @@ before including this header."
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Math/Quat.h>
@@ -64,14 +65,17 @@ class ObjectRegistry {
 	// Lookup asset name by body_id. Returns empty string if not found.
 	const std::string& GetAssetName(uint32_t body_id) const;
 
-	// Lookup body_id by asset name. Returns 0 if not found.
-	uint32_t GetBodyId(const std::string& asset_name) const;
+	// Lookup body_id by asset name.
+	std::optional<uint32_t> GetBodyId(const std::string& asset_name) const;
 
 	// Check if a body_id is registered.
 	bool Has(uint32_t body_id) const;
 
 	// Clear all registrations.
 	void Clear();
+
+	// Remove mappings for body ids that are no longer present in the physics system.
+	void PruneMissing(const std::unordered_set<uint32_t>& live_body_ids);
 
 	size_t Size() const {
 		return id_to_name_.size();

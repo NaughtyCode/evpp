@@ -154,7 +154,6 @@ BodySettingsResult PhysicsBodyAssetFactory::BuildDynamicBody(
 	BodySettingsResult result;
 	result.id = body.id;
 	result.source_proto_id = body.proto_id;
-	result.dynamic = true;
 	result.activation = body.activate ? JPH::EActivation::Activate : JPH::EActivation::DontActivate;
 
 	if (body.id.empty()) {
@@ -180,6 +179,7 @@ BodySettingsResult PhysicsBodyAssetFactory::BuildDynamicBody(
 	JPH::RVec3 pos = ParsePhysicsVec3(body.transform.position);
 	JPH::Quat rot = ParsePhysicsQuat(body.transform.rotation);
 	result.settings = CreateBodySettingsFromPrototype(proto_it->second, pos, rot, body.user_data);
+	result.dynamic = result.settings.mMotionType != JPH::EMotionType::Static;
 
 	if (body.linear_velocity) {
 		if (!IsFiniteFloatVec(*body.linear_velocity, 3)) {

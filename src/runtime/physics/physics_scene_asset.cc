@@ -30,6 +30,10 @@ bool RegisterSceneBodyName(const std::string& name,
 		out_error = "scene body id must not be empty";
 		return false;
 	}
+	if (name == "world" || name == "fixed" || name == "__world__") {
+		out_error = "scene body id uses reserved constraint body name: " + name;
+		return false;
+	}
 	if (!names.insert(name).second) {
 		out_error = "duplicate scene body id: " + name;
 		return false;

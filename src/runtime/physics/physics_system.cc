@@ -83,9 +83,22 @@ bool PhysicsSystem::Initialize(const std::string& config_dir,
 	// config_dir is <resource_dir>/physics/config; scene_path is relative to
 	// resource_dir (e.g. "/physics/data/scene.json").
 	{
-		std::string resource_dir =
-			std::filesystem::path(config_dir).parent_path().parent_path().string();
-		assets_path_ = resource_dir + config_manager_->GetPhysicsConfig().scene_path;
+		std::filesystem::path resource_dir =
+			std::filesystem::path(config_dir).parent_path().parent_path();
+		std::string scene_path_text = config_manager_->GetPhysicsConfig().scene_path;
+		std::filesystem::path scene_path(scene_path_text);
+		bool has_drive_prefix = scene_path_text.size() >= 2 && scene_path_text[1] == ':';
+		bool is_unc_path = scene_path_text.rfind("\\\\", 0) == 0;
+		if ((has_drive_prefix || is_unc_path) && scene_path.is_absolute()) {
+			assets_path_ = scene_path.string();
+		} else {
+			std::string relative_scene_path = scene_path_text;
+			while (!relative_scene_path.empty() &&
+				   (relative_scene_path.front() == '/' || relative_scene_path.front() == '\\')) {
+				relative_scene_path.erase(relative_scene_path.begin());
+			}
+			assets_path_ = (resource_dir / relative_scene_path).string();
+		}
 	}
 
 	ENGINE_LOG_INFO(GetLogger(), "PhysicsSystem: configs loaded from [{}]", config_dir);
@@ -415,7 +428,7 @@ bool PhysicsSystem::ReloadLogLevel() {
 
 std::optional<BodyTransform> PhysicsSystem::GetTransform(uint32_t body_id) const {
 	ENGINE_PROFILE_SCOPE("engine.physics", "GetTransform");
-	if (!is_initialized_) return std::nullopt;
+	if (!is_initialized_ || !physics_thread_.IsRunning()) return std::nullopt;
 	auto result = physics_thread_.GetWorld().GetTransform(body_id);
 	if (!result.has_value()) return std::nullopt;
 	BodyTransform bt;
@@ -431,20 +444,20 @@ std::optional<BodyTransform> PhysicsSystem::GetTransform(uint32_t body_id) const
 }
 
 std::optional<PhysicsSystem::Vec3Result> PhysicsSystem::GetVelocity(uint32_t body_id) const {
-	if (!is_initialized_) return std::nullopt;
+	if (!is_initialized_ || !physics_thread_.IsRunning()) return std::nullopt;
 	auto vel = physics_thread_.GetWorld().GetVelocity(body_id);
 	if (!vel.has_value()) return std::nullopt;
 	return Vec3Result{vel->GetX(), vel->GetY(), vel->GetZ()};
 }
 
 bool PhysicsSystem::IsBodyActive(uint32_t body_id) const {
-	if (!is_initialized_) return false;
+	if (!is_initialized_ || !physics_thread_.IsRunning()) return false;
 	return physics_thread_.GetWorld().IsActive(body_id);
 }
 
 std::optional<PhysicsSystem::RayCastResult> PhysicsSystem::RayCast(
 	double ox, double oy, double oz, double dx, double dy, double dz, float max_dist) const {
-	if (!is_initialized_) return std::nullopt;
+	if (!is_initialized_ || !physics_thread_.IsRunning()) return std::nullopt;
 	auto hit = physics_thread_.GetWorld().RayCast(
 		JPH::RVec3(
 			static_cast<JPH::Real>(ox), static_cast<JPH::Real>(oy), static_cast<JPH::Real>(oz)),
@@ -455,7 +468,7 @@ std::optional<PhysicsSystem::RayCastResult> PhysicsSystem::RayCast(
 }
 
 PhysicsSystem::PhysicsStats PhysicsSystem::GetPhysicsStats() const {
-	if (!is_initialized_) return {};
+	if (!is_initialized_ || !physics_thread_.IsRunning()) return {};
 	auto s = physics_thread_.GetWorld().GetStats();
 	return {s.active_bodies, s.total_bodies, s.body_pairs, s.contact_constraints};
 }
@@ -463,12 +476,12 @@ PhysicsSystem::PhysicsStats PhysicsSystem::GetPhysicsStats() const {
 // SaveState / RestoreState
 
 std::string PhysicsSystem::SaveState() const {
-	if (!is_initialized_) return {};
+	if (!is_initialized_ || !physics_thread_.IsRunning()) return {};
 	return physics_thread_.SaveState();
 }
 
 bool PhysicsSystem::RestoreState(const std::string& data) {
-	if (!is_initialized_) return false;
+	if (!is_initialized_ || !physics_thread_.IsRunning()) return false;
 	return physics_thread_.RestoreState(data);
 }
 

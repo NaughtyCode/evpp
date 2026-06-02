@@ -3,7 +3,9 @@
 #include "runtime/physics/physics_shape_assets.h"
 
 #include <cmath>
+#include <cstdint>
 #include <fstream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -31,6 +33,50 @@ bool IsFiniteVec3(const glz::generic& value) {
 		   std::isfinite(value[0u].template get<double>()) &&
 		   std::isfinite(value[1u].template get<double>()) &&
 		   std::isfinite(value[2u].template get<double>());
+}
+
+bool ReadUint32(const glz::generic& value, uint32_t& out_value) {
+	if (!value.is_number()) {
+		return false;
+	}
+	double number = value.template get<double>();
+	if (!std::isfinite(number) || number < 0.0 ||
+		number > static_cast<double>(std::numeric_limits<uint32_t>::max()) ||
+		std::floor(number) != number) {
+		return false;
+	}
+	out_value = static_cast<uint32_t>(number);
+	return true;
+}
+
+bool ReadSampleCount(glz::generic& params,
+					 uint32_t& out_sample_count,
+					 bool& out_has_sample_count,
+					 std::string& out_error) {
+	out_sample_count = 0;
+	out_has_sample_count = false;
+	if (!params.contains("sampleCount")) {
+		return true;
+	}
+	out_has_sample_count = true;
+	if (!ReadUint32(params["sampleCount"], out_sample_count) || out_sample_count == 0 ||
+		out_sample_count > 65536) {
+		out_error = "height_field sampleCount must be an integer in [1, 65536]";
+		return false;
+	}
+	return true;
+}
+
+bool InferSquareSampleCount(size_t total_samples, uint32_t& out_sample_count) {
+	if (total_samples == 0) {
+		return false;
+	}
+	uint32_t sample_count = static_cast<uint32_t>(std::sqrt(static_cast<double>(total_samples)));
+	if (static_cast<size_t>(sample_count) * sample_count != total_samples) {
+		return false;
+	}
+	out_sample_count = sample_count;
+	return true;
 }
 
 JPH::ShapeSettings::ShapeResult CreateShapeResult(JPH::ShapeSettings& settings) {
@@ -86,11 +132,29 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 	const auto& type = def.type;
 	auto& p = const_cast<glz::generic&>(def.params);
 
-	auto get_num = [&](const std::string& key, double default_val = 0.0) -> double {
-		if (p.contains(key) && p[key].is_number()) {
-			return p[key].template get<double>();
+	auto read_num = [&](const std::string& key,
+						double default_val,
+						double& out_value,
+						bool allow_array = false) -> bool {
+		if (!p.contains(key)) {
+			out_value = default_val;
+			return true;
 		}
-		return default_val;
+		if (allow_array && p[key].is_array()) {
+			out_value = default_val;
+			return true;
+		}
+		if (!p[key].is_number()) {
+			result.error = key + " must be a finite number";
+			return false;
+		}
+		double value = p[key].template get<double>();
+		if (!std::isfinite(value)) {
+			result.error = key + " must be a finite number";
+			return false;
+		}
+		out_value = value;
+		return true;
 	};
 	auto get_arr = [&](const std::string& key) -> glz::generic& {
 		static glz::generic empty;
@@ -108,11 +172,23 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 	}
 
 	if (type == "box") {
-		double hx = get_num("halfX", get_num("halfExtent", 0.5));
-		double hy = get_num("halfY", get_num("halfExtent", 0.5));
-		double hz = get_num("halfZ", get_num("halfExtent", 0.5));
+		double half_extent = 0.5;
+		if (!read_num("halfExtent", 0.5, half_extent, true)) {
+			return result;
+		}
+		double hx = half_extent;
+		double hy = half_extent;
+		double hz = half_extent;
+		if (!read_num("halfX", half_extent, hx) || !read_num("halfY", half_extent, hy) ||
+			!read_num("halfZ", half_extent, hz)) {
+			return result;
+		}
 		auto& he_arr = get_arr("halfExtent");
 		if (he_arr.is_array() && he_arr.size() >= 3) {
+			if (!IsFiniteVec3(he_arr)) {
+				result.error = "box halfExtent must be [x, y, z] finite numbers";
+				return result;
+			}
 			hx = he_arr[0u].template get<double>();
 			hy = he_arr[1u].template get<double>();
 			hz = he_arr[2u].template get<double>();
@@ -132,7 +208,10 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 			result.error = sr.GetError();
 		}
 	} else if (type == "sphere") {
-		double radius = get_num("radius", 0.5);
+		double radius = 0.5;
+		if (!read_num("radius", 0.5, radius)) {
+			return result;
+		}
 		if (!IsPositiveFinite(radius)) {
 			result.error = "sphere radius must be finite and > 0";
 			return result;
@@ -145,8 +224,11 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 			result.error = sr.GetError();
 		}
 	} else if (type == "capsule") {
-		double half_height = get_num("halfHeight", 0.5);
-		double radius = get_num("radius", 0.25);
+		double half_height = 0.5;
+		double radius = 0.25;
+		if (!read_num("halfHeight", 0.5, half_height) || !read_num("radius", 0.25, radius)) {
+			return result;
+		}
 		if (!IsPositiveFinite(half_height) || !IsPositiveFinite(radius)) {
 			result.error = "capsule halfHeight and radius must be finite and > 0";
 			return result;
@@ -160,8 +242,11 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 			result.error = sr.GetError();
 		}
 	} else if (type == "cylinder") {
-		double half_height = get_num("halfHeight", 0.5);
-		double radius = get_num("radius", 0.25);
+		double half_height = 0.5;
+		double radius = 0.25;
+		if (!read_num("halfHeight", 0.5, half_height) || !read_num("radius", 0.25, radius)) {
+			return result;
+		}
 		if (!IsPositiveFinite(half_height) || !IsPositiveFinite(radius)) {
 			result.error = "cylinder halfHeight and radius must be finite and > 0";
 			return result;
@@ -220,14 +305,14 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 		if (tris_arr.is_array()) {
 			for (size_t i = 0; i < tris_arr.size(); ++i) {
 				auto& t = tris_arr[unsigned(i)];
-				if (!t.is_array() || t.size() < 3 || !t[0u].is_number() || !t[1u].is_number() ||
-					!t[2u].is_number()) {
-					result.error = "mesh triangle must be [i0, i1, i2] numbers";
+				uint32_t i0 = 0;
+				uint32_t i1 = 0;
+				uint32_t i2 = 0;
+				if (!t.is_array() || t.size() < 3 || !ReadUint32(t[0u], i0) ||
+					!ReadUint32(t[1u], i1) || !ReadUint32(t[2u], i2)) {
+					result.error = "mesh triangle must be [i0, i1, i2] non-negative integer indices";
 					return result;
 				}
-				uint32_t i0 = static_cast<uint32_t>(t[0u].template get<double>());
-				uint32_t i1 = static_cast<uint32_t>(t[1u].template get<double>());
-				uint32_t i2 = static_cast<uint32_t>(t[2u].template get<double>());
 				if (i0 >= vertices.size() || i1 >= vertices.size() || i2 >= vertices.size()) {
 					result.error = "mesh triangle index out of range";
 					return result;
@@ -275,17 +360,29 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 				return result;
 			}
 			bf.seekg(0, std::ios::end);
-			size_t file_size = static_cast<size_t>(bf.tellg());
+			std::streampos end = bf.tellg();
+			if (end <= 0) {
+				result.error = "height_field: invalid data file size (0 bytes): " + data_path;
+				return result;
+			}
+			size_t file_size = static_cast<size_t>(end);
 			bf.seekg(0, std::ios::beg);
+			if (file_size % sizeof(float) != 0) {
+				result.error = "height_field: data file size must be a multiple of float size";
+				return result;
+			}
 			size_t sample_count_file = file_size / sizeof(float);
 			if (sample_count_file == 0 || sample_count_file > 65536) {
 				result.error = "height_field: invalid data file size (0 or >65536 samples)";
 				return result;
 			}
-			uint32_t sample_count = static_cast<uint32_t>(get_num("sampleCount", 0));
-			if (sample_count == 0) {
-				sample_count = static_cast<uint32_t>(std::sqrt(sample_count_file));
-				if (sample_count * sample_count != sample_count_file) {
+			uint32_t sample_count = 0;
+			bool has_sample_count = false;
+			if (!ReadSampleCount(p, sample_count, has_sample_count, result.error)) {
+				return result;
+			}
+			if (!has_sample_count) {
+				if (!InferSquareSampleCount(sample_count_file, sample_count)) {
 					result.error =
 						"height_field: sampleCount not specified and file size is not a perfect square";
 					return result;
@@ -323,17 +420,24 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 				}
 				samples.push_back(static_cast<float>(sample));
 			}
-			uint32_t sample_count = static_cast<uint32_t>(get_num("sampleCount", 0));
-			if (sample_count == 0) {
-				sample_count = static_cast<uint32_t>(std::sqrt(samples.size()));
-				if (static_cast<size_t>(sample_count) * sample_count != samples.size()) {
+			if (samples.empty() || samples.size() > 65536) {
+				result.error = "height_field samples size must be in [1, 65536]";
+				return result;
+			}
+			uint32_t sample_count = 0;
+			bool has_sample_count = false;
+			if (!ReadSampleCount(p, sample_count, has_sample_count, result.error)) {
+				return result;
+			}
+			if (!has_sample_count) {
+				if (!InferSquareSampleCount(samples.size(), sample_count)) {
 					result.error =
 						"height_field: inline sampleCount not specified and sample array size is not a perfect square";
 					return result;
 				}
 			}
-			if (sample_count == 0 || sample_count > 65536) {
-				result.error = "height_field sampleCount must be in [1, 65536]";
+			if (static_cast<size_t>(sample_count) * sample_count != samples.size()) {
+				result.error = "height_field: sampleCount does not match inline sample count";
 				return result;
 			}
 			settings.mHeightSamples = std::move(samples);
@@ -392,10 +496,18 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 				result.error = "plane normal must be [x, y, z] finite numbers";
 				return result;
 			}
-			plane = JPH::Plane(JPH::Vec3(static_cast<float>(n_arr[0u].template get<double>()),
-										 static_cast<float>(n_arr[1u].template get<double>()),
-										 static_cast<float>(n_arr[2u].template get<double>())),
-							   static_cast<float>(get_num("constant", 0.0)));
+			JPH::Vec3 normal(static_cast<float>(n_arr[0u].template get<double>()),
+							 static_cast<float>(n_arr[1u].template get<double>()),
+							 static_cast<float>(n_arr[2u].template get<double>()));
+			if (normal.LengthSq() <= 1.0e-12f) {
+				result.error = "plane normal must be non-zero";
+				return result;
+			}
+			double constant = 0.0;
+			if (!read_num("constant", 0.0, constant)) {
+				return result;
+			}
+			plane = JPH::Plane(normal.Normalized(), static_cast<float>(constant));
 		}
 		JPH::PlaneShapeSettings settings(plane, material);
 		auto sr = CreateShapeResult(settings);

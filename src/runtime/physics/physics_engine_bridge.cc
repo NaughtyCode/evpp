@@ -256,6 +256,9 @@ bool PhysicsEngineBridge::Recover(const std::string& saved_state) {
 
 ScriptVM* PhysicsEngineBridge::GetScriptVM() {
 	VerifyMainThread();
+	if (!PhysicsSystem::Instance().IsInitialized()) {
+		return nullptr;
+	}
 	return &PhysicsSystem::Instance().GetScriptVM();
 }
 

@@ -47,6 +47,16 @@ ConstraintCreateResult PhysicsConstraintAssetFactory::CreateAndAddConstraint(
 					   "': referenced body not found";
 		return result;
 	}
+	if (ja.IsInvalid() && jb.IsInvalid()) {
+		result.error = "constraint '" + con.body_a + "' -> '" + con.body_b +
+					   "': at least one side must reference a body";
+		return result;
+	}
+	if (!ja.IsInvalid() && !jb.IsInvalid() && ja == jb) {
+		result.error = "constraint '" + con.body_a + "' -> '" + con.body_b +
+					   "': cannot constrain a body to itself";
+		return result;
+	}
 
 	if (!IsFiniteDoubleVec(con.pivot, 3) || !IsFiniteDoubleVec(con.axis, 3) ||
 		!std::isfinite(con.limits.min) || !std::isfinite(con.limits.max) ||

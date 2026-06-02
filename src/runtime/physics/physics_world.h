@@ -209,10 +209,10 @@ class PhysicsWorld {
 	void SetThresholds(const ThresholdsConfig& thresholds);
 
 	// ── Runtime body interface ──────────────────────────────────────────
-	uint32_t CreateBody(const std::string& proto_id,
-						const JPH::RVec3& position,
-						const JPH::Quat& rotation,
-						uint64_t user_data = 0);
+	std::optional<uint32_t> CreateBody(const std::string& proto_id,
+									   const JPH::RVec3& position,
+									   const JPH::Quat& rotation,
+									   uint64_t user_data = 0);
 	bool DestroyBody(uint32_t body_id);
 	bool ApplyForce(uint32_t body_id, const JPH::Vec3& force, const JPH::RVec3& point);
 	bool SetVelocity(uint32_t body_id, const JPH::Vec3& velocity);

@@ -366,7 +366,12 @@ void PhysicsThread::EventLoop() {
 				switch (cmd.type) {
 				case CommandType::Spawn: {
 					auto& args = std::get<SpawnArgs>(cmd.args);
-					world_.CreateBody(args.proto_id, args.position, args.rotation, args.user_data);
+					if (!world_.CreateBody(
+							args.proto_id, args.position, args.rotation, args.user_data)) {
+						PHYSICS_LOG_ERROR(logger_,
+										  "PhysicsThread: spawn failed for prototype '{}'",
+										  args.proto_id);
+					}
 					break;
 				}
 				case CommandType::Destroy: {

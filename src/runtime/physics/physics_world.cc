@@ -10,6 +10,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <limits>
+#include <unordered_set>
 
 #include <Jolt/Core/Factory.h>
 #include <Jolt/Core/IssueReporting.h>
@@ -404,18 +405,21 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 
 // CreateBody - spawn dynamic body from prototype [D3]
 
-uint32_t PhysicsWorld::CreateBody(const std::string& proto_id,
-								  const JPH::RVec3& position,
-								  const JPH::Quat& rotation,
-								  uint64_t user_data) {
-	if (proto_id.empty() || !IsFiniteRVec3(position) || !IsFiniteQuat(rotation)) {
-		PHYSICS_LOG_ERROR(logger_, "PhysicsWorld: invalid CreateBody request");
-		return 0;
+std::optional<uint32_t> PhysicsWorld::CreateBody(const std::string& proto_id,
+												 const JPH::RVec3& position,
+												 const JPH::Quat& rotation,
+												 uint64_t user_data) {
+	if (!initialized_ || !system_ || proto_id.empty() || !IsFiniteRVec3(position) ||
+		!IsFiniteQuat(rotation)) {
+		if (logger_) {
+			PHYSICS_LOG_ERROR(logger_, "PhysicsWorld: invalid CreateBody request");
+		}
+		return std::nullopt;
 	}
 	auto it = prototype_pool_.find(proto_id);
 	if (it == prototype_pool_.end()) {
 		PHYSICS_LOG_ERROR(logger_, "PhysicsWorld: prototype '{}' not found", proto_id);
-		return 0;
+		return std::nullopt;
 	}
 
 	const auto& proto = it->second;
@@ -427,7 +431,7 @@ uint32_t PhysicsWorld::CreateBody(const std::string& proto_id,
 	JPH::Body* body = bi.CreateBody(settings);
 	if (!body) {
 		PHYSICS_LOG_ERROR(logger_, "PhysicsWorld: failed to create body from '{}'", proto_id);
-		return 0;
+		return std::nullopt;
 	}
 
 	uint32_t body_id = body->GetID().GetIndexAndSequenceNumber();
@@ -435,12 +439,14 @@ uint32_t PhysicsWorld::CreateBody(const std::string& proto_id,
 
 	// Register in object registry and initialize state snapshot
 	object_registry_.Register(body_id, proto_id);
-	BodyStateSnapshot snap;
-	snap.position = settings.mPosition;
-	snap.rotation = settings.mRotation;
-	snap.linear_velocity = JPH::Vec3::sZero();
-	snap.angular_velocity = JPH::Vec3::sZero();
-	state_snapshots_[body_id] = snap;
+	if (settings.mMotionType != JPH::EMotionType::Static) {
+		BodyStateSnapshot snap;
+		snap.position = settings.mPosition;
+		snap.rotation = settings.mRotation;
+		snap.linear_velocity = JPH::Vec3::sZero();
+		snap.angular_velocity = JPH::Vec3::sZero();
+		state_snapshots_[body_id] = snap;
+	}
 
 	return body_id;
 }
@@ -448,6 +454,9 @@ uint32_t PhysicsWorld::CreateBody(const std::string& proto_id,
 // DestroyBody [D3]
 
 bool PhysicsWorld::DestroyBody(uint32_t body_id) {
+	if (!initialized_ || !system_) {
+		return false;
+	}
 	JPH::BodyID jid(body_id);
 	JPH::BodyInterface& bi = system_->GetBodyInterface();
 
@@ -467,7 +476,7 @@ bool PhysicsWorld::DestroyBody(uint32_t body_id) {
 // ApplyForce [D3]
 
 bool PhysicsWorld::ApplyForce(uint32_t body_id, const JPH::Vec3& force, const JPH::RVec3& point) {
-	if (!IsFiniteVec3(force) || !IsFiniteRVec3(point)) {
+	if (!initialized_ || !system_ || !IsFiniteVec3(force) || !IsFiniteRVec3(point)) {
 		return false;
 	}
 	JPH::BodyID jid(body_id);
@@ -485,7 +494,7 @@ bool PhysicsWorld::ApplyForce(uint32_t body_id, const JPH::Vec3& force, const JP
 // SetVelocity [D3]
 
 bool PhysicsWorld::SetVelocity(uint32_t body_id, const JPH::Vec3& velocity) {
-	if (!IsFiniteVec3(velocity)) {
+	if (!initialized_ || !system_ || !IsFiniteVec3(velocity)) {
 		return false;
 	}
 	JPH::BodyID jid(body_id);
@@ -506,6 +515,10 @@ PhysicsFrameResult PhysicsWorld::Step(float delta_time, uint64_t frame_id) {
 	PhysicsFrameResult result;
 	result.frame_id = frame_id;
 
+	if (!initialized_ || !system_) {
+		result.error = "physics world is not initialized";
+		return result;
+	}
 	if (!std::isfinite(delta_time) || delta_time <= 0.0f) {
 		result.error = "delta_time must be finite and > 0";
 		return result;
@@ -665,6 +678,9 @@ void PhysicsWorld::GenerateDiffs(PhysicsFrameResult& result) {
 // Query helpers
 
 std::optional<std::pair<JPH::RVec3, JPH::Quat>> PhysicsWorld::GetTransform(uint32_t body_id) const {
+	if (!initialized_ || !system_) {
+		return std::nullopt;
+	}
 	JPH::BodyID jid(body_id);
 	JPH::BodyLockRead lock(system_->GetBodyLockInterface(), jid);
 	if (!lock.Succeeded()) return std::nullopt;
@@ -673,6 +689,9 @@ std::optional<std::pair<JPH::RVec3, JPH::Quat>> PhysicsWorld::GetTransform(uint3
 }
 
 std::optional<JPH::Vec3> PhysicsWorld::GetVelocity(uint32_t body_id) const {
+	if (!initialized_ || !system_) {
+		return std::nullopt;
+	}
 	JPH::BodyID jid(body_id);
 	JPH::BodyLockRead lock(system_->GetBodyLockInterface(), jid);
 	if (!lock.Succeeded()) return std::nullopt;
@@ -681,6 +700,9 @@ std::optional<JPH::Vec3> PhysicsWorld::GetVelocity(uint32_t body_id) const {
 }
 
 bool PhysicsWorld::IsActive(uint32_t body_id) const {
+	if (!initialized_ || !system_) {
+		return false;
+	}
 	JPH::BodyID jid(body_id);
 	JPH::BodyLockRead lock(system_->GetBodyLockInterface(), jid);
 	if (!lock.Succeeded()) return false;
@@ -689,6 +711,9 @@ bool PhysicsWorld::IsActive(uint32_t body_id) const {
 
 PhysicsWorld::Stats PhysicsWorld::GetStats() const {
 	Stats s;
+	if (!initialized_ || !system_) {
+		return s;
+	}
 	auto body_stats = system_->GetBodyStats();
 	s.total_bodies = static_cast<uint32_t>(body_stats.mNumBodies);
 	s.active_bodies = static_cast<uint32_t>(body_stats.mNumActiveBodiesDynamic +
@@ -707,6 +732,9 @@ void PhysicsWorld::SetThresholds(const ThresholdsConfig& thresholds) {
 std::optional<PhysicsWorld::RayCastHit> PhysicsWorld::RayCast(const JPH::RVec3& origin,
 															  const JPH::Vec3& direction,
 															  float max_distance) const {
+	if (!initialized_ || !system_) {
+		return std::nullopt;
+	}
 	const float direction_len_sq = direction.LengthSq();
 	if (!IsFiniteRVec3(origin) || !std::isfinite(max_distance) || max_distance <= 0.0f ||
 		!std::isfinite(direction_len_sq) || direction_len_sq <= 1.0e-12f) {
@@ -730,12 +758,18 @@ std::optional<PhysicsWorld::RayCastHit> PhysicsWorld::RayCast(const JPH::RVec3& 
 }
 
 std::string PhysicsWorld::SaveState() const {
+	if (!initialized_ || !system_) {
+		return {};
+	}
 	JPH::StateRecorderImpl recorder;
 	system_->SaveState(recorder);
 	return recorder.GetData();
 }
 
 bool PhysicsWorld::RestoreState(const std::string& data) {
+	if (!initialized_ || !system_ || data.empty()) {
+		return false;
+	}
 	// StateRecorderImpl writes to an internal stringstream.
 	// To restore: write saved data into the recorder, rewind to
 	// switch it to read mode, then restore into the physics system.
@@ -754,6 +788,13 @@ void PhysicsWorld::RebuildStateSnapshots() {
 
 	JPH::BodyIDVector body_ids;
 	system_->GetBodies(body_ids);
+	std::unordered_set<uint32_t> live_body_ids;
+	live_body_ids.reserve(body_ids.size());
+	for (const JPH::BodyID& id : body_ids) {
+		live_body_ids.insert(id.GetIndexAndSequenceNumber());
+	}
+	object_registry_.PruneMissing(live_body_ids);
+
 	for (const JPH::BodyID& id : body_ids) {
 		JPH::BodyLockRead lock(system_->GetBodyLockInterface(), id);
 		if (!lock.Succeeded()) {
