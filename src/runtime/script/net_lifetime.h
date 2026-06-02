@@ -89,11 +89,11 @@ private:
 // Usage:
 //   1. Declare: static PendingRefTracker g_xxx_pending;
 //   2. In RunInLoop callback, after TryAcquire:
-//        g_xxx_pending.AddRef(msg_ref);
+//        g_xxx_pending.AddRef(L, msg_ref);
 //        // ... Lua operations ...
-//        g_xxx_pending.RemoveRef(msg_ref);
+//        g_xxx_pending.RemoveRef(L, msg_ref);
 //   3. During shutdown, after WaitDrain:
-//        g_xxx_pending.UnrefAll(L);
+//        g_xxx_pending.UnrefAll(nullptr);
 class CLOUD_ENGINE_API PendingRefTracker {
 public:
 	PendingRefTracker() = default;
@@ -102,20 +102,27 @@ public:
 	PendingRefTracker(const PendingRefTracker&) = delete;
 	PendingRefTracker& operator=(const PendingRefTracker&) = delete;
 
+	struct Ref {
+		lua_State* L = nullptr;
+		int ref = 0;
+	};
+
 	/* Add a ref to the tracked set. Safe to call from any thread. */
+	void AddRef(lua_State* L, int ref);
 	void AddRef(int ref);
 
 	/* Remove a ref from the tracked set. Safe to call from any thread. */
+	void RemoveRef(lua_State* L, int ref);
 	void RemoveRef(int ref);
 
 	/* Release all tracked refs under the mutex. Called during shutdown
-	 * after all callbacks have drained. If L is null, clears the set
-	 * without calling luaL_unref. */
-	void UnrefAll(lua_State* L);
+	 * after all callbacks have drained. If a tracked ref has no owning
+	 * state, default_L is used. If both are null, the ref is just cleared. */
+	void UnrefAll(lua_State* default_L);
 
 private:
 	std::mutex mutex_;
-	std::vector<int> pending_refs_;
+	std::vector<Ref> pending_refs_;
 };
 
 }  // namespace script

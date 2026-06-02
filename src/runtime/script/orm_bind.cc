@@ -59,19 +59,23 @@ int l_orm_define(lua_State* L) {
 		if (lua_istable(L, -1)) {
 			lua_pushnil(L);
 			while (lua_next(L, -2) != 0) {
-				database::FieldDef field;
 				// key at -2 (field name), value at -1 (type string or table)
-				if (lua_isstring(L, -2)) {
-					field.name = lua_tostring(L, -2);
+				if (lua_type(L, -2) == LUA_TSTRING) {
+					size_t name_len = 0;
+					const char* name_ptr = lua_tolstring(L, -2, &name_len);
+					database::FieldDef field;
+					field.name.assign(name_ptr ? name_ptr : "", name_len);
+					if (lua_isstring(L, -1)) {
+						size_t type_len = 0;
+						const char* type_ptr = lua_tolstring(L, -1, &type_len);
+						std::string type_str(type_ptr ? type_ptr : "", type_len);
+						if (type_str == "int") field.type = database::FieldType::kInt;
+						else if (type_str == "double") field.type = database::FieldType::kDouble;
+						else if (type_str == "bool") field.type = database::FieldType::kBool;
+						else field.type = database::FieldType::kString;
+					}
+					schema.fields.push_back(field);
 				}
-				if (lua_isstring(L, -1)) {
-					std::string type_str = lua_tostring(L, -1);
-					if (type_str == "int") field.type = database::FieldType::kInt;
-					else if (type_str == "double") field.type = database::FieldType::kDouble;
-					else if (type_str == "bool") field.type = database::FieldType::kBool;
-					else field.type = database::FieldType::kString;
-				}
-				schema.fields.push_back(field);
 				lua_pop(L, 1);
 			}
 		}
@@ -130,8 +134,13 @@ int l_orm_find(lua_State* L) {
 		if (lua_istable(L, 2)) {
 			lua_pushnil(L);
 			while (lua_next(L, 2) != 0) {
-				if (lua_isstring(L, -2) && lua_isstring(L, -1)) {
-					query[lua_tostring(L, -2)] = lua_tostring(L, -1);
+				if (lua_type(L, -2) == LUA_TSTRING && lua_isstring(L, -1)) {
+					size_t key_len = 0;
+					size_t value_len = 0;
+					const char* key = lua_tolstring(L, -2, &key_len);
+					const char* value = lua_tolstring(L, -1, &value_len);
+					query[std::string(key ? key : "", key_len)] =
+						std::string(value ? value : "", value_len);
 				}
 				lua_pop(L, 1);
 			}

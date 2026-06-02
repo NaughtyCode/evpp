@@ -4,10 +4,16 @@
 #include <chrono>
 #include <mutex>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 #include "log_init.h"
 #include "runtime/script/net_lifetime.h"
+
+extern "C" {
+#include "lauxlib.h"
+#include "lua.h"
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * NetAliveGuard tests
@@ -138,6 +144,37 @@ TEST_CASE("PendingRefTracker UnrefAll with null L clears all refs",
 /* ═══════════════════════════════════════════════════════════════════════════
  * ResourceLimits constant validation (from P0-5, included here for coverage)
  * ═══════════════════════════════════════════════════════════════════════════ */
+
+TEST_CASE("PendingRefTracker releases refs against their owning Lua states",
+          "[net_lifetime][pending]") {
+    lua_State* L1 = luaL_newstate();
+    lua_State* L2 = luaL_newstate();
+    REQUIRE(L1 != nullptr);
+    REQUIRE(L2 != nullptr);
+
+    lua_pushliteral(L1, "owned by L1");
+    int ref1 = luaL_ref(L1, LUA_REGISTRYINDEX);
+    lua_pushliteral(L2, "owned by L2");
+    int ref2 = luaL_ref(L2, LUA_REGISTRYINDEX);
+
+    engine::script::PendingRefTracker tracker;
+    tracker.AddRef(L1, ref1);
+    tracker.AddRef(L2, ref2);
+    tracker.UnrefAll(nullptr);
+
+    lua_pushliteral(L1, "new L1");
+    int reused1 = luaL_ref(L1, LUA_REGISTRYINDEX);
+    lua_pushliteral(L2, "new L2");
+    int reused2 = luaL_ref(L2, LUA_REGISTRYINDEX);
+
+    REQUIRE(reused1 == ref1);
+    REQUIRE(reused2 == ref2);
+
+    luaL_unref(L1, LUA_REGISTRYINDEX, reused1);
+    luaL_unref(L2, LUA_REGISTRYINDEX, reused2);
+    lua_close(L1);
+    lua_close(L2);
+}
 
 TEST_CASE("NetAliveGuard is copy-disabled", "[net_lifetime][guard]") {
     /* Compile-time check: these should not compile */

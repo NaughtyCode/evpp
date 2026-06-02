@@ -156,6 +156,31 @@ return table.concat({
 	REQUIRE(result == "false,true,false,true,false");
 }
 
+TEST_CASE("Lua auth binding ignores non-string parameter keys during authenticate",
+		  "[script_bind][auth]") {
+	ExportAllFixture f;
+	std::string result;
+
+	REQUIRE(f.RunLuaResult(
+		R"lua(
+auth.set_token_backend()
+auth.add_token('good-token', 'player-1')
+
+local ok, entity_id, session_id = auth.authenticate('token', {
+    [1] = 'ignored',
+    token = 'good-token',
+})
+
+return table.concat({
+    tostring(ok),
+    tostring(entity_id),
+    tostring(type(session_id) == 'string' and #session_id > 0),
+}, ',')
+)lua",
+		result));
+	REQUIRE(result == "true,player-1,true");
+}
+
 TEST_CASE("import.loaded reports corrupted package state without crashing",
 		  "[script_bind][import]") {
 	ExportAllFixture f;

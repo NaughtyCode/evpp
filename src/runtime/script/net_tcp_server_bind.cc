@@ -94,6 +94,30 @@ bool HasMethod(lua_State* L, int inst_ref, const char* method) {
 	return ok;
 }
 
+std::shared_ptr<ServerCtx> KeepServerCtx(ServerCtx* ctx) {
+	auto it = g_server_shared.find(ctx);
+	if (it == g_server_shared.end()) return {};
+	return it->second;
+}
+
+void ReleaseServerSharedAfterStop(ServerCtx* ctx, evpp::EventLoop* loop) {
+	if (loop && !loop->IsStopped()) {
+		loop->QueueInLoop([ctx] { g_server_shared.erase(ctx); });
+	} else {
+		g_server_shared.erase(ctx);
+	}
+}
+
+void ClearServerLuaHandle(lua_State* L, int table_index, ServerCtx* ctx) {
+	lua_pushnil(L);
+	lua_setfield(L, table_index, "_ctx");
+
+	if (ctx->instance_ref != LUA_NOREF) {
+		luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
+		ctx->instance_ref = LUA_NOREF;
+	}
+}
+
 // ── Connection methods ───────────────────────────────────────────────
 
 int l_conn_send(lua_State* L) {
@@ -225,29 +249,18 @@ int l_server_stop(lua_State* L) {
 	// stop would otherwise try to erase from g_server_ctxs a second time.
 	g_server_ctxs.erase(ctx);
 
-	ctx->server->Stop();
-
-	// Null _ctx to prevent use-after-free from subsequent method calls.
-	lua_pushnil(L);
-	lua_setfield(L, 1, "_ctx");
-
-	if (ctx->instance_ref != LUA_NOREF) {
-		luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
-		ctx->instance_ref = LUA_NOREF;
-	}
+	auto keep_alive = KeepServerCtx(ctx);
+	(void)keep_alive;
+	auto* loop = ctx->event_loop;
+	ClearServerLuaHandle(L, 1, ctx);
 
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "[net.server] server stopped");
 
-	// Use QueueInLoop so HandleClose (queued by Close() in StopInLoop)
-	// fires first, allowing ConnCtx cleanup before ServerCtx is freed.
-	auto* loop = ctx->event_loop;
-	if (loop) {
-		ServerCtx* del_ctx = ctx;
-		loop->QueueInLoop([del_ctx] { g_server_shared.erase(del_ctx); });
-	} else {
-		g_server_shared.erase(ctx);
-	}
+	// Stop() can queue StopInLoop before TCPConn::Close() callbacks when
+	// called off-loop. Release from the stop completion path so ConnCtx
+	// cleanup always runs before ServerCtx is eligible for destruction.
+	ctx->server->Stop([ctx, loop] { ReleaseServerSharedAfterStop(ctx, loop); });
 
 	lua_pushboolean(L, 1);
 	return 1;
@@ -296,23 +309,11 @@ int l_server_gc(lua_State* L) {
 	ctx->disposed = true;
 	g_server_ctxs.erase(ctx);
 
-	ctx->server->Stop();
-
-	lua_pushnil(L);
-	lua_setfield(L, 1, "_ctx");
-
-	if (ctx->instance_ref != LUA_NOREF) {
-		luaL_unref(L, LUA_REGISTRYINDEX, ctx->instance_ref);
-		ctx->instance_ref = LUA_NOREF;
-	}
-
+	auto keep_alive = KeepServerCtx(ctx);
+	(void)keep_alive;
 	auto* loop = ctx->event_loop;
-	if (loop) {
-		ServerCtx* del_ctx = ctx;
-		loop->QueueInLoop([del_ctx] { g_server_shared.erase(del_ctx); });
-	} else {
-		g_server_shared.erase(ctx);
-	}
+	ClearServerLuaHandle(L, 1, ctx);
+	ctx->server->Stop([ctx, loop] { ReleaseServerSharedAfterStop(ctx, loop); });
 
 	return 0;
 }
@@ -564,10 +565,11 @@ void ShutdownServerBindings() {
 		}
 
 		auto release_state = std::make_shared<StopReleaseState>();
+		auto* loop = ctx->event_loop;
 		const bool wait_for_loop =
-			ctx->event_loop && ctx->event_loop->IsRunning() && !ctx->event_loop->IsInLoopThread();
+			loop && loop->IsRunning() && !loop->IsInLoopThread();
 		release_state->erase_in_callback = !wait_for_loop;
-		auto release_ctx = [ctx, release_state]() {
+		auto release_ctx = [ctx, loop, release_state]() {
 			bool erase_in_callback = false;
 			{
 				std::lock_guard<std::mutex> lock(release_state->mutex);
@@ -576,7 +578,7 @@ void ShutdownServerBindings() {
 			}
 			release_state->cv.notify_one();
 			if (erase_in_callback) {
-				g_server_shared.erase(ctx);
+				ReleaseServerSharedAfterStop(ctx, loop);
 			}
 		};
 

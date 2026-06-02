@@ -166,8 +166,13 @@ int l_auth_authenticate(lua_State* L) {
 			int table_index = lua_absindex(L, 2);
 			lua_pushnil(L);
 			while (lua_next(L, table_index) != 0) {
-				if (lua_isstring(L, -2) && lua_isstring(L, -1)) {
-					params[lua_tostring(L, -2)] = lua_tostring(L, -1);
+				if (lua_type(L, -2) == LUA_TSTRING && lua_isstring(L, -1)) {
+					size_t key_len = 0;
+					size_t value_len = 0;
+					const char* key = lua_tolstring(L, -2, &key_len);
+					const char* value = lua_tolstring(L, -1, &value_len);
+					params[std::string(key ? key : "", key_len)] =
+						std::string(value ? value : "", value_len);
 				}
 				lua_pop(L, 1);
 			}

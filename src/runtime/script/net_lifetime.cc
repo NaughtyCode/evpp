@@ -44,32 +44,48 @@ void NetAliveGuard::Reset() {
 	}
 }
 
-void PendingRefTracker::AddRef(int ref) {
+void PendingRefTracker::AddRef(lua_State* L, int ref) {
 	if (ref == LUA_NOREF) return;
 	std::lock_guard<std::mutex> lock(mutex_);
-	pending_refs_.push_back(ref);
+	pending_refs_.push_back(Ref{L, ref});
 }
 
-void PendingRefTracker::RemoveRef(int ref) {
+void PendingRefTracker::AddRef(int ref) {
+	AddRef(nullptr, ref);
+}
+
+void PendingRefTracker::RemoveRef(lua_State* L, int ref) {
 	if (ref == LUA_NOREF) return;
 	std::lock_guard<std::mutex> lock(mutex_);
-	auto it = std::find(pending_refs_.begin(), pending_refs_.end(), ref);
+	auto it = std::find_if(pending_refs_.begin(), pending_refs_.end(), [L, ref](const Ref& item) {
+		return item.L == L && item.ref == ref;
+	});
 	if (it != pending_refs_.end()) {
 		pending_refs_.erase(it);
 	}
 }
 
-void PendingRefTracker::UnrefAll(lua_State* L) {
-	std::vector<int> refs;
+void PendingRefTracker::RemoveRef(int ref) {
+	if (ref == LUA_NOREF) return;
+	std::lock_guard<std::mutex> lock(mutex_);
+	auto it = std::find_if(pending_refs_.begin(), pending_refs_.end(), [ref](const Ref& item) {
+		return item.ref == ref;
+	});
+	if (it != pending_refs_.end()) {
+		pending_refs_.erase(it);
+	}
+}
+
+void PendingRefTracker::UnrefAll(lua_State* default_L) {
+	std::vector<Ref> refs;
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 		refs = std::move(pending_refs_);
 	}
-	if (L) {
-		for (int ref : refs) {
-			if (ref != LUA_NOREF) {
-				luaL_unref(L, LUA_REGISTRYINDEX, ref);
-			}
+	for (const auto& item : refs) {
+		lua_State* L = item.L ? item.L : default_L;
+		if (L && item.ref != LUA_NOREF) {
+			luaL_unref(L, LUA_REGISTRYINDEX, item.ref);
 		}
 	}
 }

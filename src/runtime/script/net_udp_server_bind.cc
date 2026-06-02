@@ -129,26 +129,26 @@ void ReleaseUdpServer(lua_State* L, UdpServerCtx* ctx) {
 	if (loop && loop->IsRunning()) {
 		// Defer unref + delete so pending message callbacks queued before
 		// Stop returned execute before we free the refs.
-		g_udp_pending_unref.AddRef(old_msg_ref);
+		g_udp_pending_unref.AddRef(L, old_msg_ref);
 		for (int ref : retired_refs) {
-			g_udp_pending_unref.AddRef(ref);
+			g_udp_pending_unref.AddRef(L, ref);
 		}
-		g_udp_pending_unref.AddRef(old_inst_ref);
+		g_udp_pending_unref.AddRef(L, old_inst_ref);
 		loop->QueueInLoop([L, old_msg_ref, old_inst_ref, retired_refs = std::move(retired_refs), ctx] {
 			if (g_udp_alive.TryAcquire()) {
 				if (old_msg_ref != LUA_NOREF) {
 					luaL_unref(L, LUA_REGISTRYINDEX, old_msg_ref);
-					g_udp_pending_unref.RemoveRef(old_msg_ref);
+					g_udp_pending_unref.RemoveRef(L, old_msg_ref);
 				}
 				for (int ref : retired_refs) {
 					if (ref != LUA_NOREF) {
 						luaL_unref(L, LUA_REGISTRYINDEX, ref);
-						g_udp_pending_unref.RemoveRef(ref);
+						g_udp_pending_unref.RemoveRef(L, ref);
 					}
 				}
 				if (old_inst_ref != LUA_NOREF) {
 					luaL_unref(L, LUA_REGISTRYINDEX, old_inst_ref);
-					g_udp_pending_unref.RemoveRef(old_inst_ref);
+					g_udp_pending_unref.RemoveRef(L, old_inst_ref);
 				}
 				g_udp_alive.Release();
 			}

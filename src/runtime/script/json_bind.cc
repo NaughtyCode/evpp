@@ -16,6 +16,7 @@
 #include "glaze/json.hpp"
 #include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
+#include "runtime/script/bind_util.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {
@@ -498,13 +499,27 @@ bool EncodeLuaValue(lua_State* L, int value_index, const JsonOptions& options, s
 }
 
 bool DecodeJsonText(lua_State* L, const std::string& input, const JsonOptions& options, std::string& error) {
-	auto result = options.comments ? glz::read_jsonc<JsonValue>(input) : glz::read_json<JsonValue>(input);
-	if (!result) {
-		error = FormatGlazeError("json decode", result.error(), input);
+	const glz::error_ctx validation =
+		options.comments ? glz::validate_jsonc(input) : glz::validate_json(input);
+	if (validation) {
+		error = FormatGlazeError("json decode", validation, input);
 		return false;
 	}
 
-	return PushJsonValue(L, *result, error, 0);
+	JsonValue value;
+	const glz::error_ctx read_error =
+		options.comments ? glz::read_jsonc(value, input) : glz::read_json(value, input);
+	if (read_error) {
+		error = FormatGlazeError("json decode", read_error, input);
+		return false;
+	}
+
+	return PushJsonValue(L, value, error, 0);
+}
+
+int RaiseTopJsonError(lua_State* L, const char* fallback) {
+	const char* message = lua_tostring(L, -1);
+	return LuaError(L, "%s", message ? message : fallback);
 }
 
 bool LoadTextFile(const std::string& path, std::string& content, std::string& error) {
@@ -554,19 +569,18 @@ bool SaveTextFile(const std::string& path, const std::string& content, std::stri
 int l_json_decode(lua_State* L) {
 	size_t len = 0;
 	const char* text = luaL_checklstring(L, 1, &len);
-	const int base_top = lua_gettop(L);
 	bool ok = false;
 
 	{
 		std::string error;
 		JsonOptions options;
 		if (!ReadOptions(L, 2, options, error)) {
-			lua_settop(L, base_top);
+			lua_settop(L, 0);
 			PushStdString(L, error);
 		} else {
 			std::string input(text ? text : "", len);
 			if (!DecodeJsonText(L, input, options, error)) {
-				lua_settop(L, base_top);
+				lua_settop(L, 0);
 				PushStdString(L, error);
 			} else {
 				ok = true;
@@ -575,7 +589,7 @@ int l_json_decode(lua_State* L) {
 	}
 
 	if (!ok) {
-		return lua_error(L);
+		return RaiseTopJsonError(L, "json decode failed");
 	}
 	return 1;
 }
@@ -585,7 +599,6 @@ int l_json_encode(lua_State* L) {
 		return luaL_error(L, "json encode: value expected");
 	}
 
-	const int base_top = lua_gettop(L);
 	bool ok = false;
 
 	{
@@ -593,7 +606,7 @@ int l_json_encode(lua_State* L) {
 		std::string output;
 		JsonOptions options;
 		if (!ReadOptions(L, 2, options, error) || !EncodeLuaValue(L, 1, options, output, error)) {
-			lua_settop(L, base_top);
+			lua_settop(L, 0);
 			PushStdString(L, error);
 		} else {
 			lua_pushlstring(L, output.data(), output.size());
@@ -602,7 +615,7 @@ int l_json_encode(lua_State* L) {
 	}
 
 	if (!ok) {
-		return lua_error(L);
+		return RaiseTopJsonError(L, "json encode failed");
 	}
 	return 1;
 }
@@ -610,7 +623,6 @@ int l_json_encode(lua_State* L) {
 int l_json_load(lua_State* L) {
 	size_t path_len = 0;
 	const char* path_data = luaL_checklstring(L, 1, &path_len);
-	const int base_top = lua_gettop(L);
 	bool ok = false;
 
 	{
@@ -620,7 +632,7 @@ int l_json_load(lua_State* L) {
 		std::string path(path_data ? path_data : "", path_len);
 		if (!ReadOptions(L, 2, options, error) || !LoadTextFile(path, content, error) ||
 			!DecodeJsonText(L, content, options, error)) {
-			lua_settop(L, base_top);
+			lua_settop(L, 0);
 			PushStdString(L, error);
 		} else {
 			ok = true;
@@ -628,7 +640,7 @@ int l_json_load(lua_State* L) {
 	}
 
 	if (!ok) {
-		return lua_error(L);
+		return RaiseTopJsonError(L, "json load failed");
 	}
 	return 1;
 }
@@ -640,7 +652,6 @@ int l_json_save(lua_State* L) {
 		return luaL_error(L, "json save: value expected");
 	}
 
-	const int base_top = lua_gettop(L);
 	bool ok = false;
 
 	{
@@ -650,7 +661,7 @@ int l_json_save(lua_State* L) {
 		std::string path(path_data ? path_data : "", path_len);
 		if (!ReadOptions(L, 3, options, error) || !EncodeLuaValue(L, 2, options, output, error) ||
 			!SaveTextFile(path, output, error)) {
-			lua_settop(L, base_top);
+			lua_settop(L, 0);
 			PushStdString(L, error);
 		} else {
 			lua_pushboolean(L, 1);
@@ -659,7 +670,7 @@ int l_json_save(lua_State* L) {
 	}
 
 	if (!ok) {
-		return lua_error(L);
+		return RaiseTopJsonError(L, "json save failed");
 	}
 	return 1;
 }
@@ -667,7 +678,6 @@ int l_json_save(lua_State* L) {
 int l_json_validate(lua_State* L) {
 	size_t len = 0;
 	const char* text = luaL_checklstring(L, 1, &len);
-	const int base_top = lua_gettop(L);
 	bool call_ok = false;
 	int result_count = 0;
 
@@ -675,7 +685,7 @@ int l_json_validate(lua_State* L) {
 		std::string error;
 		JsonOptions options;
 		if (!ReadOptions(L, 2, options, error)) {
-			lua_settop(L, base_top);
+			lua_settop(L, 0);
 			PushStdString(L, error);
 		} else {
 			std::string input(text ? text : "", len);
@@ -694,7 +704,7 @@ int l_json_validate(lua_State* L) {
 	}
 
 	if (!call_ok) {
-		return lua_error(L);
+		return RaiseTopJsonError(L, "json validate failed");
 	}
 	return result_count;
 }
@@ -702,21 +712,20 @@ int l_json_validate(lua_State* L) {
 int l_json_minify(lua_State* L) {
 	size_t len = 0;
 	const char* text = luaL_checklstring(L, 1, &len);
-	const int base_top = lua_gettop(L);
 	bool ok = false;
 
 	{
 		std::string error;
 		JsonOptions options;
 		if (!ReadOptions(L, 2, options, error)) {
-			lua_settop(L, base_top);
+			lua_settop(L, 0);
 			PushStdString(L, error);
 		} else {
 			std::string input(text ? text : "", len);
 			const glz::error_ctx ec =
 				options.comments ? glz::validate_jsonc(input) : glz::validate_json(input);
 			if (ec) {
-				lua_settop(L, base_top);
+				lua_settop(L, 0);
 				PushStdString(L, FormatGlazeError("json minify", ec, input));
 			} else {
 				std::string output =
@@ -728,7 +737,7 @@ int l_json_minify(lua_State* L) {
 	}
 
 	if (!ok) {
-		return lua_error(L);
+		return RaiseTopJsonError(L, "json minify failed");
 	}
 	return 1;
 }
@@ -736,21 +745,20 @@ int l_json_minify(lua_State* L) {
 int l_json_prettify(lua_State* L) {
 	size_t len = 0;
 	const char* text = luaL_checklstring(L, 1, &len);
-	const int base_top = lua_gettop(L);
 	bool ok = false;
 
 	{
 		std::string error;
 		JsonOptions options;
 		if (!ReadOptions(L, 2, options, error)) {
-			lua_settop(L, base_top);
+			lua_settop(L, 0);
 			PushStdString(L, error);
 		} else {
 			std::string input(text ? text : "", len);
 			const glz::error_ctx ec =
 				options.comments ? glz::validate_jsonc(input) : glz::validate_json(input);
 			if (ec) {
-				lua_settop(L, base_top);
+				lua_settop(L, 0);
 				PushStdString(L, FormatGlazeError("json prettify", ec, input));
 			} else {
 				std::string output =
@@ -762,7 +770,7 @@ int l_json_prettify(lua_State* L) {
 	}
 
 	if (!ok) {
-		return lua_error(L);
+		return RaiseTopJsonError(L, "json prettify failed");
 	}
 	return 1;
 }
