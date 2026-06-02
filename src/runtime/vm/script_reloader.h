@@ -11,6 +11,7 @@
 
 #include "runtime/core/engine_api.h"
 #include "runtime/vm/sandbox.h"
+#include "runtime/vm/script_validator.h"
 
 #include "lua.h"
 #include "lauxlib.h"
@@ -136,6 +137,7 @@ class CLOUD_ENGINE_API ScriptReloader {
 	std::vector<std::string> script_dirs_;
 	std::unique_ptr<FileWatcher> watcher_;
 	LuaSandboxLevel sandbox_level_ = LuaSandboxLevel::Strict;
+	LuaScriptValidator validator_;
 	std::atomic<uint64_t> generation_{0};
 	std::atomic<bool> stopped_{true};
 

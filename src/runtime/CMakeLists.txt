@@ -81,6 +81,7 @@ set(VM_SOURCES
     ${RUNTIME_DIR}/vm/script_importer.cc ${RUNTIME_DIR}/vm/script_importer.h
     ${RUNTIME_DIR}/vm/custom_ptr_store.cc ${RUNTIME_DIR}/vm/custom_ptr_store.h
     ${RUNTIME_DIR}/vm/coroutine_scheduler.cc ${RUNTIME_DIR}/vm/coroutine_scheduler.h
+    ${RUNTIME_DIR}/vm/script_validator.cc ${RUNTIME_DIR}/vm/script_validator.h
     ${RUNTIME_DIR}/vm/script_reloader.cc ${RUNTIME_DIR}/vm/script_reloader.h
     ${RUNTIME_DIR}/vm/file_watcher.cc ${RUNTIME_DIR}/vm/file_watcher.h
 )

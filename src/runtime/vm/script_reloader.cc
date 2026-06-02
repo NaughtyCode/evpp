@@ -4,13 +4,13 @@
 #include <chrono>
 #include <condition_variable>
 #include <filesystem>
+#include <string_view>
 #include <unordered_set>
 
 #include "runtime/core/log/log.h"
 #include "runtime/evpp/event_loop.h"
 #include "runtime/vm/file_watcher.h"
 #include "runtime/vm/sandbox.h"
-#include "runtime/vm/script_importer.h"
 #include "runtime/vm/lua_error_handler.h"
 #include "runtime/vm/vm.h"
 
@@ -31,6 +31,7 @@ void ScriptReloader::SetTarget(ScriptVM* vm,
                                 const std::vector<std::string>& script_dirs) {
 	vm_ = vm;
 	script_dirs_ = script_dirs;
+	validator_.SetScriptDirs(script_dirs_);
 }
 
 void ScriptReloader::SetEventLoop(evpp::EventLoop* loop) {
@@ -39,6 +40,7 @@ void ScriptReloader::SetEventLoop(evpp::EventLoop* loop) {
 
 void ScriptReloader::SetSandboxLevel(LuaSandboxLevel level) {
 	sandbox_level_ = level;
+	validator_.SetSandboxLevel(level);
 }
 
 void ScriptReloader::Start(int poll_interval_ms, int debounce_ms) {
@@ -253,92 +255,46 @@ void ScriptReloader::ProcessPendingReloads() {
 	}
 }
 
-// ValidateScript — runs on watcher thread (creates its own lua_State)
+// ValidateScript runs the script in a dedicated validator VM before the
+// target hot-reload VM is touched.
+namespace {
 
-// Minimal import() for validation sandbox — delegates to require().
-// Does not support import.setpath/addpath/loaded/clearcache or wildcard
-// imports; the goal is to let scripts that call import("mod.name") at the
-// top level pass validation, not to fully replicate the engine's import.
-static int l_validate_import(lua_State* L) {
-	const char* name = luaL_checkstring(L, 1);
-	lua_getglobal(L, "require");
-	lua_pushstring(L, name);
-	lua_call(L, 1, 1);
-	return 1;
+std::string_view ValidationStatusName(LuaScriptValidationResult::Status status) {
+	using Status = LuaScriptValidationResult::Status;
+	switch (status) {
+	case Status::Ok:
+		return "ok";
+	case Status::FileNotFound:
+		return "file not found";
+	case Status::VmCreateFailed:
+		return "validation VM create failed";
+	case Status::CompileError:
+		return "compile error";
+	case Status::RuntimeError:
+		return "runtime error";
+	}
+	return "unknown";
 }
+
+}  // namespace
 
 bool ScriptReloader::ValidateScript(const std::string& filepath) {
 	auto* logger = GetLogger();
 
-	if (!std::filesystem::exists(filepath)) {
-		ENGINE_LOG_WARN(logger, "ScriptReloader: file not found [{}]", filepath);
-		return false;
+	auto result = validator_.ValidateFile(filepath);
+	if (result.ok()) {
+		ENGINE_LOG_INFO(logger,
+		                "ScriptReloader: validation passed [{}]",
+		                filepath);
+		return true;
 	}
 
-	lua_State* L = luaL_newstate();
-	if (!L) {
-		ENGINE_LOG_ERROR(logger,
-			"ScriptReloader: failed to create validation Lua state");
-		return false;
-	}
-	luaL_openlibs_sandboxed(L, sandbox_level_);
-
-	// Set package.path so require() can find modules relative to the
-	// watched script directories. Normalize backslashes for Lua runtime.
-	{
-		std::string pkg_path;
-		for (const auto& dir : script_dirs_) {
-			std::string norm = dir;
-			std::replace(norm.begin(), norm.end(), '\\', '/');
-			if (!norm.empty() && norm.back() != '/') norm += '/';
-			if (!pkg_path.empty()) pkg_path += ";";
-			pkg_path += norm + "?.lua;" + norm + "?/init.lua";
-		}
-		if (!pkg_path.empty()) {
-			lua_getglobal(L, "package");
-			lua_pushstring(L, pkg_path.c_str());
-			lua_setfield(L, -2, "path");
-			lua_pop(L, 1);
-		}
-	}
-
-	// Register a minimal import() so scripts that call import() at the
-	// top level can pass validation. This import delegates to require().
-	lua_pushcfunction(L, l_validate_import);
-	lua_setglobal(L, "import");
-
-	// Load the file as a Lua chunk and execute in the sandbox.
-	// Using pcall to catch both compile-time and top-level runtime errors.
-	int ret = luaL_loadfile(L, filepath.c_str());
-	if (ret != LUA_OK) {
-		ENGINE_LOG_WARN(logger,
-		                "ScriptReloader: validation compile failed [{}]: {}",
-		                filepath,
-		                lua_tostring(L, -1));
-		lua_pop(L, 1);
-		lua_close(L);
-		return false;
-	}
-
-	{
-		int msgh = PushLuaErrorHandlerForCall(L, 0);
-		ret = lua_pcall(L, 0, 0, msgh);
-		if (ret == LUA_OK) {
-			lua_remove(L, msgh);
-		}
-	}
-	if (ret != LUA_OK) {
-		ENGINE_LOG_WARN(logger,
-		                "ScriptReloader: validation runtime failed [{}]: {}",
-		                filepath,
-		                lua_tostring(L, -1));
-		lua_settop(L, 0);
-		lua_close(L);
-		return false;
-	}
-
-	lua_close(L);
-	return true;
+	ENGINE_LOG_WARN(logger,
+	                "ScriptReloader: validation failed [{}] ({}): {}",
+	                filepath,
+	                ValidationStatusName(result.status),
+	                result.error.empty() ? "no details" : result.error);
+	return false;
 }
 
 // Module name extraction helper
@@ -446,6 +402,10 @@ bool ScriptReloader::ReloadFile(const std::string& filepath) {
 	auto* L = vm_->GetState();
 	if (!L) return false;
 
+	if (!ValidateScript(filepath)) {
+		return false;
+	}
+
 	std::string module_name = ExtractModuleName(filepath, script_dirs_);
 
 	auto* logger = GetLogger();
@@ -523,6 +483,15 @@ bool ScriptReloader::ReloadAll() {
 	if (files.empty()) {
 		ENGINE_LOG_INFO(logger, "ScriptReloader: no scripts found to reload");
 		return true;
+	}
+
+	for (const auto& fe : files) {
+		if (!ValidateScript(fe.filepath)) {
+			ENGINE_LOG_ERROR(logger,
+				"ScriptReloader: reload-all validation failed for [{}], aborting",
+				fe.filepath);
+			return false;
+		}
 	}
 
 	// Snapshot initial state for atomic rollback.

@@ -12,6 +12,7 @@
 
 #include "runtime/vm/file_watcher.h"
 #include "runtime/vm/script_reloader.h"
+#include "runtime/vm/script_validator.h"
 #include "runtime/vm/vm.h"
 
 using namespace engine;
@@ -360,6 +361,52 @@ TEST_CASE("ReloadFile returns false for script with syntax error",
 
 	bool ok = reloader.ReloadFile(tmp.file("broken.lua"));
 	REQUIRE_FALSE(ok);
+}
+
+TEST_CASE("LuaScriptValidator checks syntax, top-level runtime, and import",
+          "[hotreload][validator]") {
+	TempDir tmp("hotreload_validator_test");
+	tmp.write("dep.lua", "return { value = 7 }");
+	tmp.write("good.lua", R"(
+local dep = import("dep")
+assert(dep.value == 7)
+assert(type(import.loaded()) == "table")
+import.clearcache()
+return true
+)");
+	tmp.write("syntax.lua", "this is not valid lua{{{");
+	tmp.write("runtime.lua", "local x = 1\nerror('boom')");
+
+	LuaScriptValidator validator;
+	validator.SetScriptDirs({tmp.path});
+
+	auto good = validator.ValidateFile(tmp.file("good.lua"));
+	REQUIRE(good.ok());
+
+	auto syntax = validator.ValidateFile(tmp.file("syntax.lua"));
+	REQUIRE_FALSE(syntax.ok());
+	REQUIRE(syntax.status == LuaScriptValidationResult::Status::CompileError);
+
+	auto runtime = validator.ValidateFile(tmp.file("runtime.lua"));
+	REQUIRE_FALSE(runtime.ok());
+	REQUIRE(runtime.status == LuaScriptValidationResult::Status::RuntimeError);
+}
+
+TEST_CASE("ReloadFile rejects runtime failure before touching target VM",
+          "[hotreload][reload]") {
+	TempDir tmp("hotreload_prevalidate_runtime_test");
+	tmp.write("guard.lua", "reload_guard = 200\nerror('reject reload')");
+
+	ScriptVM vm;
+	ScriptReloader reloader;
+	reloader.SetTarget(&vm, {tmp.path});
+
+	REQUIRE_FALSE(reloader.ReloadFile(tmp.file("guard.lua")));
+
+	lua_State* L = vm.GetState();
+	lua_getglobal(L, "reload_guard");
+	REQUIRE(lua_isnil(L, -1));
+	lua_pop(L, 1);
 }
 
 TEST_CASE("ReloadFile rollback restores globals on failure",
