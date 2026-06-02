@@ -483,6 +483,11 @@ game_error_t copy_entity_ids(const std::vector<engine::entity::EntityId>& ids,
     return GAME_OK;
 }
 
+bool valid_entity_id_output_args(uint64_t* out_ids, int out_cap, int* out_count) {
+    if (out_cap < 0) return false;
+    return out_count || (out_ids && out_cap > 0);
+}
+
 }  // namespace
 
 extern "C" game_error_t game_client_eval_string(game_client_t* client,
@@ -1302,7 +1307,8 @@ extern "C" game_error_t game_aoi_query_radius(game_aoi_t* aoi,
                                                int out_cap,
                                                int* out_count) {
     if (!aoi || !aoi->manager || !valid_finite_float(x) || !valid_finite_float(y) ||
-        radius < 0.0f || !valid_finite_float(radius)) {
+        radius < 0.0f || !valid_finite_float(radius) ||
+        !valid_entity_id_output_args(out_ids, out_cap, out_count)) {
         return GAME_ERR_INVALID_ARG;
     }
     try {
@@ -1317,7 +1323,8 @@ extern "C" game_error_t game_aoi_get_visible(game_aoi_t* aoi,
                                               uint64_t* out_ids,
                                               int out_cap,
                                               int* out_count) {
-    if (!aoi || !aoi->manager || entity_id == engine::entity::kInvalidEntityId) {
+    if (!aoi || !aoi->manager || entity_id == engine::entity::kInvalidEntityId ||
+        !valid_entity_id_output_args(out_ids, out_cap, out_count)) {
         return GAME_ERR_INVALID_ARG;
     }
     try {

@@ -212,6 +212,7 @@ void AOIManager::OnEntityMove(entity::EntityId id, float x, float y) {
 }
 
 std::vector<entity::EntityId> AOIManager::GetVisibleEntities(entity::EntityId id) const {
+	ValidateEntityId(id);
 	auto it = visible_.find(id);
 	if (it == visible_.end()) return {};
 	std::vector<entity::EntityId> result(it->second.begin(), it->second.end());

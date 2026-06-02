@@ -35,7 +35,9 @@ public:
 	/** Return every entity within radius of a point, including any caller id. */
 	std::vector<entity::EntityId> QueryRadius(float x, float y, float radius) const;
 
-	/** Return same-cell and neighboring-cell candidates for an entity. */
+	/** Return same-cell and neighboring-cell candidates for an entity.
+	 * Unknown ids return empty; kInvalidEntityId is rejected.
+	 */
 	std::vector<entity::EntityId> QueryAOI(entity::EntityId id) const;
 
 	/** Return same-cell and neighboring-cell candidates for a position. */

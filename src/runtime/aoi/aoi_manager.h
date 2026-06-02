@@ -54,7 +54,9 @@ public:
 	/** Move a registered entity and recompute affected observer visibility. */
 	void OnEntityMove(entity::EntityId id, float x, float y);
 
-	/** Return sorted targets currently visible to this observer, excluding self. */
+	/** Return sorted targets visible to this observer, excluding self.
+	 * Unknown ids return empty; kInvalidEntityId is rejected.
+	 */
 	std::vector<entity::EntityId> GetVisibleEntities(entity::EntityId id) const;
 
 	/** Return raw radius-query results from the spatial grid. */

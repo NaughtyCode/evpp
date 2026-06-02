@@ -234,6 +234,7 @@ std::vector<entity::EntityId> SpatialGrid::QueryRadius(float x, float y, float r
 
 std::vector<entity::EntityId> SpatialGrid::QueryAOI(entity::EntityId id) const {
 	ENGINE_PROFILE_SCOPE("engine.aoi", "GridQueryAOI");
+	ValidateEntityId(id);
 	Position position;
 	if (!TryGetPosition(id, position)) return {};
 	return QueryAOIAt(position.x, position.y);

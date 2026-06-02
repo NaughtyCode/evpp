@@ -286,7 +286,11 @@ int l_aoi_unregister_entity(lua_State* L) {
 	if (IsInCallback(state)) return PushCallbackMutationError(L);
 
 	const entity::EntityId id = CheckEntityId(L, 1);
-	state->manager->UnregisterEntity(id);
+	try {
+		state->manager->UnregisterEntity(id);
+	} catch (const std::exception& ex) {
+		return PushException(L, "AOI unregister_entity failed", ex);
+	}
 	return 0;
 }
 
@@ -299,7 +303,11 @@ int l_aoi_get_visible(lua_State* L) {
 	}
 
 	const entity::EntityId id = CheckEntityId(L, 1);
-	PushEntityList(L, state->manager->GetVisibleEntities(id));
+	try {
+		PushEntityList(L, state->manager->GetVisibleEntities(id));
+	} catch (const std::exception& ex) {
+		return PushException(L, "AOI get_visible failed", ex);
+	}
 	return 1;
 }
 
@@ -315,7 +323,11 @@ int l_aoi_query_radius(lua_State* L) {
 	const float y = CheckFiniteFloat(L, 2, "y must be finite");
 	const float radius = CheckNonNegativeFloat(L, 3, "radius must be finite and non-negative");
 
-	PushEntityList(L, state->manager->QueryRadius(x, y, radius));
+	try {
+		PushEntityList(L, state->manager->QueryRadius(x, y, radius));
+	} catch (const std::exception& ex) {
+		return PushException(L, "AOI query_radius failed", ex);
+	}
 	return 1;
 }
 

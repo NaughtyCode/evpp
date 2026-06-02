@@ -385,6 +385,8 @@ TEST_CASE("client_api: AOI boundary contracts", "[client_api][aoi]") {
             GAME_ERR_INVALID_ARG);
     REQUIRE(game_aoi_query_radius(aoi, 125.0f, 100.0f, 100.0f, ids, -1, &id_count) ==
             GAME_ERR_INVALID_ARG);
+    REQUIRE(game_aoi_get_visible(aoi, 1, nullptr, 0, nullptr) == GAME_ERR_INVALID_ARG);
+    REQUIRE(game_aoi_get_visible(aoi, 1, ids, -1, &id_count) == GAME_ERR_INVALID_ARG);
 
     REQUIRE(game_aoi_register_entity(aoi, 1, 300.0f, 100.0f, 20.0f) == GAME_OK);
     uint64_t count = 0;
