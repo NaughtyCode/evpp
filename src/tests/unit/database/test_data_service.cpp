@@ -638,6 +638,40 @@ TEST_CASE("db_bson rejects duplicate regex option flags",
             "regex options must not contain duplicate flags");
 }
 
+TEST_CASE("db_bson applies nesting depth limits to nested raw BSON docs",
+          "[database][data_service][bson]") {
+    DBScriptVM vm;
+    script::ExportMongo(vm);
+    ExportDbRuntime(vm);
+
+    std::string error;
+    std::string result;
+    REQUIRE(vm.DoString(
+        "local b = require('db_bson')\n"
+        "local function deep_with_leaf(leaf)\n"
+        "  local root = {}\n"
+        "  local cur = root\n"
+        "  for _ = 1, 64 do\n"
+        "    cur.child = {}\n"
+        "    cur = cur.child\n"
+        "  end\n"
+        "  cur.leaf = leaf\n"
+        "  return root\n"
+        "end\n"
+        "local raw = bson.new()\n"
+        "local bad_raw, raw_err = b.to_bson(deep_with_leaf(raw))\n"
+        "local bad_scope, scope_err = b.to_bson(deep_with_leaf(b.code('return x', raw)))\n"
+        "return table.concat({ tostring(bad_raw == nil),\n"
+        "  tostring(tostring(raw_err):find('nesting is too deep') ~= nil),\n"
+        "  tostring(bad_scope == nil),\n"
+        "  tostring(tostring(scope_err):find('nesting is too deep') ~= nil) }, '|')",
+        "=data_service_bson_raw_doc_depth_test",
+        &error,
+        &result));
+
+    REQUIRE(result == "true|true|true|true");
+}
+
 TEST_CASE("db_send_request rejects internal noop operation", "[database][data_service]") {
     ScriptVM vm;
     script::ExportDbService(vm);

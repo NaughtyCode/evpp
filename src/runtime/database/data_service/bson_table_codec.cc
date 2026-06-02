@@ -733,6 +733,7 @@ bool HasPublicTableFields(lua_State* L, int table_index) {
 WrapperBsonDocumentResult CopyWrapperBsonDocumentIfPresent(lua_State* L,
 														   int table_index,
 														   bool as_array,
+														   int depth,
 														   mongo::BsonDocument& out,
 														   std::string& error) {
 	mongo::BsonDocument* wrapper_doc = nullptr;
@@ -749,7 +750,7 @@ WrapperBsonDocumentResult CopyWrapperBsonDocumentIfPresent(lua_State* L,
 
 	const auto* raw = static_cast<const bson_t*>(wrapper_doc->RawBson());
 	if (!ValidateBsonForLuaConversion(raw, error) ||
-		!ValidateBsonDocumentForCodec(raw, as_array, 0, error)) {
+		!ValidateBsonDocumentForCodec(raw, as_array, depth, error)) {
 		return WrapperBsonDocumentResult::Error;
 	}
 	if (!wrapper_doc->CopyTo(out)) {
@@ -787,7 +788,7 @@ bool BuildBsonFromLuaTable(lua_State* L,
 	const WrapperType wrapper_type = GetWrapperType(L, table_index);
 	if (wrapper_type == WrapperType::Array || wrapper_type == WrapperType::Document) {
 		const WrapperBsonDocumentResult wrapper_doc_result =
-			CopyWrapperBsonDocumentIfPresent(L, table_index, as_array, out, error);
+			CopyWrapperBsonDocumentIfPresent(L, table_index, as_array, depth, out, error);
 		if (wrapper_doc_result == WrapperBsonDocumentResult::Error) return false;
 		if (wrapper_doc_result == WrapperBsonDocumentResult::Copied) return true;
 	}
@@ -1020,7 +1021,7 @@ bool AppendLuaWrapper(lua_State* L,
 				error = "code scope must be a document table or bson.doc";
 				return false;
 			}
-			if (!ValidateBsonDocumentForCodec(raw, false, 0, error)) {
+			if (!ValidateBsonDocumentForCodec(raw, false, depth + 1, error)) {
 				lua_pop(L, 1);
 				return false;
 			}
@@ -1242,7 +1243,7 @@ bool AppendLuaValue(lua_State* L,
 				return false;
 			}
 			const bool as_array = ResolveBsonUserdataAsArray(L, value_index, raw);
-			if (!ValidateBsonDocumentForCodec(raw, as_array, 0, error)) {
+			if (!ValidateBsonDocumentForCodec(raw, as_array, depth + 1, error)) {
 				return false;
 			}
 			const bool ok = as_array ? parent.AppendArray(key, **doc)
