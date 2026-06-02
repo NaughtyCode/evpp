@@ -682,8 +682,27 @@ bool TryGetPositiveIntegerKey(lua_State* L, int index, size_t* out) {
 	int is_number = 0;
 	lua_Integer key = lua_tointegerx(L, index, &is_number);
 	if (!is_number || key < 1) return false;
+	if (static_cast<uint64_t>(key) > static_cast<uint64_t>(std::numeric_limits<size_t>::max())) {
+		return false;
+	}
 
 	*out = static_cast<size_t>(key);
+	return true;
+}
+
+bool ParseDecimal128(std::string_view value, mongo::MongoDecimal128* out, std::string& error) {
+	if (!ValidateBsonIntLength(value.size(), "decimal128 value", error) ||
+		!EnsureNoEmbeddedNull(value, "decimal128 value", error)) {
+		return false;
+	}
+
+	mongo::MongoDecimal128 decimal;
+	if (!decimal.FromStringLen(StringViewDataOrEmpty(value), static_cast<int>(value.size()))) {
+		error = "decimal128 value is invalid";
+		return false;
+	}
+
+	if (out) *out = decimal;
 	return true;
 }
 
@@ -1276,14 +1295,12 @@ bool AppendLuaWrapper(lua_State* L,
 	case WrapperType::Decimal128: {
 		std::string value;
 		if (!GetWrapperStringField(
-				L, table_index, "value", &kValueKey, &value, error, "decimal128 value") ||
-			!EnsureNoEmbeddedNull(value, "decimal128 value", error)) {
+				L, table_index, "value", &kValueKey, &value, error, "decimal128 value")) {
 			return false;
 		}
 
 		mongo::MongoDecimal128 decimal;
-		if (!decimal.FromString(value.c_str())) {
-			error = "decimal128 value is invalid";
+		if (!ParseDecimal128(value, &decimal, error)) {
 			return false;
 		}
 		if (parent.AppendDecimal128(key, decimal)) return true;
@@ -2853,13 +2870,10 @@ int l_decimal128(lua_State* L) {
 	if (!ReadLuaStringArgument(L, 1, "decimal128 value", &value, &len, error)) {
 		return PushNilError(L, error);
 	}
-	if (!EnsureNoEmbeddedNull(std::string_view(value, len), "decimal128 value", error)) {
-		return PushNilError(L, error);
-	}
 
 	mongo::MongoDecimal128 decimal;
-	if (!decimal.FromString(std::string(value, len).c_str())) {
-		return PushNilError(L, "decimal128 value is invalid");
+	if (!ParseDecimal128(std::string_view(value, len), &decimal, error)) {
+		return PushNilError(L, error);
 	}
 
 	PushTaggedTable(L, WrapperType::Decimal128);

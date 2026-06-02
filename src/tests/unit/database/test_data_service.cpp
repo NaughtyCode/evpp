@@ -306,6 +306,41 @@ TEST_CASE("db_bson constructors reject numeric strings for typed arguments",
             "true|ObjectId must be a string|true|binary value must be a string");
 }
 
+TEST_CASE("db_bson validates decimal128 strings and extreme integer keys",
+          "[database][data_service][bson]") {
+    DBScriptVM vm;
+    script::ExportMongo(vm);
+    ExportDbRuntime(vm);
+
+    std::string error;
+    std::string result;
+    REQUIRE(vm.DoString(
+        "local b = require('db_bson')\n"
+        "local with_nul = '1' .. string.char(0) .. '2'\n"
+        "local bad_ctor, bad_ctor_err = b.decimal128(with_nul)\n"
+        "local dec = assert(b.decimal128('1'))\n"
+        "dec.value = with_nul\n"
+        "local bad_wrapper, bad_wrapper_err = b.to_bson({ dec = dec })\n"
+        "local key = tostring(math.maxinteger)\n"
+        "local extreme_doc, extreme_err = b.to_bson(b.document({ [math.maxinteger] = 'x' }))\n"
+        "local extreme_table = extreme_doc and b.to_table(extreme_doc) or nil\n"
+        "local sparse, sparse_err = b.to_bson({ [math.maxinteger] = 'x' })\n"
+        "return table.concat({ tostring(bad_ctor == nil), tostring(bad_ctor_err),\n"
+        "  tostring(bad_wrapper == nil), tostring(bad_wrapper_err),\n"
+        "  tostring(extreme_doc ~= nil), tostring(extreme_err == nil),\n"
+        "  tostring(extreme_table and extreme_table[key] == 'x'),\n"
+        "  tostring(sparse == nil),\n"
+        "  tostring(tostring(sparse_err):find('sparse positive integer keys', 1, true) ~= nil)\n"
+        "}, '|')",
+        "=data_service_bson_decimal_extreme_key_test",
+        &error,
+        &result));
+
+    REQUIRE(result ==
+            "true|decimal128 value must not contain embedded NUL bytes|true|"
+            "decimal128 value must not contain embedded NUL bytes|true|true|true|true|true");
+}
+
 TEST_CASE("db_bson rejects malformed BSON arrays when array mode is forced",
           "[database][data_service][bson]") {
     DBScriptVM vm;
