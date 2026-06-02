@@ -122,13 +122,15 @@ local doc, err = db_bson.to_bson({
 
 Alias for `db_bson.to_bson`.
 
-### `db_bson.to_table(doc [, root_as_array_or_options])`
+### `db_bson.to_table(doc_or_wrapper [, root_as_array_or_options])`
 
-Converts a `bson.doc` userdata to a Lua table.
+Converts a `bson.doc` userdata to a Lua table. It also accepts a
+`db_bson.array(raw_doc)` or `db_bson.document(raw_doc)` wrapper around a raw
+`bson.doc` when the desired root shape must be explicit.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `doc` | `bson.doc` | Source BSON document |
+| `doc_or_wrapper` | `bson.doc` or raw-doc wrapper | Source BSON document |
 | `root_as_array_or_options` | `boolean` or `table` | Optional root conversion control |
 
 | Returns | Type | Description |
@@ -151,6 +153,8 @@ by the lower-level `bson` module has no such metadata; pass `true` or
 `{ root_as_array = true }` when a raw empty root array must come back as a Lua
 array. For nested raw `bson.doc` values, wrap them with `db_bson.array(raw_doc)`
 or `db_bson.document(raw_doc)` to force the embedded BSON value shape.
+When such a raw-doc wrapper is passed directly to `to_table`, the wrapper's
+explicit shape overrides the root option.
 
 ### `db_bson.to_json(value [, root_as_array_or_options])`
 

@@ -2036,6 +2036,39 @@ int l_to_table(lua_State* L) {
 	const int base_top = lua_gettop(L);
 	auto** doc_ud = static_cast<mongo::BsonDocument**>(luaL_testudata(L, 1, kBsonDocMetaName));
 	if (!doc_ud) {
+		if (lua_istable(L, 1)) {
+			const WrapperType wrapper_type = GetWrapperType(L, 1);
+			if (wrapper_type == WrapperType::Array || wrapper_type == WrapperType::Document) {
+				std::string error;
+				mongo::BsonDocument* wrapper_doc = nullptr;
+				bool found = false;
+				if (!GetRawBsonDocumentValue(L, 1, &wrapper_doc, &found, error)) {
+					return PushNilError(L, error);
+				}
+				if (found) {
+					TableOptions options;
+					if (!ParseOptions(L, 2, true, &options, error)) {
+						return PushNilError(L, error);
+					}
+					if (HasPublicTableFields(L, 1)) {
+						return PushNilError(L, "BSON document wrapper must not contain Lua fields");
+					}
+
+					const bool root_as_array = wrapper_type == WrapperType::Array;
+					const auto* raw = static_cast<const bson_t*>(wrapper_doc->RawBson());
+					if (!ValidateBsonForLuaConversion(raw, error) ||
+						!ValidateBsonDocumentForCodec(raw, root_as_array, 0, error)) {
+						return PushNilError(L, error);
+					}
+					if (!PushBsonDocumentAsTable(
+							L, raw, root_as_array, options.preserve_types, 0, error)) {
+						lua_settop(L, base_top);
+						return PushNilError(L, error);
+					}
+					return 1;
+				}
+			}
+		}
 		return PushNilError(L, "db_bson.to_table expects bson.doc");
 	}
 

@@ -254,6 +254,7 @@ TEST_CASE("db_bson handles argument errors and nested BSON arrays",
         "local b = require('db_bson')\n"
         "local bad_doc, bad_doc_err = b.to_bson(123)\n"
         "local bad_table, bad_table_err = b.to_table(123)\n"
+        "local bad_wrapper, bad_wrapper_err = b.to_table(b.array({}), { root_as_array = 1 })\n"
         "local arr_doc = assert(b.to_bson(b.array({ 1, 2 })))\n"
         "local doc, err = b.to_bson({ nested = arr_doc })\n"
         "if not doc then return 'ERR:' .. tostring(err) end\n"
@@ -262,14 +263,16 @@ TEST_CASE("db_bson handles argument errors and nested BSON arrays",
         "local preserved, err3 = b.to_table(doc, { preserve_types = true })\n"
         "if not preserved then return 'ERR3:' .. tostring(err3) end\n"
         "return table.concat({ tostring(bad_doc == nil), tostring(bad_doc_err),\n"
-        "  tostring(bad_table == nil), tostring(bad_table_err), tostring(#t.nested),\n"
+        "  tostring(bad_table == nil), tostring(bad_table_err),\n"
+        "  tostring(bad_wrapper == nil), tostring(bad_wrapper_err), tostring(#t.nested),\n"
         "  tostring(t.nested[2]), b.type(preserved.nested) }, '|')",
         "=data_service_bson_argument_nested_array_test",
         &error,
         &result));
 
     REQUIRE(result ==
-            "true|db_bson.to_bson expects a table|true|db_bson.to_table expects bson.doc|2|2|"
+            "true|db_bson.to_bson expects a table|true|db_bson.to_table expects bson.doc|"
+            "true|db_bson.to_table expects bson.doc|2|2|"
             "array");
 }
 
@@ -328,27 +331,40 @@ TEST_CASE("db_bson can explicitly wrap raw BSON docs as arrays or documents",
         "if not t then return 'ERR2:' .. tostring(err2) end\n"
         "local root_arr = assert(b.to_bson(b.array(raw_numeric)))\n"
         "local root_table = assert(b.to_table(root_arr, { preserve_types = true }))\n"
+        "local direct_arr = assert(b.to_table(b.array(raw_numeric), { preserve_types = true }))\n"
+        "local direct_doc = assert(b.to_table(b.document(raw_numeric), { preserve_types = true }))\n"
+        "local direct_empty_arr = assert(b.to_table(b.array(raw_empty), { preserve_types = true }))\n"
+        "local direct_empty_doc = assert(b.to_table(b.document(raw_empty), { preserve_types = true }))\n"
         "local json_arr = assert(b.to_json(b.array(raw_empty)))\n"
         "local bad_scope, scope_err = b.to_bson({ code = b.code('return x', b.array(raw_numeric)) })\n"
         "local mixed = b.array(raw_empty)\n"
         "mixed.extra = 1\n"
         "local bad_mixed, mixed_err = b.to_bson({ value = mixed })\n"
+        "local bad_table, table_err = b.to_table(mixed)\n"
         "return table.concat({ b.type(t.empty_arr), tostring(#t.empty_arr),\n"
         "  b.type(t.empty_doc), tostring(t.empty_doc.missing == nil),\n"
         "  b.type(t.forced_arr), tostring(t.forced_arr[1].value),\n"
         "  tostring(t.forced_arr[2].value), b.type(t.forced_doc),\n"
         "  tostring(t.forced_doc['0'].value), tostring(t.forced_doc['1'].value),\n"
         "  b.type(t.code.scope), tostring(t.code.scope['0'].value),\n"
-        "  b.type(root_table), tostring(root_table[2].value), json_arr:sub(1, 1),\n"
+        "  b.type(root_table), tostring(root_table[2].value),\n"
+        "  b.type(direct_arr), tostring(direct_arr[2].value),\n"
+        "  b.type(direct_doc), tostring(direct_doc['1'].value),\n"
+        "  b.type(direct_empty_arr), tostring(#direct_empty_arr),\n"
+        "  b.type(direct_empty_doc), tostring(direct_empty_doc.missing == nil),\n"
+        "  json_arr:sub(1, 1),\n"
         "  tostring(bad_scope == nil), tostring(scope_err),\n"
-        "  tostring(bad_mixed == nil), tostring(mixed_err) }, '|')",
+        "  tostring(bad_mixed == nil), tostring(mixed_err),\n"
+        "  tostring(bad_table == nil), tostring(table_err) }, '|')",
         "=data_service_bson_raw_doc_wrapper_test",
         &error,
         &result));
 
     REQUIRE(result ==
-            "array|0|document|true|array|10|20|document|10|20|document|10|array|20|[|"
-            "true|code scope must be a document table|true|"
+            "array|0|document|true|array|10|20|document|10|20|document|10|array|20|"
+            "array|20|document|20|array|0|document|true|[|true|"
+            "code scope must be a document table|true|"
+            "BSON document wrapper must not contain Lua fields|true|"
             "BSON document wrapper must not contain Lua fields");
 }
 
