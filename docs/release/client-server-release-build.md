@@ -5,6 +5,7 @@ Release packages are split by platform:
 - Client: `scripts/build_client_release.py`
 - Server: `scripts/build_server_release.py`
 - All platforms: `scripts/build_all_platforms_release.py`
+- Android all ABIs: `scripts/build_android_all_platforms_release.py`
 
 The legacy `scripts/build_release.py` entry point is kept as an alias for the
 all-platform release script.
@@ -52,12 +53,24 @@ Build and package both platforms in one run:
 python scripts\build_all_platforms_release.py
 ```
 
+Build and package Android artifacts for all supported ABIs:
+
+```powershell
+python scripts\build_android_all_platforms_release.py
+```
+
+The Android script defaults to `arm64-v8a`, `armeabi-v7a`, `x86`, and `x86_64`.
+It auto-detects `artifacts/android-sdk/ndk/*`, `ANDROID_NDK_HOME`,
+`ANDROID_NDK_ROOT`, Android SDK `ndk/` directories, or an explicit
+`--android-toolchain-file=<ndk>/build/cmake/android.toolchain.cmake`.
+
 On Windows, batch wrappers are available:
 
 ```bat
 scripts\build_client_release.bat
 scripts\build_server_release.bat
 scripts\build_all_platforms_release.bat
+scripts\build_android_all_platforms_release.bat
 scripts\build_release.bat
 ```
 
@@ -65,9 +78,26 @@ scripts\build_release.bat
 
 Default output goes under `artifacts/release/<Config>/`:
 
+- `GameCloud-<version>/` when using the all-platform script
 - `GameCloudClient-<version>/`
 - `GameCloudServer-<version>/`
 - `all_platforms_manifest.json` when using the all-platform script
+
+Android output goes under `artifacts/release/android/<Config>/`:
+
+- `GameCloudAndroid-<abi>-<version>/`
+- `android_all_platforms_manifest.json`
+
+All-platform packages contain the client executable, client runtime library, and
+server executable in the same directory:
+
+- `GameClientApp`
+- `GameClient`
+- `GameServer`
+- `resources/`
+- `run_client`
+- `run_server`
+- `manifest.json`
 
 Client packages contain:
 
@@ -85,7 +115,8 @@ Server packages contain:
 - `manifest.json`
 
 Use `--flat-dist` to package under `artifacts/release/<Config>/client` or
-`artifacts/release/<Config>/server` without a versioned directory.
+`artifacts/release/<Config>/server` without a versioned directory. For the
+all-platform script, `--flat-dist` packages under `artifacts/release/<Config>/full`.
 
 ## Runtime
 
@@ -127,7 +158,8 @@ Useful checks from the repository root:
 python scripts\build_client_release.py --skip-configure --skip-build
 python scripts\build_server_release.py --skip-configure --skip-build
 python scripts\build_all_platforms_release.py --skip-configure --skip-build
-python -m py_compile scripts\release_common.py scripts\build_client_release.py scripts\build_server_release.py scripts\build_all_platforms_release.py scripts\build_release.py
+python scripts\build_android_all_platforms_release.py --skip-configure --skip-build --abi arm64-v8a
+python -m py_compile scripts\release_common.py scripts\build_client_release.py scripts\build_server_release.py scripts\build_all_platforms_release.py scripts\build_android_all_platforms_release.py scripts\build_release.py
 git diff --check
 ```
 

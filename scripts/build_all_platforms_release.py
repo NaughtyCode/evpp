@@ -16,6 +16,7 @@ from release_common import (
     capture,
     client_spec,
     configure,
+    full_spec,
     normalize_args,
     package,
     persist_pending_version_update,
@@ -42,6 +43,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--client-package-name", default=client_spec().package_name)
     parser.add_argument("--server-package-name", default=server_spec().package_name)
+    parser.add_argument("--package-name", default=full_spec().package_name, help="Package name for combined releases")
     parser.add_argument("--version-file", type=Path, default=VERSION_FILE)
     parser.add_argument("--version", dest="release_version_override", default="", help="Override release version")
     parser.add_argument(
@@ -57,6 +59,16 @@ def parse_args() -> argparse.Namespace:
 
 def selected_specs(args: argparse.Namespace) -> list:
     selected = list(dict.fromkeys(args.platform or ["client", "server"]))
+    selected_set = set(selected)
+    if selected_set == {"client", "server"}:
+        return [
+            spec_with_overrides(
+                full_spec(),
+                validate_path_component(args.package_name, "--package-name"),
+                args.version_file,
+            )
+        ]
+
     specs = []
     if "client" in selected:
         specs.append(

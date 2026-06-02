@@ -46,6 +46,13 @@ def is_windows() -> bool:
     return os.name == "nt"
 
 
+def target_is_windows(args: argparse.Namespace) -> bool:
+    target_os = getattr(args, "target_os", "")
+    if target_os:
+        return target_os.lower() == "windows"
+    return is_windows()
+
+
 def exe_name(base: str) -> str:
     return f"{base}.exe" if is_windows() else base
 
@@ -77,6 +84,17 @@ def client_spec() -> ReleaseSpec:
         build_targets=("GameClient", "GameClientApp"),
         artifact_names=(exe_name("GameClientApp"), shared_library_name("GameClient")),
         symbol_names=("GameClientApp.pdb", "GameClient.pdb") if is_windows() else (),
+    )
+
+
+def full_spec() -> ReleaseSpec:
+    return ReleaseSpec(
+        kind="full",
+        package_name="GameCloud",
+        version_file=VERSION_FILE,
+        build_targets=("GameClient", "GameClientApp", "GameServer"),
+        artifact_names=(exe_name("GameClientApp"), shared_library_name("GameClient"), exe_name("GameServer")),
+        symbol_names=("GameClientApp.pdb", "GameClient.pdb", "GameServer.pdb") if is_windows() else (),
     )
 
 
@@ -359,36 +377,59 @@ def copy_symbols(
     return copied
 
 
-def write_launchers(spec: ReleaseSpec, dist: Path) -> None:
-    if spec.kind == "server":
-        if is_windows():
-            write_text(
-                dist / "run_server.bat",
-                '@echo off\ncd /d "%~dp0"\nGameServer.exe --config_dir=resources/config %*\n',
-            )
-            return
-        write_text(
-            dist / "run_server.sh",
-            '#!/usr/bin/env sh\ncd "$(dirname "$0")"\n./GameServer --config_dir=resources/config "$@"\n',
-        )
-        os.chmod(dist / "run_server.sh", 0o755)
-        return
+def target_exe_name(base: str, args: argparse.Namespace) -> str:
+    return f"{base}.exe" if target_is_windows(args) else base
 
-    if spec.kind == "client":
-        if is_windows():
-            write_text(
-                dist / "run_client.bat",
-                '@echo off\ncd /d "%~dp0"\nGameClientApp.exe --config_dir=resources/config %*\n',
-            )
-            return
+
+def write_server_launcher(dist: Path, args: argparse.Namespace) -> None:
+    if target_is_windows(args):
         write_text(
-            dist / "run_client.sh",
-            '#!/usr/bin/env sh\ncd "$(dirname "$0")"\n./GameClientApp --config_dir=resources/config "$@"\n',
+            dist / "run_server.bat",
+            '@echo off\ncd /d "%~dp0"\nGameServer.exe --config_dir=resources/config %*\n',
         )
-        os.chmod(dist / "run_client.sh", 0o755)
+        return
+    write_text(
+        dist / "run_server.sh",
+        f'#!/usr/bin/env sh\ncd "$(dirname "$0")"\n./{target_exe_name("GameServer", args)} --config_dir=resources/config "$@"\n',
+    )
+    os.chmod(dist / "run_server.sh", 0o755)
+
+
+def write_client_launcher(dist: Path, args: argparse.Namespace) -> None:
+    if target_is_windows(args):
+        write_text(
+            dist / "run_client.bat",
+            '@echo off\ncd /d "%~dp0"\nGameClientApp.exe --config_dir=resources/config %*\n',
+        )
+        return
+    write_text(
+        dist / "run_client.sh",
+        f'#!/usr/bin/env sh\ncd "$(dirname "$0")"\n./{target_exe_name("GameClientApp", args)} --config_dir=resources/config "$@"\n',
+    )
+    os.chmod(dist / "run_client.sh", 0o755)
+
+
+def write_launchers(spec: ReleaseSpec, dist: Path, args: argparse.Namespace) -> None:
+    if spec.kind in ("server", "full"):
+        write_server_launcher(dist, args)
+
+    if spec.kind in ("client", "full"):
+        write_client_launcher(dist, args)
+
+    if spec.kind in ("client", "server", "full"):
         return
 
     raise ValueError(f"unsupported release kind: {spec.kind}")
+
+
+def launcher_name(kind: str, args: argparse.Namespace) -> str:
+    extension = "bat" if target_is_windows(args) else "sh"
+    return f"run_{kind}.{extension}"
+
+
+def launcher_command(kind: str, args: argparse.Namespace) -> str:
+    name = launcher_name(kind, args)
+    return name if target_is_windows(args) else f"./{name}"
 
 
 def write_readme(
@@ -397,10 +438,31 @@ def write_readme(
     args: argparse.Namespace,
     artifact_names: list[str],
 ) -> None:
-    if spec.kind == "server":
-        commands = ["run_server.bat --env=production --log_prefix=ShardA"] if is_windows() else [
-            "./run_server.sh --env=production --log_prefix=ShardA"
+    if spec.kind == "full":
+        commands = [
+            f"{launcher_command('server', args)} --env=production --instance_id=shard-a --admin_port=18081",
+            f"{launcher_command('client', args)} --log_prefix=ClientA",
         ]
+        runtime_args = [
+            "Server:",
+            "`--env=<development|staging|production>`",
+            "`--instance_id=<id>`",
+            "`--pid_file=<path>` / `--disable_pid_file`",
+            "`--admin_port=<port>`",
+            "`--log_prefix=<name>`",
+            "`--scripts_dir=<dir>`",
+            "Client:",
+            "`--log_prefix=<name>`",
+            "`--script=<file>`",
+            "`--duration_ms=<ms>`",
+            "`--tick_ms=<ms>`",
+        ]
+        component_note = "client and server"
+    elif spec.kind == "server":
+        if target_is_windows(args):
+            commands = ["run_server.bat --env=production --log_prefix=ShardA"]
+        else:
+            commands = ["./run_server.sh --env=production --log_prefix=ShardA"]
         runtime_args = [
             "`--env=<development|staging|production>`",
             "`--instance_id=<id>`",
@@ -409,18 +471,18 @@ def write_readme(
             "`--log_prefix=<name>`",
             "`--scripts_dir=<dir>`",
         ]
+        component_note = "server"
     else:
-        commands = ["run_client.bat --log_prefix=ClientA"] if is_windows() else [
-            "./run_client.sh --log_prefix=ClientA"
-        ]
+        commands = ["run_client.bat --log_prefix=ClientA"] if target_is_windows(args) else ["./run_client.sh --log_prefix=ClientA"]
         runtime_args = [
             "`--log_prefix=<name>`",
             "`--script=<file>`",
             "`--duration_ms=<ms>`",
             "`--tick_ms=<ms>`",
         ]
+        component_note = "client"
 
-    code_fence = "bat" if is_windows() else "sh"
+    code_fence = "bat" if target_is_windows(args) else "sh"
     readme_lines = [
         f"# {spec.kind.title()} Release Artifacts",
         "",
@@ -440,6 +502,7 @@ def write_readme(
         *[f"- `{name}`" for name in artifact_names],
         "",
         "Packaged resources are copied from `resources/` into `resources/`.",
+        f"This package contains {component_note} runtime files in the same directory.",
         "Launcher scripts pass all extra arguments through to the executable.",
         "",
         "Useful runtime arguments:",
@@ -539,7 +602,7 @@ def package(spec: ReleaseSpec, args: argparse.Namespace) -> Path:
 
     symbols = copy_symbols(spec, args, dist, search_dirs)
     resource_file_count = copy_resources(dist)
-    write_launchers(spec, dist)
+    write_launchers(spec, dist, args)
     write_readme(spec, dist, args, [item["name"] for item in packaged_artifacts])
     write_manifest(spec, dist, args, packaged_artifacts, symbols, resource_file_count)
 

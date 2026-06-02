@@ -16,8 +16,13 @@ if(MSVC)
 endif()
 
 # ── Output paths ──────────────────────────────────────────────────────
-set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../artifacts/bin)
-set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../artifacts/lib)
+if(CMAKE_SYSTEM_NAME STREQUAL "Android")
+    set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../artifacts/android/${ANDROID_ABI}/bin)
+    set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../artifacts/android/${ANDROID_ABI}/lib)
+else()
+    set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../artifacts/bin)
+    set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../artifacts/lib)
+endif()
 set(CMAKE_MACOSX_RPATH 0)
 
 if(CMAKE_CONFIGURATION_TYPES)
