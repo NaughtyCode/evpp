@@ -213,6 +213,72 @@ TEST_CASE("db_bson rejects ambiguous and invalid BSON table inputs",
             "symbol value must be a string");
 }
 
+TEST_CASE("db_bson constructors return nil errors for malformed argument types",
+          "[database][data_service][bson]") {
+    DBScriptVM vm;
+    script::ExportMongo(vm);
+    ExportDbRuntime(vm);
+
+    std::string error;
+    std::string result;
+    REQUIRE(vm.DoString(
+        "local b = require('db_bson')\n"
+        "local oid = '000000000000000000000001'\n"
+        "local bad_array, array_err = b.array(1)\n"
+        "local bad_document, document_err = b.document(1)\n"
+        "local bad_i32, i32_err = b.int32({})\n"
+        "local bad_i64, i64_err = b.int64('x')\n"
+        "local bad_double, double_err = b.double({})\n"
+        "local bad_oid, oid_err = b.oid({})\n"
+        "local bad_datetime, datetime_err = b.datetime({})\n"
+        "local bad_timestamp, timestamp_err = b.timestamp('x')\n"
+        "local bad_increment, increment_err = b.timestamp(1, {})\n"
+        "local bad_binary, binary_err = b.binary({})\n"
+        "local bad_subtype, subtype_err = b.binary('x', {})\n"
+        "local bad_regex, regex_err = b.regex({})\n"
+        "local bad_options, options_err = b.regex('x', {})\n"
+        "local bad_code, code_err = b.code({})\n"
+        "local bad_symbol, symbol_err = b.symbol({})\n"
+        "local bad_decimal, decimal_err = b.decimal128({})\n"
+        "local bad_dbpointer_collection, dbpointer_collection_err = b.dbpointer({}, oid)\n"
+        "local bad_dbpointer_oid, dbpointer_oid_err = b.dbpointer('coll', {})\n"
+        "return table.concat({\n"
+        "  tostring(bad_array == nil), tostring(array_err),\n"
+        "  tostring(bad_document == nil), tostring(document_err),\n"
+        "  tostring(bad_i32 == nil), tostring(i32_err),\n"
+        "  tostring(bad_i64 == nil), tostring(i64_err),\n"
+        "  tostring(bad_double == nil), tostring(double_err),\n"
+        "  tostring(bad_oid == nil), tostring(oid_err),\n"
+        "  tostring(bad_datetime == nil), tostring(datetime_err),\n"
+        "  tostring(bad_timestamp == nil), tostring(timestamp_err),\n"
+        "  tostring(bad_increment == nil), tostring(increment_err),\n"
+        "  tostring(bad_binary == nil), tostring(binary_err),\n"
+        "  tostring(bad_subtype == nil), tostring(subtype_err),\n"
+        "  tostring(bad_regex == nil), tostring(regex_err),\n"
+        "  tostring(bad_options == nil), tostring(options_err),\n"
+        "  tostring(bad_code == nil), tostring(code_err),\n"
+        "  tostring(bad_symbol == nil), tostring(symbol_err),\n"
+        "  tostring(bad_decimal == nil), tostring(decimal_err),\n"
+        "  tostring(bad_dbpointer_collection == nil), tostring(dbpointer_collection_err),\n"
+        "  tostring(bad_dbpointer_oid == nil), tostring(dbpointer_oid_err)\n"
+        "}, '|')",
+        "=data_service_bson_constructor_argument_test",
+        &error,
+        &result));
+
+    REQUIRE(result ==
+            "true|db_bson.array expects table, bson.doc, or nil|true|"
+            "db_bson.document expects table, bson.doc, or nil|true|"
+            "int32 value must be an integer|true|int64 value must be an integer|true|"
+            "double value must be a number|true|ObjectId must be a string|true|"
+            "datetime value must be an integer|true|timestamp must be an integer|true|"
+            "timestamp increment must be an integer|true|binary value must be a string|true|"
+            "binary subtype must be an integer|true|regex pattern must be a string|true|"
+            "regex options must be a string|true|code value must be a string|true|"
+            "symbol value must be a string|true|decimal128 value must be a string|true|"
+            "dbpointer collection must be a string|true|dbpointer oid must be a string");
+}
+
 TEST_CASE("db_bson rejects malformed BSON arrays when array mode is forced",
           "[database][data_service][bson]") {
     DBScriptVM vm;
@@ -654,6 +720,74 @@ TEST_CASE("db_bson rejects duplicate regex option flags",
             "regex options must not contain duplicate flags");
 }
 
+TEST_CASE("db_bson honors configurable max depth option",
+          "[database][data_service][bson]") {
+    DBScriptVM vm;
+    script::ExportMongo(vm);
+    ExportDbRuntime(vm);
+
+    std::string error;
+    std::string result;
+    const bool ok = vm.DoString(
+        "local b = require('db_bson')\n"
+        "local function deep(levels)\n"
+        "  local root = {}\n"
+        "  local cur = root\n"
+        "  for _ = 1, levels do\n"
+        "    cur.child = {}\n"
+        "    cur = cur.child\n"
+        "  end\n"
+        "  cur.leaf = 1\n"
+        "  return root\n"
+        "end\n"
+        "local low, low_err = b.to_bson(deep(4), { max_depth = 4 })\n"
+        "local raised, raised_err = b.to_bson(deep(64), { max_depth = 65,\n"
+        "  max_configurable_depth = 65, lua_stack_reserve = 8 })\n"
+        "local raised_table, raised_table_err\n"
+        "if raised then raised_table, raised_table_err = b.to_table(raised, { max_depth = 65,\n"
+        "  max_configurable_depth = 65, lua_stack_reserve = 8 }) end\n"
+        "local raised_json, raised_json_err\n"
+        "if raised then raised_json, raised_json_err = b.to_json(raised, { max_depth = 65,\n"
+        "  max_configurable_depth = 65, lua_stack_reserve = 8 }) end\n"
+        "local alias, alias_err = b.to_bson(deep(64), { max_nesting_depth = 65,\n"
+        "  max_configurable_depth = 65 })\n"
+        "local bad_type, bad_type_err = b.to_bson({}, { max_depth = 'x' })\n"
+        "local bad_range, bad_range_err = b.to_bson({}, { max_depth = 0 })\n"
+        "local bad_alias, bad_alias_err = b.to_bson({}, { max_depth = 8, max_nesting_depth = 9 })\n"
+        "local bad_limit, bad_limit_err = b.to_bson({}, { max_configurable_depth = 0 })\n"
+        "local bad_stack_type, bad_stack_type_err = b.to_bson({}, { lua_stack_reserve = 'x' })\n"
+        "local bad_stack_range, bad_stack_range_err = b.to_bson({}, { lua_stack_reserve = 0 })\n"
+        "local bad_cap, bad_cap_err = b.to_bson({}, { max_configurable_depth = 32, max_depth = 33 })\n"
+        "return table.concat({ tostring(low == nil),\n"
+        "  tostring(tostring(low_err):find('nesting is too deep') ~= nil),\n"
+        "  tostring(raised ~= nil), tostring(raised_err == nil),\n"
+        "  tostring(raised_table ~= nil), tostring(raised_table_err == nil),\n"
+        "  tostring(raised_json ~= nil), tostring(raised_json_err == nil),\n"
+        "  tostring(alias ~= nil), tostring(alias_err == nil),\n"
+        "  tostring(bad_type == nil), tostring(bad_type_err),\n"
+        "  tostring(bad_range == nil), tostring(bad_range_err),\n"
+        "  tostring(bad_alias == nil), tostring(bad_alias_err),\n"
+        "  tostring(bad_limit == nil), tostring(bad_limit_err),\n"
+        "  tostring(bad_stack_type == nil), tostring(bad_stack_type_err),\n"
+        "  tostring(bad_stack_range == nil), tostring(bad_stack_range_err),\n"
+        "  tostring(bad_cap == nil), tostring(bad_cap_err) }, '|')",
+        "=data_service_bson_configurable_depth_test",
+        &error,
+        &result);
+    INFO(error);
+    REQUIRE(ok);
+
+    REQUIRE(result ==
+            "true|true|true|true|true|true|true|true|true|true|true|"
+            "option 'max_depth' must be an integer|true|"
+            "option 'max_depth' must be between 1 and 256|true|"
+            "options 'max_depth' and 'max_nesting_depth' must match|true|"
+            "option 'max_configurable_depth' must be between 1 and 4096|true|"
+            "option 'lua_stack_reserve' must be an integer|true|"
+            "option 'lua_stack_reserve' must be between 1 and 256|true|"
+            "option 'max_depth' must be between 1 and 32");
+}
+
 TEST_CASE("db_bson applies nesting depth limits to nested raw BSON docs",
           "[database][data_service][bson]") {
     DBScriptVM vm;
@@ -662,7 +796,7 @@ TEST_CASE("db_bson applies nesting depth limits to nested raw BSON docs",
 
     std::string error;
     std::string result;
-    REQUIRE(vm.DoString(
+    const bool ok = vm.DoString(
         "local b = require('db_bson')\n"
         "local function deep_with_leaf(leaf)\n"
         "  local root = {}\n"
@@ -683,9 +817,126 @@ TEST_CASE("db_bson applies nesting depth limits to nested raw BSON docs",
         "  tostring(tostring(scope_err):find('nesting is too deep') ~= nil) }, '|')",
         "=data_service_bson_raw_doc_depth_test",
         &error,
-        &result));
+        &result);
+    INFO(error);
+    REQUIRE(ok);
 
     REQUIRE(result == "true|true|true|true");
+}
+
+TEST_CASE("db_bson applies nesting depth limits to raw BSON doc leaves",
+          "[database][data_service][bson]") {
+    DBScriptVM vm;
+    script::ExportMongo(vm);
+    ExportDbRuntime(vm);
+
+    std::string error;
+    std::string result;
+    const bool ok = vm.DoString(
+        "local b = require('db_bson')\n"
+        "local root = {}\n"
+        "local cur = root\n"
+        "for _ = 1, 64 do\n"
+        "  cur.child = {}\n"
+        "  cur = cur.child\n"
+        "end\n"
+        "cur.leaf = bson.new()\n"
+        "local bad, err = b.to_bson(root)\n"
+        "return tostring(bad == nil) .. '|' .. "
+        "tostring(tostring(err):find('nesting is too deep') ~= nil)",
+        "=data_service_bson_raw_doc_leaf_depth_test",
+        &error,
+        &result);
+    INFO(error);
+    REQUIRE(ok);
+
+    REQUIRE(result == "true|true");
+}
+
+TEST_CASE("db_bson applies nesting depth limits to scalar leaves",
+          "[database][data_service][bson]") {
+    DBScriptVM vm;
+    script::ExportMongo(vm);
+    ExportDbRuntime(vm);
+
+    std::string error;
+    std::string result;
+    const bool ok = vm.DoString(
+        "local b = require('db_bson')\n"
+        "local root = {}\n"
+        "local cur = root\n"
+        "for _ = 1, 64 do\n"
+        "  cur.child = {}\n"
+        "  cur = cur.child\n"
+        "end\n"
+        "cur.leaf = 1\n"
+        "local bad, err = b.to_bson(root)\n"
+        "return tostring(bad == nil) .. '|' .. "
+        "tostring(tostring(err):find('nesting is too deep') ~= nil)",
+        "=data_service_bson_scalar_leaf_depth_test",
+        &error,
+        &result);
+    INFO(error);
+    REQUIRE(ok);
+
+    REQUIRE(result == "true|true");
+}
+
+TEST_CASE("db_bson serializes scalar leaves just below nesting limit",
+          "[database][data_service][bson]") {
+    DBScriptVM vm;
+    script::ExportMongo(vm);
+    ExportDbRuntime(vm);
+
+    std::string error;
+    std::string result;
+    const bool ok = vm.DoString(
+        "local b = require('db_bson')\n"
+        "local root = {}\n"
+        "local cur = root\n"
+        "for _ = 1, 63 do\n"
+        "  cur.child = {}\n"
+        "  cur = cur.child\n"
+        "end\n"
+        "cur.leaf = 1\n"
+        "local doc, err = b.to_bson(root)\n"
+        "return tostring(doc ~= nil) .. '|' .. tostring(err == nil)",
+        "=data_service_bson_scalar_leaf_below_depth_test",
+        &error,
+        &result);
+    INFO(error);
+    REQUIRE(ok);
+
+    REQUIRE(result == "true|true");
+}
+
+TEST_CASE("db_bson applies nesting depth limits to BSON code scope leaves",
+          "[database][data_service][bson]") {
+    DBScriptVM vm;
+    script::ExportMongo(vm);
+    ExportDbRuntime(vm);
+
+    std::string error;
+    std::string result;
+    const bool ok = vm.DoString(
+        "local b = require('db_bson')\n"
+        "local root = {}\n"
+        "local cur = root\n"
+        "for _ = 1, 64 do\n"
+        "  cur.child = {}\n"
+        "  cur = cur.child\n"
+        "end\n"
+        "cur.leaf = b.code('return x', bson.new())\n"
+        "local bad, err = b.to_bson(root)\n"
+        "return tostring(bad == nil) .. '|' .. "
+        "tostring(tostring(err):find('nesting is too deep') ~= nil)",
+        "=data_service_bson_code_scope_leaf_depth_test",
+        &error,
+        &result);
+    INFO(error);
+    REQUIRE(ok);
+
+    REQUIRE(result == "true|true");
 }
 
 TEST_CASE("db_send_request rejects internal noop operation", "[database][data_service]") {

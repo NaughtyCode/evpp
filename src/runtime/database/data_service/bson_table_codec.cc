@@ -37,7 +37,11 @@ namespace {
 
 constexpr const char* kModuleName = "db_bson";
 constexpr const char* kBsonDocMetaName = "bson.doc";
-constexpr int kMaxDepth = 64;
+constexpr int kDefaultMaxDepth = 64;
+constexpr int kDefaultMaxConfigurableDepth = 256;
+constexpr int kDefaultLuaStackReserve = 16;
+constexpr int kHardMaxConfigurableDepth = 4096;
+constexpr int kHardMaxLuaStackReserve = 256;
 constexpr const char* kSparseArrayError =
 	"Lua table has sparse positive integer keys; use db_bson.document(...) for numeric document keys";
 
@@ -76,6 +80,9 @@ struct TableOptions {
 	bool root_as_array = false;
 	bool root_as_array_set = false;
 	bool preserve_types = false;
+	int max_depth = kDefaultMaxDepth;
+	int max_configurable_depth = kDefaultMaxConfigurableDepth;
+	int lua_stack_reserve = kDefaultLuaStackReserve;
 };
 
 enum class JsonMode {
@@ -571,6 +578,105 @@ bool ValidateByte(int64_t value, const char* label, uint8_t* out, std::string& e
 	return true;
 }
 
+bool EnsureLuaStack(lua_State* L, int slots, std::string& error) {
+	if (lua_checkstack(L, slots)) return true;
+	error = "Lua stack limit reached during BSON conversion";
+	return false;
+}
+
+bool ReadLuaIntegerArgument(lua_State* L,
+							int index,
+							const char* label,
+							int64_t* out,
+							std::string& error) {
+	if (lua_isnoneornil(L, index)) {
+		error = std::string(label) + " must be an integer";
+		return false;
+	}
+
+	int is_number = 0;
+	const lua_Integer value = lua_tointegerx(L, index, &is_number);
+	if (!is_number) {
+		error = std::string(label) + " must be an integer";
+		return false;
+	}
+
+	*out = static_cast<int64_t>(value);
+	return true;
+}
+
+bool ReadOptionalLuaIntegerArgument(lua_State* L,
+									int index,
+									int64_t default_value,
+									const char* label,
+									int64_t* out,
+									std::string& error) {
+	if (lua_isnoneornil(L, index)) {
+		*out = default_value;
+		return true;
+	}
+	return ReadLuaIntegerArgument(L, index, label, out, error);
+}
+
+bool ReadLuaNumberArgument(lua_State* L,
+						   int index,
+						   const char* label,
+						   double* out,
+						   std::string& error) {
+	if (lua_isnoneornil(L, index)) {
+		error = std::string(label) + " must be a number";
+		return false;
+	}
+
+	int is_number = 0;
+	const lua_Number value = lua_tonumberx(L, index, &is_number);
+	if (!is_number) {
+		error = std::string(label) + " must be a number";
+		return false;
+	}
+
+	*out = static_cast<double>(value);
+	return true;
+}
+
+bool ReadLuaStringArgument(lua_State* L,
+						   int index,
+						   const char* label,
+						   const char** out,
+						   size_t* length,
+						   std::string& error) {
+	if (lua_isnoneornil(L, index)) {
+		error = std::string(label) + " must be a string";
+		return false;
+	}
+
+	size_t len = 0;
+	const char* value = lua_tolstring(L, index, &len);
+	if (!value) {
+		error = std::string(label) + " must be a string";
+		return false;
+	}
+
+	*out = value;
+	*length = len;
+	return true;
+}
+
+bool ReadOptionalLuaStringArgument(lua_State* L,
+								   int index,
+								   const char* default_value,
+								   const char* label,
+								   const char** out,
+								   size_t* length,
+								   std::string& error) {
+	if (lua_isnoneornil(L, index)) {
+		*out = default_value;
+		*length = std::strlen(default_value);
+		return true;
+	}
+	return ReadLuaStringArgument(L, index, label, out, length, error);
+}
+
 bool ParseOid(std::string_view value, mongo::MongoOid* out, std::string& error) {
 	mongo::MongoOid oid;
 	if (value.size() != 24 || StringHasEmbeddedNull(value) ||
@@ -680,6 +786,8 @@ bool AppendLuaValue(lua_State* L,
 					mongo::BsonDocument& parent,
 					const char* key,
 					int depth,
+					int max_depth,
+					int lua_stack_reserve,
 					std::unordered_set<const void*>& active_tables,
 					std::string& error);
 
@@ -687,6 +795,7 @@ bool IsBsonArrayDocument(const bson_t* doc);
 bool ValidateBsonDocumentForCodec(const bson_t* doc,
 								  bool as_array,
 								  int depth,
+								  int max_depth,
 								  std::string& error);
 
 void SetBsonUserdataRootArrayHint(lua_State* L, int userdata_index, bool root_as_array) {
@@ -734,6 +843,7 @@ WrapperBsonDocumentResult CopyWrapperBsonDocumentIfPresent(lua_State* L,
 														   int table_index,
 														   bool as_array,
 														   int depth,
+														   int max_depth,
 														   mongo::BsonDocument& out,
 														   std::string& error) {
 	mongo::BsonDocument* wrapper_doc = nullptr;
@@ -750,7 +860,7 @@ WrapperBsonDocumentResult CopyWrapperBsonDocumentIfPresent(lua_State* L,
 
 	const auto* raw = static_cast<const bson_t*>(wrapper_doc->RawBson());
 	if (!ValidateBsonForLuaConversion(raw, error) ||
-		!ValidateBsonDocumentForCodec(raw, as_array, depth, error)) {
+		!ValidateBsonDocumentForCodec(raw, as_array, depth, max_depth, error)) {
 		return WrapperBsonDocumentResult::Error;
 	}
 	if (!wrapper_doc->CopyTo(out)) {
@@ -760,17 +870,115 @@ WrapperBsonDocumentResult CopyWrapperBsonDocumentIfPresent(lua_State* L,
 	return WrapperBsonDocumentResult::Copied;
 }
 
+bool ValidateLuaValueDepthForBson(lua_State* L,
+								  int value_index,
+								  int depth,
+								  int max_depth,
+								  int lua_stack_reserve,
+								  std::unordered_set<const void*>& active_tables,
+								  std::string& error);
+
+bool ValidateLuaTableDepthForBson(lua_State* L,
+								  int table_index,
+								  int depth,
+								  int max_depth,
+								  int lua_stack_reserve,
+								  std::unordered_set<const void*>& active_tables,
+								  std::string& error) {
+	if (depth >= max_depth) {
+		error = "Lua table nesting is too deep for BSON conversion";
+		return false;
+	}
+	if (!EnsureLuaStack(L, lua_stack_reserve, error)) return false;
+
+	table_index = lua_absindex(L, table_index);
+	const void* table_pointer = lua_topointer(L, table_index);
+	if (!table_pointer) {
+		error = "Lua table conversion failed";
+		return false;
+	}
+
+	ActiveTableGuard active_guard(&active_tables, table_pointer);
+	active_guard.inserted = active_tables.insert(table_pointer).second;
+	if (!active_guard.inserted) {
+		error = "Lua table cycle detected during BSON conversion";
+		return false;
+	}
+
+	const WrapperType wrapper_type = GetWrapperType(L, table_index);
+	if (wrapper_type == WrapperType::Code) {
+		lua_getfield(L, table_index, "scope");
+		if (lua_isnil(L, -1)) {
+			lua_pop(L, 1);
+			lua_rawgetp(L, table_index, &kScopeKey);
+		}
+
+		const bool ok = ValidateLuaValueDepthForBson(
+			L, -1, depth + 1, max_depth, lua_stack_reserve, active_tables, error);
+		lua_pop(L, 1);
+		return ok;
+	}
+
+	if (wrapper_type != WrapperType::None && wrapper_type != WrapperType::Array &&
+		wrapper_type != WrapperType::Document) {
+		return true;
+	}
+
+	lua_pushnil(L);
+	while (lua_next(L, table_index) != 0) {
+		if (IsInternalTableKey(L, -2)) {
+			lua_pop(L, 1);
+			continue;
+		}
+
+		if (!ValidateLuaValueDepthForBson(
+				L, -1, depth + 1, max_depth, lua_stack_reserve, active_tables, error)) {
+			lua_pop(L, 1);
+			lua_pop(L, 1);
+			return false;
+		}
+		lua_pop(L, 1);
+	}
+
+	return true;
+}
+
+bool ValidateLuaValueDepthForBson(lua_State* L,
+								  int value_index,
+								  int depth,
+								  int max_depth,
+								  int lua_stack_reserve,
+								  std::unordered_set<const void*>& active_tables,
+								  std::string& error) {
+	value_index = lua_absindex(L, value_index);
+
+	if (lua_istable(L, value_index)) {
+		return ValidateLuaTableDepthForBson(
+			L, value_index, depth, max_depth, lua_stack_reserve, active_tables, error);
+	}
+
+	if (luaL_testudata(L, value_index, kBsonDocMetaName) && depth >= max_depth) {
+		error = "BSON document nesting is too deep for Lua conversion";
+		return false;
+	}
+
+	return true;
+}
+
 bool BuildBsonFromLuaTable(lua_State* L,
 						   int table_index,
 						   mongo::BsonDocument& out,
 						   bool as_array,
 						   int depth,
+						   int max_depth,
+						   int lua_stack_reserve,
 						   std::unordered_set<const void*>& active_tables,
 						   std::string& error) {
-	if (depth > kMaxDepth) {
+	if (depth >= max_depth) {
 		error = "Lua table nesting is too deep for BSON conversion";
 		return false;
 	}
+	if (!EnsureLuaStack(L, lua_stack_reserve, error)) return false;
 
 	table_index = lua_absindex(L, table_index);
 	const void* table_pointer = lua_topointer(L, table_index);
@@ -788,7 +996,8 @@ bool BuildBsonFromLuaTable(lua_State* L,
 	const WrapperType wrapper_type = GetWrapperType(L, table_index);
 	if (wrapper_type == WrapperType::Array || wrapper_type == WrapperType::Document) {
 		const WrapperBsonDocumentResult wrapper_doc_result =
-			CopyWrapperBsonDocumentIfPresent(L, table_index, as_array, depth, out, error);
+			CopyWrapperBsonDocumentIfPresent(
+				L, table_index, as_array, depth, max_depth, out, error);
 		if (wrapper_doc_result == WrapperBsonDocumentResult::Error) return false;
 		if (wrapper_doc_result == WrapperBsonDocumentResult::Copied) return true;
 	}
@@ -803,7 +1012,9 @@ bool BuildBsonFromLuaTable(lua_State* L,
 		for (size_t i = 1; i <= length; ++i) {
 			lua_rawgeti(L, table_index, static_cast<lua_Integer>(i));
 			const std::string key = std::to_string(i - 1);
-			const bool ok = AppendLuaValue(L, -1, out, key.c_str(), depth, active_tables, error);
+			const bool ok =
+				AppendLuaValue(
+					L, -1, out, key.c_str(), depth, max_depth, lua_stack_reserve, active_tables, error);
 			lua_pop(L, 1);
 			if (!ok) return false;
 		}
@@ -833,7 +1044,8 @@ bool BuildBsonFromLuaTable(lua_State* L,
 			return false;
 		}
 
-		if (!AppendLuaValue(L, -1, out, key.c_str(), depth, active_tables, error)) {
+		if (!AppendLuaValue(
+				L, -1, out, key.c_str(), depth, max_depth, lua_stack_reserve, active_tables, error)) {
 			lua_pop(L, 1);
 			lua_pop(L, 1);
 			return false;
@@ -849,18 +1061,35 @@ bool AppendLuaWrapper(lua_State* L,
 					  mongo::BsonDocument& parent,
 					  const char* key,
 					  int depth,
+					  int max_depth,
+					  int lua_stack_reserve,
 					  std::unordered_set<const void*>& active_tables,
 					  std::string& error) {
+	if (!EnsureLuaStack(L, lua_stack_reserve, error)) return false;
+
 	table_index = lua_absindex(L, table_index);
 	const WrapperType type = GetWrapperType(L, table_index);
 
 	switch (type) {
 	case WrapperType::Array:
 	case WrapperType::Document: {
+		if (depth + 1 >= max_depth) {
+			error = "Lua table nesting is too deep for BSON conversion";
+			return false;
+		}
+
 		mongo::BsonDocument child;
 		const bool as_array = type == WrapperType::Array;
 		if (!BuildBsonFromLuaTable(
-				L, table_index, child, as_array, depth + 1, active_tables, error)) {
+				L,
+				table_index,
+				child,
+				as_array,
+				depth + 1,
+				max_depth,
+				lua_stack_reserve,
+				active_tables,
+				error)) {
 			return false;
 		}
 
@@ -999,7 +1228,15 @@ bool AppendLuaWrapper(lua_State* L,
 				return false;
 			}
 			if (!BuildBsonFromLuaTable(
-					L, -1, scope_doc, false, depth + 1, active_tables, error)) {
+					L,
+					-1,
+					scope_doc,
+					false,
+					depth + 1,
+					max_depth,
+					lua_stack_reserve,
+					active_tables,
+					error)) {
 				lua_pop(L, 1);
 				return false;
 			}
@@ -1021,7 +1258,7 @@ bool AppendLuaWrapper(lua_State* L,
 				error = "code scope must be a document table or bson.doc";
 				return false;
 			}
-			if (!ValidateBsonDocumentForCodec(raw, false, depth + 1, error)) {
+			if (!ValidateBsonDocumentForCodec(raw, false, depth + 1, max_depth, error)) {
 				lua_pop(L, 1);
 				return false;
 			}
@@ -1136,8 +1373,16 @@ bool AppendLuaTable(lua_State* L,
 					mongo::BsonDocument& parent,
 					const char* key,
 					int depth,
+					int max_depth,
+					int lua_stack_reserve,
 					std::unordered_set<const void*>& active_tables,
 					std::string& error) {
+	if (!EnsureLuaStack(L, lua_stack_reserve, error)) return false;
+	if (depth + 1 >= max_depth) {
+		error = "Lua table nesting is too deep for BSON conversion";
+		return false;
+	}
+
 	size_t array_length = 0;
 	const LuaTableShape shape = ClassifyLuaTableShape(L, table_index, &array_length);
 	if (shape == LuaTableShape::SparseArray) {
@@ -1148,7 +1393,15 @@ bool AppendLuaTable(lua_State* L,
 
 	mongo::BsonDocument child;
 	if (!BuildBsonFromLuaTable(
-			L, table_index, child, is_array, depth + 1, active_tables, error)) {
+			L,
+			table_index,
+			child,
+			is_array,
+			depth + 1,
+			max_depth,
+			lua_stack_reserve,
+			active_tables,
+			error)) {
 		return false;
 	}
 
@@ -1162,6 +1415,8 @@ bool AppendLuaValue(lua_State* L,
 					mongo::BsonDocument& parent,
 					const char* key,
 					int depth,
+					int max_depth,
+					int lua_stack_reserve,
 					std::unordered_set<const void*>& active_tables,
 					std::string& error) {
 	value_index = lua_absindex(L, value_index);
@@ -1206,9 +1461,11 @@ bool AppendLuaValue(lua_State* L,
 
 	case LUA_TTABLE:
 		if (GetWrapperType(L, value_index) != WrapperType::None) {
-			return AppendLuaWrapper(L, value_index, parent, key, depth, active_tables, error);
+			return AppendLuaWrapper(
+				L, value_index, parent, key, depth, max_depth, lua_stack_reserve, active_tables, error);
 		}
-		return AppendLuaTable(L, value_index, parent, key, depth, active_tables, error);
+		return AppendLuaTable(
+			L, value_index, parent, key, depth, max_depth, lua_stack_reserve, active_tables, error);
 
 	case LUA_TLIGHTUSERDATA:
 		if (IsNullSentinel(L, value_index)) {
@@ -1243,7 +1500,7 @@ bool AppendLuaValue(lua_State* L,
 				return false;
 			}
 			const bool as_array = ResolveBsonUserdataAsArray(L, value_index, raw);
-			if (!ValidateBsonDocumentForCodec(raw, as_array, depth + 1, error)) {
+			if (!ValidateBsonDocumentForCodec(raw, as_array, depth + 1, max_depth, error)) {
 				return false;
 			}
 			const bool ok = as_array ? parent.AppendArray(key, **doc)
@@ -1299,13 +1556,17 @@ bool IsBsonArrayDocument(const bson_t* doc) {
 	return expected_index > 0;
 }
 
-bool ValidateBsonIterValueForCodec(const bson_iter_t* iter, int depth, std::string& error);
+bool ValidateBsonIterValueForCodec(const bson_iter_t* iter,
+								   int depth,
+								   int max_depth,
+								   std::string& error);
 
 bool ValidateBsonDocumentForCodec(const bson_t* doc,
 								  bool as_array,
 								  int depth,
+								  int max_depth,
 								  std::string& error) {
-	if (depth > kMaxDepth) {
+	if (depth >= max_depth) {
 		error = "BSON document nesting is too deep for Lua conversion";
 		return false;
 	}
@@ -1331,7 +1592,7 @@ bool ValidateBsonDocumentForCodec(const bson_t* doc,
 			return false;
 		}
 
-		if (!ValidateBsonIterValueForCodec(&iter, depth, error)) {
+		if (!ValidateBsonIterValueForCodec(&iter, depth, max_depth, error)) {
 			return false;
 		}
 	}
@@ -1339,8 +1600,11 @@ bool ValidateBsonDocumentForCodec(const bson_t* doc,
 	return true;
 }
 
-bool ValidateBsonIterValueForCodec(const bson_iter_t* iter, int depth, std::string& error) {
-	if (depth > kMaxDepth) {
+bool ValidateBsonIterValueForCodec(const bson_iter_t* iter,
+								   int depth,
+								   int max_depth,
+								   std::string& error) {
+	if (depth >= max_depth) {
 		error = "BSON document nesting is too deep for Lua conversion";
 		return false;
 	}
@@ -1387,7 +1651,8 @@ bool ValidateBsonIterValueForCodec(const bson_iter_t* iter, int depth, std::stri
 								   : "failed to read nested BSON document";
 			return false;
 		}
-		const bool ok = ValidateBsonDocumentForCodec(&child, value_is_array, depth + 1, error);
+		const bool ok =
+			ValidateBsonDocumentForCodec(&child, value_is_array, depth + 1, max_depth, error);
 		bson_destroy(&child);
 		return ok;
 	}
@@ -1452,7 +1717,8 @@ bool ValidateBsonIterValueForCodec(const bson_iter_t* iter, int depth, std::stri
 			error = "failed to read BSON code scope";
 			return false;
 		}
-		const bool ok = ValidateBsonDocumentForCodec(&scope, false, depth + 1, error);
+		const bool ok =
+			ValidateBsonDocumentForCodec(&scope, false, depth + 1, max_depth, error);
 		bson_destroy(&scope);
 		return ok;
 	}
@@ -1468,14 +1734,18 @@ bool PushBsonDocumentAsTable(lua_State* L,
 							 bool as_array,
 							 bool preserve_types,
 							 int depth,
+							 int max_depth,
+							 int lua_stack_reserve,
 							 std::string& error);
 
 bool PushBsonIterValue(lua_State* L,
 					   const bson_iter_t* iter,
 					   bool preserve_types,
 					   int depth,
+					   int max_depth,
+					   int lua_stack_reserve,
 					   std::string& error) {
-	if (depth > kMaxDepth) {
+	if (depth >= max_depth) {
 		error = "BSON document nesting is too deep for Lua conversion";
 		return false;
 	}
@@ -1507,7 +1777,9 @@ bool PushBsonIterValue(lua_State* L,
 			error = "failed to read nested BSON document";
 			return false;
 		}
-		const bool ok = PushBsonDocumentAsTable(L, &child, false, preserve_types, depth + 1, error);
+		const bool ok =
+			PushBsonDocumentAsTable(
+				L, &child, false, preserve_types, depth + 1, max_depth, lua_stack_reserve, error);
 		bson_destroy(&child);
 		return ok;
 	}
@@ -1522,7 +1794,9 @@ bool PushBsonIterValue(lua_State* L,
 			error = "failed to read BSON array";
 			return false;
 		}
-		const bool ok = PushBsonDocumentAsTable(L, &child, true, preserve_types, depth + 1, error);
+		const bool ok =
+			PushBsonDocumentAsTable(
+				L, &child, true, preserve_types, depth + 1, max_depth, lua_stack_reserve, error);
 		bson_destroy(&child);
 		return ok;
 	}
@@ -1673,7 +1947,15 @@ bool PushBsonIterValue(lua_State* L,
 					return false;
 				}
 				const bool ok =
-					PushBsonDocumentAsTable(L, &scope, false, preserve_types, depth + 1, error);
+					PushBsonDocumentAsTable(
+						L,
+						&scope,
+						false,
+						preserve_types,
+						depth + 1,
+						max_depth,
+						lua_stack_reserve,
+						error);
 				bson_destroy(&scope);
 				if (!ok) {
 					lua_pop(L, 1);
@@ -1698,7 +1980,15 @@ bool PushBsonIterValue(lua_State* L,
 				return false;
 			}
 			const bool ok =
-				PushBsonDocumentAsTable(L, &scope, false, preserve_types, depth + 1, error);
+				PushBsonDocumentAsTable(
+					L,
+					&scope,
+					false,
+					preserve_types,
+					depth + 1,
+					max_depth,
+					lua_stack_reserve,
+					error);
 			bson_destroy(&scope);
 			if (!ok) {
 				lua_pop(L, 1);
@@ -1781,11 +2071,14 @@ bool PushBsonDocumentAsTable(lua_State* L,
 							 bool as_array,
 							 bool preserve_types,
 							 int depth,
+							 int max_depth,
+							 int lua_stack_reserve,
 							 std::string& error) {
-	if (depth > kMaxDepth) {
+	if (depth >= max_depth) {
 		error = "BSON document nesting is too deep for Lua conversion";
 		return false;
 	}
+	if (!EnsureLuaStack(L, lua_stack_reserve, error)) return false;
 
 	bson_iter_t iter;
 	if (!bson_iter_init(&iter, doc)) {
@@ -1815,7 +2108,8 @@ bool PushBsonDocumentAsTable(lua_State* L,
 			return false;
 		}
 
-		if (!PushBsonIterValue(L, &iter, preserve_types, depth, error)) {
+		if (!PushBsonIterValue(
+				L, &iter, preserve_types, depth, max_depth, lua_stack_reserve, error)) {
 			lua_pop(L, 1);
 			return false;
 		}
@@ -1852,6 +2146,53 @@ bool ReadOptionalBoolField(lua_State* L,
 	*is_set = true;
 	lua_pop(L, 1);
 	return true;
+}
+
+bool ReadOptionalIntegerField(lua_State* L,
+							  int table_index,
+							  const char* field,
+							  int64_t* value,
+							  bool* is_set,
+							  std::string& error) {
+	table_index = lua_absindex(L, table_index);
+	lua_getfield(L, table_index, field);
+	if (lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+		return true;
+	}
+	if (!lua_isinteger(L, -1)) {
+		lua_pop(L, 1);
+		error = std::string("option '") + field + "' must be an integer";
+		return false;
+	}
+	*value = static_cast<int64_t>(lua_tointeger(L, -1));
+	*is_set = true;
+	lua_pop(L, 1);
+	return true;
+}
+
+bool ValidateIntegerOptionRange(const char* field,
+								int64_t value,
+								int min_value,
+								int max_value,
+								int* out,
+								std::string& error) {
+	if (value < min_value || value > max_value) {
+		error = std::string("option '") + field + "' must be between 1 and " +
+				std::to_string(max_value);
+		return false;
+	}
+	*out = static_cast<int>(value);
+	return true;
+}
+
+bool ValidateMaxDepthOption(const TableOptions& options,
+							const char* field,
+							int64_t value,
+							int* out,
+							std::string& error) {
+	return ValidateIntegerOptionRange(
+		field, value, 1, options.max_configurable_depth, out, error);
 }
 
 bool ParseOptions(lua_State* L,
@@ -1892,6 +2233,74 @@ bool ParseOptions(lua_State* L,
 	} else if (array_alias_set) {
 		options->root_as_array = array_alias;
 		options->root_as_array_set = true;
+	}
+
+	int64_t max_configurable_depth = 0;
+	bool max_configurable_depth_set = false;
+	if (!ReadOptionalIntegerField(L,
+								  index,
+								  "max_configurable_depth",
+								  &max_configurable_depth,
+								  &max_configurable_depth_set,
+								  error)) {
+		return false;
+	}
+	if (max_configurable_depth_set &&
+		!ValidateIntegerOptionRange("max_configurable_depth",
+									max_configurable_depth,
+									1,
+									kHardMaxConfigurableDepth,
+									&options->max_configurable_depth,
+									error)) {
+		return false;
+	}
+
+	int64_t lua_stack_reserve = 0;
+	bool lua_stack_reserve_set = false;
+	if (!ReadOptionalIntegerField(
+			L, index, "lua_stack_reserve", &lua_stack_reserve, &lua_stack_reserve_set, error)) {
+		return false;
+	}
+	if (lua_stack_reserve_set &&
+		!ValidateIntegerOptionRange("lua_stack_reserve",
+									lua_stack_reserve,
+									1,
+									kHardMaxLuaStackReserve,
+									&options->lua_stack_reserve,
+									error)) {
+		return false;
+	}
+
+	int64_t max_depth = 0;
+	bool max_depth_set = false;
+	if (!ReadOptionalIntegerField(L, index, "max_depth", &max_depth, &max_depth_set, error)) {
+		return false;
+	}
+	int64_t max_nesting_depth = 0;
+	bool max_nesting_depth_set = false;
+	if (!ReadOptionalIntegerField(L,
+								  index,
+								  "max_nesting_depth",
+								  &max_nesting_depth,
+								  &max_nesting_depth_set,
+								  error)) {
+		return false;
+	}
+	if (max_depth_set && max_nesting_depth_set && max_depth != max_nesting_depth) {
+		error = "options 'max_depth' and 'max_nesting_depth' must match";
+		return false;
+	}
+	if (max_depth_set) {
+		if (!ValidateMaxDepthOption(*options, "max_depth", max_depth, &options->max_depth, error)) {
+			return false;
+		}
+	} else if (max_nesting_depth_set) {
+		if (!ValidateMaxDepthOption(
+				*options, "max_nesting_depth", max_nesting_depth, &options->max_depth, error)) {
+			return false;
+		}
+	} else if (options->max_depth > options->max_configurable_depth) {
+		options->max_depth = options->max_configurable_depth;
 	}
 
 	if (allow_preserve_types) {
@@ -1942,10 +2351,18 @@ bool ResolveRootTableOptions(lua_State* L,
 bool BuildRootBsonFromLuaTable(lua_State* L,
 							   int table_index,
 							   bool root_as_array,
+							   int max_depth,
+							   int lua_stack_reserve,
 							   mongo::BsonDocument& doc,
 							   std::string& error) {
 	std::unordered_set<const void*> active_tables;
-	return BuildBsonFromLuaTable(L, table_index, doc, root_as_array, 0, active_tables, error);
+	if (!ValidateLuaTableDepthForBson(
+			L, table_index, 0, max_depth, lua_stack_reserve, active_tables, error)) {
+		return false;
+	}
+	active_tables.clear();
+	return BuildBsonFromLuaTable(
+		L, table_index, doc, root_as_array, 0, max_depth, lua_stack_reserve, active_tables, error);
 }
 
 char* SerializeBsonJson(const mongo::BsonDocument& doc,
@@ -1975,9 +2392,12 @@ bool PushBsonJson(lua_State* L,
 				  const mongo::BsonDocument& doc,
 				  JsonMode mode,
 				  bool as_array,
+				  int max_depth,
+				  int lua_stack_reserve,
 				  std::string& error) {
+	(void)lua_stack_reserve;
 	if (!ValidateBsonDocumentForCodec(
-			static_cast<const bson_t*>(doc.RawBson()), as_array, 0, error)) {
+			static_cast<const bson_t*>(doc.RawBson()), as_array, 0, max_depth, error)) {
 		return false;
 	}
 
@@ -2012,22 +2432,21 @@ int l_to_bson(lua_State* L) {
 		return PushNilError(L, error);
 	}
 
-	auto** ud = script::NewUserdata<mongo::BsonDocument>(L, kBsonDocMetaName);
-	const int userdata_index = lua_gettop(L);
 	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument);
 	if (!doc) {
-		lua_settop(L, base_top);
 		return PushNilError(L, "allocation failure");
 	}
-	*ud = doc;
 
-	if (!BuildRootBsonFromLuaTable(L, 1, root_as_array, *doc, error)) {
+	if (!BuildRootBsonFromLuaTable(
+			L, 1, root_as_array, options.max_depth, options.lua_stack_reserve, *doc, error)) {
 		CLOUDENGINE_MEM_DELETE(doc);
-		*ud = nullptr;
 		lua_settop(L, base_top);
 		return PushNilError(L, error);
 	}
 
+	auto** ud = script::NewUserdata<mongo::BsonDocument>(L, kBsonDocMetaName);
+	const int userdata_index = lua_gettop(L);
+	*ud = doc;
 	SetBsonUserdataRootArrayHint(L, userdata_index, root_as_array);
 	return 1;
 }
@@ -2057,11 +2476,19 @@ int l_to_table(lua_State* L) {
 					const bool root_as_array = wrapper_type == WrapperType::Array;
 					const auto* raw = static_cast<const bson_t*>(wrapper_doc->RawBson());
 					if (!ValidateBsonForLuaConversion(raw, error) ||
-						!ValidateBsonDocumentForCodec(raw, root_as_array, 0, error)) {
+						!ValidateBsonDocumentForCodec(
+							raw, root_as_array, 0, options.max_depth, error)) {
 						return PushNilError(L, error);
 					}
 					if (!PushBsonDocumentAsTable(
-							L, raw, root_as_array, options.preserve_types, 0, error)) {
+							L,
+							raw,
+							root_as_array,
+							options.preserve_types,
+							0,
+							options.max_depth,
+							options.lua_stack_reserve,
+							error)) {
 						lua_settop(L, base_top);
 						return PushNilError(L, error);
 					}
@@ -2088,11 +2515,19 @@ int l_to_table(lua_State* L) {
 	}
 	const bool root_as_array =
 		options.root_as_array_set ? options.root_as_array : ResolveBsonUserdataAsArray(L, 1, raw);
-	if (!ValidateBsonDocumentForCodec(raw, root_as_array, 0, error)) {
+	if (!ValidateBsonDocumentForCodec(raw, root_as_array, 0, options.max_depth, error)) {
 		return PushNilError(L, error);
 	}
 
-	if (!PushBsonDocumentAsTable(L, raw, root_as_array, options.preserve_types, 0, error)) {
+	if (!PushBsonDocumentAsTable(
+			L,
+			raw,
+			root_as_array,
+			options.preserve_types,
+			0,
+			options.max_depth,
+			options.lua_stack_reserve,
+			error)) {
 		lua_settop(L, base_top);
 		return PushNilError(L, error);
 	}
@@ -2112,11 +2547,13 @@ int l_to_json_common(lua_State* L, JsonMode mode, const char* function_name) {
 		}
 
 		mongo::BsonDocument doc;
-		if (!BuildRootBsonFromLuaTable(L, 1, root_as_array, doc, error)) {
+		if (!BuildRootBsonFromLuaTable(
+				L, 1, root_as_array, options.max_depth, options.lua_stack_reserve, doc, error)) {
 			lua_settop(L, base_top);
 			return PushNilError(L, error);
 		}
-		if (!PushBsonJson(L, doc, mode, root_as_array, error)) {
+		if (!PushBsonJson(
+				L, doc, mode, root_as_array, options.max_depth, options.lua_stack_reserve, error)) {
 			lua_settop(L, base_top);
 			return PushNilError(L, error);
 		}
@@ -2139,7 +2576,8 @@ int l_to_json_common(lua_State* L, JsonMode mode, const char* function_name) {
 		}
 		const bool root_as_array =
 			options.root_as_array_set ? options.root_as_array : ResolveBsonUserdataAsArray(L, 1, raw);
-		if (!PushBsonJson(L, *doc, mode, root_as_array, error)) {
+		if (!PushBsonJson(
+				L, *doc, mode, root_as_array, options.max_depth, options.lua_stack_reserve, error)) {
 			return PushNilError(L, error);
 		}
 		return 1;
@@ -2222,7 +2660,7 @@ int l_array(lua_State* L) {
 		lua_newtable(L);
 		SetRawBsonDocumentValue(L, -1, 1);
 	} else {
-		return luaL_error(L, "db_bson.array expects table, bson.doc, or nil");
+		return PushNilError(L, "db_bson.array expects table, bson.doc, or nil");
 	}
 	SetWrapperType(L, -1, WrapperType::Array);
 	return 1;
@@ -2237,16 +2675,20 @@ int l_document(lua_State* L) {
 		lua_newtable(L);
 		SetRawBsonDocumentValue(L, -1, 1);
 	} else {
-		return luaL_error(L, "db_bson.document expects table, bson.doc, or nil");
+		return PushNilError(L, "db_bson.document expects table, bson.doc, or nil");
 	}
 	SetWrapperType(L, -1, WrapperType::Document);
 	return 1;
 }
 
 int l_int32(lua_State* L) {
-	const auto raw_value = static_cast<int64_t>(luaL_checkinteger(L, 1));
-	int32_t value = 0;
 	std::string error;
+	int64_t raw_value = 0;
+	if (!ReadLuaIntegerArgument(L, 1, "int32 value", &raw_value, error)) {
+		return PushNilError(L, error);
+	}
+
+	int32_t value = 0;
 	if (!ValidateInt32(raw_value, "int32 value", &value, error)) {
 		return PushNilError(L, error);
 	}
@@ -2257,14 +2699,24 @@ int l_int32(lua_State* L) {
 }
 
 int l_int64(lua_State* L) {
-	const auto value = static_cast<int64_t>(luaL_checkinteger(L, 1));
+	std::string error;
+	int64_t value = 0;
+	if (!ReadLuaIntegerArgument(L, 1, "int64 value", &value, error)) {
+		return PushNilError(L, error);
+	}
+
 	PushTaggedTable(L, WrapperType::Int64);
 	SetWrapperIntegerField(L, -1, "value", &kValueKey, value);
 	return 1;
 }
 
 int l_double(lua_State* L) {
-	const double value = static_cast<double>(luaL_checknumber(L, 1));
+	std::string error;
+	double value = 0.0;
+	if (!ReadLuaNumberArgument(L, 1, "double value", &value, error)) {
+		return PushNilError(L, error);
+	}
+
 	PushTaggedTable(L, WrapperType::Double);
 	SetWrapperNumberField(L, -1, "value", &kValueKey, value);
 	return 1;
@@ -2272,8 +2724,11 @@ int l_double(lua_State* L) {
 
 int l_oid(lua_State* L) {
 	size_t len = 0;
-	const char* value = luaL_checklstring(L, 1, &len);
+	const char* value = nullptr;
 	std::string error;
+	if (!ReadLuaStringArgument(L, 1, "ObjectId", &value, &len, error)) {
+		return PushNilError(L, error);
+	}
 	if (!ParseOid(std::string_view(value, len), nullptr, error)) {
 		return PushNilError(L, error);
 	}
@@ -2284,19 +2739,27 @@ int l_oid(lua_State* L) {
 }
 
 int l_datetime(lua_State* L) {
-	const auto value = static_cast<int64_t>(luaL_checkinteger(L, 1));
+	std::string error;
+	int64_t value = 0;
+	if (!ReadLuaIntegerArgument(L, 1, "datetime value", &value, error)) {
+		return PushNilError(L, error);
+	}
+
 	PushTaggedTable(L, WrapperType::DateTime);
 	SetWrapperIntegerField(L, -1, "value", &kValueKey, value);
 	return 1;
 }
 
 int l_timestamp(lua_State* L) {
-	const auto timestamp_value = static_cast<int64_t>(luaL_checkinteger(L, 1));
-	const auto increment_value = static_cast<int64_t>(luaL_optinteger(L, 2, 0));
+	int64_t timestamp_value = 0;
+	int64_t increment_value = 0;
 	uint32_t timestamp = 0;
 	uint32_t increment = 0;
 	std::string error;
-	if (!ValidateUInt32(timestamp_value, "timestamp", &timestamp, error) ||
+	if (!ReadLuaIntegerArgument(L, 1, "timestamp", &timestamp_value, error) ||
+		!ReadOptionalLuaIntegerArgument(
+			L, 2, 0, "timestamp increment", &increment_value, error) ||
+		!ValidateUInt32(timestamp_value, "timestamp", &timestamp, error) ||
 		!ValidateUInt32(increment_value, "timestamp increment", &increment, error)) {
 		return PushNilError(L, error);
 	}
@@ -2309,11 +2772,13 @@ int l_timestamp(lua_State* L) {
 
 int l_binary(lua_State* L) {
 	size_t len = 0;
-	const char* value = luaL_checklstring(L, 1, &len);
-	const auto subtype_value = static_cast<int64_t>(luaL_optinteger(L, 2, 0));
+	const char* value = nullptr;
+	int64_t subtype_value = 0;
 	uint8_t subtype = 0;
 	std::string error;
-	if (!ValidateByte(subtype_value, "binary subtype", &subtype, error)) {
+	if (!ReadLuaStringArgument(L, 1, "binary value", &value, &len, error) ||
+		!ReadOptionalLuaIntegerArgument(L, 2, 0, "binary subtype", &subtype_value, error) ||
+		!ValidateByte(subtype_value, "binary subtype", &subtype, error)) {
 		return PushNilError(L, error);
 	}
 	if (len > std::numeric_limits<uint32_t>::max()) {
@@ -2329,9 +2794,14 @@ int l_binary(lua_State* L) {
 int l_regex(lua_State* L) {
 	size_t pattern_len = 0;
 	size_t options_len = 0;
-	const char* pattern = luaL_checklstring(L, 1, &pattern_len);
-	const char* options = luaL_optlstring(L, 2, "", &options_len);
+	const char* pattern = nullptr;
+	const char* options = nullptr;
 	std::string error;
+	if (!ReadLuaStringArgument(L, 1, "regex pattern", &pattern, &pattern_len, error) ||
+		!ReadOptionalLuaStringArgument(
+			L, 2, "", "regex options", &options, &options_len, error)) {
+		return PushNilError(L, error);
+	}
 	const std::string_view pattern_view(pattern, pattern_len);
 	const std::string_view options_view(options, options_len);
 	if (!EnsureValidBsonCString(pattern_view, "regex pattern", error) ||
@@ -2348,8 +2818,11 @@ int l_regex(lua_State* L) {
 
 int l_code(lua_State* L) {
 	size_t len = 0;
-	const char* value = luaL_checklstring(L, 1, &len);
+	const char* value = nullptr;
 	std::string error;
+	if (!ReadLuaStringArgument(L, 1, "code value", &value, &len, error)) {
+		return PushNilError(L, error);
+	}
 	if (!EnsureValidBsonCString(std::string_view(value, len), "code value", error)) {
 		return PushNilError(L, error);
 	}
@@ -2372,8 +2845,11 @@ int l_code(lua_State* L) {
 
 int l_symbol(lua_State* L) {
 	size_t len = 0;
-	const char* value = luaL_checklstring(L, 1, &len);
+	const char* value = nullptr;
 	std::string error;
+	if (!ReadLuaStringArgument(L, 1, "symbol value", &value, &len, error)) {
+		return PushNilError(L, error);
+	}
 	if (!ValidateBsonIntLength(len, "symbol value", error) ||
 		!EnsureValidBsonText(std::string_view(value, len), "symbol value", error)) {
 		return PushNilError(L, error);
@@ -2386,8 +2862,11 @@ int l_symbol(lua_State* L) {
 
 int l_decimal128(lua_State* L) {
 	size_t len = 0;
-	const char* value = luaL_checklstring(L, 1, &len);
+	const char* value = nullptr;
 	std::string error;
+	if (!ReadLuaStringArgument(L, 1, "decimal128 value", &value, &len, error)) {
+		return PushNilError(L, error);
+	}
 	if (!EnsureNoEmbeddedNull(std::string_view(value, len), "decimal128 value", error)) {
 		return PushNilError(L, error);
 	}
@@ -2405,10 +2884,13 @@ int l_decimal128(lua_State* L) {
 int l_dbpointer(lua_State* L) {
 	size_t collection_len = 0;
 	size_t oid_len = 0;
-	const char* collection = luaL_checklstring(L, 1, &collection_len);
-	const char* oid = luaL_checklstring(L, 2, &oid_len);
+	const char* collection = nullptr;
+	const char* oid = nullptr;
 	std::string error;
-	if (!EnsureValidBsonCString(
+	if (!ReadLuaStringArgument(
+			L, 1, "dbpointer collection", &collection, &collection_len, error) ||
+		!ReadLuaStringArgument(L, 2, "dbpointer oid", &oid, &oid_len, error) ||
+		!EnsureValidBsonCString(
 			std::string_view(collection, collection_len), "dbpointer collection", error) ||
 		!ParseOid(std::string_view(oid, oid_len), nullptr, error)) {
 		return PushNilError(L, error);
