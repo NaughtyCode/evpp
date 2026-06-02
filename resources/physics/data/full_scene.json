@@ -1,0 +1,322 @@
+{
+  "materials": [
+    { "name": "concrete", "friction": 0.8, "restitution": 0.1 },
+    { "name": "rubber", "friction": 0.6, "restitution": 0.7 },
+    { "name": "metal", "friction": 0.4, "restitution": 0.2 },
+    { "name": "ice", "friction": 0.05, "restitution": 0.01 }
+  ],
+  "staticBodies": [
+    {
+      "id": "full_ground",
+      "shape": {
+        "type": "box",
+        "params": { "halfExtent": [20.0, 0.5, 20.0] },
+        "material": "concrete"
+      },
+      "material": { "friction": 0.8, "restitution": 0.1 },
+      "transform": {
+        "position": [0.0, -0.5, 0.0],
+        "rotation": [0.0, 0.0, 0.0, 1.0]
+      },
+      "objectLayer": "static"
+    },
+    {
+      "id": "mesh_ramp",
+      "shape": {
+        "type": "mesh",
+        "params": {
+          "vertices": [
+            [-1.0, 0.0, -1.0],
+            [1.0, 0.0, -1.0],
+            [1.0, 0.5, 1.0],
+            [-1.0, 0.5, 1.0]
+          ],
+          "triangles": [
+            [0, 1, 2],
+            [0, 2, 3]
+          ],
+          "materials": ["metal"]
+        }
+      },
+      "material": { "friction": 0.4, "restitution": 0.2 },
+      "transform": {
+        "position": [-6.0, 0.0, 0.0],
+        "rotation": [0.0, 0.0, 0.0, 1.0]
+      },
+      "objectLayer": "static"
+    },
+    {
+      "id": "height_patch",
+      "shape": {
+        "type": "height_field",
+        "params": {
+          "sampleCount": 4,
+          "samples": [
+            0.0, 0.1, 0.2, 0.0,
+            0.1, 0.2, 0.3, 0.1,
+            0.0, 0.15, 0.2, 0.0,
+            0.0, 0.0, 0.1, 0.0
+          ],
+          "offset": [-1.0, 0.0, -1.0],
+          "scale": [0.75, 1.0, 0.75],
+          "materials": ["concrete"]
+        }
+      },
+      "material": { "friction": 0.7, "restitution": 0.1 },
+      "transform": {
+        "position": [6.0, 0.0, 0.0],
+        "rotation": [0.0, 0.0, 0.0, 1.0]
+      },
+      "objectLayer": "static"
+    },
+    {
+      "id": "infinite_plane",
+      "shape": {
+        "type": "plane",
+        "params": {
+          "normal": [0.0, 1.0, 0.0],
+          "constant": 2.0
+        },
+        "material": "ice"
+      },
+      "material": { "friction": 0.05, "restitution": 0.01 },
+      "transform": {
+        "position": [0.0, 0.0, 0.0],
+        "rotation": [0.0, 0.0, 0.0, 1.0]
+      },
+      "objectLayer": "static"
+    }
+  ],
+  "dynamicPrototypes": [
+    {
+      "protoId": "crate_full",
+      "shape": {
+        "type": "box",
+        "params": { "halfExtent": [0.5, 0.5, 0.5] },
+        "material": "concrete"
+      },
+      "mass": 10.0,
+      "material": { "friction": 0.6, "restitution": 0.2 },
+      "motionType": "dynamic",
+      "motionQuality": "discrete",
+      "linearDamping": 0.1,
+      "angularDamping": 0.1,
+      "gravityFactor": 1.0,
+      "objectLayer": "dynamic",
+      "allowedDofs": [0, 1, 2, 3, 4, 5],
+      "isSensor": false,
+      "allowSleeping": true,
+      "maxLinearVelocity": 500.0,
+      "maxAngularVelocity": 47.1
+    },
+    {
+      "protoId": "ball_full",
+      "shape": {
+        "type": "sphere",
+        "params": { "radius": 0.45 },
+        "material": "rubber"
+      },
+      "mass": 5.0,
+      "material": { "friction": 0.3, "restitution": 0.8 },
+      "motionType": "dynamic",
+      "motionQuality": "linear_cast",
+      "linearDamping": 0.05,
+      "angularDamping": 0.05,
+      "gravityFactor": 1.0,
+      "objectLayer": "dynamic",
+      "allowedDofs": [0, 1, 2, 3, 4, 5],
+      "isSensor": false,
+      "allowSleeping": true,
+      "maxLinearVelocity": 500.0,
+      "maxAngularVelocity": 47.1
+    },
+    {
+      "protoId": "capsule_full",
+      "shape": {
+        "type": "capsule",
+        "params": { "halfHeight": 0.35, "radius": 0.25 },
+        "material": "rubber"
+      },
+      "mass": 4.0,
+      "material": { "friction": 0.4, "restitution": 0.4 },
+      "motionType": "dynamic",
+      "motionQuality": "discrete",
+      "linearDamping": 0.05,
+      "angularDamping": 0.05,
+      "gravityFactor": 1.0,
+      "objectLayer": "dynamic",
+      "allowedDofs": [0, 1, 2, 3, 4, 5],
+      "isSensor": false,
+      "allowSleeping": true,
+      "maxLinearVelocity": 500.0,
+      "maxAngularVelocity": 47.1
+    },
+    {
+      "protoId": "cylinder_full",
+      "shape": {
+        "type": "cylinder",
+        "params": { "halfHeight": 0.4, "radius": 0.3 },
+        "material": "metal"
+      },
+      "mass": 6.0,
+      "material": { "friction": 0.5, "restitution": 0.2 },
+      "motionType": "dynamic",
+      "motionQuality": "discrete",
+      "linearDamping": 0.05,
+      "angularDamping": 0.05,
+      "gravityFactor": 1.0,
+      "objectLayer": "dynamic",
+      "allowedDofs": [0, 1, 2, 3, 4, 5],
+      "isSensor": false,
+      "allowSleeping": true,
+      "maxLinearVelocity": 500.0,
+      "maxAngularVelocity": 47.1
+    },
+    {
+      "protoId": "hull_full",
+      "shape": {
+        "type": "convex_hull",
+        "params": {
+          "points": [
+            [-0.5, 0.0, -0.5],
+            [0.5, 0.0, -0.5],
+            [0.0, 0.0, 0.5],
+            [0.0, 0.8, 0.0]
+          ]
+        },
+        "material": "metal"
+      },
+      "mass": 7.0,
+      "material": { "friction": 0.4, "restitution": 0.2 },
+      "motionType": "dynamic",
+      "motionQuality": "discrete",
+      "linearDamping": 0.05,
+      "angularDamping": 0.05,
+      "gravityFactor": 1.0,
+      "objectLayer": "dynamic",
+      "allowedDofs": [0, 1, 2, 3, 4, 5],
+      "isSensor": false,
+      "allowSleeping": true,
+      "maxLinearVelocity": 500.0,
+      "maxAngularVelocity": 47.1
+    },
+    {
+      "protoId": "compound_full",
+      "shape": {
+        "shapes": [
+          {
+            "type": "box",
+            "params": { "halfExtent": [0.3, 0.3, 0.3] },
+            "position": [-0.25, 0.0, 0.0],
+            "rotation": [0.0, 0.0, 0.0, 1.0],
+            "material": "concrete"
+          },
+          {
+            "type": "sphere",
+            "params": { "radius": 0.3 },
+            "position": [0.35, 0.0, 0.0],
+            "rotation": [0.0, 0.0, 0.0, 1.0],
+            "material": "rubber"
+          }
+        ]
+      },
+      "mass": 8.0,
+      "material": { "friction": 0.5, "restitution": 0.3 },
+      "motionType": "dynamic",
+      "motionQuality": "discrete",
+      "linearDamping": 0.05,
+      "angularDamping": 0.05,
+      "gravityFactor": 1.0,
+      "objectLayer": "dynamic",
+      "allowedDofs": [0, 1, 2, 3, 4, 5],
+      "isSensor": false,
+      "allowSleeping": true,
+      "maxLinearVelocity": 500.0,
+      "maxAngularVelocity": 47.1
+    }
+  ],
+  "dynamicBodies": [
+    {
+      "id": "hinge_body",
+      "protoId": "crate_full",
+      "transform": {
+        "position": [-3.0, 1.25, 0.0],
+        "rotation": [0.0, 0.0, 0.0, 1.0]
+      },
+      "userData": 101,
+      "activate": true,
+      "linearVelocity": [0.0, 0.0, 0.0],
+      "angularVelocity": [0.0, 0.0, 0.0]
+    },
+    {
+      "id": "spring_body",
+      "protoId": "ball_full",
+      "transform": {
+        "position": [-1.0, 1.5, 0.0],
+        "rotation": [0.0, 0.0, 0.0, 1.0]
+      },
+      "userData": 102,
+      "activate": true,
+      "linearVelocity": [0.0, 0.0, 0.0],
+      "angularVelocity": [0.0, 0.0, 0.0]
+    },
+    {
+      "id": "slider_body",
+      "protoId": "capsule_full",
+      "transform": {
+        "position": [1.0, 1.4, 0.0],
+        "rotation": [0.0, 0.0, 0.0, 1.0]
+      },
+      "userData": 103,
+      "activate": true,
+      "linearVelocity": [0.0, 0.0, 0.0],
+      "angularVelocity": [0.0, 0.0, 0.0]
+    },
+    {
+      "id": "fixed_body",
+      "protoId": "cylinder_full",
+      "transform": {
+        "position": [3.0, 1.4, 0.0],
+        "rotation": [0.0, 0.0, 0.0, 1.0]
+      },
+      "userData": 104,
+      "activate": true,
+      "linearVelocity": [0.0, 0.0, 0.0],
+      "angularVelocity": [0.0, 0.0, 0.0]
+    }
+  ],
+  "constraints": [
+    {
+      "type": "hinge",
+      "bodyA": "hinge_body",
+      "bodyB": "full_ground",
+      "pivot": [-3.0, 1.25, 0.0],
+      "axis": [0.0, 1.0, 0.0],
+      "limits": { "min": -0.5, "max": 0.5 }
+    },
+    {
+      "type": "spring",
+      "bodyA": "spring_body",
+      "bodyB": "full_ground",
+      "pivot": [-1.0, 1.5, 0.0],
+      "axis": [0.0, 1.0, 0.0],
+      "spring": { "frequency": 1.0, "damping": 0.5 }
+    },
+    {
+      "type": "slider",
+      "bodyA": "slider_body",
+      "bodyB": "full_ground",
+      "pivot": [1.0, 1.4, 0.0],
+      "axis": [1.0, 0.0, 0.0],
+      "axis2": [1.0, 0.0, 0.0],
+      "limits": { "min": -0.75, "max": 0.75 }
+    },
+    {
+      "type": "fixed",
+      "bodyA": "fixed_body",
+      "bodyB": "full_ground",
+      "pivot": [3.0, 1.4, 0.0],
+      "axis": [0.0, 1.0, 0.0]
+    }
+  ]
+}

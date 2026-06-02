@@ -144,3 +144,4 @@ artifacts/build-android/*
 
 artifacts/android/*
 artifacts/release*/
+artifacts/build-physics/*
