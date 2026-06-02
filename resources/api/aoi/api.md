@@ -18,6 +18,7 @@ Current semantics:
 - If two entities use the same radius and are both within that distance, visibility will usually appear symmetric, but symmetry is not a separate contract.
 - `get_visible(entity_id)` returns the observer's maintained visible set, excludes the observer itself, and is sorted by entity id.
 - `query_radius(x, y, radius)` is a raw spatial query. It includes every entity in range, including a caller's own entity if that entity is in range, and it does not provide a stable ordering contract.
+- Enter/leave callbacks are dispatched synchronously. For one observer, multiple target events in the same recompute are ordered by target entity id; connection-side spawn/delta/despawn sequencing is still the caller's responsibility.
 - Coordinates outside the world bounds are assigned to the nearest boundary cell for indexing. The stored original position is still used by precise distance checks.
 - The module has no `space_id`, `layer_id`, `phase_id`, team, stealth, owner-only, occlusion, batching, or replication-budget filtering.
 
@@ -228,7 +229,7 @@ aoi.shutdown()
 ## Notes
 
 - AOI uses a uniform grid (`SpatialGrid`) and is best suited to bounded, reasonably even 2D/2.5D maps.
-- The enter/leave event callback is configured by `aoi.set_event_callback(callback_or_nil)` and is dispatched synchronously on the caller thread.
+- The enter/leave event callback is configured by `aoi.set_event_callback(callback_or_nil)` and is dispatched synchronously on the caller thread. Same-observer target events are ordered by target id inside one recompute.
 - AOI mutation APIs return `nil, err` instead of raising for not-initialized state and callback reentrancy guard failures. Invalid Lua argument types/ranges still raise Lua argument errors via `luaL_argerror`.
 - `aoi_radius` is observer-side only. There is no target-side aura or separate replication radius in the current implementation.
 - `get_visible` is sorted and excludes self; `query_radius` is unsorted and includes all entities in range.

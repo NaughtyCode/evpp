@@ -345,7 +345,7 @@ evpp3 的 `QueryRadius` 会按半径覆盖格子，不依赖 9 宫格，因此�
 - AOI 回调是同步调用。Lua 回调期间禁止再次调用 `register_entity`、`update_entity`、`unregister_entity`、`shutdown` 或 `set_event_callback` 修改 AOI，否则 Lua 绑定会返回 `nil, err`。
 - C++ `AOIManager::SetEventCallback` 现在有统一回调重入 guard。回调派发期间同一个 manager 的 mutation API 会抛出 `std::logic_error`；Lua 绑定会在进入 manager 前返回 `nil, err`。
 - `AOIManager` 和 `SpatialGrid` 没有内部锁，当前应按单线程或明确阶段所有权串行调用。若网络线程、逻辑线程、脚本线程都会触碰 AOI，需要先建立调度队列或 actor ownership。
-- `OnEntityMove` 会按 id 排序受影响 observer，但 `RecomputeVisibility` 内部用 `unordered_set` 计算目标差集，同一 observer 的多个 enter/leave 目标派发顺序不是稳定契约。若上层复制系统要求确定性，应在派发前按 target id 排序。
+- `OnEntityMove` 会按 id 排序受影响 observer；`RecomputeVisibility` 虽用 `unordered_set` 计算目标差集，但派发前会按 target id 排序同一 observer 的 enter/leave 目标。连接侧 spawn/delta/despawn 生命周期顺序仍由复制层负责。
 - 当前没有 `space_id`、`layer_id`、`phase_id`、category、team、owner、visibility predicate。所有注册实体默认处于同一个逻辑世界。
 
 本轮已把这些语义同步到 `resources/api/aoi/api.md` 和 `src/client/client.h` 的 AOI 注释中。后续如果运行时代码新增分区、对称可见或逻辑过滤能力，应同步更新这两处契约文档和本文件的实现评估。
@@ -588,7 +588,7 @@ C Client API：
 11. 缺少 Z/楼层/遮挡。当前是二维距离，无法表达多楼层、飞行或墙体视线。
 12. 固定数组不适合无限大世界。超大地图会浪费内存或触发格子数安全上限。
 13. 缺少 enter/leave 与后续移动 delta 的连接侧顺序模型。
-14. 同一 observer 的多个 enter/leave 事件目标顺序未排序，不能作为确定性网络协议顺序使用。
+14. AOI 层同一 observer 的多个 enter/leave 事件目标已按 entity id 排序；网络协议层仍需要显式 spawn/delta/despawn 批次和确认机制。
 15. C Client API 仅暴露查询型 AOI 能力，未暴露 enter/leave 事件、批处理或复制预算。
 
 ### 9.5 当前文档与资料限制
@@ -605,26 +605,15 @@ C Client API：
 本轮对照 `src/tests/unit/aoi/test_aoi.cpp`、`src/tests/integration/entity/test_entity_aoi.cpp`、`src/tests/unit/client_api/test_client_api.cpp` 和 `src/tests/performance/bench_aoi.cpp`，当前测试已经覆盖：
 
 - `SpatialGrid` 构造参数校验、插入、重复插入更新、删除、跨格移动、`QueryRadius`、9 宫格 `QueryAOI`、越界坐标 clamp、负半径安全返回。
-- `AOIManager` 注册/注销计数、非法半径/位置、移动进入/离开、方向性可见、相同半径下的对称可见、未注册实体移动忽略、无回调时安全。
-- Lua 绑定导出、`aoi.count()`、跨 `ScriptVM` 状态隔离、回调异常恢复、回调内 `shutdown()` mutation guard、基本 symmetric callbacks、非法 init 参数。
-- C Client API 的 `game_aoi_create/register_entity/move_entity/update_radius/query_radius/get_visible/unregister_entity/count` 基本路径。
+- `AOIManager` 注册/注销计数、非法半径/位置、移动进入/离开、方向性可见、相同半径下的对称可见、未注册实体移动忽略、无回调时安全、upsert 原子语义、零半径同坐标可见、raw radius self-inclusion、`GetVisibleEntities` self-filter、watchers 反向清理、同一 observer 多目标事件排序、C++ callback 重入 guard，以及 `max_aoi_radius_` 在半径缩小、注销和 upsert 缩小后的受影响 observer 重算。
+- Lua 绑定导出、`aoi.count()`、跨 `ScriptVM` 状态隔离、回调异常恢复、回调内所有 mutation API guard、基本 symmetric callbacks、非法 init 参数、init 成功 reset、init 失败保留旧状态、shutdown 后空状态语义和 `update_radius`。
+- C Client API 的 `game_aoi_create/register_entity/move_entity/update_radius/query_radius/get_visible/unregister_entity/count` 基本路径，以及无效参数、count-only 查询、容量不足 `GAME_ERR_BUFFER_TOO_SMALL`、方向性可见、upsert、超大网格创建失败错误码。
 - 性能基准覆盖均匀查询、拥挤格跨格更新和 `AOIManager` crowd move。
 
 仍缺少或需要加强：
 
-- `register_entity` 对已有 id 的 upsert 行为和事件序列测试。
-- `aoi.init` 重新初始化成功后应清理旧实体和旧 callback；初始化失败时应保留旧 AOI 状态；`aoi.shutdown` 后 `count/get_visible/query_radius` 的空状态语义测试。
-- Lua 回调重入目前只覆盖 `shutdown()`；还需要覆盖 `init`、`register_entity`、`update_entity`、`unregister_entity` 和 `set_event_callback`。
 - Lua 非法参数错误与 `nil, err` 返回路径的区分测试。
-- `QueryRadius` 包含自身的 API 语义测试。
 - `QueryRadius` / `QueryAOI` 未排序结果不作为协议顺序的契约测试。
-- `QueryAOI` 只覆盖同格和邻格，不可用于任意半径查询的边界测试。
-- `aoi_radius = 0` 的同坐标可见测试。
-- 越界坐标原始位置参与精确距离过滤的测试。
-- 多目标 enter/leave 的稳定排序或明确非稳定契约测试。
-- `max_aoi_radius_` 在半径缩小、实体删除、重新注册后的边界测试。
-- C++ callback 递归修改 AOI 的禁止策略或 guard 测试。
-- C Client API 对无效参数、`out_ids == nullptr` 计数查询、容量不足返回 `GAME_ERR_BUFFER_TOO_SMALL`、方向性可见和 upsert 语义的边界测试。
 - 客户端复制层的 spawn/delta/despawn 顺序测试，目前 AOI 单元测试无法覆盖。
 
 ## 10. evpp3 推荐路线
@@ -636,7 +625,7 @@ C Client API：
 - 明确方向性可见：`visible_[observer]` 表示 observer 能看到 target。
 - 已完成文档同步：`resources/api/aoi/api.md` 和 `src/client/client.h` 已写明方向性可见、事件语义、错误语义、upsert、clamp、self-filter 和结果顺序。
 - 保留现有方向性可见、注册后可见、注销 leave、越界 clamp 测试作为回归用例，不再把这些已覆盖项当作缺口。
-- 补齐测试：
+- 已补齐 P0 测试：
   - 已有 id 重新 `register_entity` 的 upsert 行为、半径变化和事件序列。
   - `aoi.init` 成功 reset、失败时保留旧状态、`aoi.shutdown` 后空状态、旧 callback 清理。
   - `aoi_radius = 0` 同坐标可见。
@@ -651,8 +640,8 @@ C Client API：
 - 给 `QueryAOI` 标注使用限制，避免被误用为任意半径查询。
 - 给 `register_entity` 明确“新增还是 upsert”。当前保留 upsert，并已增加单独 `aoi.update_radius(entity_id, radius)` / `game_aoi_update_radius`，避免注册接口承担移动和半径更新双重语义。
 - 保持 API 文档和 C Client API 说明与实现同步：坐标越界 clamp、clamp 不改写原始坐标、`QueryRadius` 包含自身、`GetVisibleEntities` 排除自身、非线程安全、回调同步派发、回调期间禁止修改、`aoi.count()` 和 `aoi.shutdown()` 都应作为契约保留。
-- 增加事件顺序测试：enter 必须先于该 target 的移动 delta，leave 后不能再发送普通 delta。
-- 若网络层需要可复现事件顺序，应在 AOI 事件派发前排序目标 id；否则在 API 文档中声明同一 observer 的多目标事件顺序不稳定。
+- 已增加 AOI 事件顺序测试：同一 observer 的多目标 enter/leave 按 target id 排序。
+- 连接侧仍需要生命周期顺序测试：enter/spawn 必须先于该 target 的移动 delta，leave/despawn 后不能再发送普通 delta。
 
 ### P1：空间和规则过滤
 

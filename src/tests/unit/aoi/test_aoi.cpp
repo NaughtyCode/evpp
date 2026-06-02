@@ -717,6 +717,54 @@ TEST_CASE("AOIManager update_radius changes only observer-side visibility",
     REQUIRE_FALSE(Contains(mgr.GetVisibleEntities(1), 2));
 }
 
+TEST_CASE("AOIManager keeps affected observer queries correct after max radius shrink",
+          "[aoi][aoi_manager]") {
+    auto grid = std::make_unique<SpatialGrid>(1000.0f, 1000.0f, 100.0f);
+    AOIManager mgr(std::move(grid));
+
+    mgr.UpsertEntity(1, 0.0f, 0.0f, 500.0f);
+    mgr.UpsertEntity(2, 300.0f, 0.0f, 100.0f);
+    mgr.UpsertEntity(3, 800.0f, 0.0f, 1.0f);
+    REQUIRE_FALSE(Contains(mgr.GetVisibleEntities(2), 3));
+
+    mgr.UpdateEntityRadius(1, 10.0f);
+    mgr.OnEntityMove(3, 250.0f, 0.0f);
+
+    REQUIRE(Contains(mgr.GetVisibleEntities(2), 3));
+}
+
+TEST_CASE("AOIManager keeps affected observer queries correct after unregistering max radius",
+          "[aoi][aoi_manager]") {
+    auto grid = std::make_unique<SpatialGrid>(1000.0f, 1000.0f, 100.0f);
+    AOIManager mgr(std::move(grid));
+
+    mgr.UpsertEntity(1, 0.0f, 0.0f, 500.0f);
+    mgr.UpsertEntity(2, 300.0f, 0.0f, 100.0f);
+    mgr.UpsertEntity(3, 800.0f, 0.0f, 1.0f);
+    REQUIRE_FALSE(Contains(mgr.GetVisibleEntities(2), 3));
+
+    mgr.UnregisterEntity(1);
+    mgr.OnEntityMove(3, 250.0f, 0.0f);
+
+    REQUIRE(Contains(mgr.GetVisibleEntities(2), 3));
+}
+
+TEST_CASE("AOIManager upsert shrinking max radius preserves remaining observer reach",
+          "[aoi][aoi_manager]") {
+    auto grid = std::make_unique<SpatialGrid>(1000.0f, 1000.0f, 100.0f);
+    AOIManager mgr(std::move(grid));
+
+    mgr.UpsertEntity(1, 0.0f, 0.0f, 500.0f);
+    mgr.UpsertEntity(2, 300.0f, 0.0f, 100.0f);
+    mgr.UpsertEntity(3, 800.0f, 0.0f, 1.0f);
+    REQUIRE_FALSE(Contains(mgr.GetVisibleEntities(2), 3));
+
+    mgr.UpsertEntity(1, 0.0f, 0.0f, 10.0f);
+    mgr.OnEntityMove(3, 250.0f, 0.0f);
+
+    REQUIRE(Contains(mgr.GetVisibleEntities(2), 3));
+}
+
 TEST_CASE("AOIManager unregister uses watchers to clear reverse visibility",
           "[aoi][aoi_manager]") {
     auto grid = std::make_unique<SpatialGrid>(1000.0f, 1000.0f, 100.0f);
@@ -738,6 +786,42 @@ TEST_CASE("AOIManager unregister uses watchers to clear reverse visibility",
     REQUIRE(HasEvent(events, 2, 1, false));
     REQUIRE_FALSE(Contains(mgr.GetVisibleEntities(1), 2));
     REQUIRE_FALSE(Contains(mgr.QueryRadius(130.0f, 100.0f, 1.0f), 2));
+}
+
+TEST_CASE("AOIManager dispatches sorted multi-target events for one observer",
+          "[aoi][aoi_manager]") {
+    auto grid = std::make_unique<SpatialGrid>(1000.0f, 1000.0f, 100.0f);
+    AOIManager mgr(std::move(grid));
+
+    mgr.UpsertEntity(3, 30.0f, 0.0f, 0.0f);
+    mgr.UpsertEntity(1, 10.0f, 0.0f, 0.0f);
+    mgr.UpsertEntity(2, 20.0f, 0.0f, 0.0f);
+
+    std::vector<EventRecord> events;
+    mgr.SetEventCallback([&](EntityId observer, EntityId target, bool entered) {
+        events.push_back(EventRecord{observer, target, entered});
+    });
+
+    mgr.UpsertEntity(10, 0.0f, 0.0f, 100.0f);
+
+    std::vector<EntityId> entered_targets;
+    for (const auto& event : events) {
+        if (event.observer == 10 && event.entered) {
+            entered_targets.push_back(event.target);
+        }
+    }
+    REQUIRE(entered_targets == std::vector<EntityId>{1, 2, 3});
+
+    events.clear();
+    mgr.OnEntityMove(10, 900.0f, 900.0f);
+
+    std::vector<EntityId> left_targets;
+    for (const auto& event : events) {
+        if (event.observer == 10 && !event.entered) {
+            left_targets.push_back(event.target);
+        }
+    }
+    REQUIRE(left_targets == std::vector<EntityId>{1, 2, 3});
 }
 
 TEST_CASE("AOIManager rejects C++ callback reentrant mutations and preserves state",

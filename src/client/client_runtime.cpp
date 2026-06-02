@@ -24,6 +24,7 @@
 #include <memory>
 #include <new>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>
@@ -437,6 +438,18 @@ bool valid_positive_float(float value) {
 
 bool valid_finite_float(float value) {
     return std::isfinite(value);
+}
+
+game_error_t aoi_exception_to_error() {
+    try {
+        throw;
+    } catch (const std::bad_alloc&) {
+        return GAME_ERR_OUT_OF_MEMORY;
+    } catch (const std::invalid_argument&) {
+        return GAME_ERR_INVALID_ARG;
+    } catch (...) {
+        return GAME_ERR_GENERIC;
+    }
 }
 
 game_error_t copy_entity_ids(const std::vector<engine::entity::EntityId>& ids,
@@ -1219,8 +1232,12 @@ extern "C" game_error_t game_aoi_register_entity(game_aoi_t* aoi,
         !valid_finite_float(radius)) {
         return GAME_ERR_INVALID_ARG;
     }
-    aoi->manager->UpsertEntity(static_cast<engine::entity::EntityId>(entity_id), x, y, radius);
-    return GAME_OK;
+    try {
+        aoi->manager->UpsertEntity(static_cast<engine::entity::EntityId>(entity_id), x, y, radius);
+        return GAME_OK;
+    } catch (...) {
+        return aoi_exception_to_error();
+    }
 }
 
 extern "C" game_error_t game_aoi_move_entity(game_aoi_t* aoi,
@@ -1231,8 +1248,12 @@ extern "C" game_error_t game_aoi_move_entity(game_aoi_t* aoi,
         !valid_finite_float(x) || !valid_finite_float(y)) {
         return GAME_ERR_INVALID_ARG;
     }
-    aoi->manager->OnEntityMove(static_cast<engine::entity::EntityId>(entity_id), x, y);
-    return GAME_OK;
+    try {
+        aoi->manager->OnEntityMove(static_cast<engine::entity::EntityId>(entity_id), x, y);
+        return GAME_OK;
+    } catch (...) {
+        return aoi_exception_to_error();
+    }
 }
 
 extern "C" game_error_t game_aoi_update_radius(game_aoi_t* aoi,
@@ -1242,8 +1263,12 @@ extern "C" game_error_t game_aoi_update_radius(game_aoi_t* aoi,
         radius < 0.0f || !valid_finite_float(radius)) {
         return GAME_ERR_INVALID_ARG;
     }
-    aoi->manager->UpdateEntityRadius(static_cast<engine::entity::EntityId>(entity_id), radius);
-    return GAME_OK;
+    try {
+        aoi->manager->UpdateEntityRadius(static_cast<engine::entity::EntityId>(entity_id), radius);
+        return GAME_OK;
+    } catch (...) {
+        return aoi_exception_to_error();
+    }
 }
 
 extern "C" game_error_t game_aoi_unregister_entity(game_aoi_t* aoi,
@@ -1251,8 +1276,12 @@ extern "C" game_error_t game_aoi_unregister_entity(game_aoi_t* aoi,
     if (!aoi || !aoi->manager || entity_id == engine::entity::kInvalidEntityId) {
         return GAME_ERR_INVALID_ARG;
     }
-    aoi->manager->UnregisterEntity(static_cast<engine::entity::EntityId>(entity_id));
-    return GAME_OK;
+    try {
+        aoi->manager->UnregisterEntity(static_cast<engine::entity::EntityId>(entity_id));
+        return GAME_OK;
+    } catch (...) {
+        return aoi_exception_to_error();
+    }
 }
 
 extern "C" game_error_t game_aoi_count(game_aoi_t* aoi,
@@ -1273,7 +1302,11 @@ extern "C" game_error_t game_aoi_query_radius(game_aoi_t* aoi,
         radius < 0.0f || !valid_finite_float(radius)) {
         return GAME_ERR_INVALID_ARG;
     }
-    return copy_entity_ids(aoi->manager->QueryRadius(x, y, radius), out_ids, out_cap, out_count);
+    try {
+        return copy_entity_ids(aoi->manager->QueryRadius(x, y, radius), out_ids, out_cap, out_count);
+    } catch (...) {
+        return aoi_exception_to_error();
+    }
 }
 
 extern "C" game_error_t game_aoi_get_visible(game_aoi_t* aoi,
@@ -1284,9 +1317,13 @@ extern "C" game_error_t game_aoi_get_visible(game_aoi_t* aoi,
     if (!aoi || !aoi->manager || entity_id == engine::entity::kInvalidEntityId) {
         return GAME_ERR_INVALID_ARG;
     }
-    return copy_entity_ids(
-        aoi->manager->GetVisibleEntities(static_cast<engine::entity::EntityId>(entity_id)),
-        out_ids,
-        out_cap,
-        out_count);
+    try {
+        return copy_entity_ids(
+            aoi->manager->GetVisibleEntities(static_cast<engine::entity::EntityId>(entity_id)),
+            out_ids,
+            out_cap,
+            out_count);
+    } catch (...) {
+        return aoi_exception_to_error();
+    }
 }
