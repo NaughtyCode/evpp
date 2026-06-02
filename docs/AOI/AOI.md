@@ -8,13 +8,14 @@ AOI（Area of Interest，兴趣区域）不是一个单独算法，而是 MMO �
 
 ## 0. 本轮审查方式
 
-本次按五个视角做多轮审查，并把修正直接合入正文：
+本次按六个视角做多轮审查，并把修正直接合入正文：
 
 1. 资料准确性：校验公开资料是否仍可访问，去掉过度推断，给过时或特定版本资料加限定。
 2. MMO 完整性：补齐空间 AOI、逻辑可见性、复制调度、分区、热点保护、反作弊和运维编排之间的边界。
 3. 当前代码一致性：对照 `SpatialGrid`、`AOIManager`、Lua 绑定、C Client API、API 文档和测试，明确当前实现的真实语义和边界。
 4. 工程落地性：把抽象建议收敛为 P0 到 P4 的接口、数据结构、测试和监控路线。
 5. 文档可维护性：补充术语、风险清单、资料限制和参考链接，避免读者把“行业趋势”误解为当前已实现能力。
+6. 契约可验证性：把初始化替换、查询顺序、回调重入、链接重定向和测试缺口写成可回归的验收项。
 
 ## 1. 结论先行
 
@@ -325,7 +326,7 @@ evpp3 当前 `UnregisterEntity` 会扫描 `visible_` 中所有 observer 来清�
 - 如果大量实体半径差异大，按 profile 分多层网格，而不是用最大半径决定全局 `C`。
 - 如果使用固定 9 宫格 `QueryAOI`，则必须证明 `C` 与最大查询半径不会漏查；否则用半径覆盖格子扫描。
 
-evpp3 的 `QueryRadius` 会按半径覆盖格子，不依赖 9 宫格，因此更安全。`QueryAOI` 是 9 格便捷接口，应在文档中明确仅适合 `cell_size >= query_radius` 一类受控场景。
+evpp3 的 `QueryRadius` 会按半径覆盖格子，不依赖 9 宫格，因此更安全。`QueryAOI` 是 9 格便捷接口，应仅用于“同格 + 邻格候选”或最大业务半径不超过一个 `cell_size` 的受控场景，不能把它当成任意半径查询 API。
 
 ### 6.7 当前 evpp3 实现的边界语义
 
@@ -339,7 +340,7 @@ evpp3 的 `QueryRadius` 会按半径覆盖格子，不依赖 9 宫格，因此�
 - `QueryRadius`、`QueryAOI` 和 `QueryAOIAt` 不排序。结果顺序来自格子扫描和格内 `vector` 顺序，`swap-remove` 删除也会改变格内顺序；不能把它当网络协议顺序。
 - `aoi_radius = 0` 是合法半径，只能看到与 observer 同坐标的其他实体。
 - `register_entity` 对同一个 id 调用时实际是 upsert：先更新半径，再通过 `OnEntityMove` 更新位置。若该 id 已有旧位置，当前实现可能先基于旧位置重算一次自身可见集合，再按新位置重算受影响 observer。后续应明确 API 语义，避免脚本把它当作普通移动接口使用。
-- `aoi.init` 会清理当前 AOI 实例、事件回调和已注册实体，再创建新实例；`aoi.shutdown` 会销毁 AOI 实例并清空回调。未初始化时，`get_visible` 和 `query_radius` 返回空表，`count` 返回 0。
+- `aoi.init` 在参数校验后会先构造新的 `SpatialGrid` 和 `AOIManager`；构造成功后才清理旧实例、旧回调和旧实体并替换为新实例。若构造失败并返回 `nil, err`，旧 AOI 状态仍保留。`aoi.shutdown` 会销毁 AOI 实例并清空回调。未初始化时，`get_visible` 和 `query_radius` 返回空表，`count` 返回 0。
 - Lua 绑定的无效参数通过 `luaL_argerror` 抛出 Lua 参数错误；`nil, err` 只用于未初始化、回调重入 guard 和捕获到底层异常的 mutation API。C++ API 使用异常或空结果，C Client API 使用 `game_error_t`，三层错误语义不能混写。
 - AOI 回调是同步调用。Lua 回调期间禁止再次调用 `register_entity`、`update_entity`、`unregister_entity`、`shutdown` 或 `set_event_callback` 修改 AOI，否则 Lua 绑定会返回 `nil, err`。
 - C++ `AOIManager::SetEventCallback` 没有回调重入 guard；如果 C++ 回调再次调用同一个 manager 修改 AOI，当前文档应视为未定义的上层误用，后续可加统一 reentrancy guard。
@@ -558,7 +559,7 @@ C Client API：
 - 输入校验覆盖 NaN、无限值和非法尺寸。
 - `OnEntityMove` 会重算受影响 observer，不是只重算移动者自己。
 
-### 9.3 本轮已修正的文档问题
+### 9.3 已固化的契约澄清
 
 1. 统一方向性可见语义：`A` 半径大能看到 `B`，不代表 `B` 能看到 `A`；`resources/api/aoi/api.md` 不再描述为双向可见。
 2. 补全事件语义：`update_entity` 会重算移动者和附近受影响 observer，`unregister_entity` 会同时清理被删除实体自己的 visible 集合和其他 observer 对它的引用。
@@ -567,8 +568,9 @@ C Client API：
 5. 明确 `register_entity` 对已有 id 是 upsert，普通移动应使用 `update_entity` / `game_aoi_move_entity`。
 6. 明确坐标越界 clamp 到边界格，但精确距离仍使用原始坐标。
 7. 明确 `QueryRadius` 不排除自身，调用方需要自行过滤。
-8. 补齐 `aoi.init` 返回语义：参数错误仍是 Lua 参数错误，初始化阶段捕获到底层异常时返回 `nil, err`。
-9. 补充 C Client AOI 注释：方向性可见、upsert、clamp、count-only 查询、排序和 self-filter 语义已写入 `src/client/client.h`。
+8. 补齐 `aoi.init` 替换语义：参数错误仍是 Lua 参数错误；初始化阶段捕获到底层异常时返回 `nil, err`，且旧 AOI 实例不应被破坏。
+9. 明确 `QueryAOI` 只是 9 格候选接口，任意半径查询应使用 `QueryRadius`。
+10. 补充 C Client AOI 注释：方向性可见、upsert、clamp、count-only 查询、排序和 self-filter 语义已写入 `src/client/client.h`。
 
 ### 9.4 仍需代码或架构补强的地方
 
@@ -590,7 +592,7 @@ C Client API：
 
 ### 9.5 当前文档与资料限制
 
-- 本轮链接检查日期：2026-06-02。第 14 节全部 19 个参考链接均可访问；其中 17 个原始 URL 直接返回 200，`docs.unity.com/multiplayer/netcode/netcode` 和旧 `docs-multiplayer.unity3d.com` 可经重定向后返回 200。后续维护时应重新检查，因为 Unity、Photon、AWS 和 Agones 文档会持续更新。
+- 本轮链接检查日期：2026-06-02。第 15 节全部 19 个参考链接均可访问；其中 Unity 的 `docs.unity.com/multiplayer/netcode/netcode` 和旧 `docs-multiplayer.unity3d.com` 链接会重定向到新版文档入口。后续维护时应重新检查，因为 Unity、Photon、Mirror、AWS 和 Agones 文档会持续更新。
 - BigWorld 资料来自 2012 年左右公开文档，但 Cell/Ghost/Handoff 仍是 MMO 分布式世界的经典参考。不能把 BigWorld 的具体进程名直接当作 evpp3 目标实现。
 - Unity Netcode 的旧 `docs-multiplayer` 站点已转向新版 package 文档；Object Visibility 概念稳定，但具体 API 要以 `com.unity.netcode.gameobjects` 当前包文档和项目锁定版本为准。
 - Photon Fusion Unreal 的 interest key 资料适合说明 key 订阅和空间哈希策略；不同 Photon 产品线的 API 不完全相同。
@@ -610,11 +612,12 @@ C Client API：
 仍缺少或需要加强：
 
 - `register_entity` 对已有 id 的 upsert 行为和事件序列测试。
-- `aoi.init` 重新初始化应清理旧实体和旧 callback；`aoi.shutdown` 后 `count/get_visible/query_radius` 的空状态语义测试。
+- `aoi.init` 重新初始化成功后应清理旧实体和旧 callback；初始化失败时应保留旧 AOI 状态；`aoi.shutdown` 后 `count/get_visible/query_radius` 的空状态语义测试。
 - Lua 回调重入目前只覆盖 `shutdown()`；还需要覆盖 `init`、`register_entity`、`update_entity`、`unregister_entity` 和 `set_event_callback`。
 - Lua 非法参数错误与 `nil, err` 返回路径的区分测试。
 - `QueryRadius` 包含自身的 API 语义测试。
 - `QueryRadius` / `QueryAOI` 未排序结果不作为协议顺序的契约测试。
+- `QueryAOI` 只覆盖同格和邻格，不可用于任意半径查询的边界测试。
 - `aoi_radius = 0` 的同坐标可见测试。
 - 越界坐标原始位置参与精确距离过滤的测试。
 - 多目标 enter/leave 的稳定排序或明确非稳定契约测试。
@@ -634,10 +637,11 @@ C Client API：
 - 保留现有方向性可见、注册后可见、注销 leave、越界 clamp 测试作为回归用例，不再把这些已覆盖项当作缺口。
 - 补齐测试：
   - 已有 id 重新 `register_entity` 的 upsert 行为、半径变化和事件序列。
-  - `aoi.init` reset、`aoi.shutdown` 后空状态、旧 callback 清理。
+  - `aoi.init` 成功 reset、失败时保留旧状态、`aoi.shutdown` 后空状态、旧 callback 清理。
   - `aoi_radius = 0` 同坐标可见。
   - `QueryRadius` 包含自身、`GetVisibleEntities` 排除自身。
   - `QueryRadius` / `QueryAOI` 未排序结果的非契约说明。
+  - `QueryAOI` 只返回同格和邻格候选，不承担任意半径查询。
   - 越界坐标 clamp 到格子但保留原始坐标参与距离过滤。
   - `max_aoi_radius_` 在半径缩小、删除和重新注册后的边界行为。
   - Lua 回调内所有 mutation API 都应返回错误且不破坏状态。
@@ -825,7 +829,22 @@ WorldPartition
 
 短期保留当前 `SpatialGrid + AOIManager` 是正确选择。它应作为“单 Zone 内精确半径 AOI”的基础，而不是直接承担全世界扩展。下一步最有价值的是语义修正、空间/层隔离、反向 watchers 和批处理调度。
 
-## 14. 参考资料
+## 14. 术语与契约速查
+
+| 项 | 当前 evpp3 契约 | 生产 MMO 扩展方向 |
+| --- | --- | --- |
+| 空间范围 | 单个固定二维世界，`SpatialGrid` 预分配全部格子 | `space_id/layer_id/phase_id` 多空间注册表，稀疏或分页网格 |
+| 可见方向 | 方向性；`visible_[observer]` 表示 observer 能看到 target | 可选对称规则、target-side aura、玩法谓词 |
+| 查询 API | `QueryRadius` 是精确半径查询；`QueryAOI` 是 9 格候选 | 多层索引、类型分层、批量查询 |
+| 结果顺序 | `GetVisibleEntities` 排序；半径/9 格查询不承诺顺序 | 网络协议层显式排序和稳定事件批次 |
+| 初始化 | `aoi.init` 成功后替换旧实例；失败时保留旧实例 | 配置热切换、灰度空间迁移、失败回滚 |
+| 回调 | Lua 回调同步派发且有 mutation guard；C++ 回调无 guard | 统一事件队列、重入保护、异步批处理 |
+| 删除 | 清理自身 visible 并扫描其他 observer 的 visible | `watchers_` 反向索引，避免全量扫描 |
+| 热点 | 无 `max_visible`、LOD、预算或降级 | 连接预算、距离排序、低频 LOD、实例迁移 |
+| 线程 | 无内部锁，要求单线程或阶段所有权 | actor ownership、任务队列、跨线程只投递命令 |
+| 复制 | AOI 只给候选和 enter/leave | spawn/delta/despawn 生命周期队列和复制预算 |
+
+## 15. 参考资料
 
 - IBM Research / ACM Computing Surveys: [Interest management for distributed virtual environments: A survey](https://research.ibm.com/publications/interest-management-for-distributed-virtual-environments-a-survey)
 - Springer: [Area of Interest Management in Massively Multiplayer Online Games](https://link.springer.com/rwe/10.1007/978-3-319-08234-9_239-1)
