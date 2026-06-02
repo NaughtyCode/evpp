@@ -50,7 +50,7 @@ AOI（Area of Interest，兴趣区域）不是一个单独算法，而是 MMO �
 | ACM/IBM Interest Management 综述 | Interest Management 是分布式虚拟环境和 MMOG 的核心扩展手段，需要在不同方案之间权衡延迟、带宽、准确性和成本。 | AOI 应被视为系统工程，不是单一数据结构。 |
 | Springer AOI in MMOG 条目 | AOI 是玩家感兴趣的虚拟世界部分，既可用于中心化 C/S 降低消息量，也可用于 P2P/分布式架构。 | 中心化 MMO 仍然需要 AOI，P2P 方案学术上丰富但商业 MMO 受反作弊限制。 |
 | Unreal Replication Graph | 用持久节点为每个连接构建复制列表，避免每个 Actor 对每个连接做逐一判断。Fortnite 级别的 Actor 数量需要这种复制图。 | 大型在线游戏需要“按角色/状态/空间预分组”的复制层。 |
-| Unity Netcode NetworkObject Visibility | 可见对象会在客户端保持 spawned clone；隐藏对象会被 despawn/destroy，并停止网络流量；该概念页有版本差异，应按项目使用的包版本核对 API。 | AOI 直接驱动客户端对象生命周期，不只是减少移动包。 |
+| Unity Netcode NetworkObject Visibility | 可见对象会在客户端保持 spawned clone；隐藏对象会被 despawn/destroy，并停止网络流量；旧 `docs-multiplayer` 概念页已转向 package 文档，应按项目锁定包版本核对 API。 | AOI 直接驱动客户端对象生命周期，不只是减少移动包。 |
 | Photon Fusion Interest Management | 使用 interest key 和 spatial hash AOI；全局对象绕过过滤，小房间可不启用 AOI。 | Key/频道式订阅适合把空间和玩法规则统一编码。 |
 | Mirror Interest Management | 内置 Spatial Hashing、Distance、Scene、Team、Match 等多种过滤器。 | 生产 AOI 常是“空间过滤 + 语义过滤”的组合。 |
 | BigWorld Server | CellApp 管理空间 Cell，边界附近创建 ghost，客户端实体按 AoI 构建更新包，并维护优先队列。 | 无缝世界需要 Cell/Ghost/Handoff，而不是把世界交给一个 AOI 网格。 |
@@ -327,6 +327,7 @@ evpp3 的 `QueryRadius` 会按半径覆盖格子，不依赖 9 宫格，因此�
 - `aoi_radius = 0` 是合法半径，只能看到与 observer 同坐标的其他实体。
 - `register_entity` 对同一个 id 调用时实际是 upsert：先更新半径，再通过 `OnEntityMove` 更新位置。若该 id 已有旧位置，当前实现可能先基于旧位置重算一次自身可见集合，再按新位置重算受影响 observer。后续应明确 API 语义，避免脚本把它当作普通移动接口使用。
 - AOI 回调是同步调用。回调期间禁止再次调用 `register_entity`、`update_entity`、`unregister_entity`、`shutdown` 或 `set_event_callback` 修改 AOI，否则 Lua 绑定会返回 `nil, err`。
+- `OnEntityMove` 会按 id 排序受影响 observer，但 `RecomputeVisibility` 内部用 `unordered_set` 计算目标差集，同一 observer 的多个 enter/leave 目标派发顺序不是稳定契约。若上层复制系统要求确定性，应在派发前按 target id 排序。
 - 当前没有 `space_id`、`layer_id`、`phase_id`、category、team、owner、visibility predicate。所有注册实体默认处于同一个逻辑世界。
 
 这些语义应同步写入 `resources/api/aoi/api.md`，否则 API 使用者容易误解当前 AOI 已具备分区、对称可见或逻辑过滤能力。
@@ -480,7 +481,13 @@ Agones、GameLift、Kubernetes、FleetIQ、FlexMatch 这类系统负责“把玩
 - `src/runtime/aoi/aoi_manager.h`
 - `src/runtime/aoi/aoi_manager.cc`
 - `src/runtime/script/aoi_bind.cc`
+- `src/client/client.h`
+- `src/client/client_runtime.cpp`
 - `resources/api/aoi/api.md`
+- `src/tests/unit/aoi/test_aoi.cpp`
+- `src/tests/integration/entity/test_entity_aoi.cpp`
+- `src/tests/unit/client_api/test_client_api.cpp`
+- `src/tests/performance/bench_aoi.cpp`
 
 ### 9.1 当前能力
 
@@ -512,6 +519,18 @@ Lua 绑定：
 - `aoi.query_radius(x, y, radius)`
 - `aoi.set_event_callback(callback)`
 
+C Client API：
+
+- `game_aoi_create` / `game_aoi_destroy`
+- `game_aoi_register_entity`
+- `game_aoi_move_entity`
+- `game_aoi_unregister_entity`
+- `game_aoi_count`
+- `game_aoi_query_radius`
+- `game_aoi_get_visible`
+
+这层 API 包装同一个 `AOIManager`，可以创建、注册、移动、注销、查询半径和读取可见集合；当前没有暴露 enter/leave 回调，也没有批量查询、空间/层过滤或连接复制调度接口。
+
 ### 9.2 优点
 
 - 简洁，适合作为 Zone 内 AOI 基础。
@@ -522,7 +541,7 @@ Lua 绑定：
 
 ### 9.3 需要修正或补强的地方
 
-1. 文档语义需要统一。当前实现是方向性可见，`A` 半径大能看到 `B`，不代表 `B` 能看到 `A`。如果 API 文档说“双向”，应修改文档或强制对称规则。
+1. 文档语义需要统一。当前实现是方向性可见，`A` 半径大能看到 `B`，不代表 `B` 能看到 `A`；但 `resources/api/aoi/api.md` 的 Notes 仍描述为 “visibility range in both directions”。应修改 API 文档或强制实现对称规则。
 2. 缺少 `space_id`、`layer_id`、`phase_id`。现在所有实体默认在同一世界，不能表达副本、频道、任务相位。
 3. 缺少逻辑过滤。阵营、队伍、隐身、对象类型、owner-only 状态无法参与 AOI。
 4. 缺少反向 watchers。删除实体时扫描全部 `visible_`，大规模下会变成热点。
@@ -536,14 +555,37 @@ Lua 绑定：
 12. 坐标 clamp 到边界格的行为未在 API 文档中说明，可能隐藏越界写入或脚本错误。
 13. `QueryRadius` 不排除调用者自身；调用方需要自行过滤。
 14. 缺少 enter/leave 与后续移动 delta 的连接侧顺序模型。
+15. 同一 observer 的多个 enter/leave 事件目标顺序未排序，不能作为确定性网络协议顺序使用。
+16. C Client API 仅暴露查询型 AOI 能力，未暴露 enter/leave 事件、批处理或复制预算；其头文件注释和外部文档也需要同步方向性可见、upsert、clamp、self-filter 这些语义。
 
 ### 9.4 当前文档与资料限制
 
 - BigWorld 资料来自 2012 年左右公开文档，但 Cell/Ghost/Handoff 仍是 MMO 分布式世界的经典参考。不能把 BigWorld 的具体进程名直接当作 evpp3 目标实现。
-- Unity Netcode 文档版本变化较快，Object Visibility 概念稳定，但具体 API 要按项目锁定的 package 版本核对。
+- Unity Netcode 的旧 `docs-multiplayer` 站点已转向新版 package 文档；Object Visibility 概念稳定，但具体 API 要以 `com.unity.netcode.gameobjects` 当前包文档和项目锁定版本为准。
 - Photon Fusion Unreal 的 interest key 资料适合说明 key 订阅和空间哈希策略；不同 Photon 产品线的 API 不完全相同。
 - EVE Time Dilation 是过载治理案例，不是 AOI 算法；它用于说明热点无法继续空间裁剪时的降级思路。
 - GameLift/Agones 是托管和编排层，不是 AOI 中间件。
+
+### 9.5 已有测试覆盖与剩余缺口
+
+本轮对照 `src/tests/unit/aoi/test_aoi.cpp`、`src/tests/integration/entity/test_entity_aoi.cpp`、`src/tests/unit/client_api/test_client_api.cpp` 和 `src/tests/performance/bench_aoi.cpp`，当前测试已经覆盖：
+
+- `SpatialGrid` 构造参数校验、插入、重复插入更新、删除、跨格移动、`QueryRadius`、9 宫格 `QueryAOI`、越界坐标 clamp、负半径安全返回。
+- `AOIManager` 注册/注销计数、非法半径/位置、移动进入/离开、方向性可见、相同半径下的对称可见、未注册实体移动忽略、无回调时安全。
+- Lua 绑定导出、跨 `ScriptVM` 状态隔离、回调异常恢复、基本 symmetric callbacks。
+- C Client API 的 `game_aoi_create/register_entity/move_entity/query_radius/get_visible/unregister_entity/count` 基本路径。
+- 性能基准覆盖均匀查询、拥挤格跨格更新和 `AOIManager` crowd move。
+
+仍缺少或需要加强：
+
+- `register_entity` 对已有 id 的 upsert 行为和事件序列测试。
+- `set_event_callback` / mutation API 的 Lua 回调重入错误测试。
+- `QueryRadius` 包含自身的 API 语义测试。
+- `aoi_radius = 0` 的同坐标可见测试。
+- 多目标 enter/leave 的稳定排序或明确非稳定契约测试。
+- `max_aoi_radius_` 在半径缩小、实体删除、重新注册后的边界测试。
+- C Client API 对无效参数、容量截断、方向性可见和 upsert 语义的边界测试。
+- 客户端复制层的 spawn/delta/despawn 顺序测试，目前 AOI 单元测试无法覆盖。
 
 ## 10. evpp3 推荐路线
 
@@ -552,7 +594,7 @@ Lua 绑定：
 目标：让当前 AOI 成为可信的单区服基础。
 
 - 明确方向性可见：`visible_[observer]` 表示 observer 能看到 target。
-- 更新 `resources/api/aoi/api.md` 中“双向”相关描述。
+- 更新 `resources/api/aoi/api.md` 中“双向”相关描述，把当前语义改为“每个 observer 按自身半径独立判断；相同半径时通常表现为对称”。
 - 增加测试：
   - A 半径大、B 半径小的非对称可见。
   - 注册后立即移动触发 enter。
@@ -561,8 +603,9 @@ Lua 绑定：
   - 越界坐标 clamp 行为。
 - 给 `QueryAOI` 标注使用限制，避免被误用为任意半径查询。
 - 给 `register_entity` 明确“新增还是 upsert”。如果保留 upsert，应增加单独 `aoi.update_radius(entity_id, radius)`，避免注册接口承担移动和半径更新双重语义。
-- 在 API 文档中说明坐标越界 clamp、`QueryRadius` 包含自身、回调同步派发和回调期间禁止修改。
+- 在 API 文档和 C Client API 说明中同步坐标越界 clamp、`QueryRadius` 包含自身、`GetVisibleEntities` 排除自身、回调同步派发和回调期间禁止修改。
 - 增加事件顺序测试：enter 必须先于该 target 的移动 delta，leave 后不能再发送普通 delta。
+- 若网络层需要可复现事件顺序，应在 AOI 事件派发前排序目标 id；否则在 API 文档中声明同一 observer 的多目标事件顺序不稳定。
 
 ### P1：空间和规则过滤
 
@@ -742,8 +785,9 @@ WorldPartition
 - IBM Research / ACM Computing Surveys: [Interest management for distributed virtual environments: A survey](https://research.ibm.com/publications/interest-management-for-distributed-virtual-environments-a-survey)
 - Springer: [Area of Interest Management in Massively Multiplayer Online Games](https://link.springer.com/rwe/10.1007/978-3-319-08234-9_239-1)
 - Epic Games: [Replication Graph in Unreal Engine](https://dev.epicgames.com/documentation/unreal-engine/replication-graph-in-unreal-engine)
-- Unity Multiplayer: [Netcode for GameObjects Object visibility](https://docs-multiplayer.unity3d.com/netcode/2.0.0/basics/object-visibility/)
-- Unity Manual: [Netcode for GameObjects package versions](https://docs.unity3d.com/Manual/com.unity.netcode.gameobjects.html)
+- Unity Multiplayer: [Unity's netcode packages](https://docs.unity.com/multiplayer/netcode/netcode)
+- Unity Netcode for GameObjects package: [latest package docs](https://docs.unity3d.com/Packages/com.unity.netcode.gameobjects@latest/)
+- Unity Multiplayer archive: [Netcode for GameObjects Object visibility](https://docs-multiplayer.unity3d.com/netcode/2.3.2/basics/object-visibility/)
 - Photon Fusion Unreal: [Interest Management](https://doc.photonengine.com/fusion-unreal/current/manual/replication/interest-management)
 - Photon Server: [Interest Groups](https://doc.photonengine.com/server/current/applications/loadbalancing/interestgroups)
 - Photon Blog: [Photon Fusion Area of Interest sample](https://blog.photonengine.com/new-photon-fusion-area-of-interest-sample/)
