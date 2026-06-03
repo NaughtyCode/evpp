@@ -157,7 +157,7 @@ int l_string_empty(lua_State* L) {
 
 int l_string_truncate(lua_State* L) {
 	auto* s = GetUserdata<mongo::BsonString>(L, 1, kMetaString);
-	auto len = static_cast<size_t>(luaL_checkinteger(L, 2));
+	auto len = CheckIntegerArg<size_t>(L, 2);
 	if (s) s->Truncate(len);
 	return 0;
 }
@@ -195,7 +195,7 @@ int l_json_reader_gc(lua_State* L) {
 }
 
 int l_json_reader_new_from_fd(lua_State* L) {
-	auto fd = static_cast<int>(luaL_checkinteger(L, 1));
+	auto fd = CheckIntegerArg<int>(L, 1);
 	bool close = lua_toboolean(L, 2) != 0;
 	auto reader = mongo::BsonJsonReader::NewFromFd(fd, close);
 	auto* p = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonJsonReader, std::move(reader));
@@ -401,7 +401,7 @@ int l_reader_new_from_file(lua_State* L) {
 }
 
 int l_reader_new_from_fd(lua_State* L) {
-	auto fd = static_cast<int>(luaL_checkinteger(L, 1));
+	auto fd = CheckIntegerArg<int>(L, 1);
 	bool close = lua_toboolean(L, 2) != 0;
 	auto reader = mongo::BsonReader::NewFromFd(fd, close);
 	auto* p = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonReader, std::move(reader));
@@ -626,8 +626,8 @@ int l_json_opts_gc(lua_State* L) {
 }
 
 int l_json_opts_new(lua_State* L) {
-	auto mode = static_cast<int>(luaL_optinteger(L, 1, 1));	 // default canonical
-	auto max_len = static_cast<int32_t>(luaL_optinteger(L, 2, -1));
+	auto mode = OptIntegerArg<int>(L, 1, 1);	 // default canonical
+	auto max_len = OptIntegerArg<int32_t>(L, 2, -1);
 	auto* p =
 		CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonJsonOpts, static_cast<mongo::BsonJsonMode>(mode), max_len);
 	if (!p) {
@@ -778,7 +778,7 @@ int l_utf8_next_char(lua_State* L) {
 }
 
 int l_utf8_from_unichar(lua_State* L) {
-	auto unichar = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+	auto unichar = CheckIntegerArg<uint32_t>(L, 1);
 	char utf8[6];
 	uint32_t len = 0;
 	mongo::BsonUtf8::FromUnichar(unichar, utf8, &len);
@@ -819,7 +819,7 @@ int l_str_dup(lua_State* L) {
 
 int l_str_ndup(lua_State* L) {
 	const char* str = luaL_checkstring(L, 1);
-	auto n = static_cast<size_t>(luaL_checkinteger(L, 2));
+	auto n = CheckIntegerArg<size_t>(L, 2);
 	char* dup = mongo::BsonStrUtil::Strndup(str, n);
 	if (dup) {
 		lua_pushstring(L, dup);
@@ -831,9 +831,8 @@ int l_str_ndup(lua_State* L) {
 }
 
 int l_str_ncpy(lua_State* L) {
-	size_t src_len;
-	const char* src = luaL_checklstring(L, 1, &src_len);
-	auto size = static_cast<size_t>(luaL_checkinteger(L, 2));
+	const char* src = luaL_checklstring(L, 1, nullptr);
+	auto size = CheckIntegerArg<size_t>(L, 2);
 	if (size == 0) {
 		lua_pushstring(L, "");
 		return 1;
@@ -844,14 +843,14 @@ int l_str_ncpy(lua_State* L) {
 		return 1;
 	}
 	mongo::BsonStrUtil::Strncpy(dst, src, size);
-	lua_pushstring(L, dst);
+	lua_pushlstring(L, dst, mongo::BsonStrUtil::Strnlen(dst, size));
 	bson_free(dst);
 	return 1;
 }
 
 int l_str_nlen(lua_State* L) {
 	const char* s = luaL_checkstring(L, 1);
-	auto maxlen = static_cast<size_t>(luaL_checkinteger(L, 2));
+	auto maxlen = CheckIntegerArg<size_t>(L, 2);
 	lua_pushinteger(L, static_cast<lua_Integer>(mongo::BsonStrUtil::Strnlen(s, maxlen)));
 	return 1;
 }
@@ -865,20 +864,20 @@ int l_str_casecmp(lua_State* L) {
 
 int l_str_ascii_strtoll(lua_State* L) {
 	const char* str = luaL_checkstring(L, 1);
-	auto base = static_cast<int>(luaL_optinteger(L, 2, 0));
+	auto base = OptIntegerArg<int>(L, 2, 0);
 	lua_pushinteger(L,
 					static_cast<lua_Integer>(mongo::BsonStrUtil::AsciiStrtoll(str, nullptr, base)));
 	return 1;
 }
 
 int l_str_isspace(lua_State* L) {
-	auto c = static_cast<int>(luaL_checkinteger(L, 1));
+	auto c = CheckIntegerArg<int>(L, 1);
 	lua_pushboolean(L, mongo::BsonStrUtil::Isspace(c));
 	return 1;
 }
 
 int l_keys_uint32_to_string(lua_State* L) {
-	auto val = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+	auto val = CheckIntegerArg<uint32_t>(L, 1);
 	const char* strptr = nullptr;
 	char buf[16];
 	mongo::BsonKeys::Uint32ToString(val, &strptr, buf, sizeof(buf));

@@ -40,7 +40,7 @@ int l_stream_destroy(lua_State* L) {
 
 int l_stream_new_buffered(lua_State* L) {
 	auto* base = GetUserdata<mongo::MongoStream>(L, 1, kMetaName);
-	size_t buf_size = static_cast<size_t>(luaL_checkinteger(L, 2));
+	auto buf_size = CheckIntegerArg<size_t>(L, 2);
 	if (!base) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid base stream");
@@ -60,7 +60,7 @@ int l_stream_new_buffered(lua_State* L) {
 }
 
 int l_stream_new_file(lua_State* L) {
-	int fd = static_cast<int>(luaL_checkinteger(L, 1));
+	int fd = CheckIntegerArg<int>(L, 1);
 	auto* s = mongo::MongoStream::NewFile(fd);
 	if (!s) {
 		lua_pushnil(L);
@@ -75,8 +75,8 @@ int l_stream_new_file(lua_State* L) {
 
 int l_stream_new_file_for_path(lua_State* L) {
 	const char* path = luaL_checkstring(L, 1);
-	int flags = static_cast<int>(luaL_checkinteger(L, 2));
-	int mode = static_cast<int>(luaL_checkinteger(L, 3));
+	int flags = CheckIntegerArg<int>(L, 2);
+	int mode = CheckIntegerArg<int>(L, 3);
 	auto* s = mongo::MongoStream::NewFileForPath(path, flags, mode);
 	if (!s) {
 		lua_pushnil(L);
@@ -271,7 +271,7 @@ int l_stream_write(lua_State* L) {
 	auto* s = GetUserdata<mongo::MongoStream>(L, 1, kMetaName);
 	size_t len;
 	const char* data = luaL_checklstring(L, 2, &len);
-	int32_t timeout = static_cast<int32_t>(luaL_checkinteger(L, 3));
+	auto timeout = CheckIntegerArg<int32_t>(L, 3);
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid stream");
@@ -285,9 +285,9 @@ int l_stream_write(lua_State* L) {
 
 int l_stream_read(lua_State* L) {
 	auto* s = GetUserdata<mongo::MongoStream>(L, 1, kMetaName);
-	size_t count = static_cast<size_t>(luaL_checkinteger(L, 2));
-	size_t min_bytes = static_cast<size_t>(luaL_optinteger(L, 3, 0));
-	int32_t timeout = static_cast<int32_t>(luaL_optinteger(L, 4, 0));
+	auto count = CheckIntegerArg<size_t>(L, 2);
+	auto min_bytes = OptIntegerArg<size_t>(L, 3, 0);
+	auto timeout = OptIntegerArg<int32_t>(L, 4, 0);
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid stream");
@@ -317,14 +317,16 @@ int l_stream_writev(lua_State* L) {
 		return 3;
 	}
 	luaL_checktype(L, 2, LUA_TTABLE);
-	int32_t timeout = static_cast<int32_t>(luaL_checkinteger(L, 3));
-	int n = static_cast<int>(luaL_len(L, 2));
+	auto timeout = CheckIntegerArg<int32_t>(L, 3);
+	int n = CheckLengthArg<int>(L, 2);
+	luaL_checkstack(L, n, "too many buffers");
 	std::vector<SimpleIovec> iov(static_cast<size_t>(n));
 	// Keep string references on the stack during Writev to prevent GC
 	for (int i = 0; i < n; ++i) {
 		lua_rawgeti(L, 2, i + 1);
 		size_t len;
 		const char* data = luaL_tolstring(L, -1, &len);
+		lua_remove(L, -2);
 		iov[i].iov_base = const_cast<char*>(data);
 		iov[i].iov_len = len;
 	}
@@ -343,9 +345,9 @@ int l_stream_readv(lua_State* L) {
 		return 3;
 	}
 	luaL_checktype(L, 2, LUA_TTABLE);
-	size_t min_bytes = static_cast<size_t>(luaL_optinteger(L, 3, 0));
-	int32_t timeout = static_cast<int32_t>(luaL_optinteger(L, 4, 0));
-	int n = static_cast<int>(luaL_len(L, 2));
+	auto min_bytes = OptIntegerArg<size_t>(L, 3, 0);
+	auto timeout = OptIntegerArg<int32_t>(L, 4, 0);
+	int n = CheckLengthArg<int>(L, 2);
 	std::vector<SimpleIovec> iov(static_cast<size_t>(n));
 	std::vector<std::vector<char>> bufs(static_cast<size_t>(n));
 	for (int i = 0; i < n; ++i) {
@@ -374,10 +376,13 @@ int l_stream_readv(lua_State* L) {
 
 int l_stream_set_sockopt(lua_State* L) {
 	auto* s = GetUserdata<mongo::MongoStream>(L, 1, kMetaName);
-	int level = static_cast<int>(luaL_checkinteger(L, 2));
-	int optname = static_cast<int>(luaL_checkinteger(L, 3));
+	int level = CheckIntegerArg<int>(L, 2);
+	int optname = CheckIntegerArg<int>(L, 3);
 	size_t optlen;
 	const char* optval = luaL_checklstring(L, 4, &optlen);
+	if (optlen > static_cast<size_t>((std::numeric_limits<int>::max)())) {
+		return luaL_argerror(L, 4, "option value too large");
+	}
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid stream");
@@ -412,7 +417,7 @@ int l_stream_should_retry(lua_State* L) {
 int l_stream_tls_handshake(lua_State* L) {
 	auto* s = GetUserdata<mongo::MongoStream>(L, 1, kMetaName);
 	const char* host = luaL_checkstring(L, 2);
-	int32_t timeout = static_cast<int32_t>(luaL_checkinteger(L, 3));
+	auto timeout = CheckIntegerArg<int32_t>(L, 3);
 	if (!s) {
 		lua_pushboolean(L, false);
 		lua_pushinteger(L, 0);
@@ -435,7 +440,7 @@ int l_stream_tls_handshake(lua_State* L) {
 int l_stream_tls_handshake_block(lua_State* L) {
 	auto* s = GetUserdata<mongo::MongoStream>(L, 1, kMetaName);
 	const char* host = luaL_checkstring(L, 2);
-	int32_t timeout = static_cast<int32_t>(luaL_checkinteger(L, 3));
+	auto timeout = CheckIntegerArg<int32_t>(L, 3);
 	if (!s) {
 		lua_pushboolean(L, false);
 		lua_pushstring(L, "invalid stream");
@@ -493,8 +498,8 @@ int l_stream_get_raw(lua_State* L) {
 
 int l_stream_poll(lua_State* L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
-	int32_t timeout = static_cast<int32_t>(luaL_checkinteger(L, 2));
-	int n = static_cast<int>(luaL_len(L, 1));
+	auto timeout = CheckIntegerArg<int32_t>(L, 2);
+	int n = CheckLengthArg<int>(L, 1);
 
 	// Build array of mongoc_stream_poll_t-compatible structs
 	struct StreamPollFd {

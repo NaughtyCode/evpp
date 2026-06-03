@@ -3,6 +3,7 @@
 #include "runtime/database/mongo_bind/bind_bson_iter.h"
 
 #include <cstdint>
+#include <limits>
 #include <new>
 
 #include <bson/bson.h>
@@ -321,7 +322,7 @@ int l_bson_iter_find_descendant(lua_State* L) {
 int l_bson_iter_find_wlen(lua_State* L) {
 	auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
 	const char* key = luaL_checkstring(L, 2);
-	auto keylen = static_cast<int>(luaL_checkinteger(L, 3));
+	auto keylen = CheckIntegerArg<int>(L, 3);
 	lua_pushboolean(L, iter && iter->FindWLen(key, keylen));
 	return 1;
 }
@@ -348,7 +349,7 @@ int l_bson_iter_init_find_wlen(lua_State* L) {
 	auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
 	auto* doc = GetUserdata<mongo::BsonDocument>(L, 2, "bson.doc");
 	const char* key = luaL_checkstring(L, 3);
-	auto keylen = static_cast<int>(luaL_checkinteger(L, 4));
+	auto keylen = CheckIntegerArg<int>(L, 4);
 	lua_pushboolean(L, iter && doc && iter->InitFindWLen(*doc, key, keylen));
 	return 1;
 }
@@ -450,7 +451,7 @@ int l_bson_iter_value(lua_State* L) {
 
 int l_bson_iter_overwrite_int32(lua_State* L) {
 	auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
-	auto val = static_cast<int32_t>(luaL_checkinteger(L, 2));
+	auto val = CheckIntegerArg<int32_t>(L, 2);
 	if (iter) iter->OverwriteInt32(val);
 	return 0;
 }
@@ -484,8 +485,8 @@ int l_bson_iter_overwrite_datetime(lua_State* L) {
 
 int l_bson_iter_overwrite_timestamp(lua_State* L) {
 	auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
-	auto ts = static_cast<uint32_t>(luaL_checkinteger(L, 2));
-	auto inc = static_cast<uint32_t>(luaL_checkinteger(L, 3));
+	auto ts = CheckIntegerArg<uint32_t>(L, 2);
+	auto inc = CheckIntegerArg<uint32_t>(L, 3);
 	if (iter) iter->OverwriteTimestamp(ts, inc);
 	return 0;
 }
@@ -511,9 +512,12 @@ int l_bson_iter_overwrite_decimal128(lua_State* L) {
 
 int l_bson_iter_overwrite_binary(lua_State* L) {
 	auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
-	auto subtype = static_cast<int>(luaL_checkinteger(L, 2));
+	auto subtype = CheckIntegerArg<int>(L, 2);
 	size_t bin_len;
 	const char* data = luaL_checklstring(L, 3, &bin_len);
+	if (bin_len > (std::numeric_limits<uint32_t>::max)()) {
+		return luaL_argerror(L, 3, "binary data too large");
+	}
 	if (!iter) return 0;
 	// Note: OverwriteBinary takes uint32_t* for binary_len (in-out param)
 	uint32_t len32 = static_cast<uint32_t>(bin_len);
@@ -620,8 +624,8 @@ int l_bson_iter_init_from_data_at_offset(lua_State* L) {
 	auto* iter = GetUserdata<mongo::BsonIter>(L, 1, kMetaName);
 	size_t len;
 	const char* data_str = luaL_checklstring(L, 2, &len);
-	auto offset = static_cast<uint32_t>(luaL_checkinteger(L, 3));
-	auto keylen = static_cast<uint32_t>(luaL_checkinteger(L, 4));
+	auto offset = CheckIntegerArg<uint32_t>(L, 3);
+	auto keylen = CheckIntegerArg<uint32_t>(L, 4);
 	if (!iter) {
 		lua_pushboolean(L, false);
 		return 1;

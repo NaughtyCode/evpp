@@ -37,9 +37,9 @@ int l_socket_destroy(lua_State* L) {
 // ── Factory ───────────────────────────────────────────────────────────────
 
 int l_socket_new(lua_State* L) {
-	int domain = static_cast<int>(luaL_checkinteger(L, 1));
-	int type = static_cast<int>(luaL_checkinteger(L, 2));
-	int protocol = static_cast<int>(luaL_checkinteger(L, 3));
+	int domain = CheckIntegerArg<int>(L, 1);
+	int type = CheckIntegerArg<int>(L, 2);
+	int protocol = CheckIntegerArg<int>(L, 3);
 	auto* s = mongo::MongoSocket::New(domain, type, protocol);
 	if (!s) {
 		lua_pushnil(L);
@@ -76,7 +76,7 @@ int l_socket_accept(lua_State* L) {
 int l_socket_bind(lua_State* L) {
 	auto* s = GetUserdata<mongo::MongoSocket>(L, 1, kMetaName);
 	const char* ip = luaL_checkstring(L, 2);
-	int port = static_cast<int>(luaL_checkinteger(L, 3));
+	const auto port = CheckIntegerArg<uint16_t>(L, 3);
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid socket");
@@ -86,7 +86,7 @@ int l_socket_bind(lua_State* L) {
 	struct sockaddr_in addr;
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
-	addr.sin_port = htons(static_cast<uint16_t>(port));
+	addr.sin_port = htons(port);
 	inet_pton(AF_INET, ip, &addr.sin_addr);
 	int rc = s->Bind(reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr));
 	lua_pushinteger(L, rc);
@@ -102,7 +102,7 @@ int l_socket_close(lua_State* L) {
 int l_socket_connect(lua_State* L) {
 	auto* s = GetUserdata<mongo::MongoSocket>(L, 1, kMetaName);
 	const char* ip = luaL_checkstring(L, 2);
-	int port = static_cast<int>(luaL_checkinteger(L, 3));
+	const auto port = CheckIntegerArg<uint16_t>(L, 3);
 	int64_t expire_at = static_cast<int64_t>(luaL_checkinteger(L, 4));
 	if (!s) {
 		lua_pushnil(L);
@@ -113,7 +113,7 @@ int l_socket_connect(lua_State* L) {
 	struct sockaddr_in addr;
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
-	addr.sin_port = htons(static_cast<uint16_t>(port));
+	addr.sin_port = htons(port);
 	inet_pton(AF_INET, ip, &addr.sin_addr);
 	int rc = s->Connect(reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr), expire_at);
 	lua_pushinteger(L, rc);
@@ -184,15 +184,15 @@ int l_socket_get_error(lua_State* L) {
 
 int l_socket_listen(lua_State* L) {
 	auto* s = GetUserdata<mongo::MongoSocket>(L, 1, kMetaName);
-	unsigned int backlog = static_cast<unsigned int>(luaL_checkinteger(L, 2));
+	auto backlog = CheckIntegerArg<unsigned int>(L, 2);
 	lua_pushinteger(L, s ? s->Listen(backlog) : -1);
 	return 1;
 }
 
 int l_socket_receive(lua_State* L) {
 	auto* s = GetUserdata<mongo::MongoSocket>(L, 1, kMetaName);
-	size_t buf_size = static_cast<size_t>(luaL_checkinteger(L, 2));
-	int flags = static_cast<int>(luaL_optinteger(L, 3, 0));
+	auto buf_size = CheckIntegerArg<size_t>(L, 2);
+	int flags = OptIntegerArg<int>(L, 3, 0);
 	int64_t expire_at = static_cast<int64_t>(luaL_optinteger(L, 4, 0));
 	if (!s) {
 		lua_pushnil(L);
@@ -236,7 +236,7 @@ int l_socket_sendv(lua_State* L) {
 	}
 	luaL_checktype(L, 2, LUA_TTABLE);
 	int64_t expire_at = static_cast<int64_t>(luaL_checkinteger(L, 3));
-	int n = static_cast<int>(luaL_len(L, 2));
+	int n = CheckLengthArg<int>(L, 2);
 	std::vector<mongo::MongoIovec> iov(static_cast<size_t>(n));
 	std::vector<std::vector<char>> buffers(static_cast<size_t>(n));
 	for (int i = 0; i < n; ++i) {
@@ -255,9 +255,9 @@ int l_socket_sendv(lua_State* L) {
 
 int l_socket_set_sockopt(lua_State* L) {
 	auto* s = GetUserdata<mongo::MongoSocket>(L, 1, kMetaName);
-	int level = static_cast<int>(luaL_checkinteger(L, 2));
-	int optname = static_cast<int>(luaL_checkinteger(L, 3));
-	int optval = static_cast<int>(luaL_checkinteger(L, 4));
+	int level = CheckIntegerArg<int>(L, 2);
+	int optname = CheckIntegerArg<int>(L, 3);
+	int optval = CheckIntegerArg<int>(L, 4);
 	if (!s) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid socket");
@@ -293,8 +293,8 @@ int l_socket_get_raw(lua_State* L) {
 
 int l_socket_poll_fds(lua_State* L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
-	int32_t timeout = static_cast<int32_t>(luaL_checkinteger(L, 2));
-	int n = static_cast<int>(luaL_len(L, 1));
+	auto timeout = CheckIntegerArg<int32_t>(L, 2);
+	int n = CheckLengthArg<int>(L, 1);
 
 	std::vector<mongo::MongoSocketPollFd> fds(static_cast<size_t>(n));
 	for (int i = 0; i < n; ++i) {
@@ -306,7 +306,7 @@ int l_socket_poll_fds(lua_State* L) {
 		lua_pop(L, 1);
 
 		lua_getfield(L, -1, "events");
-		fds[i].events = static_cast<int>(luaL_checkinteger(L, -1));
+		fds[i].events = CheckIntegerArg<int>(L, -1);
 		fds[i].revents = 0;
 		lua_pop(L, 1);
 

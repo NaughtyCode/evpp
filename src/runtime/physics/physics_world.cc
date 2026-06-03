@@ -136,8 +136,9 @@ void ContactListenerImpl::OnContactPersisted(const JPH::Body& inBody1,
 		static_cast<size_t>(inManifold.mRelativeContactPointsOn2.size()));
 	count = std::min(count, static_cast<size_t>(4));
 	for (size_t i = 0; i < count; ++i) {
-		cp1_sum += inManifold.GetWorldSpaceContactPointOn1(i);
-		cp2_sum += inManifold.GetWorldSpaceContactPointOn2(i);
+		const auto point_index = static_cast<JPH::uint>(i);
+		cp1_sum += inManifold.GetWorldSpaceContactPointOn1(point_index);
+		cp2_sum += inManifold.GetWorldSpaceContactPointOn2(point_index);
 	}
 	if (count > 0) {
 		double inv = 1.0 / static_cast<double>(count);

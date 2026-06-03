@@ -59,7 +59,7 @@ int l_file_opts_set_content_type(lua_State* L) {
 
 int l_file_opts_set_chunk_size(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoGridFsFileOpts>(L, 1, kFileOptsMeta);
-	if (opts) opts->SetChunkSize(static_cast<uint32_t>(luaL_checkinteger(L, 2)));
+	if (opts) opts->SetChunkSize(CheckIntegerArg<uint32_t>(L, 2));
 	return 0;
 }
 
@@ -252,7 +252,7 @@ int l_file_readv(lua_State* L) {
 		lua_pushnil(L);
 		return 3;
 	}
-	size_t size = static_cast<size_t>(luaL_checkinteger(L, 2));
+	auto size = CheckIntegerArg<size_t>(L, 2);
 	if (size == 0) {
 		lua_pushstring(L, "");
 		return 1;
@@ -309,7 +309,7 @@ int l_file_save(lua_State* L) {
 int l_file_seek(lua_State* L) {
 	auto* file = GetUserdata<mongo::MongoGridFsFile>(L, 1, kFileMeta);
 	auto pos = static_cast<int64_t>(luaL_checkinteger(L, 2));
-	int whence = static_cast<int>(luaL_optinteger(L, 3, 0));
+	int whence = OptIntegerArg<int>(L, 3, 0);
 	lua_pushboolean(L, file && file->Seek(pos, whence));
 	return 1;
 }

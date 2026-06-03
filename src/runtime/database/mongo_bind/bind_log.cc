@@ -78,7 +78,7 @@ int l_log_opts_get_max_document_length(lua_State* L) {
 
 int l_log_opts_set_max_document_length(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoStructuredLogOpts>(L, 1, kOptsMeta);
-	size_t len = static_cast<size_t>(luaL_checkinteger(L, 2));
+	auto len = CheckIntegerArg<size_t>(L, 2);
 	lua_pushboolean(L, opts && opts->SetMaxDocumentLength(len));
 	return 1;
 }

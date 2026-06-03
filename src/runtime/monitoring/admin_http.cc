@@ -1,5 +1,6 @@
 #include "runtime/monitoring/admin_http.h"
 
+#include <algorithm>
 #include <chrono>
 #include <sstream>
 #include <utility>
@@ -45,10 +46,12 @@ bool IsLoopbackBindAddress(const std::string& address) {
 }
 
 bool ConstantTimeEqual(const std::string& lhs, const std::string& rhs) {
-	if (lhs.size() != rhs.size()) return false;
-	unsigned char diff = 0;
-	for (size_t i = 0; i < lhs.size(); ++i) {
-		diff |= static_cast<unsigned char>(lhs[i] ^ rhs[i]);
+	size_t diff = lhs.size() ^ rhs.size();
+	const size_t max_size = std::max(lhs.size(), rhs.size());
+	for (size_t i = 0; i < max_size; ++i) {
+		const unsigned char l = i < lhs.size() ? static_cast<unsigned char>(lhs[i]) : 0;
+		const unsigned char r = i < rhs.size() ? static_cast<unsigned char>(rhs[i]) : 0;
+		diff |= static_cast<size_t>(l ^ r);
 	}
 	return diff == 0;
 }

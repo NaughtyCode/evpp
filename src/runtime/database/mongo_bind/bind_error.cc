@@ -77,15 +77,15 @@ int l_error_has_label(lua_State* L) {
 
 int l_error_set_error(lua_State* L) {
 	auto* err = GetUserdata<mongo::MongoError>(L, 1, kMetaName);
-	uint32_t domain = static_cast<uint32_t>(luaL_checkinteger(L, 2));
-	uint32_t code = static_cast<uint32_t>(luaL_checkinteger(L, 3));
+	auto domain = CheckIntegerArg<uint32_t>(L, 2);
+	auto code = CheckIntegerArg<uint32_t>(L, 3);
 	const char* msg = luaL_checkstring(L, 4);
 	if (err) err->SetError(domain, code, "%s", msg);
 	return 0;
 }
 
 int l_error_strerror_r(lua_State* L) {
-	int errno_val = static_cast<int>(luaL_checkinteger(L, 1));
+	int errno_val = CheckIntegerArg<int>(L, 1);
 	lua_pushstring(L, mongo::MongoError::StrErrorR(errno_val));
 	return 1;
 }

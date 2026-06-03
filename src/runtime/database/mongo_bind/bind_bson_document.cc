@@ -200,7 +200,7 @@ int l_bson_doc_append_datetime(lua_State* L) {
 int l_bson_doc_append_binary(lua_State* L) {
 	auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
 	const char* key = luaL_checkstring(L, 2);
-	auto subtype = static_cast<int>(luaL_checkinteger(L, 3));
+	auto subtype = CheckIntegerArg<int>(L, 3);
 	size_t len;
 	const char* data = luaL_checklstring(L, 4, &len);
 	lua_pushboolean(
@@ -288,8 +288,8 @@ int l_bson_doc_append_decimal128(lua_State* L) {
 int l_bson_doc_append_timeval(lua_State* L) {
 	auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
 	const char* key = luaL_checkstring(L, 2);
-	auto tv_sec = static_cast<long>(luaL_checkinteger(L, 3));
-	auto tv_usec = static_cast<long>(luaL_checkinteger(L, 4));
+	auto tv_sec = CheckIntegerArg<long>(L, 3);
+	auto tv_usec = CheckIntegerArg<long>(L, 4);
 	struct timeval tv;
 	tv.tv_sec = tv_sec;
 	tv.tv_usec = tv_usec;
@@ -514,7 +514,7 @@ int l_bson_doc_append_dbref(lua_State* L) {
 int l_bson_doc_append_timet(lua_State* L) {
 	auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
 	const char* key = luaL_checkstring(L, 2);
-	auto val = static_cast<time_t>(luaL_checkinteger(L, 3));
+	auto val = CheckIntegerArg<time_t>(L, 3);
 	lua_pushboolean(L, doc && doc->AppendTimeT(key, val));
 	return 1;
 }
@@ -522,7 +522,7 @@ int l_bson_doc_append_timet(lua_State* L) {
 int l_bson_doc_append_regex_wlen(lua_State* L) {
 	auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
 	const char* key = luaL_checkstring(L, 2);
-	auto keylen = static_cast<int>(luaL_checkinteger(L, 3));
+	auto keylen = CheckIntegerArg<int>(L, 3);
 	const char* regex = luaL_checkstring(L, 4);
 	const char* options = luaL_checkstring(L, 5);
 	lua_pushboolean(L, doc && doc->AppendRegexWLen(key, keylen, regex, options));
@@ -549,8 +549,8 @@ int l_bson_doc_append_iter(lua_State* L) {
 int l_bson_doc_append_binary_uninit(lua_State* L) {
 	auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
 	const char* key = luaL_checkstring(L, 2);
-	auto subtype = static_cast<int>(luaL_checkinteger(L, 3));
-	auto len = static_cast<uint32_t>(luaL_checkinteger(L, 4));
+	auto subtype = CheckIntegerArg<int>(L, 3);
+	auto len = CheckIntegerArg<uint32_t>(L, 4);
 	uint8_t* data_out = nullptr;
 	bool ok = doc && doc->AppendBinaryUninit(key, subtype, &data_out, len);
 	lua_pushboolean(L, ok);
@@ -581,7 +581,7 @@ int l_bson_doc_copy_to(lua_State* L) {
 
 int l_bson_doc_reserve_buffer(lua_State* L) {
 	auto* doc = GetUserdata<mongo::BsonDocument>(L, 1, kMetaName);
-	auto size = static_cast<uint32_t>(luaL_checkinteger(L, 2));
+	auto size = CheckIntegerArg<uint32_t>(L, 2);
 	lua_pushboolean(L, doc && doc->ReserveBuffer(size));
 	return 1;
 }
@@ -686,7 +686,7 @@ int l_bson_doc_new_from_buffer(lua_State* L) {
 }
 
 int l_bson_doc_sized_new(lua_State* L) {
-	auto size = static_cast<size_t>(luaL_checkinteger(L, 1));
+	auto size = CheckIntegerArg<size_t>(L, 1);
 	auto* doc = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::BsonDocument, mongo::BsonDocument::SizedNew(size));
 	if (!doc) {
 		lua_pushnil(L);

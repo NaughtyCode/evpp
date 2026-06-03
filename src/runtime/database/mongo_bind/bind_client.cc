@@ -88,7 +88,7 @@ int l_client_set_appname(lua_State* L) {
 
 int l_client_set_socket_timeout_ms(lua_State* L) {
 	auto* client = GetUserdata<mongo::MongoClient>(L, 1, kMetaName);
-	auto timeout = static_cast<int32_t>(luaL_checkinteger(L, 2));
+	auto timeout = CheckIntegerArg<int32_t>(L, 2);
 	if (client) client->SetSocketTimeoutMs(timeout);
 	return 0;
 }
@@ -484,7 +484,7 @@ int l_client_command_simple_with_server_id(lua_State* L) {
 	auto* prefs = lua_isnoneornil(L, 4)
 					  ? nullptr
 					  : GetUserdata<mongo::MongoReadPrefs>(L, 4, "mongoc.read_prefs");
-	auto server_id = static_cast<uint32_t>(luaL_checkinteger(L, 5));
+	auto server_id = CheckIntegerArg<uint32_t>(L, 5);
 	if (!client || !cmd) {
 		lua_pushnil(L);
 		lua_pushstring(L, "invalid args");
@@ -522,7 +522,7 @@ int l_client_set_ssl_opts(lua_State* L) {
 
 int l_client_set_error_api(lua_State* L) {
 	auto* client = GetUserdata<mongo::MongoClient>(L, 1, kMetaName);
-	auto version = static_cast<uint32_t>(luaL_checkinteger(L, 2));
+	auto version = CheckIntegerArg<uint32_t>(L, 2);
 	if (client) client->SetErrorApi(version);
 	return 0;
 }
@@ -699,7 +699,7 @@ int l_client_select_server(lua_State* L) {
 
 int l_client_get_server_description(lua_State* L) {
 	auto* client = GetUserdata<mongo::MongoClient>(L, 1, kMetaName);
-	auto server_id = static_cast<uint32_t>(luaL_checkinteger(L, 2));
+	auto server_id = CheckIntegerArg<uint32_t>(L, 2);
 	if (!client) {
 		lua_pushnil(L);
 		return 1;
@@ -737,7 +737,7 @@ int l_client_get_server_descriptions(lua_State* L) {
 
 int l_client_server_descriptions_destroy_all(lua_State* L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
-	auto n = static_cast<size_t>(luaL_checkinteger(L, 2));
+	auto n = static_cast<size_t>(CheckIntegerArg<int>(L, 2));
 	if (n == 0) return 0;
 	void** sds = CLOUDENGINE_MEM_NEW_ARR_NOTHROW(void*, n);
 	if (!sds) return 0;
@@ -753,7 +753,7 @@ int l_client_server_descriptions_destroy_all(lua_State* L) {
 
 int l_client_get_handshake_description(lua_State* L) {
 	auto* client = GetUserdata<mongo::MongoClient>(L, 1, kMetaName);
-	auto server_id = static_cast<uint32_t>(luaL_checkinteger(L, 2));
+	auto server_id = CheckIntegerArg<uint32_t>(L, 2);
 	auto* opts =
 		lua_isnoneornil(L, 3) ? nullptr : GetUserdata<mongo::BsonDocument>(L, 3, "bson.doc");
 	if (!client) {

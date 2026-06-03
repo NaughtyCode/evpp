@@ -274,9 +274,9 @@ int l_mongo_get_version(lua_State* L) {
 }
 
 int l_mongo_check_version(lua_State* L) {
-	int major = static_cast<int>(luaL_checkinteger(L, 1));
-	int minor = static_cast<int>(luaL_checkinteger(L, 2));
-	int micro = static_cast<int>(luaL_checkinteger(L, 3));
+	int major = CheckIntegerArg<int>(L, 1);
+	int minor = CheckIntegerArg<int>(L, 2);
+	int micro = CheckIntegerArg<int>(L, 3);
 	lua_pushboolean(L, mongo::MongoVersion::CheckVersion(major, minor, micro));
 	return 1;
 }
@@ -302,9 +302,9 @@ int l_bson_get_version(lua_State* L) {
 }
 
 int l_bson_check_version(lua_State* L) {
-	int major = static_cast<int>(luaL_checkinteger(L, 1));
-	int minor = static_cast<int>(luaL_checkinteger(L, 2));
-	int micro = static_cast<int>(luaL_checkinteger(L, 3));
+	int major = CheckIntegerArg<int>(L, 1);
+	int minor = CheckIntegerArg<int>(L, 2);
+	int micro = CheckIntegerArg<int>(L, 3);
 	lua_pushboolean(L, mongo::MongoVersion::CheckBsonVersion(major, minor, micro));
 	return 1;
 }

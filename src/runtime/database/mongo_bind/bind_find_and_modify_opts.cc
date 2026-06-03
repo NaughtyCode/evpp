@@ -119,7 +119,7 @@ int l_find_and_modify_get_fields(lua_State* L) {
 
 int l_find_and_modify_set_flags(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoFindAndModifyOpts>(L, 1, kMetaName);
-	auto flags = static_cast<uint32_t>(luaL_checkinteger(L, 2));
+	auto flags = CheckIntegerArg<uint32_t>(L, 2);
 	lua_pushboolean(L, opts && opts->SetFlags(flags));
 	return 1;
 }
@@ -144,7 +144,7 @@ int l_find_and_modify_get_bypass_document_validation(lua_State* L) {
 
 int l_find_and_modify_set_max_time_ms(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoFindAndModifyOpts>(L, 1, kMetaName);
-	auto val = static_cast<uint32_t>(luaL_checkinteger(L, 2));
+	auto val = CheckIntegerArg<uint32_t>(L, 2);
 	lua_pushboolean(L, opts && opts->SetMaxTimeMs(val));
 	return 1;
 }

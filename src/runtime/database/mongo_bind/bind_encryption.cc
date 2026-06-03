@@ -76,7 +76,7 @@ int l_auto_encrypt_opts_set_kms_providers(lua_State* L) {
 
 int l_auto_encrypt_opts_set_key_expiration(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoAutoEncryptionOpts>(L, 1, kAeoMeta);
-	auto ms = static_cast<uint64_t>(luaL_checkinteger(L, 2));
+	auto ms = CheckIntegerArg<uint64_t>(L, 2);
 	if (opts) opts->SetKeyExpiration(ms);
 	return 0;
 }
@@ -214,7 +214,7 @@ int l_client_encrypt_opts_set_tls_opts(lua_State* L) {
 
 int l_client_encrypt_opts_set_key_expiration(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionOpts>(L, 1, kCeoMeta);
-	auto ms = static_cast<uint64_t>(luaL_checkinteger(L, 2));
+	auto ms = CheckIntegerArg<uint64_t>(L, 2);
 	if (opts) opts->SetKeyExpiration(ms);
 	return 0;
 }
@@ -380,7 +380,7 @@ int l_encrypt_range_opts_destroy(lua_State* L) {
 
 int l_encrypt_range_opts_set_trim_factor(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptRangeOpts>(L, 1, kErMeta);
-	auto val = static_cast<int32_t>(luaL_checkinteger(L, 2));
+	auto val = CheckIntegerArg<int32_t>(L, 2);
 	if (opts) opts->SetTrimFactor(val);
 	return 0;
 }
@@ -408,7 +408,7 @@ int l_encrypt_range_opts_set_max(lua_State* L) {
 
 int l_encrypt_range_opts_set_precision(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptRangeOpts>(L, 1, kErMeta);
-	auto val = static_cast<int32_t>(luaL_checkinteger(L, 2));
+	auto val = CheckIntegerArg<int32_t>(L, 2);
 	if (opts) opts->SetPrecision(val);
 	return 0;
 }
@@ -468,14 +468,14 @@ int l_encrypt_text_prefix_opts_destroy(lua_State* L) {
 
 int l_encrypt_text_prefix_opts_set_max_query_length(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptTextPrefixOpts>(L, 1, kTpMeta);
-	auto val = static_cast<int32_t>(luaL_checkinteger(L, 2));
+	auto val = CheckIntegerArg<int32_t>(L, 2);
 	if (opts) opts->SetStrMaxQueryLength(val);
 	return 0;
 }
 
 int l_encrypt_text_prefix_opts_set_min_query_length(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptTextPrefixOpts>(L, 1, kTpMeta);
-	auto val = static_cast<int32_t>(luaL_checkinteger(L, 2));
+	auto val = CheckIntegerArg<int32_t>(L, 2);
 	if (opts) opts->SetStrMinQueryLength(val);
 	return 0;
 }
@@ -534,14 +534,14 @@ int l_encrypt_text_suffix_opts_destroy(lua_State* L) {
 
 int l_encrypt_text_suffix_opts_set_max_query_length(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptTextSuffixOpts>(L, 1, kTsMeta);
-	auto val = static_cast<int32_t>(luaL_checkinteger(L, 2));
+	auto val = CheckIntegerArg<int32_t>(L, 2);
 	if (opts) opts->SetStrMaxQueryLength(val);
 	return 0;
 }
 
 int l_encrypt_text_suffix_opts_set_min_query_length(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptTextSuffixOpts>(L, 1, kTsMeta);
-	auto val = static_cast<int32_t>(luaL_checkinteger(L, 2));
+	auto val = CheckIntegerArg<int32_t>(L, 2);
 	if (opts) opts->SetStrMinQueryLength(val);
 	return 0;
 }
@@ -600,21 +600,21 @@ int l_encrypt_text_substring_opts_destroy(lua_State* L) {
 
 int l_encrypt_text_substring_opts_set_max_length(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptTextSubstringOpts>(L, 1, kTssMeta);
-	auto val = static_cast<int32_t>(luaL_checkinteger(L, 2));
+	auto val = CheckIntegerArg<int32_t>(L, 2);
 	if (opts) opts->SetStrMaxLength(val);
 	return 0;
 }
 
 int l_encrypt_text_substring_opts_set_max_query_length(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptTextSubstringOpts>(L, 1, kTssMeta);
-	auto val = static_cast<int32_t>(luaL_checkinteger(L, 2));
+	auto val = CheckIntegerArg<int32_t>(L, 2);
 	if (opts) opts->SetStrMaxQueryLength(val);
 	return 0;
 }
 
 int l_encrypt_text_substring_opts_set_min_query_length(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionEncryptTextSubstringOpts>(L, 1, kTssMeta);
-	auto val = static_cast<int32_t>(luaL_checkinteger(L, 2));
+	auto val = CheckIntegerArg<int32_t>(L, 2);
 	if (opts) opts->SetStrMinQueryLength(val);
 	return 0;
 }
@@ -779,14 +779,14 @@ int l_datakey_opts_set_masterkey(lua_State* L) {
 int l_datakey_opts_set_key_alt_names(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoClientEncryptionDatakeyOpts>(L, 1, kDkMeta);
 	if (!lua_istable(L, 2) || !opts) return 0;
-	int n = static_cast<int>(luaL_len(L, 2));
+	auto n = CheckLengthArg<uint32_t>(L, 2);
 	std::vector<char*> names(n);
-	for (int i = 0; i < n; ++i) {
+	for (uint32_t i = 0; i < n; ++i) {
 		lua_rawgeti(L, 2, i + 1);
 		names[i] = const_cast<char*>(lua_tostring(L, -1));
 		lua_pop(L, 1);
 	}
-	opts->SetKeyAltNames(names.data(), static_cast<uint32_t>(n));
+	opts->SetKeyAltNames(names.data(), n);
 	return 0;
 }
 

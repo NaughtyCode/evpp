@@ -81,7 +81,7 @@ int l_bulk_write_opts_set_extra(lua_State* L) {
 
 int l_bulk_write_opts_set_server_id(lua_State* L) {
 	auto* opts = GetUserdata<mongo::MongoBulkWriteOpts>(L, 1, kMetaName);
-	auto val = static_cast<uint32_t>(luaL_checkinteger(L, 2));
+	auto val = CheckIntegerArg<uint32_t>(L, 2);
 	if (opts) opts->SetServerId(val);
 	return 0;
 }

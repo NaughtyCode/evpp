@@ -68,7 +68,7 @@ int l_array_builder_build(lua_State* L) {
 
 int l_array_builder_append_int32(lua_State* L) {
 	auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
-	auto val = static_cast<int32_t>(luaL_checkinteger(L, 2));
+	auto val = CheckIntegerArg<int32_t>(L, 2);
 	lua_pushboolean(L, builder && builder->AppendInt32(val));
 	return 1;
 }
@@ -130,7 +130,7 @@ int l_array_builder_append_datetime(lua_State* L) {
 
 int l_array_builder_append_binary(lua_State* L) {
 	auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
-	auto subtype = static_cast<int>(luaL_checkinteger(L, 2));
+	auto subtype = CheckIntegerArg<int>(L, 2);
 	size_t len;
 	const char* data = luaL_checklstring(L, 3, &len);
 	lua_pushboolean(L,
@@ -143,8 +143,8 @@ int l_array_builder_append_binary(lua_State* L) {
 
 int l_array_builder_append_binary_uninit(lua_State* L) {
 	auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
-	auto subtype = static_cast<int>(luaL_checkinteger(L, 2));
-	auto len = static_cast<uint32_t>(luaL_checkinteger(L, 3));
+	auto subtype = CheckIntegerArg<int>(L, 2);
+	auto len = CheckIntegerArg<uint32_t>(L, 3);
 	uint8_t* data_out = nullptr;
 	bool ok = builder && builder->AppendBinaryUninit(subtype, &data_out, len);
 	lua_pushboolean(L, ok);
@@ -269,15 +269,15 @@ int l_array_builder_append_db_pointer(lua_State* L) {
 
 int l_array_builder_append_time_t(lua_State* L) {
 	auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
-	time_t value = static_cast<time_t>(luaL_checkinteger(L, 2));
+	auto value = CheckIntegerArg<time_t>(L, 2);
 	lua_pushboolean(L, builder && builder->AppendTimeT(value));
 	return 1;
 }
 
 int l_array_builder_append_timeval(lua_State* L) {
 	auto* builder = GetUserdata<mongo::BsonArrayBuilder>(L, 1, kMetaName);
-	auto tv_sec = static_cast<long>(luaL_checkinteger(L, 2));
-	auto tv_usec = static_cast<long>(luaL_checkinteger(L, 3));
+	auto tv_sec = CheckIntegerArg<long>(L, 2);
+	auto tv_usec = CheckIntegerArg<long>(L, 3);
 	struct timeval tv;
 	tv.tv_sec = tv_sec;
 	tv.tv_usec = tv_usec;

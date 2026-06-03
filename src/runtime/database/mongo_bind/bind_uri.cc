@@ -271,7 +271,7 @@ int l_uri_set_server_monitoring_mode(lua_State* L) {
 int l_uri_get_option_int32(lua_State* L) {
 	auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
 	const char* opt = luaL_checkstring(L, 2);
-	auto fallback = static_cast<int32_t>(luaL_optinteger(L, 3, 0));
+	auto fallback = OptIntegerArg<int32_t>(L, 3, 0);
 	lua_pushinteger(L, uri ? uri->GetOptionAsInt32(opt, fallback) : fallback);
 	return 1;
 }
@@ -279,7 +279,7 @@ int l_uri_get_option_int32(lua_State* L) {
 int l_uri_set_option_int32(lua_State* L) {
 	auto* uri = GetUserdata<mongo::MongoUri>(L, 1, kMetaName);
 	const char* opt = luaL_checkstring(L, 2);
-	auto val = static_cast<int32_t>(luaL_checkinteger(L, 3));
+	auto val = CheckIntegerArg<int32_t>(L, 3);
 	lua_pushboolean(L, uri && uri->SetOptionAsInt32(opt, val));
 	return 1;
 }
@@ -443,7 +443,7 @@ int l_uri_new_with_error(lua_State* L) {
 
 int l_uri_new_for_host_port(lua_State* L) {
 	const char* hostname = luaL_checkstring(L, 1);
-	auto port = static_cast<uint16_t>(luaL_checkinteger(L, 2));
+	auto port = CheckIntegerArg<uint16_t>(L, 2);
 	auto* uri = CLOUDENGINE_MEM_NEW_NOTHROW(mongo::MongoUri, mongo::MongoUri::NewForHostPort(hostname, port));
 	if (!uri) {
 		lua_pushnil(L);

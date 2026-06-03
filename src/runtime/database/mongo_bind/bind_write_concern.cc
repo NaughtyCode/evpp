@@ -46,7 +46,7 @@ int l_write_concern_get_w(lua_State* L) {
 
 int l_write_concern_set_w(lua_State* L) {
 	auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 1, kMetaName);
-	auto w = static_cast<int32_t>(luaL_checkinteger(L, 2));
+	auto w = CheckIntegerArg<int32_t>(L, 2);
 	if (concern) concern->SetW(w);
 	return 0;
 }
@@ -72,7 +72,7 @@ int l_write_concern_get_w_timeout(lua_State* L) {
 
 int l_write_concern_set_w_timeout(lua_State* L) {
 	auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 1, kMetaName);
-	auto timeout = static_cast<int32_t>(luaL_checkinteger(L, 2));
+	auto timeout = CheckIntegerArg<int32_t>(L, 2);
 	if (concern) concern->SetWTimeout(timeout);
 	return 0;
 }
@@ -140,7 +140,7 @@ int l_write_concern_get_w_majority(lua_State* L) {
 
 int l_write_concern_set_w_majority(lua_State* L) {
 	auto* concern = GetUserdata<mongo::MongoWriteConcern>(L, 1, kMetaName);
-	auto timeout = static_cast<int32_t>(luaL_checkinteger(L, 2));
+	auto timeout = CheckIntegerArg<int32_t>(L, 2);
 	if (concern) concern->SetWMajority(timeout);
 	return 0;
 }

@@ -118,7 +118,7 @@ int l_cursor_get_max_await_time_ms(lua_State* L) {
 
 int l_cursor_set_server_id(lua_State* L) {
 	auto* cursor = GetUserdata<mongo::MongoCursor>(L, 1, kMetaName);
-	auto server_id = static_cast<uint32_t>(luaL_checkinteger(L, 2));
+	auto server_id = CheckIntegerArg<uint32_t>(L, 2);
 	if (cursor) cursor->SetServerId(server_id);
 	return 0;
 }
@@ -262,4 +262,3 @@ const luaL_Reg* GetMongoCursorLib() {
 }  // namespace engine
 
 #endif
-

@@ -2,6 +2,7 @@
 
 #include "runtime/database/mongo_bind/bind_bson_vector.h"
 
+#include <limits>
 #include <new>
 #include <vector>
 
@@ -14,6 +15,10 @@ namespace script {
 namespace {
 
 const char* kVi8cMeta = "bson.vector_int8_const";
+
+bool IsRangeInside(size_t length, size_t count, size_t offset) {
+	return offset <= length && count <= length - offset;
+}
 
 int l_vi8c_gc(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorInt8ConstView>(L, 1, kVi8cMeta);
@@ -39,6 +44,10 @@ int l_vi8c_init(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorInt8ConstView>(L, 1, kVi8cMeta);
 	size_t len;
 	const uint8_t* data = reinterpret_cast<const uint8_t*>(luaL_checklstring(L, 2, &len));
+	if (len > (std::numeric_limits<uint32_t>::max)()) {
+		lua_pushboolean(L, false);
+		return 1;
+	}
 	lua_pushboolean(L, v && v->Init(data, static_cast<uint32_t>(len)));
 	return 1;
 }
@@ -58,9 +67,13 @@ int l_vi8c_length(lua_State* L) {
 
 int l_vi8c_read(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorInt8ConstView>(L, 1, kVi8cMeta);
-	auto count = static_cast<size_t>(luaL_checkinteger(L, 2));
-	auto offset = static_cast<size_t>(luaL_optinteger(L, 3, 0));
+	auto count = CheckIntegerArg<size_t>(L, 2);
+	auto offset = OptIntegerArg<size_t>(L, 3, 0);
 	if (!v) {
+		lua_pushnil(L);
+		return 1;
+	}
+	if (!IsRangeInside(v->Length(), count, offset)) {
 		lua_pushnil(L);
 		return 1;
 	}
@@ -74,7 +87,7 @@ int l_vi8c_read(lua_State* L) {
 }
 
 int l_vi8c_binary_data_len(lua_State* L) {
-	auto count = static_cast<size_t>(luaL_checkinteger(L, 1));
+	auto count = CheckIntegerArg<size_t>(L, 1);
 	lua_pushinteger(L, mongo::BsonVectorInt8ConstView::BinaryDataLength(count));
 	return 1;
 }
@@ -121,6 +134,10 @@ int l_vi8_init(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorInt8View>(L, 1, kVi8Meta);
 	size_t len;
 	uint8_t* data = reinterpret_cast<uint8_t*>(const_cast<char*>(luaL_checklstring(L, 2, &len)));
+	if (len > (std::numeric_limits<uint32_t>::max)()) {
+		lua_pushboolean(L, false);
+		return 1;
+	}
 	lua_pushboolean(L, v && v->Init(data, static_cast<uint32_t>(len)));
 	return 1;
 }
@@ -140,9 +157,13 @@ int l_vi8_length(lua_State* L) {
 
 int l_vi8_read(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorInt8View>(L, 1, kVi8Meta);
-	auto count = static_cast<size_t>(luaL_checkinteger(L, 2));
-	auto offset = static_cast<size_t>(luaL_optinteger(L, 3, 0));
+	auto count = CheckIntegerArg<size_t>(L, 2);
+	auto offset = OptIntegerArg<size_t>(L, 3, 0);
 	if (!v) {
+		lua_pushnil(L);
+		return 1;
+	}
+	if (!IsRangeInside(v->Length(), count, offset)) {
 		lua_pushnil(L);
 		return 1;
 	}
@@ -159,7 +180,7 @@ int l_vi8_write(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorInt8View>(L, 1, kVi8Meta);
 	size_t len;
 	const int8_t* data = reinterpret_cast<const int8_t*>(luaL_checklstring(L, 2, &len));
-	auto offset = static_cast<size_t>(luaL_optinteger(L, 3, 0));
+	auto offset = OptIntegerArg<size_t>(L, 3, 0);
 	lua_pushboolean(L, v && v->Write(data, len, offset));
 	return 1;
 }
@@ -183,7 +204,7 @@ int l_vi8_as_const(lua_State* L) {
 }
 
 int l_vi8_binary_data_len(lua_State* L) {
-	auto count = static_cast<size_t>(luaL_checkinteger(L, 1));
+	auto count = CheckIntegerArg<size_t>(L, 1);
 	lua_pushinteger(L, mongo::BsonVectorInt8View::BinaryDataLength(count));
 	return 1;
 }
@@ -232,6 +253,10 @@ int l_vf32c_init(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorFloat32ConstView>(L, 1, kVf32cMeta);
 	size_t len;
 	const uint8_t* data = reinterpret_cast<const uint8_t*>(luaL_checklstring(L, 2, &len));
+	if (len > (std::numeric_limits<uint32_t>::max)()) {
+		lua_pushboolean(L, false);
+		return 1;
+	}
 	lua_pushboolean(L, v && v->Init(data, static_cast<uint32_t>(len)));
 	return 1;
 }
@@ -251,9 +276,14 @@ int l_vf32c_length(lua_State* L) {
 
 int l_vf32c_read(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorFloat32ConstView>(L, 1, kVf32cMeta);
-	auto count = static_cast<size_t>(luaL_checkinteger(L, 2));
-	auto offset = static_cast<size_t>(luaL_optinteger(L, 3, 0));
+	auto count = CheckIntegerArg<size_t>(L, 2);
+	auto offset = OptIntegerArg<size_t>(L, 3, 0);
 	if (!v) {
+		lua_pushnil(L);
+		return 1;
+	}
+	if (!IsRangeInside(v->Length(), count, offset) ||
+		count > static_cast<size_t>((std::numeric_limits<int>::max)())) {
 		lua_pushnil(L);
 		return 1;
 	}
@@ -271,7 +301,7 @@ int l_vf32c_read(lua_State* L) {
 }
 
 int l_vf32c_binary_data_len(lua_State* L) {
-	auto count = static_cast<size_t>(luaL_checkinteger(L, 1));
+	auto count = CheckIntegerArg<size_t>(L, 1);
 	lua_pushinteger(L, mongo::BsonVectorFloat32ConstView::BinaryDataLength(count));
 	return 1;
 }
@@ -318,6 +348,10 @@ int l_vf32_init(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorFloat32View>(L, 1, kVf32Meta);
 	size_t len;
 	uint8_t* data = reinterpret_cast<uint8_t*>(const_cast<char*>(luaL_checklstring(L, 2, &len)));
+	if (len > (std::numeric_limits<uint32_t>::max)()) {
+		lua_pushboolean(L, false);
+		return 1;
+	}
 	lua_pushboolean(L, v && v->Init(data, static_cast<uint32_t>(len)));
 	return 1;
 }
@@ -337,9 +371,14 @@ int l_vf32_length(lua_State* L) {
 
 int l_vf32_read(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorFloat32View>(L, 1, kVf32Meta);
-	auto count = static_cast<size_t>(luaL_checkinteger(L, 2));
-	auto offset = static_cast<size_t>(luaL_optinteger(L, 3, 0));
+	auto count = CheckIntegerArg<size_t>(L, 2);
+	auto offset = OptIntegerArg<size_t>(L, 3, 0);
 	if (!v) {
+		lua_pushnil(L);
+		return 1;
+	}
+	if (!IsRangeInside(v->Length(), count, offset) ||
+		count > static_cast<size_t>((std::numeric_limits<int>::max)())) {
 		lua_pushnil(L);
 		return 1;
 	}
@@ -362,8 +401,8 @@ int l_vf32_write(lua_State* L) {
 		lua_pushboolean(L, false);
 		return 1;
 	}
-	auto count = static_cast<size_t>(luaL_len(L, 2));
-	auto offset = static_cast<size_t>(luaL_optinteger(L, 3, 0));
+	auto count = static_cast<size_t>(CheckLengthArg<int>(L, 2));
+	auto offset = OptIntegerArg<size_t>(L, 3, 0);
 	std::vector<float> buf(count);
 	for (size_t i = 0; i < count; ++i) {
 		lua_rawgeti(L, 2, (int) i + 1);
@@ -393,7 +432,7 @@ int l_vf32_as_const(lua_State* L) {
 }
 
 int l_vf32_binary_data_len(lua_State* L) {
-	auto count = static_cast<size_t>(luaL_checkinteger(L, 1));
+	auto count = CheckIntegerArg<size_t>(L, 1);
 	lua_pushinteger(L, mongo::BsonVectorFloat32View::BinaryDataLength(count));
 	return 1;
 }
@@ -442,6 +481,10 @@ int l_vpb_init(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorPackedBitConstView>(L, 1, kVpbMeta);
 	size_t len;
 	const uint8_t* data = reinterpret_cast<const uint8_t*>(luaL_checklstring(L, 2, &len));
+	if (len > (std::numeric_limits<uint32_t>::max)()) {
+		lua_pushboolean(L, false);
+		return 1;
+	}
 	lua_pushboolean(L, v && v->Init(data, static_cast<uint32_t>(len)));
 	return 1;
 }
@@ -473,9 +516,13 @@ int l_vpb_padding(lua_State* L) {
 
 int l_vpb_read_packed(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorPackedBitConstView>(L, 1, kVpbMeta);
-	auto count = static_cast<size_t>(luaL_checkinteger(L, 2));
-	auto offset = static_cast<size_t>(luaL_optinteger(L, 3, 0));
+	auto count = CheckIntegerArg<size_t>(L, 2);
+	auto offset = OptIntegerArg<size_t>(L, 3, 0);
 	if (!v) {
+		lua_pushnil(L);
+		return 1;
+	}
+	if (!IsRangeInside(v->LengthBytes(), count, offset)) {
 		lua_pushnil(L);
 		return 1;
 	}
@@ -490,9 +537,14 @@ int l_vpb_read_packed(lua_State* L) {
 
 int l_vpb_unpack_bool(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorPackedBitConstView>(L, 1, kVpbMeta);
-	auto count = static_cast<size_t>(luaL_checkinteger(L, 2));
-	auto offset = static_cast<size_t>(luaL_optinteger(L, 3, 0));
+	auto count = CheckIntegerArg<size_t>(L, 2);
+	auto offset = OptIntegerArg<size_t>(L, 3, 0);
 	if (!v) {
+		lua_pushnil(L);
+		return 1;
+	}
+	if (!IsRangeInside(v->Length(), count, offset) ||
+		count > static_cast<size_t>((std::numeric_limits<int>::max)())) {
 		lua_pushnil(L);
 		return 1;
 	}
@@ -517,7 +569,7 @@ int l_vpb_unpack_bool(lua_State* L) {
 }
 
 int l_vpb_binary_data_len(lua_State* L) {
-	auto count = static_cast<size_t>(luaL_checkinteger(L, 1));
+	auto count = CheckIntegerArg<size_t>(L, 1);
 	lua_pushinteger(L, mongo::BsonVectorPackedBitConstView::BinaryDataLength(count));
 	return 1;
 }
@@ -567,6 +619,10 @@ int l_vpbw_init(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorPackedBitView>(L, 1, kVpbwMeta);
 	size_t len;
 	uint8_t* data = reinterpret_cast<uint8_t*>(const_cast<char*>(luaL_checklstring(L, 2, &len)));
+	if (len > (std::numeric_limits<uint32_t>::max)()) {
+		lua_pushboolean(L, false);
+		return 1;
+	}
 	lua_pushboolean(L, v && v->Init(data, static_cast<uint32_t>(len)));
 	return 1;
 }
@@ -598,9 +654,13 @@ int l_vpbw_padding(lua_State* L) {
 
 int l_vpbw_read_packed(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorPackedBitView>(L, 1, kVpbwMeta);
-	auto count = static_cast<size_t>(luaL_checkinteger(L, 2));
-	auto offset = static_cast<size_t>(luaL_optinteger(L, 3, 0));
+	auto count = CheckIntegerArg<size_t>(L, 2);
+	auto offset = OptIntegerArg<size_t>(L, 3, 0);
 	if (!v) {
+		lua_pushnil(L);
+		return 1;
+	}
+	if (!IsRangeInside(v->LengthBytes(), count, offset)) {
 		lua_pushnil(L);
 		return 1;
 	}
@@ -615,9 +675,14 @@ int l_vpbw_read_packed(lua_State* L) {
 
 int l_vpbw_unpack_bool(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorPackedBitView>(L, 1, kVpbwMeta);
-	auto count = static_cast<size_t>(luaL_checkinteger(L, 2));
-	auto offset = static_cast<size_t>(luaL_optinteger(L, 3, 0));
+	auto count = CheckIntegerArg<size_t>(L, 2);
+	auto offset = OptIntegerArg<size_t>(L, 3, 0);
 	if (!v) {
+		lua_pushnil(L);
+		return 1;
+	}
+	if (!IsRangeInside(v->Length(), count, offset) ||
+		count > static_cast<size_t>((std::numeric_limits<int>::max)())) {
 		lua_pushnil(L);
 		return 1;
 	}
@@ -645,7 +710,7 @@ int l_vpbw_write_packed(lua_State* L) {
 	auto* v = GetUserdata<mongo::BsonVectorPackedBitView>(L, 1, kVpbwMeta);
 	size_t len;
 	const uint8_t* data = reinterpret_cast<const uint8_t*>(luaL_checklstring(L, 2, &len));
-	auto offset = static_cast<size_t>(luaL_optinteger(L, 3, 0));
+	auto offset = OptIntegerArg<size_t>(L, 3, 0);
 	lua_pushboolean(L, v && v->WritePacked(data, len, offset));
 	return 1;
 }
@@ -656,8 +721,8 @@ int l_vpbw_pack_bool(lua_State* L) {
 		lua_pushboolean(L, false);
 		return 1;
 	}
-	auto count = static_cast<size_t>(luaL_len(L, 2));
-	auto offset = static_cast<size_t>(luaL_optinteger(L, 3, 0));
+	auto count = static_cast<size_t>(CheckLengthArg<int>(L, 2));
+	auto offset = OptIntegerArg<size_t>(L, 3, 0);
 	auto* buf = CLOUDENGINE_MEM_NEW_ARR_NOTHROW(bool, count);
 	if (!buf) {
 		lua_pushboolean(L, false);
@@ -692,7 +757,7 @@ int l_vpbw_as_const(lua_State* L) {
 }
 
 int l_vpbw_binary_data_len(lua_State* L) {
-	auto count = static_cast<size_t>(luaL_checkinteger(L, 1));
+	auto count = CheckIntegerArg<size_t>(L, 1);
 	lua_pushinteger(L, mongo::BsonVectorPackedBitView::BinaryDataLength(count));
 	return 1;
 }

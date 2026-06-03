@@ -3,6 +3,7 @@
 #include "runtime/database/data_service/database_service.h"
 
 #include <cstdio>
+#include <limits>
 #include <mutex>
 #include <shared_mutex>
 
@@ -33,6 +34,13 @@ bool ValidateConfig(const DbServiceConfig& config) {
 						 "DatabaseService: max_pool_size ({}) must be >= thread_count ({})",
 						 config.connection_pool.max_pool_size,
 						 config.thread_pool.thread_count);
+		return false;
+	}
+	if (config.connection_pool.max_pool_size >
+		static_cast<int>((std::numeric_limits<uint32_t>::max)())) {
+		ENGINE_LOG_ERROR(logger,
+						 "DatabaseService: max_pool_size ({}) exceeds uint32_t max",
+						 config.connection_pool.max_pool_size);
 		return false;
 	}
 
@@ -68,6 +76,12 @@ bool ValidateConfig(const DbServiceConfig& config) {
 		ENGINE_LOG_WARN(logger,
 						"DatabaseService: wait_queue_timeout_ms <= 0 disables pool Pop timeout; "
 						"shutdown can block if a worker waits for a client");
+	} else if (config.connection_pool.wait_queue_timeout_ms >
+			   (std::numeric_limits<int32_t>::max)()) {
+		ENGINE_LOG_ERROR(logger,
+						 "DatabaseService: wait_queue_timeout_ms ({}) exceeds int32_t max",
+						 config.connection_pool.wait_queue_timeout_ms);
+		return false;
 	}
 
 	return true;

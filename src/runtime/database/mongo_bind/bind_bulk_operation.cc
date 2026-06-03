@@ -293,7 +293,7 @@ int l_bulk_update_many_with_opts(lua_State* L) {
 
 int l_bulk_set_server_id(lua_State* L) {
 	auto* bulk = GetUserdata<mongo::MongoBulkOperation>(L, 1, kMetaName);
-	auto server_id = static_cast<uint32_t>(luaL_checkinteger(L, 2));
+	auto server_id = CheckIntegerArg<uint32_t>(L, 2);
 	if (bulk) bulk->SetServerId(server_id);
 	return 0;
 }

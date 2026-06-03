@@ -7,9 +7,11 @@
 #include <cassert>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <filesystem>
 #include <limits>
+#include <new>
 
 #include <Jolt/Math/Quat.h>
 #include <Jolt/Math/Real.h>
@@ -61,7 +63,8 @@ PhysicsSystem& PhysicsSystem::Instance() {
 	// performs explicit PhysicsSystem::Shutdown() during Engine::Cleanup();
 	// letting the C++ static-destruction phase tear down the wrapper after
 	// those globals have started unwinding can jump through stale Jolt state.
-	static PhysicsSystem* instance = new PhysicsSystem();
+	alignas(PhysicsSystem) static std::byte storage[sizeof(PhysicsSystem)];
+	static PhysicsSystem* instance = ::new (static_cast<void*>(storage)) PhysicsSystem();
 	return *instance;
 }
 

@@ -138,8 +138,8 @@ int l_session_get_operation_time(lua_State* L) {
 
 int l_session_advance_operation_time(lua_State* L) {
 	auto* session = GetUserdata<mongo::MongoSession>(L, 1, kMetaName);
-	auto timestamp = static_cast<uint32_t>(luaL_checkinteger(L, 2));
-	auto increment = static_cast<uint32_t>(luaL_checkinteger(L, 3));
+	auto timestamp = CheckIntegerArg<uint32_t>(L, 2);
+	auto increment = CheckIntegerArg<uint32_t>(L, 3);
 	if (session) session->AdvanceOperationTime(timestamp, increment);
 	return 0;
 }

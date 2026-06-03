@@ -57,7 +57,7 @@ int l_read_prefs_set_mode(lua_State* L) {
 
 int l_read_prefs_set_max_staleness_seconds(lua_State* L) {
 	auto* prefs = GetUserdata<mongo::MongoReadPrefs>(L, 1, kMetaName);
-	auto secs = static_cast<int>(luaL_checkinteger(L, 2));
+	auto secs = CheckIntegerArg<int>(L, 2);
 	if (prefs) prefs->SetMaxStalenessSeconds(secs);
 	return 0;
 }

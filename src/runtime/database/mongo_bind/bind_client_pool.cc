@@ -93,7 +93,7 @@ int l_pool_push(lua_State* L) {
 
 int l_pool_set_max_size(lua_State* L) {
 	auto* pool = GetUserdata<mongo::MongoClientPool>(L, 1, kMetaName);
-	auto size = static_cast<uint32_t>(luaL_checkinteger(L, 2));
+	auto size = CheckIntegerArg<uint32_t>(L, 2);
 	if (pool) pool->SetMaxSize(size);
 	return 0;
 }
@@ -138,7 +138,7 @@ int l_pool_set_apm_callbacks(lua_State* L) {
 
 int l_pool_set_error_api(lua_State* L) {
 	auto* pool = GetUserdata<mongo::MongoClientPool>(L, 1, kMetaName);
-	auto version = static_cast<uint32_t>(luaL_checkinteger(L, 2));
+	auto version = CheckIntegerArg<uint32_t>(L, 2);
 	lua_pushboolean(L, pool && pool->SetErrorApi(version));
 	return 1;
 }

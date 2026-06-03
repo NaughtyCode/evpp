@@ -2,8 +2,11 @@
 
 #if defined(ENGINE_MONGODB_ENABLED)
 
+#include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <new>
+#include <type_traits>
 
 #include "runtime/core/mem/mem.h"
 
@@ -33,6 +36,56 @@ T** NewUserdata(lua_State* L, const char* meta_name) {
 	*ud = nullptr;
 	luaL_setmetatable(L, meta_name);
 	return ud;
+}
+
+template <typename T>
+T CheckIntegerValue(lua_State* L, int idx, lua_Integer value) {
+	static_assert(std::is_integral_v<T> && !std::is_same_v<T, bool>,
+				  "T must be a non-bool integral type");
+
+	if constexpr (std::is_signed_v<T>) {
+		constexpr lua_Integer min_value = static_cast<lua_Integer>((std::numeric_limits<T>::min)());
+		constexpr lua_Integer max_value = static_cast<lua_Integer>((std::numeric_limits<T>::max)());
+		if (value < min_value || value > max_value) {
+			luaL_argerror(L, idx, "integer out of range");
+			return T{};
+		}
+	} else {
+		if (value < 0) {
+			luaL_argerror(L, idx, "integer out of range");
+			return T{};
+		}
+		using UnsignedLuaInteger = std::make_unsigned_t<lua_Integer>;
+		const auto unsigned_value = static_cast<UnsignedLuaInteger>(value);
+		constexpr auto target_max = (std::numeric_limits<T>::max)();
+		constexpr auto lua_max = (std::numeric_limits<UnsignedLuaInteger>::max)();
+		if constexpr (target_max < lua_max) {
+			if (unsigned_value > static_cast<UnsignedLuaInteger>(target_max)) {
+				luaL_argerror(L, idx, "integer out of range");
+				return T{};
+			}
+		}
+	}
+
+	return static_cast<T>(value);
+}
+
+template <typename T>
+T CheckIntegerArg(lua_State* L, int idx) {
+	return CheckIntegerValue<T>(L, idx, luaL_checkinteger(L, idx));
+}
+
+template <typename T>
+T CheckLengthArg(lua_State* L, int idx) {
+	return CheckIntegerValue<T>(L, idx, luaL_len(L, idx));
+}
+
+template <typename T>
+T OptIntegerArg(lua_State* L, int idx, T default_value) {
+	if (lua_isnoneornil(L, idx)) {
+		return default_value;
+	}
+	return CheckIntegerArg<T>(L, idx);
 }
 
 // ── Metatable registration ──────────────────────────────────────────────
