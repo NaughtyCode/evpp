@@ -405,5 +405,11 @@ void ExportSpace(ScriptVM& vm, space::Space* current_space) {
 	}
 }
 
+void ClearCurrentSpace(ScriptVM& vm) {
+	auto* L = vm.GetState();
+	if (!L) return;
+	SetCurrentSpace(L, nullptr);
+}
+
 }  // namespace script
 }  // namespace engine

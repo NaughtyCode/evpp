@@ -19,5 +19,10 @@ namespace script {
 //   space.current()              → {id, name, entity_count}
 CLOUD_ENGINE_API void ExportSpace(ScriptVM& vm, space::Space* current_space = nullptr);
 
+// Clear the VM-local current-space pointer without changing the exported API.
+// Call before a bound Space object is destroyed so Lua cannot observe a
+// dangling native pointer during VM teardown.
+CLOUD_ENGINE_API void ClearCurrentSpace(ScriptVM& vm);
+
 }  // namespace script
 }  // namespace engine

@@ -42,6 +42,7 @@ CLOUD_ENGINE_API void ExportEntity(ScriptVM& vm);
 CLOUD_ENGINE_API void ShutdownEntityBindings();
 
 CLOUD_ENGINE_API void ExportSpace(ScriptVM& vm, space::Space* current_space);
+CLOUD_ENGINE_API void ClearCurrentSpace(ScriptVM& vm);
 
 CLOUD_ENGINE_API void ExportAOI(ScriptVM& vm);
 #if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED

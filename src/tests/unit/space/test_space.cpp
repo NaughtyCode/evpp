@@ -92,6 +92,27 @@ TEST_CASE("Space script VM has current space binding", "[space][vm][binding]") {
     REQUIRE(result == "123:BoundSpace");
 }
 
+TEST_CASE("Space current binding can be cleared before VM teardown", "[space][vm][binding]") {
+    auto* default_space = SpaceManager::Instance().GetDefaultSpace();
+    if (default_space) {
+        SpaceManager::Instance().DestroySpace(default_space->GetId());
+    }
+
+    SpaceConfig cfg;
+    cfg.name = "ClearBinding";
+    Space space(9001, cfg);
+    auto& vm = space.GetScriptVM();
+    engine::script::ClearCurrentSpace(vm);
+
+    std::string error;
+    std::string result;
+    REQUIRE(vm.DoString("return tostring(space.current() == nil)",
+                        "string",
+                        &error,
+                        &result));
+    REQUIRE(result == "true");
+}
+
 TEST_CASE("Space is not copyable", "[space][traits]") {
     SpaceConfig cfg;
     Space space(1, cfg);

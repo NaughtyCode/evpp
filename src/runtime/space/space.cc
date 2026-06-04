@@ -47,6 +47,7 @@ Space::~Space() {
 
 	if (vm_) {
 		vm_->DestroyScript();
+		script::ClearCurrentSpace(*vm_);
 	}
 
 	// Suspend all player entities before teardown
