@@ -133,6 +133,7 @@ LuaScriptValidationResult LuaScriptValidator::ValidateFile(
 	}
 
 	ConfigurePackagePath(L, script_dirs_);
+	validation_vm->SetScriptRoots(script_dirs_);
 	ConfigureImport(*validation_vm, script_dirs_);
 
 	const int base_top = lua_gettop(L);

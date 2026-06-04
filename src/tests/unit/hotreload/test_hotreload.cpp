@@ -494,7 +494,7 @@ str_val = "hello"
 // ScriptReloader — module name extraction
 // ============================================================================
 
-TEST_CASE("ReloadFile extracts dotted module name from script dirs",
+TEST_CASE("ReloadFile extracts path-based default module name from script dirs",
           "[hotreload][reload]") {
 	TempDir base("hotreload_modname_test");
 
@@ -504,7 +504,7 @@ TEST_CASE("ReloadFile extracts dotted module name from script dirs",
 	std::filesystem::create_directories(sub, ec);
 
 	std::ofstream of(sub / "mod.lua");
-	of << "return { name = 'sub.mod' }";
+	of << "return { name = 'sub_mod' }";
 	of.close();
 
 	ScriptVM vm;
@@ -515,13 +515,13 @@ TEST_CASE("ReloadFile extracts dotted module name from script dirs",
 	bool ok = reloader.ReloadFile(fpath);
 	REQUIRE(ok);
 
-	// Verify the module was cached as "sub.mod" in package.loaded.
+	// Verify the module was cached as "sub_mod" in package.loaded.
 	lua_State* L = vm.GetState();
 	lua_getglobal(L, "package");
 	REQUIRE(lua_istable(L, -1));
 	lua_getfield(L, -1, "loaded");
 	REQUIRE(lua_istable(L, -1));
-	lua_getfield(L, -1, "sub.mod");
+	lua_getfield(L, -1, "sub_mod");
 	REQUIRE(lua_istable(L, -1));
 	lua_pop(L, 3);
 }

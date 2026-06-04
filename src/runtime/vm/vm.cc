@@ -1,5 +1,6 @@
 #include "runtime/vm/vm.h"
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <stdexcept>
@@ -10,6 +11,88 @@
 #include "runtime/vm/lua_error_handler.h"
 
 namespace engine {
+
+namespace {
+
+std::vector<std::string> SplitPathList(const std::string& paths) {
+	std::vector<std::string> result;
+	size_t start = 0;
+	while (start <= paths.size()) {
+		size_t end = paths.find(';', start);
+		if (end == std::string::npos) end = paths.size();
+		std::string path = paths.substr(start, end - start);
+		if (!path.empty()) {
+#ifdef _WIN32
+			std::replace(path.begin(), path.end(), '\\', '/');
+#endif
+			result.push_back(std::move(path));
+		}
+		if (end == paths.size()) break;
+		start = end + 1;
+	}
+	return result;
+}
+
+std::filesystem::path AbsoluteNormalPath(const std::filesystem::path& path) {
+	std::error_code ec;
+	auto absolute = std::filesystem::absolute(path, ec);
+	if (ec) {
+		return path.lexically_normal();
+	}
+	return absolute.lexically_normal();
+}
+
+bool IsUsableRelativePath(const std::filesystem::path& relative) {
+	if (relative.empty() || relative.is_absolute()) return false;
+	const auto rel_str = relative.generic_string();
+	if (rel_str.empty() || rel_str == ".") return false;
+	for (const auto& part : relative) {
+		if (part == "..") return false;
+	}
+	return true;
+}
+
+bool IsPathUnderOrAtRoot(const std::filesystem::path& path,
+						 const std::filesystem::path& root) {
+	auto relative = path.lexically_relative(root);
+	return relative.generic_string() == "." || IsUsableRelativePath(relative);
+}
+
+std::filesystem::path CommonRootForPaths(const std::vector<std::string>& paths) {
+	if (paths.empty()) return {};
+
+	std::filesystem::path common = AbsoluteNormalPath(paths.front());
+	for (size_t i = 1; i < paths.size(); ++i) {
+		const auto path = AbsoluteNormalPath(paths[i]);
+		while (!common.empty() && !IsPathUnderOrAtRoot(path, common)) {
+			auto parent = common.parent_path();
+			if (parent == common) break;
+			common = parent;
+		}
+	}
+	return common;
+}
+
+std::vector<std::string> DeriveScriptRootsFromImportPath(const std::string& paths) {
+	auto split_paths = SplitPathList(paths);
+	if (split_paths.size() <= 1) return split_paths;
+
+	auto common = CommonRootForPaths(split_paths);
+	if (!common.empty()) {
+		return {common.string()};
+	}
+	return split_paths;
+}
+
+std::filesystem::path RemoveLuaExtension(std::filesystem::path path) {
+	auto ext = path.extension().string();
+	if (ext == ".lua" || ext == ".LUA") {
+		path = path.parent_path() / path.stem();
+	}
+	return path;
+}
+
+}  // namespace
 
 ScriptVM::ScriptVM(LuaSandboxLevel level) {
 	ENGINE_PROFILE_SCOPE("engine.vm", "ScriptVM::ctor");
@@ -195,7 +278,11 @@ bool ScriptVM::DoFile(const std::string& filename, std::string* error_out) {
 
 	int base_top = lua_gettop(L_);
 	auto* logger = GetLogger();
-	ENGINE_LOG_INFO(logger, "ScriptVM::DoFile loading [{}]...", filename);
+	const std::string module_name = GetDefaultModuleNameForFile(filename);
+	ENGINE_LOG_INFO(logger,
+					"ScriptVM::DoFile loading [{}] as module [{}]...",
+					filename,
+					module_name);
 
 	int rc = luaL_loadfilex(L_, filename.c_str(), nullptr);
 	if (rc != LUA_OK) {
@@ -207,7 +294,7 @@ bool ScriptVM::DoFile(const std::string& filename, std::string* error_out) {
 	}
 
 	int msgh = PushLuaErrorHandlerForCall(L_, 0);
-	rc = lua_pcall(L_, 0, 0, msgh);
+	rc = lua_pcall(L_, 0, 1, msgh);
 	if (rc != LUA_OK) {
 		const char* msg = lua_tostring(L_, -1);
 		ENGINE_LOG_ERROR(logger, "ScriptVM::DoFile run error [{}]: [{}]", filename, msg);
@@ -216,9 +303,10 @@ bool ScriptVM::DoFile(const std::string& filename, std::string* error_out) {
 		return false;
 	}
 	lua_remove(L_, msgh);
+	RegisterLoadedModule(module_name, -1);
 	lua_settop(L_, base_top);
 
-	ENGINE_LOG_INFO(logger, "ScriptVM::DoFile [{}] OK", filename);
+	ENGINE_LOG_INFO(logger, "ScriptVM::DoFile [{}] module [{}] OK", filename, module_name);
 	return true;
 }
 
@@ -419,7 +507,121 @@ ScriptImporter& ScriptVM::GetImporter() {
 }
 
 void ScriptVM::SetImportPath(const std::string& scripts_dir) {
-	GetImporter().Init(scripts_dir);
+	if (scripts_dir.find(';') != std::string::npos) {
+		GetImporter().SetPaths(scripts_dir);
+	} else {
+		GetImporter().Init(scripts_dir);
+	}
+	SetScriptRoots(DeriveScriptRootsFromImportPath(scripts_dir));
+}
+
+void ScriptVM::SetScriptRoot(const std::string& root_dir) {
+	SetScriptRoots({root_dir});
+}
+
+void ScriptVM::SetScriptRoots(std::vector<std::string> root_dirs) {
+	script_roots_.clear();
+	script_roots_.reserve(root_dirs.size());
+	for (auto& root : root_dirs) {
+		if (root.empty()) continue;
+#ifdef _WIN32
+		std::replace(root.begin(), root.end(), '\\', '/');
+#endif
+		script_roots_.push_back(std::move(root));
+	}
+}
+
+const std::vector<std::string>& ScriptVM::GetScriptRoots() const {
+	return script_roots_;
+}
+
+std::string ScriptVM::GetDefaultModuleNameForFile(const std::string& filename) const {
+	return BuildDefaultModuleNameForFile(filename, script_roots_);
+}
+
+std::string ScriptVM::BuildDefaultModuleNameForFile(const std::string& filename) {
+	return BuildDefaultModuleNameForFile(filename, {});
+}
+
+std::string ScriptVM::BuildDefaultModuleNameForFile(
+	const std::string& filename,
+	const std::vector<std::string>& root_dirs) {
+	return BuildModuleNameForFile(filename, root_dirs, '_');
+}
+
+std::string ScriptVM::BuildModuleNameForFile(const std::string& filename,
+											 const std::vector<std::string>& root_dirs,
+											 char path_separator) {
+	std::filesystem::path file_path = AbsoluteNormalPath(filename);
+	std::filesystem::path best_relative;
+	size_t best_root_length = 0;
+
+	for (const auto& root_dir : root_dirs) {
+		if (root_dir.empty()) continue;
+		std::filesystem::path root_path = AbsoluteNormalPath(root_dir);
+		auto relative = file_path.lexically_relative(root_path);
+		if (!IsUsableRelativePath(relative)) continue;
+
+		const auto root_length = root_path.generic_string().size();
+		if (best_relative.empty() || root_length > best_root_length) {
+			best_relative = relative;
+			best_root_length = root_length;
+		}
+	}
+
+	if (best_relative.empty()) {
+		std::error_code ec;
+		auto cwd = std::filesystem::current_path(ec);
+		if (!ec) {
+			auto relative = file_path.lexically_relative(AbsoluteNormalPath(cwd));
+			if (IsUsableRelativePath(relative)) {
+				best_relative = relative;
+			}
+		}
+	}
+
+	if (best_relative.empty()) {
+		std::filesystem::path raw_path(filename);
+		best_relative = raw_path.is_absolute() ? raw_path.filename() : raw_path.lexically_normal();
+	}
+
+	best_relative = RemoveLuaExtension(best_relative);
+	std::string module_name = best_relative.generic_string();
+	for (auto& c : module_name) {
+		if (c == '/' || c == '\\') c = path_separator;
+	}
+	while (!module_name.empty() && module_name.front() == path_separator) {
+		module_name.erase(module_name.begin());
+	}
+	if (module_name.empty()) {
+		module_name = RemoveLuaExtension(std::filesystem::path(filename).filename()).string();
+	}
+	return module_name;
+}
+
+void ScriptVM::RegisterLoadedModule(std::string_view module_name, int value_index) {
+	if (!L_ || module_name.empty()) return;
+
+	const int abs_value_index = lua_absindex(L_, value_index);
+	lua_getglobal(L_, "package");
+	if (!lua_istable(L_, -1)) {
+		lua_pop(L_, 1);
+		return;
+	}
+	lua_getfield(L_, -1, "loaded");
+	if (!lua_istable(L_, -1)) {
+		lua_pop(L_, 2);
+		return;
+	}
+
+	if (lua_isnil(L_, abs_value_index)) {
+		lua_pushboolean(L_, 1);
+	} else {
+		lua_pushvalue(L_, abs_value_index);
+	}
+	lua_setfield(L_, -2, std::string(module_name).c_str());
+
+	lua_pop(L_, 2);
 }
 
 // RegisterCallback

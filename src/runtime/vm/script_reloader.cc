@@ -299,40 +299,35 @@ bool ScriptReloader::ValidateScript(const std::string& filepath) {
 
 // Module name extraction helper
 
-static std::string ExtractModuleName(const std::string& filepath,
-                                      const std::vector<std::string>& script_dirs) {
-	std::error_code ec;
-	std::filesystem::path fp = std::filesystem::absolute(filepath, ec).lexically_normal();
-	if (ec) {
-		fp = std::filesystem::path(filepath).lexically_normal();
+std::vector<std::string> ScriptReloader::ResolveModuleNames(
+	const std::string& filepath) const {
+	std::vector<std::string> roots;
+	if (vm_ && !vm_->GetScriptRoots().empty()) {
+		roots = vm_->GetScriptRoots();
+	} else {
+		roots = script_dirs_;
 	}
-	for (const auto& dir : script_dirs) {
-		ec.clear();
-		std::filesystem::path dp = std::filesystem::absolute(dir, ec).lexically_normal();
-		if (ec) {
-			dp = std::filesystem::path(dir).lexically_normal();
-		}
-		std::filesystem::path relative = fp.lexically_relative(dp);
-		if (relative.empty()) continue;
-		auto rel_str = relative.string();
-		if (rel_str == "." || rel_str.rfind("..", 0) == 0 || relative.is_absolute()) continue;
 
-		for (auto& c : rel_str) {
-			if (c == '/' || c == '\\') c = '.';
-		}
-		if (rel_str.size() > 4 && rel_str.compare(rel_str.size() - 4, 4, ".lua") == 0) {
-			rel_str.resize(rel_str.size() - 4);
-		}
-		return rel_str;
+	std::vector<std::string> names;
+	std::string primary = ScriptVM::BuildDefaultModuleNameForFile(filepath, roots);
+	if (primary.empty()) {
+		primary = std::filesystem::path(filepath).stem().string();
 	}
-	// Fallback: use stem.
-	return fp.stem().string();
+	names.push_back(primary);
+
+	std::string dotted = ScriptVM::BuildModuleNameForFile(filepath, roots, '.');
+	if (!dotted.empty() && dotted != primary) {
+		names.push_back(dotted);
+	}
+	return names;
 }
 
 // ReloadFileCore — core reload logic without snapshot/restore
 
 bool ScriptReloader::ReloadFileCore(lua_State* L, const std::string& filepath,
-                                     const std::string& module_name) {
+                                     const std::vector<std::string>& module_names) {
+	if (module_names.empty()) return false;
+	const std::string& module_name = module_names.front();
 	auto* logger = GetLogger();
 	int base_top = lua_gettop(L);
 
@@ -376,19 +371,25 @@ bool ScriptReloader::ReloadFileCore(lua_State* L, const std::string& filepath,
 	}
 	lua_remove(L, msgh);
 
-	// If the module returned a table, register it in package.loaded.
+	// Register the returned module value in package.loaded.  A nil return
+	// follows require() semantics and records true.
+	lua_getglobal(L, "package");
 	if (lua_istable(L, -1)) {
-		lua_getglobal(L, "package");
+		lua_getfield(L, -1, "loaded");
 		if (lua_istable(L, -1)) {
-			lua_getfield(L, -1, "loaded");
-			if (lua_istable(L, -1)) {
-				lua_pushvalue(L, -3);
-				lua_setfield(L, -2, module_name.c_str());
+			for (const auto& name : module_names) {
+				if (name.empty()) continue;
+				if (lua_isnil(L, -3)) {
+					lua_pushboolean(L, 1);
+				} else {
+					lua_pushvalue(L, -3);
+				}
+				lua_setfield(L, -2, name.c_str());
 			}
-			lua_pop(L, 1);
 		}
 		lua_pop(L, 1);
 	}
+	lua_pop(L, 1);
 	lua_settop(L, base_top);
 
 	return true;
@@ -406,7 +407,8 @@ bool ScriptReloader::ReloadFile(const std::string& filepath) {
 		return false;
 	}
 
-	std::string module_name = ExtractModuleName(filepath, script_dirs_);
+	auto module_names = ResolveModuleNames(filepath);
+	const std::string& module_name = module_names.front();
 
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger,
@@ -417,7 +419,7 @@ bool ScriptReloader::ReloadFile(const std::string& filepath) {
 	SnapshotGlobals(L);
 	SnapshotPackageLoaded(L, module_name);
 
-	if (!ReloadFileCore(L, filepath, module_name)) {
+	if (!ReloadFileCore(L, filepath, module_names)) {
 		RestoreGlobals(L);
 		RestorePackageLoaded(L, module_name);
 		ClearSnapshot(L);
@@ -455,7 +457,7 @@ bool ScriptReloader::ReloadAll() {
 	// Collect all .lua files first.
 	struct FileEntry {
 		std::string filepath;
-		std::string module_name;
+		std::vector<std::string> module_names;
 	};
 	std::vector<FileEntry> files;
 	for (const auto& dir : script_dirs_) {
@@ -474,7 +476,7 @@ bool ScriptReloader::ReloadAll() {
 			if (entry.is_regular_file(fec) &&
 			    entry.path().extension() == ".lua") {
 				std::string fp = entry.path().string();
-				files.push_back({fp, ExtractModuleName(fp, script_dirs_)});
+				files.push_back({fp, ResolveModuleNames(fp)});
 			}
 			if (fec) fec.clear();
 		}
@@ -535,13 +537,15 @@ bool ScriptReloader::ReloadAll() {
 	bool all_ok = true;
 	auto now = std::chrono::steady_clock::now();
 	for (const auto& fe : files) {
+		if (fe.module_names.empty()) continue;
+		const std::string& module_name = fe.module_names.front();
 		// Snapshot this file's package.loaded entry individually.
-		SnapshotPackageLoaded(L, fe.module_name);
-		if (!ReloadFileCore(L, fe.filepath, fe.module_name)) {
+		SnapshotPackageLoaded(L, module_name);
+		if (!ReloadFileCore(L, fe.filepath, fe.module_names)) {
 			ENGINE_LOG_ERROR(logger,
 				"ScriptReloader: reload failed for [{}], rolling back all",
 				fe.filepath);
-			RestorePackageLoaded(L, fe.module_name);
+			RestorePackageLoaded(L, module_name);
 			{
 				std::lock_guard<std::mutex> lock(file_reload_mutex_);
 				file_reload_times_[fe.filepath] = now;

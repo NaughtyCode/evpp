@@ -194,6 +194,37 @@ TEST_CASE("DoDirectory returns failure count for invalid dir", "[vm][dodir]") {
     REQUIRE(failures > 0);
 }
 
+TEST_CASE("DoFile registers default module name from script root", "[vm][dofile]") {
+    ScriptVMFixture f;
+
+    const std::filesystem::path root = "tmp_test_module_root";
+    const std::filesystem::path sub = root / "sub";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(sub);
+
+    const auto script_path = sub / "mod.lua";
+    std::ofstream script(script_path);
+    script << "return { value = 42 }";
+    script.close();
+
+    f.vm.SetScriptRoot(root.string());
+    REQUIRE(f.vm.GetDefaultModuleNameForFile(script_path.string()) == "sub_mod");
+    REQUIRE(f.vm.DoFile(script_path.string()));
+
+    lua_State* L = f.vm.GetState();
+    lua_getglobal(L, "package");
+    REQUIRE(lua_istable(L, -1));
+    lua_getfield(L, -1, "loaded");
+    REQUIRE(lua_istable(L, -1));
+    lua_getfield(L, -1, "sub_mod");
+    REQUIRE(lua_istable(L, -1));
+    lua_getfield(L, -1, "value");
+    REQUIRE(lua_tointeger(L, -1) == 42);
+    lua_pop(L, 4);
+
+    std::filesystem::remove_all(root);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ScriptVM — RegisterFunctions (array version)
 // ═══════════════════════════════════════════════════════════════════════════════

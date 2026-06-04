@@ -5,6 +5,7 @@
 #include <filesystem>
 
 #include "runtime/core/log/log.h"
+#include "runtime/vm/vm.h"
 
 extern "C" {
 #include "lauxlib.h"
@@ -96,6 +97,23 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
 		cleanup_importing();
 		return luaL_error(L, "module '%s' not found in import paths", name_str.c_str());
 	}
+	std::string default_module_name =
+		ScriptVM::BuildDefaultModuleNameForFile(filepath, search_paths_);
+	if (default_module_name.empty()) default_module_name = name_str;
+
+	if (default_module_name != name_str) {
+		lua_getfield(L, -1, default_module_name.c_str());
+		if (!lua_isnil(L, -1)) {
+			lua_pushvalue(L, -1);
+			lua_setfield(L, -3, name_str.c_str());
+			loaded_modules_.insert(name_str);
+			lua_remove(L, -3);	// ..., loaded, cached
+			lua_remove(L, -2);	// ..., cached
+			cleanup_importing();
+			return 1;
+		}
+		lua_pop(L, 1);
+	}
 
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "import: loading module [{}] from [{}]", name_str, filepath);
@@ -122,13 +140,18 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
 	}
 
 	// Track new globals set by this module
-	TrackNewGlobals(L, name_str, before_keys);
+	TrackNewGlobals(L, default_module_name, before_keys);
 
 	// ── Cache result in package.loaded ─────────────────────────────
 	// Stack: ..., pkg, loaded, result
 	lua_pushvalue(L, -1);  // ..., pkg, loaded, result, copy
 	lua_setfield(L, -3, name_str.c_str());	// loaded[name] = copy
 	loaded_modules_.insert(name_str);
+	if (default_module_name != name_str) {
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -3, default_module_name.c_str());
+		loaded_modules_.insert(default_module_name);
+	}
 	lua_remove(L, -3);	// ..., pkg, result
 	lua_remove(L, -2);	// ..., result
 	cleanup_importing();
@@ -204,7 +227,10 @@ int ScriptImporter::ImportAll(lua_State* L, std::string_view name) {
 		}
 
 		std::string cache_name = dir_name.empty() ? stem : dir_name + "." + stem;
-		TrackNewGlobals(L, cache_name, before_keys);
+		std::string default_module_name =
+			ScriptVM::BuildDefaultModuleNameForFile(filepath, search_paths_);
+		if (default_module_name.empty()) default_module_name = cache_name;
+		TrackNewGlobals(L, default_module_name, before_keys);
 
 		// result[stem] = module result
 		lua_setfield(L, table_idx, stem.c_str());
@@ -216,6 +242,11 @@ int ScriptImporter::ImportAll(lua_State* L, std::string_view name) {
 		lua_getfield(L, -1, stem.c_str());	// get result[stem]
 		lua_setfield(L, -3, cache_name.c_str());  // package.loaded[cache_name] = result
 		loaded_modules_.insert(cache_name);
+		if (default_module_name != cache_name) {
+			lua_getfield(L, -1, stem.c_str());
+			lua_setfield(L, -3, default_module_name.c_str());
+			loaded_modules_.insert(default_module_name);
+		}
 		lua_pop(L, 3);	// pop result_table_copy, loaded, package
 
 		++count;

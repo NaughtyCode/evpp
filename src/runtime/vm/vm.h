@@ -172,6 +172,22 @@ class CLOUD_ENGINE_API ScriptVM {
 	ScriptImporter& GetImporter();
 	void SetImportPath(const std::string& scripts_dir);
 
+	// Script module-name roots.
+	// File-backed script loads derive their default module name from the
+	// script path relative to one of these roots, replacing path separators
+	// with '_'.  Example: <root>/runtime/net/init.lua -> runtime_net_init.
+	void SetScriptRoot(const std::string& root_dir);
+	void SetScriptRoots(std::vector<std::string> root_dirs);
+	const std::vector<std::string>& GetScriptRoots() const;
+	std::string GetDefaultModuleNameForFile(const std::string& filename) const;
+	static std::string BuildDefaultModuleNameForFile(const std::string& filename);
+	static std::string BuildDefaultModuleNameForFile(
+		const std::string& filename,
+		const std::vector<std::string>& root_dirs);
+	static std::string BuildModuleNameForFile(const std::string& filename,
+											  const std::vector<std::string>& root_dirs,
+											  char path_separator);
+
 	private:
 	// Shared trampoline storage for RegisterCallback.
 	static int CallbackTrampoline(lua_State* L);
@@ -179,6 +195,7 @@ class CLOUD_ENGINE_API ScriptVM {
 	// Call a global Lua function by name (0 args, 0 results).
 	// Logs a warning if the function exists but errors at runtime.
 	void CallGlobalFunction(std::string_view name);
+	void RegisterLoadedModule(std::string_view module_name, int value_index);
 
 	lua_State* L_ = nullptr;
 
@@ -187,6 +204,7 @@ class CLOUD_ENGINE_API ScriptVM {
 	std::vector<std::unique_ptr<LuaCallback>> callbacks_;
 
 	std::unique_ptr<ScriptImporter> importer_;
+	std::vector<std::string> script_roots_;
 };
 
 // Template implementations

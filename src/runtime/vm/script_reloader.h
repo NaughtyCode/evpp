@@ -108,9 +108,11 @@ class CLOUD_ENGINE_API ScriptReloader {
 	void OnFilesChanged(const std::vector<std::string>& files);
 
 	// Core reload without snapshot/restore (caller manages rollback).
-	// module_name must be the dotted package.loaded key.
+	// module_names[0] is the default package.loaded key; later names are
+	// compatibility aliases such as explicit import("a.b") keys.
 	bool ReloadFileCore(lua_State* L, const std::string& filepath,
-	                    const std::string& module_name);
+	                    const std::vector<std::string>& module_names);
+	std::vector<std::string> ResolveModuleNames(const std::string& filepath) const;
 
 	// Process the validated reload list (main thread).
 	void ProcessReloadList(const std::vector<std::string>& files);
