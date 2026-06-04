@@ -132,7 +132,7 @@ TEST_CASE("FileWatcher detects newly created files", "[hotreload][filewatcher]")
 	std::this_thread::sleep_for(std::chrono::milliseconds(150));
 
 	// Now create a brand-new file.
-	tmp.write("new.lua", "return 42");
+	tmp.write("new.LUA", "return 42");
 	std::this_thread::sleep_for(std::chrono::milliseconds(150));
 
 	watcher.Stop();
@@ -530,6 +530,38 @@ TEST_CASE("ReloadFile extracts path-based default module name from script dirs",
 // ScriptReloader — ReloadAll
 // ============================================================================
 
+TEST_CASE("ReloadFile extracts module name from common script root",
+          "[hotreload][reload]") {
+	TempDir base("hotreload_common_modname_test");
+	const auto root = std::filesystem::path(base.path);
+	const auto db_dir = root / "db_service";
+	const auto runtime_dir = root / "runtime";
+	std::filesystem::create_directories(db_dir);
+	std::filesystem::create_directories(runtime_dir);
+
+	const auto script_path = runtime_dir / "dep.lua";
+	std::ofstream of(script_path);
+	of << "return { value = 'dep' }";
+	of.close();
+
+	ScriptVM vm;
+	ScriptReloader reloader;
+	reloader.SetTarget(&vm, {db_dir.string(), runtime_dir.string()});
+
+	REQUIRE(reloader.ReloadFile(script_path.string()));
+
+	lua_State* L = vm.GetState();
+	lua_getglobal(L, "package");
+	REQUIRE(lua_istable(L, -1));
+	lua_getfield(L, -1, "loaded");
+	REQUIRE(lua_istable(L, -1));
+	lua_getfield(L, -1, "runtime_dep");
+	REQUIRE(lua_istable(L, -1));
+	lua_getfield(L, -1, "value");
+	REQUIRE(std::string(lua_tostring(L, -1)) == "dep");
+	lua_pop(L, 4);
+}
+
 TEST_CASE("ReloadAll with no target set", "[hotreload][reload_all]") {
 	ScriptReloader reloader;
 	bool result = reloader.ReloadAll();
@@ -549,6 +581,7 @@ TEST_CASE("ReloadAll loads all lua files in watched dirs",
 	TempDir tmp("hotreload_all_test");
 	tmp.write("a.lua", "a_loaded = true");
 	tmp.write("b.lua", "b_loaded = true");
+	tmp.write("c.LUA", "c_loaded = true");
 
 	ScriptVM vm;
 	ScriptReloader reloader;
@@ -563,6 +596,10 @@ TEST_CASE("ReloadAll loads all lua files in watched dirs",
 	lua_pop(L, 1);
 
 	lua_getglobal(L, "b_loaded");
+	REQUIRE(lua_toboolean(L, -1) == 1);
+	lua_pop(L, 1);
+
+	lua_getglobal(L, "c_loaded");
 	REQUIRE(lua_toboolean(L, -1) == 1);
 	lua_pop(L, 1);
 }

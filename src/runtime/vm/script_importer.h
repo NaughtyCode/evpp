@@ -14,10 +14,12 @@ namespace engine {
 
 // ScriptImporter — per-VM Lua module import system
 //
-// Module names are dot-separated paths relative to search directories:
+// Explicit import names are dot-separated paths relative to search directories.
 //   import("utils.helpers")  →  <search_dir>/utils/helpers.lua
 //   import("utils.*")        →  loads all .lua files in <search_dir>/utils/
 
+// Loaded files are also cached by root-relative default module name:
+//   <root>/runtime/net/init.lua -> package.loaded["runtime_net_init"]
 class CLOUD_ENGINE_API ScriptImporter {
 	public:
 	ScriptImporter() = default;
@@ -61,6 +63,7 @@ class CLOUD_ENGINE_API ScriptImporter {
 						 const std::vector<std::string>& before);
 
 	std::vector<std::string> search_paths_;
+	std::vector<std::string> module_roots_;
 	std::unordered_set<std::string> importing_;
 	std::unordered_set<std::string> loaded_modules_;
 	std::unordered_map<std::string, ModuleGlobals> module_globals_;

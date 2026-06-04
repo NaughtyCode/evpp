@@ -3,12 +3,22 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <string_view>
 #include <thread>
 #include <utility>
 
 #include "runtime/core/log/log.h"
 
 namespace engine {
+
+namespace {
+
+bool ExtensionMatches(std::string_view actual, std::string_view expected) {
+	if (expected.empty() || actual == expected) return true;
+	return expected == ".lua" && actual == ".LUA";
+}
+
+}  // namespace
 
 #if ENGINE_FILE_WATCHER_ENABLED
 
@@ -74,7 +84,7 @@ void FileWatcher::PrimeKnownFiles() {
 			if (!de.is_regular_file(ec)) continue;
 			if (ec) { ec.clear(); continue; }
 			auto ext = de.path().extension().string();
-			if (!entry.extension.empty() && ext != entry.extension) continue;
+			if (!ExtensionMatches(ext, entry.extension)) continue;
 			auto path_str = de.path().string();
 			known_files_.insert(path_str);
 			auto ftime = std::filesystem::last_write_time(de, ec);
@@ -162,7 +172,7 @@ std::vector<std::string> FileWatcher::ScanChanges() {
 			if (ec) { ec.clear(); continue; }
 
 			auto ext = dir_entry.path().extension().string();
-			if (!entry.extension.empty() && ext != entry.extension) {
+			if (!ExtensionMatches(ext, entry.extension)) {
 				continue;
 			}
 

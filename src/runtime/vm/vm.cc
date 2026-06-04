@@ -128,6 +128,7 @@ ScriptVM::ScriptVM(ScriptVM&& other) noexcept : L_(other.L_) {
 	other.L_ = nullptr;
 	callbacks_ = std::move(other.callbacks_);
 	importer_ = std::move(other.importer_);
+	script_roots_ = std::move(other.script_roots_);
 }
 
 ScriptVM& ScriptVM::operator=(ScriptVM&& other) noexcept {
@@ -139,6 +140,7 @@ ScriptVM& ScriptVM::operator=(ScriptVM&& other) noexcept {
 		other.L_ = nullptr;
 		callbacks_ = std::move(other.callbacks_);
 		importer_ = std::move(other.importer_);
+		script_roots_ = std::move(other.script_roots_);
 	}
 	return *this;
 }

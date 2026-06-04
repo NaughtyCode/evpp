@@ -21,6 +21,68 @@ extern "C" {
 
 namespace engine {
 
+namespace {
+
+std::filesystem::path AbsoluteNormalPath(const std::filesystem::path& path) {
+	std::error_code ec;
+	auto absolute = std::filesystem::absolute(path, ec);
+	if (ec) {
+		return path.lexically_normal();
+	}
+	return absolute.lexically_normal();
+}
+
+bool IsUsableRelativePath(const std::filesystem::path& relative) {
+	if (relative.empty() || relative.is_absolute()) return false;
+	const auto rel_str = relative.generic_string();
+	if (rel_str.empty() || rel_str == ".") return false;
+	for (const auto& part : relative) {
+		if (part == "..") return false;
+	}
+	return true;
+}
+
+bool IsPathUnderOrAtRoot(const std::filesystem::path& path,
+                         const std::filesystem::path& root) {
+	auto relative = path.lexically_relative(root);
+	return relative.generic_string() == "." || IsUsableRelativePath(relative);
+}
+
+std::filesystem::path CommonRootForPaths(const std::vector<std::string>& paths) {
+	if (paths.empty()) return {};
+
+	std::filesystem::path common = AbsoluteNormalPath(paths.front());
+	for (size_t i = 1; i < paths.size(); ++i) {
+		const auto path = AbsoluteNormalPath(paths[i]);
+		while (!common.empty() && !IsPathUnderOrAtRoot(path, common)) {
+			auto parent = common.parent_path();
+			if (parent == common) break;
+			common = parent;
+		}
+	}
+	return common;
+}
+
+std::vector<std::string> DeriveModuleRoots(const std::vector<std::string>& script_dirs) {
+	std::vector<std::string> roots;
+	for (const auto& dir : script_dirs) {
+		if (!dir.empty()) {
+			roots.push_back(dir);
+		}
+	}
+	if (roots.size() <= 1) {
+		return roots;
+	}
+
+	auto common = CommonRootForPaths(roots);
+	if (!common.empty()) {
+		return {common.string()};
+	}
+	return roots;
+}
+
+}  // namespace
+
 ScriptReloader::ScriptReloader() = default;
 
 ScriptReloader::~ScriptReloader() {
@@ -31,6 +93,10 @@ void ScriptReloader::SetTarget(ScriptVM* vm,
                                 const std::vector<std::string>& script_dirs) {
 	vm_ = vm;
 	script_dirs_ = script_dirs;
+	module_roots_ = DeriveModuleRoots(script_dirs_);
+	if (vm_ && vm_->GetScriptRoots().empty()) {
+		vm_->SetScriptRoots(module_roots_);
+	}
 	validator_.SetScriptDirs(script_dirs_);
 }
 
@@ -305,7 +371,7 @@ std::vector<std::string> ScriptReloader::ResolveModuleNames(
 	if (vm_ && !vm_->GetScriptRoots().empty()) {
 		roots = vm_->GetScriptRoots();
 	} else {
-		roots = script_dirs_;
+		roots = module_roots_;
 	}
 
 	std::vector<std::string> names;
@@ -473,8 +539,8 @@ bool ScriptReloader::ReloadAll() {
 			}
 			const auto& entry = *it;
 			std::error_code fec;
-			if (entry.is_regular_file(fec) &&
-			    entry.path().extension() == ".lua") {
+			const auto ext = entry.path().extension().string();
+			if (entry.is_regular_file(fec) && (ext == ".lua" || ext == ".LUA")) {
 				std::string fp = entry.path().string();
 				files.push_back({fp, ResolveModuleNames(fp)});
 			}

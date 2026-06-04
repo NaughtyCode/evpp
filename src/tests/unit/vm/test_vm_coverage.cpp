@@ -369,6 +369,79 @@ TEST_CASE("ScriptImporter: SetPaths parses semicolon-separated paths", "[vm][imp
     REQUIRE_NOTHROW(f.vm.SetImportPath("resources/script"));
 }
 
+TEST_CASE("ScriptImporter: semicolon paths cache root-relative default names", "[vm][importer]") {
+    engine::ScriptVM vm;
+
+    const std::filesystem::path root = "tmp_test_import_roots";
+    const auto db_dir = root / "db_service";
+    const auto runtime_dir = root / "runtime";
+    const auto plugins_dir = runtime_dir / "plugins";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(db_dir);
+    std::filesystem::create_directories(plugins_dir);
+
+    std::ofstream dep(runtime_dir / "dep.lua");
+    dep << "return { value = 'dep' }";
+    dep.close();
+
+    std::ofstream upper(runtime_dir / "upper.LUA");
+    upper << "return { value = 'upper' }";
+    upper.close();
+
+    std::ofstream plugin(plugins_dir / "handler.lua");
+    plugin << "return { value = 'handler' }";
+    plugin.close();
+
+    const std::string import_path = db_dir.string() + ";" + runtime_dir.string();
+    vm.SetImportPath(import_path);
+    ExportImport(vm);
+
+    lua_State* L = vm.GetState();
+    auto loaded_value = [L](const char* module_name) {
+        lua_getglobal(L, "package");
+        lua_getfield(L, -1, "loaded");
+        lua_getfield(L, -1, module_name);
+        REQUIRE(lua_istable(L, -1));
+        lua_getfield(L, -1, "value");
+        const char* value = lua_tostring(L, -1);
+        std::string result = value ? value : "";
+        lua_pop(L, 4);
+        return result;
+    };
+
+    lua_getglobal(L, "import");
+    lua_pushstring(L, "dep");
+    int rc = lua_pcall(L, 1, 1, 0);
+    if (rc != LUA_OK) INFO(lua_tostring(L, -1));
+    REQUIRE(rc == LUA_OK);
+    lua_pop(L, 1);
+
+    REQUIRE(loaded_value("dep") == "dep");
+    REQUIRE(loaded_value("runtime_dep") == "dep");
+
+    lua_getglobal(L, "import");
+    lua_pushstring(L, "upper");
+    rc = lua_pcall(L, 1, 1, 0);
+    if (rc != LUA_OK) INFO(lua_tostring(L, -1));
+    REQUIRE(rc == LUA_OK);
+    lua_pop(L, 1);
+
+    REQUIRE(loaded_value("upper") == "upper");
+    REQUIRE(loaded_value("runtime_upper") == "upper");
+
+    lua_getglobal(L, "import");
+    lua_pushstring(L, "plugins.*");
+    rc = lua_pcall(L, 1, 1, 0);
+    if (rc != LUA_OK) INFO(lua_tostring(L, -1));
+    REQUIRE(rc == LUA_OK);
+    lua_pop(L, 1);
+
+    REQUIRE(loaded_value("plugins.handler") == "handler");
+    REQUIRE(loaded_value("runtime_plugins_handler") == "handler");
+
+    std::filesystem::remove_all(root);
+}
+
 TEST_CASE("ScriptImporter: AddPath adds to search paths", "[vm][importer]") {
     ScriptVMFixture f;
     f.vm.GetImporter().SetPaths("/first");

@@ -137,6 +137,7 @@ class CLOUD_ENGINE_API ScriptReloader {
 	ScriptVM* vm_ = nullptr;
 	evpp::EventLoop* loop_ = nullptr;
 	std::vector<std::string> script_dirs_;
+	std::vector<std::string> module_roots_;
 	std::unique_ptr<FileWatcher> watcher_;
 	LuaSandboxLevel sandbox_level_ = LuaSandboxLevel::Strict;
 	LuaScriptValidator validator_;

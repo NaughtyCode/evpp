@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <utility>
 
 #include "runtime/core/log/log.h"
 #include "runtime/vm/vm.h"
@@ -16,20 +17,110 @@ namespace engine {
 
 // ScriptImporter implementation
 
+namespace {
+
+std::filesystem::path AbsoluteNormalPath(const std::filesystem::path& path) {
+	std::error_code ec;
+	auto absolute = std::filesystem::absolute(path, ec);
+	if (ec) {
+		return path.lexically_normal();
+	}
+	return absolute.lexically_normal();
+}
+
+bool IsUsableRelativePath(const std::filesystem::path& relative) {
+	if (relative.empty() || relative.is_absolute()) return false;
+	const auto rel_str = relative.generic_string();
+	if (rel_str.empty() || rel_str == ".") return false;
+	for (const auto& part : relative) {
+		if (part == "..") return false;
+	}
+	return true;
+}
+
+bool IsPathUnderOrAtRoot(const std::filesystem::path& path,
+						 const std::filesystem::path& root) {
+	auto relative = path.lexically_relative(root);
+	return relative.generic_string() == "." || IsUsableRelativePath(relative);
+}
+
+std::string NormalizeSearchPath(std::string path) {
+#ifdef _WIN32
+	std::replace(path.begin(), path.end(), '\\', '/');
+#endif
+	if (!path.empty() && path.back() != '/') {
+		path += '/';
+	}
+	return path;
+}
+
+bool IsFallbackPath(const std::string& path) {
+	return path == "./" || path == ".";
+}
+
+std::vector<std::string> SplitPathList(const std::string& paths) {
+	std::vector<std::string> result;
+	size_t start = 0;
+	while (start <= paths.size()) {
+		size_t end = paths.find(';', start);
+		if (end == std::string::npos) end = paths.size();
+		auto path = NormalizeSearchPath(paths.substr(start, end - start));
+		if (!path.empty()) {
+			result.push_back(std::move(path));
+		}
+		if (end == paths.size()) break;
+		start = end + 1;
+	}
+	return result;
+}
+
+std::filesystem::path CommonRootForPaths(const std::vector<std::string>& paths) {
+	if (paths.empty()) return {};
+
+	std::filesystem::path common = AbsoluteNormalPath(paths.front());
+	for (size_t i = 1; i < paths.size(); ++i) {
+		const auto path = AbsoluteNormalPath(paths[i]);
+		while (!common.empty() && !IsPathUnderOrAtRoot(path, common)) {
+			auto parent = common.parent_path();
+			if (parent == common) break;
+			common = parent;
+		}
+	}
+	return common;
+}
+
+std::vector<std::string> DeriveModuleRoots(const std::vector<std::string>& search_paths) {
+	std::vector<std::string> explicit_paths;
+	for (const auto& path : search_paths) {
+		if (!path.empty() && !IsFallbackPath(path)) {
+			explicit_paths.push_back(path);
+		}
+	}
+
+	if (explicit_paths.size() <= 1) {
+		return explicit_paths;
+	}
+
+	auto common = CommonRootForPaths(explicit_paths);
+	if (!common.empty()) {
+		return {common.string()};
+	}
+	return explicit_paths;
+}
+
+}  // namespace
+
 void ScriptImporter::Init(std::string scripts_dir) {
 	search_paths_.clear();
+	module_roots_.clear();
 	importing_.clear();
 	loaded_modules_.clear();
 	module_globals_.clear();
 
 	if (!scripts_dir.empty()) {
-#ifdef _WIN32
-		std::replace(scripts_dir.begin(), scripts_dir.end(), '\\', '/');
-#endif
-		if (scripts_dir.back() != '/') {
-			scripts_dir += '/';
-		}
+		scripts_dir = NormalizeSearchPath(std::move(scripts_dir));
 		search_paths_.push_back(scripts_dir);
+		module_roots_.push_back(scripts_dir);
 	}
 
 	// Always include a "./" fallback for relative imports
@@ -98,7 +189,7 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
 		return luaL_error(L, "module '%s' not found in import paths", name_str.c_str());
 	}
 	std::string default_module_name =
-		ScriptVM::BuildDefaultModuleNameForFile(filepath, search_paths_);
+		ScriptVM::BuildDefaultModuleNameForFile(filepath, module_roots_);
 	if (default_module_name.empty()) default_module_name = name_str;
 
 	if (default_module_name != name_str) {
@@ -228,7 +319,7 @@ int ScriptImporter::ImportAll(lua_State* L, std::string_view name) {
 
 		std::string cache_name = dir_name.empty() ? stem : dir_name + "." + stem;
 		std::string default_module_name =
-			ScriptVM::BuildDefaultModuleNameForFile(filepath, search_paths_);
+			ScriptVM::BuildDefaultModuleNameForFile(filepath, module_roots_);
 		if (default_module_name.empty()) default_module_name = cache_name;
 		TrackNewGlobals(L, default_module_name, before_keys);
 
@@ -258,36 +349,19 @@ int ScriptImporter::ImportAll(lua_State* L, std::string_view name) {
 
 void ScriptImporter::SetPaths(const std::string& paths) {
 	search_paths_.clear();
+	module_roots_.clear();
+	importing_.clear();
 	loaded_modules_.clear();
 	module_globals_.clear();
-	size_t start = 0;
-	while (start < paths.size()) {
-		size_t end = paths.find(';', start);
-		if (end == std::string::npos) end = paths.size();
-		std::string path = paths.substr(start, end - start);
-		if (!path.empty()) {
-#ifdef _WIN32
-			std::replace(path.begin(), path.end(), '\\', '/');
-#endif
-			if (path.back() != '/') {
-				path += '/';
-			}
-			search_paths_.push_back(path);
-		}
-		start = end + 1;
-	}
+	search_paths_ = SplitPathList(paths);
+	module_roots_ = DeriveModuleRoots(search_paths_);
 }
 
 void ScriptImporter::AddPath(const std::string& path) {
-	std::string p(path);
-#ifdef _WIN32
-	std::replace(p.begin(), p.end(), '\\', '/');
-#endif
-	if (!p.empty() && p.back() != '/') {
-		p += '/';
-	}
+	std::string p = NormalizeSearchPath(path);
 	if (!p.empty()) {
 		search_paths_.push_back(p);
+		module_roots_ = DeriveModuleRoots(search_paths_);
 	}
 }
 
@@ -384,14 +458,16 @@ bool ScriptImporter::IsSafeModuleName(std::string_view name) {
 }
 
 std::string ScriptImporter::FindModule(std::string_view name) const {
-	std::string mod_path = ModuleToPath(name) + ".lua";
+	std::string mod_path = ModuleToPath(name);
 	std::error_code ec;
 
 	for (const auto& base : search_paths_) {
-		std::string path = base + mod_path;
-		ec.clear();
-		if (std::filesystem::is_regular_file(path, ec) && !ec) {
-			return path;
+		for (const char* ext : {".lua", ".LUA"}) {
+			std::string path = base + mod_path + ext;
+			ec.clear();
+			if (std::filesystem::is_regular_file(path, ec) && !ec) {
+				return path;
+			}
 		}
 	}
 	return {};

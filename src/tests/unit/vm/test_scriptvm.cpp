@@ -13,21 +13,25 @@ TEST_CASE("ScriptVM constructs with valid lua_State", "[vm][lifecycle]") {
 
 TEST_CASE("ScriptVM move construction", "[vm][lifecycle]") {
     engine::ScriptVM a;
+    a.SetScriptRoot("tmp_script_root");
     auto* state_a = a.GetState();
     REQUIRE(state_a != nullptr);
 
     engine::ScriptVM b(std::move(a));
     REQUIRE(b.GetState() == state_a);
+    REQUIRE(b.GetDefaultModuleNameForFile("tmp_script_root/sub/mod.lua") == "sub_mod");
     REQUIRE(a.GetState() == nullptr);  // moved-from
 }
 
 TEST_CASE("ScriptVM move assignment", "[vm][lifecycle]") {
     engine::ScriptVM a;
+    a.SetScriptRoot("tmp_script_root");
     engine::ScriptVM b;
     auto* state_b = b.GetState();
 
     b = std::move(a);
     REQUIRE(b.GetState() != state_b);  // b's old state was destroyed, a's state moved in
+    REQUIRE(b.GetDefaultModuleNameForFile("tmp_script_root/sub/mod.lua") == "sub_mod");
     REQUIRE(a.GetState() == nullptr);
 }
 
