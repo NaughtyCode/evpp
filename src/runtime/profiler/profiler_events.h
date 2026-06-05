@@ -10,12 +10,16 @@
 // Static tracks ensure continuous time series in the trace UI rather than
 // one track per call. Declared inline to satisfy ODR.
 
+namespace engine::profiler_detail {
+
 inline perfetto::CounterTrack g_frame_no_track("frame_number");
 inline perfetto::CounterTrack g_frame_dt_track("frame_delta_ms");
 inline perfetto::CounterTrack g_frame_time_track("frame_elapsed_ms");
 
 // ── Thread-local storage for physics flow event ─────────────────────────
 inline thread_local uint64_t g_profiler_physics_frame_id = UINT64_MAX;
+
+}  // namespace engine::profiler_detail
 
 // ── Engine lifecycle ────────────────────────────────────────────────────
 
@@ -25,10 +29,12 @@ inline thread_local uint64_t g_profiler_physics_frame_id = UINT64_MAX;
 #define ENGINE_PROFILE_FRAME_BEGIN(frame_no, dt_ms)                                               \
 	do {                                                                                          \
 		ENGINE_PROFILE_COUNTER_TRACK_GROUP(                                                        \
-			::engine::ProfilerEventGroup::Frame, "engine", g_frame_no_track,                       \
+			::engine::ProfilerEventGroup::Frame, "engine",                                        \
+			::engine::profiler_detail::g_frame_no_track,                                           \
 			static_cast<int64_t>(frame_no));                                                       \
 		ENGINE_PROFILE_COUNTER_TRACK_GROUP(                                                        \
-			::engine::ProfilerEventGroup::Frame, "engine", g_frame_dt_track,                       \
+			::engine::ProfilerEventGroup::Frame, "engine",                                        \
+			::engine::profiler_detail::g_frame_dt_track,                                           \
 			static_cast<int64_t>(dt_ms));                                                          \
 		ENGINE_PROFILE_BEGIN_GROUP(::engine::ProfilerEventGroup::Frame,                            \
 								   "engine",                                                       \
@@ -43,7 +49,7 @@ inline thread_local uint64_t g_profiler_physics_frame_id = UINT64_MAX;
 	do {                                                                     \
 		ENGINE_PROFILE_COUNTER_TRACK_GROUP(::engine::ProfilerEventGroup::Frame,                    \
 										   "engine",                                               \
-										   g_frame_time_track,                                      \
+										   ::engine::profiler_detail::g_frame_time_track,           \
 										   static_cast<int64_t>(elapsed_ms));                       \
 		ENGINE_PROFILE_END_GROUP(::engine::ProfilerEventGroup::Frame, "engine");                  \
 	} while (0)
@@ -99,9 +105,10 @@ inline thread_local uint64_t g_profiler_physics_frame_id = UINT64_MAX;
 		auto&& engine_profile_command__ = (command);                                           \
 		if (engine_profile_command__.type == CommandType::Tick) {                              \
 			auto* _prof_args = std::get_if<TickArgs>(&engine_profile_command__.args);           \
-			g_profiler_physics_frame_id = _prof_args ? _prof_args->frame_id : UINT64_MAX;      \
+			::engine::profiler_detail::g_profiler_physics_frame_id =                           \
+				_prof_args ? _prof_args->frame_id : UINT64_MAX;                                \
 		} else {                                                                               \
-			g_profiler_physics_frame_id = UINT64_MAX;                                          \
+			::engine::profiler_detail::g_profiler_physics_frame_id = UINT64_MAX;               \
 		}                                                                                      \
 		ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Physics,                       \
 								   "engine.physics",                                           \
@@ -117,7 +124,7 @@ inline thread_local uint64_t g_profiler_physics_frame_id = UINT64_MAX;
 							   "delta_time",                                           \
 							   static_cast<double>(delta_time),                         \
 							   perfetto::TerminatingFlow::ProcessScoped(                \
-								   g_profiler_physics_frame_id))
+								   ::engine::profiler_detail::g_profiler_physics_frame_id))
 
 #define ENGINE_PROFILE_PHYSICS_COLLISION() \
 	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Physics, "engine.physics", "Collision")

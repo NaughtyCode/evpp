@@ -37,7 +37,9 @@ struct TempDir {
 
 void EmitProfilerTestEvents() {
 	ENGINE_PROFILE_SCOPE("engine", "ProfilerUnitScope", "value", 7);
+	ENGINE_PROFILE_FRAME_BEGIN(1, 16);
 	ENGINE_PROFILE_INSTANT("engine", "ProfilerUnitInstant", "value", 11);
+	ENGINE_PROFILE_FRAME_END(17);
 	std::this_thread::sleep_for(std::chrono::milliseconds(1));
 }
 
@@ -133,6 +135,9 @@ TEST_CASE("Profiler runtime switches parse and gate event arguments", "[profiler
 	REQUIRE(FormatProfilerEventGroupMask(ProfilerEventGroupBit(ProfilerEventGroup::Physics) |
 										 ProfilerEventGroupBit(ProfilerEventGroup::Script)) ==
 			"physics,script");
+	REQUIRE(ProfilerEventGroupBit(ProfilerEventGroup::Network) == (1ull << 10));
+	REQUIRE(ProfilerCategoryStartsWith("engine.physics.step", "engine.physics"));
+	REQUIRE_FALSE(ProfilerCategoryStartsWith("engine.physics2", "engine.physics"));
 	REQUIRE(ProfilerEventGroupFromCategory("engine.physics") == ProfilerEventGroup::Physics);
 	REQUIRE(ProfilerEventGroupFromCategory("engine.physics.step") ==
 			ProfilerEventGroup::Physics);

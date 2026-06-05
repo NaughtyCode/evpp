@@ -10,7 +10,7 @@ namespace engine {
 
 using ProfilerEventGroupMask = uint64_t;
 
-enum class ProfilerEventGroup : ProfilerEventGroupMask {
+enum class CLOUD_ENGINE_API ProfilerEventGroup : ProfilerEventGroupMask {
 	None = 0,
 	Engine = 1ull << 0,
 	Frame = 1ull << 1,
@@ -37,8 +37,8 @@ constexpr ProfilerEventGroupMask ProfilerEventGroupBit(ProfilerEventGroup group)
 	return static_cast<ProfilerEventGroupMask>(group);
 }
 
-inline constexpr bool ProfilerCategoryStartsWith(std::string_view value,
-												 std::string_view prefix) noexcept {
+constexpr bool ProfilerCategoryStartsWith(std::string_view value,
+										  std::string_view prefix) noexcept {
 	return value == prefix ||
 		   (value.size() > prefix.size() && value.substr(0, prefix.size()) == prefix &&
 			value[prefix.size()] == '.');

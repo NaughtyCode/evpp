@@ -14,6 +14,7 @@ before including this header."
 
 #ifdef ENGINE_PHYSICS_ENABLED
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -88,7 +89,17 @@ class ObjectRegistry {
 	}
 
 	// Return all registered mappings sorted by body_id for deterministic iteration.
-	std::vector<Entry> Entries() const;
+	std::vector<Entry> Entries() const {
+		std::vector<Entry> entries;
+		entries.reserve(id_to_name_.size());
+		for (const auto& [body_id, asset_name] : id_to_name_) {
+			entries.push_back({body_id, asset_name});
+		}
+		std::sort(entries.begin(), entries.end(), [](const Entry& lhs, const Entry& rhs) {
+			return lhs.body_id < rhs.body_id;
+		});
+		return entries;
+	}
 
 	private:
 	std::unordered_map<uint32_t, std::string> id_to_name_;

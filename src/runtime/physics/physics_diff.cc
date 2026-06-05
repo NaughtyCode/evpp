@@ -3,7 +3,6 @@
 #define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/physics_diff.h"
 
-#include <algorithm>
 #include <cmath>
 
 #include "runtime/profiler/profiler_events.h"
@@ -159,18 +158,6 @@ void ObjectRegistry::PruneMissing(const std::unordered_set<uint32_t>& live_body_
 			++it;
 		}
 	}
-}
-
-std::vector<ObjectRegistry::Entry> ObjectRegistry::Entries() const {
-	std::vector<Entry> entries;
-	entries.reserve(id_to_name_.size());
-	for (const auto& [body_id, asset_name] : id_to_name_) {
-		entries.push_back({body_id, asset_name});
-	}
-	std::sort(entries.begin(), entries.end(), [](const Entry& lhs, const Entry& rhs) {
-		return lhs.body_id < rhs.body_id;
-	});
-	return entries;
 }
 
 }  // namespace engine
