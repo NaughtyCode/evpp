@@ -33,7 +33,8 @@ class ScriptVM;
 //   1. Detect file changes (via FileWatcher, with per-file debounce)
 //   2. Validate changed scripts in an isolated sandbox VM
 //   3. Dispatch actual reload to the main thread via EventLoop::RunInLoop
-//   4. Clear only the target module's cache entry (not entire package.loaded)
+//   4. Clear the target module cache entries and compatibility aliases
+//      (not the entire package.loaded table)
 //   5. Restore previous state on reload failure
 //
 // Thread safety:

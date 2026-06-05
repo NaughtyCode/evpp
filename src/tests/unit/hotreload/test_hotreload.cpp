@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -44,6 +45,22 @@ struct TempDir {
 		of << content;
 	}
 };
+
+std::string LoadedModuleStringField(lua_State* L,
+                                    const char* module_name,
+                                    const char* field_name) {
+	lua_getglobal(L, "package");
+	REQUIRE(lua_istable(L, -1));
+	lua_getfield(L, -1, "loaded");
+	REQUIRE(lua_istable(L, -1));
+	lua_getfield(L, -1, module_name);
+	REQUIRE(lua_istable(L, -1));
+	lua_getfield(L, -1, field_name);
+	const char* value = lua_tostring(L, -1);
+	std::string result = value ? value : "";
+	lua_pop(L, 4);
+	return result;
+}
 
 }  // namespace
 
@@ -562,6 +579,77 @@ TEST_CASE("ReloadFile extracts module name from common script root",
 	lua_pop(L, 4);
 }
 
+TEST_CASE("ReloadFile clears dotted alias before executing refreshed script",
+          "[hotreload][reload]") {
+	TempDir base("hotreload_alias_clear_test");
+	const auto sub_dir = std::filesystem::path(base.path) / "sub";
+	std::filesystem::create_directories(sub_dir);
+	const auto script_path = sub_dir / "mod.lua";
+
+	{
+		std::ofstream of(script_path);
+		of << "return { value = 'one' }";
+	}
+
+	ScriptVM vm;
+	ScriptReloader reloader;
+	reloader.SetTarget(&vm, {base.path});
+
+	REQUIRE(reloader.ReloadFile(script_path.string()));
+	REQUIRE(LoadedModuleStringField(vm.GetState(), "sub_mod", "value") == "one");
+	REQUIRE(LoadedModuleStringField(vm.GetState(), "sub.mod", "value") == "one");
+
+	{
+		std::ofstream of(script_path);
+		of << R"(
+local cached = package.loaded["sub.mod"]
+return { value = 'two', observed = cached and cached.value or 'none' }
+)";
+	}
+
+	REQUIRE(reloader.ReloadFile(script_path.string()));
+	REQUIRE(LoadedModuleStringField(vm.GetState(), "sub_mod", "value") == "two");
+	REQUIRE(LoadedModuleStringField(vm.GetState(), "sub_mod", "observed") == "none");
+	REQUIRE(LoadedModuleStringField(vm.GetState(), "sub.mod", "value") == "two");
+}
+
+TEST_CASE("ReloadFile rollback restores dotted alias cache on target VM failure",
+          "[hotreload][reload]") {
+	TempDir base("hotreload_alias_rollback_test");
+	const auto sub_dir = std::filesystem::path(base.path) / "sub";
+	std::filesystem::create_directories(sub_dir);
+	const auto script_path = sub_dir / "mod.lua";
+
+	{
+		std::ofstream of(script_path);
+		of << "return { value = 'one' }";
+	}
+
+	ScriptVM vm;
+	ScriptReloader reloader;
+	reloader.SetTarget(&vm, {base.path});
+
+	REQUIRE(reloader.ReloadFile(script_path.string()));
+	REQUIRE(LoadedModuleStringField(vm.GetState(), "sub_mod", "value") == "one");
+	REQUIRE(LoadedModuleStringField(vm.GetState(), "sub.mod", "value") == "one");
+
+	vm.RegisterCallback("fail_in_target_vm", [](lua_State*) -> int {
+		throw std::runtime_error("target failure");
+	});
+
+	{
+		std::ofstream of(script_path);
+		of << R"(
+if fail_in_target_vm then fail_in_target_vm() end
+return { value = 'two' }
+)";
+	}
+
+	REQUIRE_FALSE(reloader.ReloadFile(script_path.string()));
+	REQUIRE(LoadedModuleStringField(vm.GetState(), "sub_mod", "value") == "one");
+	REQUIRE(LoadedModuleStringField(vm.GetState(), "sub.mod", "value") == "one");
+}
+
 TEST_CASE("ReloadAll with no target set", "[hotreload][reload_all]") {
 	ScriptReloader reloader;
 	bool result = reloader.ReloadAll();
@@ -607,6 +695,50 @@ TEST_CASE("ReloadAll loads all lua files in watched dirs",
 // ============================================================================
 // ScriptReloader — ProcessPendingReloads
 // ============================================================================
+
+TEST_CASE("ReloadAll rollback restores package.loaded aliases",
+          "[hotreload][reload_all]") {
+	TempDir tmp("hotreload_all_alias_rollback_test");
+	const auto sub_dir = std::filesystem::path(tmp.path) / "sub";
+	std::filesystem::create_directories(sub_dir);
+	const auto a_path = sub_dir / "a.lua";
+	const auto b_path = sub_dir / "b.lua";
+
+	{
+		std::ofstream a(a_path);
+		a << "return { value = 'one' }";
+		std::ofstream b(b_path);
+		b << "return { value = 'one' }";
+	}
+
+	ScriptVM vm;
+	ScriptReloader reloader;
+	reloader.SetTarget(&vm, {tmp.path});
+
+	REQUIRE(reloader.ReloadAll());
+	REQUIRE(LoadedModuleStringField(vm.GetState(), "sub_a", "value") == "one");
+	REQUIRE(LoadedModuleStringField(vm.GetState(), "sub.a", "value") == "one");
+	REQUIRE(LoadedModuleStringField(vm.GetState(), "sub_b", "value") == "one");
+
+	vm.RegisterCallback("fail_in_target_vm", [](lua_State*) -> int {
+		throw std::runtime_error("target failure");
+	});
+
+	{
+		std::ofstream a(a_path);
+		a << "return { value = 'two' }";
+		std::ofstream b(b_path);
+		b << R"(
+if fail_in_target_vm then fail_in_target_vm() end
+return { value = 'two' }
+)";
+	}
+
+	REQUIRE_FALSE(reloader.ReloadAll());
+	REQUIRE(LoadedModuleStringField(vm.GetState(), "sub_a", "value") == "one");
+	REQUIRE(LoadedModuleStringField(vm.GetState(), "sub.a", "value") == "one");
+	REQUIRE(LoadedModuleStringField(vm.GetState(), "sub_b", "value") == "one");
+}
 
 TEST_CASE("ProcessPendingReloads with no pending reloads is safe",
           "[hotreload][pending]") {

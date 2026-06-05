@@ -48,6 +48,45 @@ bool IsPathUnderOrAtRoot(const std::filesystem::path& path,
 	return relative.generic_string() == "." || IsUsableRelativePath(relative);
 }
 
+int SnapshotPackageLoadedTable(lua_State* L) {
+	lua_getglobal(L, "package");
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 1);
+		return LUA_NOREF;
+	}
+	lua_getfield(L, -1, "loaded");
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 2);
+		return LUA_NOREF;
+	}
+
+	const int loaded_idx = lua_absindex(L, -1);
+	lua_newtable(L);
+	const int copy_idx = lua_absindex(L, -1);
+	lua_pushnil(L);
+	while (lua_next(L, loaded_idx) != 0) {
+		lua_pushvalue(L, -2);
+		lua_pushvalue(L, -2);
+		lua_settable(L, copy_idx);
+		lua_pop(L, 1);
+	}
+
+	int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	lua_pop(L, 2);
+	return ref;
+}
+
+void RestorePackageLoadedTable(lua_State* L, int ref) {
+	if (ref == LUA_NOREF) return;
+
+	lua_getglobal(L, "package");
+	if (lua_istable(L, -1)) {
+		lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+		lua_setfield(L, -2, "loaded");
+	}
+	lua_pop(L, 1);
+}
+
 std::filesystem::path CommonRootForPaths(const std::vector<std::string>& paths) {
 	if (paths.empty()) return {};
 
@@ -393,17 +432,20 @@ std::vector<std::string> ScriptReloader::ResolveModuleNames(
 bool ScriptReloader::ReloadFileCore(lua_State* L, const std::string& filepath,
                                      const std::vector<std::string>& module_names) {
 	if (module_names.empty()) return false;
-	const std::string& module_name = module_names.front();
 	auto* logger = GetLogger();
 	int base_top = lua_gettop(L);
 
-	// Remove only this module from package.loaded.
+	// Remove every resolved cache key so reload execution cannot observe stale
+	// aliases for the file currently being refreshed.
 	lua_getglobal(L, "package");
 	if (lua_istable(L, -1)) {
 		lua_getfield(L, -1, "loaded");
 		if (lua_istable(L, -1)) {
-			lua_pushnil(L);
-			lua_setfield(L, -2, module_name.c_str());
+			for (const auto& name : module_names) {
+				if (name.empty()) continue;
+				lua_pushnil(L);
+				lua_setfield(L, -2, name.c_str());
+			}
 		}
 		lua_pop(L, 1);
 	}
@@ -483,19 +525,21 @@ bool ScriptReloader::ReloadFile(const std::string& filepath) {
 
 	// Per-file snapshot for rollback.
 	SnapshotGlobals(L);
-	SnapshotPackageLoaded(L, module_name);
+	int pkg_loaded_snapshot = SnapshotPackageLoadedTable(L);
 
 	if (!ReloadFileCore(L, filepath, module_names)) {
 		RestoreGlobals(L);
-		RestorePackageLoaded(L, module_name);
+		RestorePackageLoadedTable(L, pkg_loaded_snapshot);
+		if (pkg_loaded_snapshot != LUA_NOREF) {
+			luaL_unref(L, LUA_REGISTRYINDEX, pkg_loaded_snapshot);
+		}
 		ClearSnapshot(L);
 		return false;
 	}
 
 	// Release the package.loaded snapshot — reload succeeded.
-	if (package_loaded_snapshot_ref_ != LUA_NOREF) {
-		luaL_unref(L, LUA_REGISTRYINDEX, package_loaded_snapshot_ref_);
-		package_loaded_snapshot_ref_ = LUA_NOREF;
+	if (pkg_loaded_snapshot != LUA_NOREF) {
+		luaL_unref(L, LUA_REGISTRYINDEX, pkg_loaded_snapshot);
 	}
 	ClearSnapshot(L);
 
@@ -586,19 +630,7 @@ bool ScriptReloader::ReloadAll() {
 	// Snapshot the entire package.loaded table for full restoration on
 	// rollback. This covers all previously-succeeded files, unlike the
 	// per-file SnapshotPackageLoaded which only handles one module.
-	int pkg_loaded_snapshot = LUA_NOREF;
-	{
-		lua_getglobal(L, "package");
-		if (lua_istable(L, -1)) {
-			lua_getfield(L, -1, "loaded");
-			if (lua_istable(L, -1)) {
-				pkg_loaded_snapshot = luaL_ref(L, LUA_REGISTRYINDEX);
-			} else {
-				lua_pop(L, 1);
-			}
-		}
-		lua_pop(L, 1);  // pop package or nil
-	}
+	int pkg_loaded_snapshot = SnapshotPackageLoadedTable(L);
 
 	bool all_ok = true;
 	auto now = std::chrono::steady_clock::now();
@@ -634,12 +666,7 @@ bool ScriptReloader::ReloadAll() {
 		// Restore the entire package.loaded table to its pre-reload state,
 		// undoing changes from previously-succeeded files.
 		if (pkg_loaded_snapshot != LUA_NOREF) {
-			lua_getglobal(L, "package");
-			if (lua_istable(L, -1)) {
-				lua_rawgeti(L, LUA_REGISTRYINDEX, pkg_loaded_snapshot);
-				lua_setfield(L, -2, "loaded");
-			}
-			lua_pop(L, 1);
+			RestorePackageLoadedTable(L, pkg_loaded_snapshot);
 			luaL_unref(L, LUA_REGISTRYINDEX, pkg_loaded_snapshot);
 		}
 
