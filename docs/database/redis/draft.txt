@@ -1,0 +1,17 @@
+
+集成hiredis, 要求如下：
+. 这个模块只有server会启用
+. adapters 使用 libevent ，libevent库代码位置: ./src/thirdparty/libevent
+. 集成代码代码位置： ./src/runtime/database/redis
+. 集成代码的封装代码位置： ./src/runtime/database/redis/bind
+. 集成代码 与 hiredis 代码全部运行在独立线程中，线程类名: RedisClientThread, 线程名相同
+. RedisClientTread 有独立的 Lua VM，外部不可访问，Lua VM 类名: RedisClientScriptVM
+. RedisClientScriptVM 的脚本要能访问 ./src/runtime/database/redis 全部Public API
+. RedisClientScriptVM 的脚本要能访问 ./src/runtime/database/redis 模块级类实例的请使用 custom_ptr_store.h 和 custom_ptr_store.cc 中的机制
+. ./src/runtime/database/redis 模块封装一个全局单例类提供给外部访问，只有这个类的API是外部可以访问的，类名： RedisClient, RedisClient全部API保证线程安全
+. RedisClient 通过  ./src/thirdparty/concurrentqueue/concurrentqueue 下的线程安全队列 向 RedisClientThread 传递请求
+. 外部模块通过 RedisClient 向 RedisClientTread 发送请求的要求： 请求内容 + redis服务器结果返回回调，当redis服务器返回结果成功或失败时，都调用 redis服务器结果返回回调 ，这个回调函数必须是线程安全的
+. 每个线程都可能会访问 RedisClient，因此每个线程需要将访问 RedisClient 函数导出到自己的 Lua VM 中, redis服务器结果返回回调 将结果放入自己线程的结果队列中，然后在自己线程的 主循环中做dispatch（dispatch到线程的C++逻辑代码和lua脚本代码中）
+. 外部访问 ./src/runtime/database/redis 的相关机制请实现成公共基础设施代码，方便服用
+
+
