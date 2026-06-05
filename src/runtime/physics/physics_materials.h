@@ -88,8 +88,12 @@ class CLOUD_ENGINE_API MaterialTable {
 	// Check whether a named material is registered.
 	bool Has(const std::string& name) const;
 
-	// Get all registered material names.
+	// Get all registered material names, sorted for deterministic iteration.
 	std::vector<std::string> GetNames() const;
+
+	// Get all registered material entries with friction/restitution values,
+	// sorted by name for deterministic iteration.
+	std::vector<MaterialEntry> GetEntries() const;
 
 	// Create a material list (for MeshShape/HeightFieldShape) from names.
 	// Returns one RefConst per name; uses a default material if name not found.

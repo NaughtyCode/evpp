@@ -399,6 +399,10 @@ void RegisterConstants(lua_State* L) {
 	SetField(L, "COLLISION_START", "start");
 	SetField(L, "COLLISION_PERSIST", "persist");
 	SetField(L, "COLLISION_END", "end");
+	SetField(L, "DIFF_POSITION", 1 << 0);
+	SetField(L, "DIFF_ROTATION", 1 << 1);
+	SetField(L, "DIFF_LINEAR_VELOCITY", 1 << 2);
+	SetField(L, "DIFF_ANGULAR_VELOCITY", 1 << 3);
 }
 
 }  // namespace physics_bindings

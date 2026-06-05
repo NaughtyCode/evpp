@@ -17,6 +17,7 @@ before including this header."
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Math/Quat.h>
+#include <Jolt/Math/Real.h>
 
 #include "runtime/physics/physics_system.h"
 #include "runtime/vm/vm.h"
@@ -95,6 +96,16 @@ inline float CheckFiniteFloat(lua_State* L, int index, const char* name) {
 	return static_cast<float>(value);
 }
 
+inline JPH::Real CheckFiniteReal(lua_State* L, int index, const char* name) {
+	double value = CheckFiniteDouble(L, index, name);
+	luaL_argcheck(L,
+				  std::abs(value) <=
+					  static_cast<double>((std::numeric_limits<JPH::Real>::max)()),
+				  index,
+				  name);
+	return static_cast<JPH::Real>(value);
+}
+
 inline uint32_t CheckUInt32(lua_State* L, int index, const char* name) {
 	lua_Integer value = luaL_checkinteger(L, index);
 	luaL_argcheck(L,
@@ -160,6 +171,7 @@ void RegisterBodyBindings(lua_State* L);
 void RegisterStateBindings(lua_State* L);
 void RegisterConfigBindings(lua_State* L);
 void RegisterAssetBindings(lua_State* L);
+void RegisterCommandBindings(lua_State* L);
 void RegisterLogGlobals(ScriptVM& vm);
 void RegisterLogModuleBindings(lua_State* L);
 void RegisterConstants(lua_State* L);

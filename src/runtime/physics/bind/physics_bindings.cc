@@ -20,6 +20,7 @@ void Register(ScriptVM& vm) {
 	RegisterStateBindings(L);
 	RegisterConfigBindings(L);
 	RegisterAssetBindings(L);
+	RegisterCommandBindings(L);
 	RegisterLogModuleBindings(L);
 	RegisterConstants(L);
 	lua_setglobal(L, "physics");

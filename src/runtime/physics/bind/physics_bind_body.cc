@@ -47,19 +47,18 @@ std::optional<PhysicsSystem::Vec3Result> GetVelocityFromContext(const BindingCon
 }
 
 std::optional<PhysicsSystem::RayCastResult> RayCastFromContext(const BindingContext& ctx,
-															   double ox,
-															   double oy,
-															   double oz,
-															   double dx,
-															   double dy,
-															   double dz,
+															   JPH::Real ox,
+															   JPH::Real oy,
+															   JPH::Real oz,
+															   float dx,
+															   float dy,
+															   float dz,
 															   float max_dist) {
 	if (ctx.IsPhysicsThread()) {
 		if (!ctx.world) return std::nullopt;
 		auto hit = ctx.world->RayCast(
-			JPH::RVec3(
-				static_cast<JPH::Real>(ox), static_cast<JPH::Real>(oy), static_cast<JPH::Real>(oz)),
-			JPH::Vec3(static_cast<float>(dx), static_cast<float>(dy), static_cast<float>(dz)),
+			JPH::RVec3(ox, oy, oz),
+			JPH::Vec3(dx, dy, dz),
 			max_dist);
 		if (!hit.has_value()) return std::nullopt;
 		return PhysicsSystem::RayCastResult{hit->body_id, hit->x, hit->y, hit->z};
@@ -67,14 +66,71 @@ std::optional<PhysicsSystem::RayCastResult> RayCastFromContext(const BindingCont
 	return ctx.system ? ctx.system->RayCast(ox, oy, oz, dx, dy, dz, max_dist) : std::nullopt;
 }
 
+void PushVec3(lua_State* L, double x, double y, double z) {
+	lua_newtable(L);
+	SetField(L, "x", x);
+	SetField(L, "y", y);
+	SetField(L, "z", z);
+	lua_pushnumber(L, x);
+	lua_rawseti(L, -2, 1);
+	lua_pushnumber(L, y);
+	lua_rawseti(L, -2, 2);
+	lua_pushnumber(L, z);
+	lua_rawseti(L, -2, 3);
+}
+
+void PushQuat(lua_State* L, float x, float y, float z, float w) {
+	lua_newtable(L);
+	SetField(L, "x", x);
+	SetField(L, "y", y);
+	SetField(L, "z", z);
+	SetField(L, "w", w);
+	lua_pushnumber(L, x);
+	lua_rawseti(L, -2, 1);
+	lua_pushnumber(L, y);
+	lua_rawseti(L, -2, 2);
+	lua_pushnumber(L, z);
+	lua_rawseti(L, -2, 3);
+	lua_pushnumber(L, w);
+	lua_rawseti(L, -2, 4);
+}
+
+void PushTransformTable(lua_State* L, const BodyTransform& transform) {
+	lua_newtable(L);
+	SetField(L, "body_id", transform.body_id);
+	SetField(L, "bodyId", transform.body_id);
+	SetField(L, "pos_x", transform.pos_x);
+	SetField(L, "posX", transform.pos_x);
+	SetField(L, "pos_y", transform.pos_y);
+	SetField(L, "posY", transform.pos_y);
+	SetField(L, "pos_z", transform.pos_z);
+	SetField(L, "posZ", transform.pos_z);
+	SetField(L, "rot_x", transform.rot_x);
+	SetField(L, "rotX", transform.rot_x);
+	SetField(L, "rot_y", transform.rot_y);
+	SetField(L, "rotY", transform.rot_y);
+	SetField(L, "rot_z", transform.rot_z);
+	SetField(L, "rotZ", transform.rot_z);
+	SetField(L, "rot_w", transform.rot_w);
+	SetField(L, "rotW", transform.rot_w);
+	PushVec3(L, transform.pos_x, transform.pos_y, transform.pos_z);
+	lua_setfield(L, -2, "position");
+	PushQuat(L, transform.rot_x, transform.rot_y, transform.rot_z, transform.rot_w);
+	lua_setfield(L, -2, "rotation");
+}
+
+void PushVelocityTable(lua_State* L, const PhysicsSystem::Vec3Result& velocity) {
+	PushVec3(L, velocity.x, velocity.y, velocity.z);
+}
+
 int LuaSpawn(lua_State* L) {
 	BindingContext ctx;
 	if (!CheckInit(L, ctx)) return 2;
 
 	const char* proto_id = luaL_checkstring(L, 1);
-	double x = CheckFiniteDouble(L, 2, "x must be finite");
-	double y = CheckFiniteDouble(L, 3, "y must be finite");
-	double z = CheckFiniteDouble(L, 4, "z must be finite");
+	JPH::Real x = CheckFiniteReal(L, 2, "x must fit JPH::Real");
+	JPH::Real y = CheckFiniteReal(L, 3, "y must fit JPH::Real");
+	JPH::Real z = CheckFiniteReal(L, 4, "z must fit JPH::Real");
 	float qx = CheckFiniteFloat(L, 5, "qx must be finite");
 	float qy = CheckFiniteFloat(L, 6, "qy must be finite");
 	float qz = CheckFiniteFloat(L, 7, "qz must be finite");
@@ -85,9 +141,7 @@ int LuaSpawn(lua_State* L) {
 		if (!CheckWorld(L, ctx)) return 2;
 		auto body_id = ctx.world->CreateBody(
 			proto_id,
-			JPH::RVec3(static_cast<JPH::Real>(x),
-					   static_cast<JPH::Real>(y),
-					   static_cast<JPH::Real>(z)),
+			JPH::RVec3(x, y, z),
 			NormalizedOrIdentity(qx, qy, qz, qw),
 			user_data);
 		if (!body_id.has_value()) {
@@ -130,18 +184,16 @@ int LuaApplyForce(lua_State* L) {
 	float fx = CheckFiniteFloat(L, 2, "fx must be finite");
 	float fy = CheckFiniteFloat(L, 3, "fy must be finite");
 	float fz = CheckFiniteFloat(L, 4, "fz must be finite");
-	double px = CheckFiniteDouble(L, 5, "px must be finite");
-	double py = CheckFiniteDouble(L, 6, "py must be finite");
-	double pz = CheckFiniteDouble(L, 7, "pz must be finite");
+	JPH::Real px = CheckFiniteReal(L, 5, "px must fit JPH::Real");
+	JPH::Real py = CheckFiniteReal(L, 6, "py must fit JPH::Real");
+	JPH::Real pz = CheckFiniteReal(L, 7, "pz must fit JPH::Real");
 
 	bool ok = false;
 	if (ctx.IsPhysicsThread()) {
 		ok = ctx.world &&
 			 ctx.world->ApplyForce(body_id,
 								   JPH::Vec3(fx, fy, fz),
-								   JPH::RVec3(static_cast<JPH::Real>(px),
-											  static_cast<JPH::Real>(py),
-											  static_cast<JPH::Real>(pz)));
+								   JPH::RVec3(px, py, pz));
 	} else {
 		ok = ctx.system->EnqueueApplyForce(body_id, fx, fy, fz, px, py, pz);
 	}
@@ -202,6 +254,32 @@ int LuaGetVelocity(lua_State* L) {
 	return 3;
 }
 
+int LuaGetTransformTable(lua_State* L) {
+	BindingContext ctx;
+	if (!CheckInit(L, ctx)) return 2;
+
+	uint32_t body_id = CheckUInt32(L, 1, "body_id must be a uint32");
+	auto t = GetTransformFromContext(ctx, body_id);
+	if (!t.has_value()) {
+		return PushNilError(L, "body not found");
+	}
+	PushTransformTable(L, *t);
+	return 1;
+}
+
+int LuaGetVelocityTable(lua_State* L) {
+	BindingContext ctx;
+	if (!CheckInit(L, ctx)) return 2;
+
+	uint32_t body_id = CheckUInt32(L, 1, "body_id must be a uint32");
+	auto v = GetVelocityFromContext(ctx, body_id);
+	if (!v.has_value()) {
+		return PushNilError(L, "body not found");
+	}
+	PushVelocityTable(L, *v);
+	return 1;
+}
+
 int LuaIsActive(lua_State* L) {
 	BindingContext ctx;
 	if (!CheckInit(L, ctx)) return 2;
@@ -213,16 +291,44 @@ int LuaIsActive(lua_State* L) {
 	return 1;
 }
 
+int LuaGetBodyState(lua_State* L) {
+	BindingContext ctx;
+	if (!CheckInit(L, ctx)) return 2;
+
+	uint32_t body_id = CheckUInt32(L, 1, "body_id must be a uint32");
+	auto transform = GetTransformFromContext(ctx, body_id);
+	if (!transform.has_value()) {
+		return PushNilError(L, "body not found");
+	}
+
+	auto velocity = GetVelocityFromContext(ctx, body_id);
+	lua_newtable(L);
+	SetField(L, "body_id", body_id);
+	SetField(L, "bodyId", body_id);
+	PushTransformTable(L, *transform);
+	lua_setfield(L, -2, "transform");
+	if (velocity.has_value()) {
+		PushVelocityTable(L, *velocity);
+	} else {
+		lua_pushnil(L);
+	}
+	lua_setfield(L, -2, "velocity");
+	bool active = ctx.IsPhysicsThread() ? (ctx.world && ctx.world->IsActive(body_id))
+										: ctx.system->IsBodyActive(body_id);
+	SetField(L, "active", active);
+	return 1;
+}
+
 int LuaRayCast(lua_State* L) {
 	BindingContext ctx;
 	if (!CheckInit(L, ctx)) return 2;
 
-	double ox = CheckFiniteDouble(L, 1, "ox must be finite");
-	double oy = CheckFiniteDouble(L, 2, "oy must be finite");
-	double oz = CheckFiniteDouble(L, 3, "oz must be finite");
-	double dx = CheckFiniteDouble(L, 4, "dx must be finite");
-	double dy = CheckFiniteDouble(L, 5, "dy must be finite");
-	double dz = CheckFiniteDouble(L, 6, "dz must be finite");
+	JPH::Real ox = CheckFiniteReal(L, 1, "ox must fit JPH::Real");
+	JPH::Real oy = CheckFiniteReal(L, 2, "oy must fit JPH::Real");
+	JPH::Real oz = CheckFiniteReal(L, 3, "oz must fit JPH::Real");
+	float dx = CheckFiniteFloat(L, 4, "dx must be finite");
+	float dy = CheckFiniteFloat(L, 5, "dy must be finite");
+	float dz = CheckFiniteFloat(L, 6, "dz must be finite");
 	float max_dist = CheckFiniteFloat(L, 7, "max_dist must be finite");
 	luaL_argcheck(L, max_dist > 0.0f, 7, "max_dist must be > 0");
 
@@ -234,6 +340,7 @@ int LuaRayCast(lua_State* L) {
 
 	lua_newtable(L);
 	SetField(L, "body_id", hit->body_id);
+	SetField(L, "bodyId", hit->body_id);
 	SetField(L, "x", hit->x);
 	SetField(L, "y", hit->y);
 	SetField(L, "z", hit->z);
@@ -250,6 +357,9 @@ const luaL_Reg kBodyFunctions[] = {{"spawn", LuaSpawn},
 								   {"enqueue_set_velocity", LuaSetVelocity},
 								   {"get_transform", LuaGetTransform},
 								   {"get_velocity", LuaGetVelocity},
+								   {"get_transform_table", LuaGetTransformTable},
+								   {"get_velocity_table", LuaGetVelocityTable},
+								   {"get_body_state", LuaGetBodyState},
 								   {"is_active", LuaIsActive},
 								   {"is_body_active", LuaIsActive},
 								   {"ray_cast", LuaRayCast},

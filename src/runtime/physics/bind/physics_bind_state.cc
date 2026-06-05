@@ -87,19 +87,54 @@ void PushPrototype(lua_State* L, const PrototypeEntry& proto) {
 void PushBodyTransform(lua_State* L, const BodyTransform& transform) {
 	lua_newtable(L);
 	SetField(L, "body_id", transform.body_id);
+	SetField(L, "bodyId", transform.body_id);
 	SetField(L, "pos_x", transform.pos_x);
+	SetField(L, "posX", transform.pos_x);
 	SetField(L, "pos_y", transform.pos_y);
+	SetField(L, "posY", transform.pos_y);
 	SetField(L, "pos_z", transform.pos_z);
+	SetField(L, "posZ", transform.pos_z);
 	SetField(L, "rot_x", transform.rot_x);
+	SetField(L, "rotX", transform.rot_x);
 	SetField(L, "rot_y", transform.rot_y);
+	SetField(L, "rotY", transform.rot_y);
 	SetField(L, "rot_z", transform.rot_z);
+	SetField(L, "rotZ", transform.rot_z);
 	SetField(L, "rot_w", transform.rot_w);
+	SetField(L, "rotW", transform.rot_w);
+	lua_newtable(L);
+	SetField(L, "x", transform.pos_x);
+	SetField(L, "y", transform.pos_y);
+	SetField(L, "z", transform.pos_z);
+	lua_pushnumber(L, transform.pos_x);
+	lua_rawseti(L, -2, 1);
+	lua_pushnumber(L, transform.pos_y);
+	lua_rawseti(L, -2, 2);
+	lua_pushnumber(L, transform.pos_z);
+	lua_rawseti(L, -2, 3);
+	lua_setfield(L, -2, "position");
+	lua_newtable(L);
+	SetField(L, "x", transform.rot_x);
+	SetField(L, "y", transform.rot_y);
+	SetField(L, "z", transform.rot_z);
+	SetField(L, "w", transform.rot_w);
+	lua_pushnumber(L, transform.rot_x);
+	lua_rawseti(L, -2, 1);
+	lua_pushnumber(L, transform.rot_y);
+	lua_rawseti(L, -2, 2);
+	lua_pushnumber(L, transform.rot_z);
+	lua_rawseti(L, -2, 3);
+	lua_pushnumber(L, transform.rot_w);
+	lua_rawseti(L, -2, 4);
+	lua_setfield(L, -2, "rotation");
 }
 
 void PushCollisionEvent(lua_State* L, const CollisionEvent& event) {
 	lua_newtable(L);
 	SetField(L, "body_a", event.body_a);
+	SetField(L, "bodyA", event.body_a);
 	SetField(L, "body_b", event.body_b);
+	SetField(L, "bodyB", event.body_b);
 	const char* type = "start";
 	if (event.type == CollisionEvent::Type::Persist) {
 		type = "persist";
@@ -115,15 +150,27 @@ void PushCollisionEvent(lua_State* L, const CollisionEvent& event) {
 		SetField(L, "x", point.GetX());
 		SetField(L, "y", point.GetY());
 		SetField(L, "z", point.GetZ());
+		lua_pushnumber(L, point.GetX());
+		lua_rawseti(L, -2, 1);
+		lua_pushnumber(L, point.GetY());
+		lua_rawseti(L, -2, 2);
+		lua_pushnumber(L, point.GetZ());
+		lua_rawseti(L, -2, 3);
 		lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
 	}
 	lua_setfield(L, -2, "contact_points");
+	lua_getfield(L, -1, "contact_points");
+	lua_setfield(L, -2, "contactPoints");
+	lua_getfield(L, -1, "contact_points");
+	lua_setfield(L, -2, "points");
 }
 
 void PushDiffPacket(lua_State* L, const DiffPacket& packet) {
 	lua_newtable(L);
 	SetField(L, "object_id", packet.object_id);
+	SetField(L, "objectId", packet.object_id);
 	SetField(L, "change_mask", static_cast<uint32_t>(packet.change_mask));
+	SetField(L, "changeMask", static_cast<uint32_t>(packet.change_mask));
 	lua_newtable(L);
 	for (size_t i = 0; i < packet.values.size(); ++i) {
 		lua_pushnumber(L, packet.values[i]);
@@ -325,6 +372,7 @@ ThresholdsConfig ReadThresholds(lua_State* L, int index, ThresholdsConfig defaul
 void PushFrameResult(lua_State* L, const PhysicsFrameResult& result) {
 	lua_newtable(L);
 	SetField(L, "frame_id", result.frame_id);
+	SetField(L, "frameId", result.frame_id);
 	SetField(L, "error", result.error);
 
 	lua_newtable(L);
@@ -340,6 +388,8 @@ void PushFrameResult(lua_State* L, const PhysicsFrameResult& result) {
 		lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
 	}
 	lua_setfield(L, -2, "collision_events");
+	lua_getfield(L, -1, "collision_events");
+	lua_setfield(L, -2, "collisionEvents");
 
 	lua_newtable(L);
 	for (size_t i = 0; i < result.diff_packets.size(); ++i) {
@@ -347,6 +397,8 @@ void PushFrameResult(lua_State* L, const PhysicsFrameResult& result) {
 		lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
 	}
 	lua_setfield(L, -2, "diff_packets");
+	lua_getfield(L, -1, "diff_packets");
+	lua_setfield(L, -2, "diffPackets");
 }
 
 int LuaTick(lua_State* L) {

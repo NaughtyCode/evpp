@@ -150,6 +150,18 @@ local x, y, z = physics.get_transform(body_id)
 if type(x) ~= "number" or type(y) ~= "number" or type(z) ~= "number" then
 	error("physics.get_transform failed")
 end
+local transform = physics.get_transform_table(body_id)
+if type(transform) ~= "table" or transform.bodyId ~= body_id or transform.position[2] == nil then
+	error("physics.get_transform_table failed")
+end
+local velocity = physics.get_velocity_table(body_id)
+if type(velocity) ~= "table" or type(velocity.x) ~= "number" then
+	error("physics.get_velocity_table failed")
+end
+local state = physics.get_body_state(body_id)
+if type(state) ~= "table" or state.bodyId ~= body_id or type(state.transform) ~= "table" then
+	error("physics.get_body_state failed")
+end
 
 local stats = physics.get_stats()
 if type(stats) ~= "table" or stats.bodies < 1 then
@@ -213,11 +225,12 @@ local parsed_scene = physics.parse_scene_asset_json([[
   "constraints": []
 }
 ]], "inline_scene.json")
-local materials = physics.parse_materials_json([[
+local materials_json = [[
 [
   {"name": "script_mat", "friction": 0.4, "restitution": 0.1}
 ]
-]])
+]]
+local materials = physics.parse_materials_json(materials_json)
 
 assert(type(cfg.physics) == "table")
 assert(type(cfg.threading) == "table")
@@ -243,6 +256,13 @@ assert(scene_by_path.counts.staticBodies >= 1)
 assert(parsed_scene.counts.materials == 1)
 assert(parsed_scene.materials[1].name == "script_mat")
 assert(materials.count == 1)
+assert(materials.empty == false)
+assert(math.abs(materials.byName.script_mat.friction - 0.4) < 0.0001)
+assert(materials.entries[1].name == "script_mat")
+assert(physics.has_material_in_json(materials_json, "script_mat") == true)
+assert(physics.has_material_in_json(materials_json, "missing") == false)
+local material = physics.get_material_in_json(materials_json, "script_mat")
+assert(material.name == "script_mat" and math.abs(material.restitution - 0.1) < 0.0001)
 local vec3 = physics.parse_vec3({1, 2, 3})
 local fvec3 = physics.parse_float_vec3({4, 5, 6})
 local quat = physics.normalize_quat({0, 0, 0, 2})
@@ -291,6 +311,30 @@ assert(type(physics.log_info) == "function")
 assert(type(physics.enqueue_spawn) == "function")
 assert(type(physics.tick) == "function")
 assert(type(physics.fetch_result) == "function")
+local spawn_args = physics.make_spawn_args("crate", 1, 2, 3, 0, 0, 0, 1, 99)
+assert(spawn_args.type == physics.COMMAND_SPAWN)
+assert(spawn_args.protoId == "crate")
+assert(spawn_args.position[3] == 3)
+assert(spawn_args.rotation.w == 1)
+assert(spawn_args.userData == 99)
+assert(physics.make_destroy_args(5).bodyId == 5)
+assert(physics.make_apply_force_args(5, 1, 2, 3, 4, 5, 6).force.y == 2)
+assert(physics.make_set_velocity_args(5, 7, 8, 9).velocity.z == 9)
+assert(physics.make_tick_args(42, 0.016).frameId == 42)
+local transform_packet = physics.make_body_transform(7, 1, 2, 3, 0, 0, 0, 1)
+assert(transform_packet.bodyId == 7 and transform_packet.position[2] == 2)
+local collision = physics.make_collision_event(1, 2, physics.COLLISION_PERSIST, {
+	{1, 2, 3},
+	{x = 4, y = 5, z = 6}
+})
+assert(collision.type == physics.COLLISION_PERSIST)
+assert(collision.contactPoints[2].z == 6 and collision.points[1][1] == 1)
+local packet = physics.make_diff_packet(9, physics.DIFF_POSITION, {1, 2, 3})
+assert(packet.objectId == 9 and packet.changeMask == physics.DIFF_POSITION)
+local frame = physics.make_frame_result(12)
+assert(frame.frameId == 12 and #frame.transforms == 0 and #frame.diffPackets == 0)
+assert(physics.command_type_name(physics.COMMAND_TICK) == physics.COMMAND_TICK)
+assert(physics.collision_type_name(physics.COLLISION_END) == physics.COLLISION_END)
 
 return table.concat({
 	tostring(status.initialized),

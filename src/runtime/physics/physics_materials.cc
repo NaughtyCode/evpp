@@ -64,7 +64,22 @@ std::vector<std::string> MaterialTable::GetNames() const {
 	for (const auto& [name, _] : materials_) {
 		names.push_back(name);
 	}
+	std::sort(names.begin(), names.end());
 	return names;
+}
+
+std::vector<MaterialEntry> MaterialTable::GetEntries() const {
+	std::vector<MaterialEntry> entries;
+	entries.reserve(materials_.size());
+	for (const auto& [name, material] : materials_) {
+		if (material.GetPtr() == nullptr) continue;
+		entries.push_back(
+			MaterialEntry{name, material->GetFriction(), material->GetRestitution()});
+	}
+	std::sort(entries.begin(), entries.end(), [](const auto& lhs, const auto& rhs) {
+		return lhs.name < rhs.name;
+	});
+	return entries;
 }
 
 JPH::PhysicsMaterialList MaterialTable::CreateList(const std::vector<std::string>& names) const {

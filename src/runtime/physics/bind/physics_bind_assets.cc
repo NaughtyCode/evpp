@@ -387,6 +387,7 @@ int LuaParseMaterialsJson(lua_State* L) {
 
 	lua_newtable(L);
 	SetField(L, "count", static_cast<uint32_t>(table.Size()));
+	SetField(L, "empty", table.Empty());
 	lua_newtable(L);
 	auto names = table.GetNames();
 	for (size_t i = 0; i < names.size(); ++i) {
@@ -394,6 +395,49 @@ int LuaParseMaterialsJson(lua_State* L) {
 		lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
 	}
 	lua_setfield(L, -2, "names");
+	auto entries = table.GetEntries();
+	PushArray(L, entries, PushMaterialEntry);
+	lua_setfield(L, -2, "materials");
+	PushArray(L, entries, PushMaterialEntry);
+	lua_setfield(L, -2, "entries");
+	lua_newtable(L);
+	for (const auto& entry : entries) {
+		PushMaterialEntry(L, entry);
+		lua_setfield(L, -2, entry.name.c_str());
+	}
+	lua_setfield(L, -2, "by_name");
+	lua_getfield(L, -1, "by_name");
+	lua_setfield(L, -2, "byName");
+	return 1;
+}
+
+int LuaHasMaterialInJson(lua_State* L) {
+	size_t len = 0;
+	const char* json = luaL_checklstring(L, 1, &len);
+	const char* name = luaL_checkstring(L, 2);
+	MaterialTable table;
+	if (!table.LoadFromJson(std::string(json, len))) {
+		return PushNilError(L, "materials json parse failed");
+	}
+	lua_pushboolean(L, table.Has(name) ? 1 : 0);
+	return 1;
+}
+
+int LuaGetMaterialInJson(lua_State* L) {
+	size_t len = 0;
+	const char* json = luaL_checklstring(L, 1, &len);
+	const char* name = luaL_checkstring(L, 2);
+	MaterialTable table;
+	if (!table.LoadFromJson(std::string(json, len))) {
+		return PushNilError(L, "materials json parse failed");
+	}
+	for (const auto& entry : table.GetEntries()) {
+		if (entry.name == name) {
+			PushMaterialEntry(L, entry);
+			return 1;
+		}
+	}
+	lua_pushnil(L);
 	return 1;
 }
 
@@ -753,6 +797,8 @@ const luaL_Reg kAssetFunctions[] = {{"load_configured_scene_asset", LuaLoadConfi
 									{"load_scene_asset", LuaLoadSceneAsset},
 									{"parse_scene_asset_json", LuaParseSceneAssetJson},
 									{"parse_materials_json", LuaParseMaterialsJson},
+									{"has_material_in_json", LuaHasMaterialInJson},
+									{"get_material_in_json", LuaGetMaterialInJson},
 									{"parse_vec3", LuaParseVec3},
 									{"parse_float_vec3", LuaParseFloatVec3},
 									{"parse_quat", LuaParseQuat},

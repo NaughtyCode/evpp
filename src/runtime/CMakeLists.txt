@@ -198,6 +198,7 @@ set(PHYSICS_CC
     ${RUNTIME_DIR}/physics/bind/physics_bindings.cc
     ${RUNTIME_DIR}/physics/bind/physics_bind_assets.cc
     ${RUNTIME_DIR}/physics/bind/physics_bind_body.cc
+    ${RUNTIME_DIR}/physics/bind/physics_bind_commands.cc
     ${RUNTIME_DIR}/physics/bind/physics_bind_config.cc
     ${RUNTIME_DIR}/physics/bind/physics_bind_log.cc
     ${RUNTIME_DIR}/physics/bind/physics_bind_state.cc
