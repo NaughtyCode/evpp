@@ -14,7 +14,7 @@
 - 任意线程都可以通过 `RedisClient` 发起 Redis 请求。
 - 请求通过 `moodycamel::ConcurrentQueue` 路由并传递给某个 `RedisClientThread`。
 - RedisClient accepted 的请求，在成功、命令失败、连接错误、超时、关闭丢弃等情况下都要完成一次。
-- Redis runtime 编译启用时，每个线程自己的 Lua VM 都可以导出访问 `RedisClient` 相关的 API。
+- Redis runtime 编译启用时，每个拥有 Lua VM 的线程都可以导出访问 `RedisClient` 相关的 API。
 - Redis 结果不能在 Redis 线程直接访问调用方 Lua VM，必须先进入调用方所属线程的结果队列，再由调用方线程主循环 dispatch。
 - `RedisClientScriptVM` 是 Redis 线程私有 Lua VM，外部不可访问。
 - `RedisClientScriptVM` 通过 `custom_ptr_store` 访问 Redis 模块级实例。
@@ -57,7 +57,7 @@ server 端 CMake 已经集成并链接 libevent，concurrentqueue 也已经在 i
 
 server 和 client 的 CMake option 有 cache 泄漏风险。如果同一构建树或上层构建入口先后配置 server/client，Redis 的 server-only 不能只依赖全局 option，需要在 client/mobile target 显式禁用或使用 target-specific 判断。
 
-另外，现有 `MainThreadScriptVM` 对 Mongo/DB binding 的宏判断存在组合宏使用，Redis 模块应避免重复这种隐式判断，建议使用清晰的 `ENGINE_REDIS_ENABLED` 和 server-only target 条件。
+另外，现有 `MainThreadScriptVM` 对 Mongo/DB binding 的宏判断存在组合宏使用，Redis 模块应避免重复这种隐式判断。建议用非 cache 的 `ENGINE_REDIS_RUNTIME_ENABLED` 普通 CMake 变量控制 runtime 源文件列表，用 `ENGINE_REDIS_ENABLED` compile definition 表示当前 target 已编译 Redis runtime，二者都必须由 server/client target 在 include runtime 前显式设置。
 
 ## 3. 总体架构
 
@@ -264,7 +264,7 @@ class RedisClient {
 - 返回 `accepted = false` 表示请求未被接受，不触发 completion；`status` 和 `error` 描述同步拒绝原因。Lua binding 应把这种情况转换为同步错误返回。
 - 队列满、模块未启动、正在关闭、未连接且禁止断线排队、参数非法或 completion 为空时返回 `accepted = false`。
 - `Command` 必须在入队前解析并规范化第一个 argv 作为命令名；空命令、空命令名或命令名包含二进制控制字符时返回 `kInvalidArgument`。
-- 第一版必须拒绝会改变连接状态、阻塞 worker、或把连接切入专用模式的命令，并返回 `kUnsupportedCommand`，不触发 completion。拒绝列表至少包含 `AUTH`、`HELLO`、`SELECT`、`QUIT`、`RESET`、`CLIENT`、`MONITOR`、`SUBSCRIBE`、`PSUBSCRIBE`、`SSUBSCRIBE`、`UNSUBSCRIBE`、`PUNSUBSCRIBE`、`SUNSUBSCRIBE`、`BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BLMOVE`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP`、带 `BLOCK` 选项的 `XREAD` / `XREADGROUP`、`MULTI`、`EXEC`、`DISCARD`、`WATCH`、`UNWATCH`。
+- 第一版必须拒绝会改变连接状态、阻塞 worker、或把连接切入专用模式的命令，并返回 `kUnsupportedCommand`，不触发 completion。拒绝列表至少包含 `AUTH`、`HELLO`、`SELECT`、`QUIT`、`RESET`、`CLIENT`、`MONITOR`、`SUBSCRIBE`、`PSUBSCRIBE`、`SSUBSCRIBE`、`UNSUBSCRIBE`、`PUNSUBSCRIBE`、`SUNSUBSCRIBE`、`BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BLMOVE`、`BLMPOP`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP`、`WAIT`、`WAITAOF`、带 `BLOCK` 选项的 `XREAD` / `XREADGROUP`、`MULTI`、`EXEC`、`DISCARD`、`WATCH`、`UNWATCH`。
 - 命令校验逻辑应集中在 RedisClient 内部 helper 中，Lua binding 和 C++ API 都调用同一条路径；命令名比较使用 ASCII case-insensitive 规则，`XREAD` / `XREADGROUP` 只在 `STREAMS` 之前的 option 区间扫描 `BLOCK` 选项，避免把 key 名误判为 blocking 选项。
 - 连接认证和 database 选择只能由 `RedisClientThread` 根据配置执行，普通 `Command` 和 Lua binding 不能覆盖。第一版固定使用 hiredis 默认 RESP2，不开放 `HELLO`；如果后续支持 RESP 协议版本切换，也只能通过 Redis 配置完成。
 - `RedisCompletion` 是 RedisClient 的低层完成回调，默认在 `RedisClientThread` 中执行，必须线程安全，且不能直接访问任何外部 Lua VM。
@@ -286,7 +286,7 @@ struct RedisRequest {
 };
 ```
 
-`argv` 使用 `std::string` 保存参数，hiredis 调用时使用 `redisAsyncCommandArgv`，保证二进制安全。
+`argv` 使用 `std::string` 保存参数，hiredis 调用时使用 `redisAsyncCommandArgv`，保证二进制安全。`redisAsyncCommandArgv` 会在调用栈内格式化命令缓冲区，所以 `argv` 的字符指针只需要在本次调用返回前有效；但 callback `privdata` 只是被 hiredis 保存为裸指针，pending token / request metadata 必须由 Redis 模块自行保证生命周期，直到 hiredis callback、超时、断线或 shutdown 去重流程确认不会再访问。
 
 不建议在 `RedisRequest` 中直接保存 Lua registry ref。Lua ref 应由调用方线程的 dispatcher/registry 管理，Redis 请求只保存一个线程安全 completion adapter。
 
@@ -674,6 +674,13 @@ bool redis_required = false;
 - `src/runtime/config/bind/config_bind.cc`
 - `resources/config/server/server.json`
 
+`resources/config/server/server.json` 应显式保留默认空入口，避免依赖 `ServerConfig` 的 C++ 默认值导致运行时配置快照、Dump 输出和人工排查不一致：
+
+```json
+"redis": "",
+"redis_required": false
+```
+
 ### 10.2 Redis 详细配置文件
 
 新增 `resources/config/server/redis.json`：
@@ -815,7 +822,7 @@ bool previous_redis_loaded_ = false;
 
 加载流程建议：
 
-1. `LoadServerFromFile` 先解析 `server.json`；`LoadServerFromString` 也应复用同一套 Redis 入口校验和详细配置加载逻辑。
+1. `LoadServerFromFile` 先解析 `server.json`；`LoadServerFromString`、`Load`、`Reload` 和 `ValidateOnly` 也应复用同一套 Redis 入口校验和详细配置加载逻辑，不能让 dry-run 校验和真实加载走出不同结论。
 2. 通过编译宏或 server target 注入的 helper 判断 Redis runtime 是否已编译进当前 target。
 3. Redis runtime 未编译且 `server.redis_required = true` 时，server 配置加载必须失败；Redis runtime 未编译且 `server.redis_required = false` 时，跳过 Redis 详细配置加载，即使 `server.redis` 非空也不打开该文件，并设置 `redis_loaded_ = false`。
 4. Redis runtime 已编译且 `server.redis` 非空时，调用 `LoadRedisClientConfigFromFile(server.redis, new_redis)`。
@@ -824,7 +831,7 @@ bool previous_redis_loaded_ = false;
 7. Redis 配置加载失败时，根据 `server.redis_required` 决定 server 配置加载是否失败；如果 `redis_required = false`，server 配置加载可以成功，但必须记录错误并设置 `redis_loaded_ = false`。
 8. 日志中禁止输出明文 password；如 password 看起来是明文，应复用 Mongo 配置的 plaintext credential warning 思路。
 
-`server_config_` 与 `redis_config_` 必须作为同一个配置快照更新：`LoadServerFromString`、`LoadServerFromFile`、`Reload` 在覆盖当前配置前要同步保存 `previous_redis_config_` 和 `previous_redis_loaded_`；`Rollback` 必须同时恢复 `server_config_` 和 Redis 缓存，避免回滚后 `server.redis` 指向旧路径但 `redis_config_` 仍是新内容。
+`server_config_` 与 `redis_config_` 必须作为同一个配置快照更新：`LoadServerFromString`、`LoadServerFromFile`、`Reload` 在覆盖当前配置前要同步保存 `previous_redis_config_` 和 `previous_redis_loaded_`；`Rollback` 必须同时恢复 `server_config_`、`redis_config_`、`redis_loaded_` 和上一份 Redis 快照，避免回滚后 `server.redis` 指向旧路径但 `redis_config_` 仍是新内容。
 
 建议在 `src/runtime/config/config_constants.h` 增加默认路径：
 
@@ -838,9 +845,10 @@ inline constexpr const char* kRedisConfigFile = "/server/redis.json";
 
 - `config.h` 如果需要按值缓存 `RedisClientConfig`，应包含 `runtime/config/redis_config.h`。
 - `redis_config.h` 不能包含 hiredis、libevent 或 `database/redis` 内部头文件。
-- 当前 `ConfigManager::Diff` 只比较 runtime/server 字段；接入 Redis 时必须扩展为同时比较 old/new Redis 详细配置和 loaded flag，或增加独立 helper 把 Redis 详细字段追加到同一个 `ConfigChangeSet`。
+- 当前 `ConfigManager::Diff` 只比较 runtime/server 字段；接入 Redis 时必须扩展签名以接收 old/new Redis 详细配置和 loaded flag，或增加独立 `DiffRedisConfig` helper 并在 `LoadServerFromString`、`Reload` 和 `Rollback` 构造同一个 `ConfigChangeSet` 时追加结果。
 - Redis 详细配置 diff 只能在 Redis runtime 已编译且对应 Redis 配置已成功加载时比较；从 loaded 变为 unloaded 或从 unloaded 变为 loaded 时，也必须生成可让 `RedisClient` reload 逻辑识别的 change。
 - 如果后续决定不在 `ConfigManager` 缓存 Redis 详细配置，则 `redis.json` 变化不会自然进入 `ConfigChangeSet`；这种实现必须让 `RedisClient` 自己订阅文件变化并重新加载，复杂度更高，不建议第一版采用。
+- `Dump()` / `DumpServer()` 只输出 `server.redis` 路径和 `redis_required`；如果需要导出 Redis 详细配置，应提供单独的 redacted dump helper，所有 password 字段必须输出 `<redacted>`。
 
 ### 10.5 热重载策略
 
@@ -1130,6 +1138,9 @@ Redis 命令错误，例如 `WRONGTYPE`，应作为 `kCommandError` 返回；已
 - 如果 `redis_required = true`，server 初始化可以失败，readiness 必须失败。
 - 如果 `redis_required = false`，server 可以继续启动；在 `RedisClient` 已初始化且 worker 集合存在的前提下，新请求按 5.1 的路由和 `queue_while_disconnected` 规则处理。全部 worker 不可用且不允许断线排队时同步返回 `kDisconnected`，允许断线排队时可进入 running worker 队列；部分 worker 不可用时，未指定 `routing_key` 的请求继续路由到 healthy worker。Redis runtime 未编译、`server.redis` 为空或 Redis config 加载失败导致没有 worker 集合时，提交请求同步返回 `kNotRunning`。
 - 单个 worker 连接断开时，该 worker 所有已发送但未完成的 pending request 应立即完成为 `kConnectionError`，不要静默等待重连，避免非幂等命令在不确定状态下重复执行。
+- 单个 worker 连接断开且 `queue_while_disconnected = false` 时，该 worker 已 accepted 但尚未发送的 `request_queue_` 和 `unsent_requests_` 请求也必须完成为 `kConnectionError`，并释放全局未发送计数；不能保留到重连后再发送。
+- 单个 worker 连接断开且 `queue_while_disconnected = true` 时，尚未发送的请求可以继续留在 `request_queue_` / `unsent_requests_`，但 deadline 仍从 accepted 时间计算，超时后完成为 `kTimeout`，shutdown 时完成为 `kShutdown`。
+- hiredis 可能在断线或 context free 路径中以 `reply == nullptr` 调用已注册命令 callback；这类 callback 必须走同一个 completion token 去重路径。如果 disconnect callback 已经完成了该 request，后续 `reply == nullptr` callback 只能记录并丢弃，不能二次完成。
 - 使用 5.1 中定义的 `RedisClientState`：所有 worker healthy 时为 `kHealthy`，部分 worker unhealthy 时为 `kDegraded`，全部 worker 不可用或启动失败时进入 `kError` / `kReconnecting` / `kStopped` 等对应状态。
 
 readiness 规则：
@@ -1153,13 +1164,14 @@ readiness 规则：
 - completion 返回 `kTimeout`。
 - 如果 hiredis 后续又返回该 request，必须识别为已完成并丢弃。
 - hiredis callback 的 `privdata` 不能指向会在超时时释放的 `PendingRedisRequest`。建议传递稳定 token，例如由 hiredis callback 自己释放的 heap token，或 `shared_ptr<PendingToken>`；超时只标记完成，不释放 callback 仍可能访问的 token，不让晚到 callback 发生 use-after-free。
+- 超时完成必须同时覆盖 `request_queue_`、`unsent_requests_` 和 `pending_requests_` 三种状态；`request_queue_` 中无法随机删除的请求应在 drain 时按 request_id/deadline 识别并完成为 `kTimeout`，不得继续发送。
 
 ### 13.4 重连
 
 第一版建议支持简单重连：
 
 - 每个 worker 的 disconnect callback 只把该 worker 设置为 healthy false。
-- 该 worker 的所有 pending request 立即完成为 `kConnectionError`。
+- 该 worker 的所有 pending request 立即完成为 `kConnectionError`；未发送请求按 13.2 的 `queue_while_disconnected` 规则完成或保留。
 - 该 worker 定时重连。
 - 该 worker 重连成功后 healthy true，并更新 `RedisClient` 聚合 health/state。
 - 断线期间新请求默认不进入 unhealthy worker 队列，`RedisClient::Command` / `Eval` 返回 `accepted = false`，Lua binding 同步返回错误；未指定 `routing_key` 的请求可以继续路由到其他 healthy worker。
@@ -1211,7 +1223,7 @@ src/tests/unit/database/test_redis_bind.cpp
 - array、nil、integer、error、status、bulk string。
 - 二进制安全字符串。
 - `RedisSubmitResult` 在参数非法、completion 为空、未启动、断线、队列满、正在关闭时返回正确同步拒绝状态，且不触发 completion。
-- `AUTH`、`SELECT`、Pub/Sub、blocking command、transaction command 等 unsupported command 返回 `kUnsupportedCommand`，不入队、不触发 completion。
+- `AUTH`、`SELECT`、Pub/Sub、blocking command、transaction command 等 unsupported command 返回 `kUnsupportedCommand`，不入队、不触发 completion；阻塞命令覆盖 `BLPOP`、`BRPOP`、`BLMOVE`、`BLMPOP`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP`、`WAIT`、`WAITAOF` 和带 `BLOCK` 选项的 `XREAD` / `XREADGROUP`。
 - 配置驱动的 AUTH/SELECT 连接握手能正常执行，不被普通 unsupported-command helper 拦截；但外部 C++ API 和 Lua binding 直接提交 `AUTH` / `SELECT` 仍同步拒绝。
 - 未配置 password/username 且 `database = 0` 时，connect callback 成功即可进入 healthy；配置 AUTH/SELECT 时，握手完成前 `IsHealthy()` 不能返回 true。
 - Lua `redis.command` 调用 unsupported command 时同步返回 `false, error`，且不保存 callback ref。
@@ -1224,6 +1236,8 @@ src/tests/unit/database/test_redis_bind.cpp
 - Redis runtime 编译启用时，`MainThreadScriptVM`、`DBScriptVM`、space VM、physics VM 等普通 VM owner 都通过通用 `ScriptVM&` helper 导出访问 `RedisClient` 的 `redis` 表；禁用时这些 VM 都不导出。
 - `ConfigManager` reload 能为 Redis 详细配置变化生成 `redis.*` change key；password 变化必须 redacted。
 - `ConfigManager::Rollback` 会同时恢复 `server_config_`、`redis_config_` 和 `redis_loaded_`，rollback 后 Redis reload 逻辑看到的路径、loaded 状态和详细配置一致。
+- `ConfigManager::ValidateOnly`、`LoadServerFromFile`、`LoadServerFromString` 和 `Reload` 对 Redis 入口、`redis_required`、详细配置加载失败的结论一致。
+- `ConfigManager::Dump` / Redis 详细配置 dump 不输出明文 password，reload diff 和日志也只输出 redacted 变化。
 - 默认配置 `thread_count = 4` 时 `RedisClient` 能启动 4 个 `RedisClientThread`；`thread_count > 1` 时任一 worker 启动失败会清理已启动 worker。
 - `wait_for_initial_connect = true` 且多 worker 时，首次连接等待使用整体 `connect_timeout_ms` 预算，不按 worker 数串行累加。
 - 多个 worker 的 OS thread name 仍设置为 `RedisClientThread`，worker index 通过 stats/log/profiler context 暴露。
@@ -1250,6 +1264,8 @@ src/tests/unit/database/test_redis_bind.cpp
 - VM 销毁后结果不再回调 Lua，晚到 Redis result 只被丢弃并记录日志。
 - accepted 请求在 shutdown、timeout、connection error 下只完成一次。
 - 已发送的 pending 请求在普通连接断开时完成为 `kConnectionError`；显式 `RedisClient::Shutdown()` 时完成为 `kShutdown`，两种路径不能混用。
+- 普通连接断开且 `queue_while_disconnected = false` 时，`request_queue_` 和 `unsent_requests_` 中已 accepted 但尚未发送的请求完成为 `kConnectionError`，不会在重连后发送。
+- hiredis 以 `reply == nullptr` 触发命令 callback，且 disconnect path 已先完成同一 request 时，late callback 不会二次完成或访问已释放对象。
 - timed out 请求的 hiredis late callback 不触发 use-after-free。
 - 新增 `RedisShutdown` 后，admin cleanup/drain 输出的 `cleanup_phase` 能正确显示 `RedisShutdown`，不落入 unknown/default 文本。
 - `queue_while_disconnected = false` 时断线请求同步失败；`true` 时按上限入队。
@@ -1356,7 +1372,7 @@ Redis 集成测试建议 opt-in：
 
 风险：shutdown、超时、连接断开时 accepted request 丢失，尤其是断线排队但尚未发送给 hiredis 的请求。
 
-规避：所有 accepted request 必须处于 `request_queue_`、`unsent_requests_` 或 `pending_requests_` 三种状态之一；关闭和超时必须覆盖三种状态并统一生成失败结果。
+规避：所有 accepted request 必须处于 `request_queue_`、`unsent_requests_` 或 `pending_requests_` 三种状态之一；关闭、超时和 `queue_while_disconnected = false` 的连接断开都必须覆盖三种状态并统一生成失败结果。
 
 ### 17.4 晚到 reply 二次完成
 
@@ -1364,19 +1380,25 @@ Redis 集成测试建议 opt-in：
 
 规避：pending token 必须稳定存在到 hiredis callback 结束；request 完成状态使用原子或 Redis 线程内状态机保护，late callback 只能记录并丢弃。
 
-### 17.5 client 误编译 Redis
+### 17.5 hiredis 断线空 reply 二次完成
+
+风险：hiredis 在断线、free async context 或清理 callback 队列时，可能以 `reply == nullptr` 调用命令 callback；如果 Redis 模块的 disconnect callback 已经把同一个 pending request 完成为 `kConnectionError`，空 reply callback 会形成第二条完成路径。
+
+规避：所有 completion 都必须经过稳定 request token 的 `TryComplete` / `MarkCompleted` 入口。disconnect callback、timeout tick、shutdown、发送失败和 hiredis callback 共享同一套去重状态；空 reply callback 只在 token 尚未完成时生成 `kConnectionError`，否则仅记录 debug 日志并释放 callback 侧资源。
+
+### 17.6 client 误编译 Redis
 
 风险：CMake cache 导致 client 继承 server 的 `ENGINE_REDIS_ENABLED`。
 
-规避：使用 target-specific 变量或在 client/mobile 明确禁用 Redis runtime。
+规避：使用 include runtime 前设置的非 cache `ENGINE_REDIS_RUNTIME_ENABLED` 控制源列表；client/mobile 明确设为 OFF，且不添加 `ENGINE_REDIS_ENABLED` compile definition。
 
-### 17.6 多 worker 路由和顺序风险
+### 17.7 多 worker 路由和顺序风险
 
 风险：多个 `RedisClientThread` 意味着多个 Redis 连接；不同 worker 上的命令没有全局顺序，同一业务对象的连续操作如果被路由到不同 worker，可能出现业务层观察到的顺序问题。
 
 规避：`RedisClient` 必须统一管理路由策略；提供 `routing_key`，保证相同 key 稳定进入同一个 worker。文档和 Lua binding 都要说明未指定 `routing_key` 时不保证跨请求顺序；需要严格顺序的调用方应串行提交或使用相同 `routing_key`。
 
-### 17.7 worker 集合 reload 竞态
+### 17.8 worker 集合 reload 竞态
 
 风险：reload 重建 `RedisClientThread` worker 集合时，请求路由可能拿到旧集合指针；如果旧集合同时关闭，会出现 accepted 请求被错误丢弃、重复完成或访问已销毁 worker。
 
