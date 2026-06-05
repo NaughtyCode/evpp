@@ -122,6 +122,7 @@ private:
 	mutable std::mutex mutex_;
 	RedisClientState state_ = RedisClientState::kStopped;
 	std::shared_ptr<RedisClientThreadGroup> group_;
+	uint64_t lifecycle_epoch_ = 0;
 	int default_command_timeout_ms_ = 5000;
 	std::atomic<uint64_t> next_request_id_{1};
 	std::atomic<uint64_t> rejected_requests_{0};

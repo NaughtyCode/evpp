@@ -76,6 +76,14 @@ RedisClient& RedisClient::Instance() {
 
 bool RedisClient::Initialize(const RedisClientConfig& config,
 							 const RedisClientStartOptions& options) {
+	const auto validation = ValidateRedisClientConfig(config);
+	if (!validation.valid) {
+		ENGINE_LOG_ERROR(GetLogger(), "RedisClient: invalid config: {}",
+						 validation.errors);
+		return false;
+	}
+
+	uint64_t start_epoch = 0;
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 		if (state_ != RedisClientState::kStopped) {
@@ -84,6 +92,7 @@ bool RedisClient::Initialize(const RedisClientConfig& config,
 			return false;
 		}
 		state_ = RedisClientState::kStarting;
+		start_epoch = ++lifecycle_epoch_;
 		default_command_timeout_ms_ = config.connection.command_timeout_ms;
 	}
 
@@ -92,20 +101,26 @@ bool RedisClient::Initialize(const RedisClientConfig& config,
 	if (!ok) {
 		group->Stop();
 		std::lock_guard<std::mutex> lock(mutex_);
-		if (state_ == RedisClientState::kStarting) {
+		if (state_ == RedisClientState::kStarting &&
+			lifecycle_epoch_ == start_epoch) {
 			state_ = RedisClientState::kStopped;
 		}
 		return false;
 	}
 
+	bool published = false;
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
-		if (state_ != RedisClientState::kStarting) {
-			group->Stop();
-			return false;
+		if (state_ == RedisClientState::kStarting &&
+			lifecycle_epoch_ == start_epoch) {
+			group_ = std::move(group);
+			state_ = RedisClientState::kRunning;
+			published = true;
 		}
-		group_ = std::move(group);
-		state_ = RedisClientState::kRunning;
+	}
+	if (!published) {
+		group->Stop();
+		return false;
 	}
 	ENGINE_LOG_INFO(GetLogger(), "RedisClient: initialized with {} worker(s)",
 					config.thread.thread_count);
@@ -120,6 +135,7 @@ void RedisClient::Shutdown() {
 			return;
 		}
 		state_ = RedisClientState::kStopping;
+		++lifecycle_epoch_;
 		group = std::move(group_);
 	}
 	if (group) {

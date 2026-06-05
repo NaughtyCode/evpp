@@ -31,6 +31,12 @@ RedisClientThreadGroup::~RedisClientThreadGroup() {
 
 bool RedisClientThreadGroup::Start(const RedisClientConfig& config,
 								   bool wait_for_initial_connect) {
+	if (config.thread.thread_count == 0) {
+		ENGINE_LOG_ERROR(GetLogger(),
+						 "RedisClientThreadGroup: thread_count must be greater than zero");
+		return false;
+	}
+
 	config_ = config;
 	counters_ = std::make_shared<RedisSharedCounters>();
 	workers_.clear();

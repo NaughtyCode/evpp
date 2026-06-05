@@ -19,6 +19,7 @@ using engine::redis::RedisResult;
 using engine::redis::RedisSubmitStatus;
 using engine::redis::RedisValueFromReply;
 using engine::redis::RedisValueType;
+using engine::RedisClientConfig;
 
 }  // namespace
 
@@ -75,6 +76,16 @@ TEST_CASE("RedisClient reports not running without allocating public request ids
 	REQUIRE(xread_key_named_block.status == RedisSubmitStatus::kNotRunning);
 	REQUIRE(xread_key_named_block.request_id == 0);
 	REQUIRE_FALSE(completion_called);
+}
+
+TEST_CASE("RedisClient validates direct initialize config", "[redis][client]") {
+	RedisClient::Instance().Shutdown();
+
+	RedisClientConfig config;
+	config.thread.thread_count = 0;
+
+	REQUIRE_FALSE(RedisClient::Instance().Initialize(config));
+	REQUIRE_FALSE(RedisClient::Instance().IsRunning());
 }
 
 TEST_CASE("RedisValue converts hiredis replies including binary strings",

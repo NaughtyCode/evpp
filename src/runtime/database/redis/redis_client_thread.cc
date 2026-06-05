@@ -606,7 +606,7 @@ void RedisClientThread::FlushUnsent() {
 			result.request_id = request_id;
 			TryCompletePending(pending, std::move(result), true);
 			delete token;
-			return;
+			continue;
 		}
 	}
 }
