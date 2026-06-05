@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-#include "runtime/script/import_bind.h"
+#include "runtime/script/bind/import_bind.h"
 #include "runtime/vm/lua_error_handler.h"
 #include "runtime/vm/script_importer.h"
 #include "runtime/vm/vm.h"

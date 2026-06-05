@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "log_init.h"
-#include "runtime/script/net_lifetime.h"
+#include "runtime/network/bind/net_lifetime.h"
 
 extern "C" {
 #include "lauxlib.h"

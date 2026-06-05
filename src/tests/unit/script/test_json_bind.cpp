@@ -7,7 +7,7 @@
 #include <string>
 
 #include "log_init.h"
-#include "runtime/script/json_bind.h"
+#include "runtime/script/bind/json_bind.h"
 #include "runtime/vm/vm.h"
 
 using namespace engine;

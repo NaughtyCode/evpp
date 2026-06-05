@@ -11,7 +11,7 @@
 #include "runtime/aoi/aoi_manager.h"
 #include "runtime/aoi/spatial_index.h"
 #include "runtime/entity/entity_id.h"
-#include "runtime/script/aoi_bind.h"
+#include "runtime/aoi/bind/aoi_bind.h"
 #include "runtime/vm/vm.h"
 
 using namespace engine::aoi;

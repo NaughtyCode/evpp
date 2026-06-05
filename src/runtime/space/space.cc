@@ -5,7 +5,7 @@
 #include "runtime/core/log/log.h"
 #include "runtime/entity/entity_manager.h"
 #include "runtime/profiler/profiler_events.h"
-#include "runtime/script/space_bind.h"
+#include "runtime/space/bind/space_bind.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {

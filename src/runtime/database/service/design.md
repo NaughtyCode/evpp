@@ -1,7 +1,7 @@
 # 数据服务基础设施 (Database Service) 设计方案
 
 > 初稿 — 2026-05-26
-> 基于 `src/runtime/database/mongo` + `src/runtime/database/mongo_bind`
+> 基于 `src/runtime/database/mongo` + `src/runtime/database/mongo/bind`
 > 线程模型参考 `docs/mongo/thread-model-and-design.md`
 
 ---
@@ -12,7 +12,7 @@
 |---|------|------|
 | R1 | 主线程只能调用模块的 `Initialize` / `Shutdown` 以及有限的请求发送 API，这些 API 必须线程安全 | 需求 |
 | R2 | 一个全局单例类管理整个数据服务基础设施 | 需求 |
-| R3 | 基于 `database/mongo` 和 `database/mongo_bind` 实现 | 需求 |
+| R3 | 基于 `database/mongo` 和 `database/mongo/bind` 实现 | 需求 |
 | R4 | 多线程模型：N 个 `DBThread`，线程内阻塞式访问 MongoDB | 需求 + thread-model-and-design.md |
 | R5 | 每个 DBThread 内有一个专属的 `DBScriptVM`（`ScriptVM` 子类） | 需求 |
 | R6 | `DBScriptVM` 模块外部不可访问 | 需求 |

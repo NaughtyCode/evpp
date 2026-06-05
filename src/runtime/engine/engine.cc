@@ -1,4 +1,4 @@
-﻿// NOMINMAX must be defined before any windows.h inclusion,
+// NOMINMAX must be defined before any windows.h inclusion,
 // which can come via engine.h -> invoke_timer.h -> ...
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -39,7 +39,7 @@
 #include "runtime/vm/main_thread_vm.h"
 #include "runtime/vm/script_reloader.h"
 #include "runtime/profiler/profiler_events.h"
-#include "runtime/script/script_bind.h"
+#include "runtime/script/bind/script_bind.h"
 #include "runtime/space/connection_router.h"
 #include "runtime/space/space_manager.h"
 #include "runtime/space/space_message.h"

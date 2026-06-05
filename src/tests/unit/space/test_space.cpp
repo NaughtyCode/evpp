@@ -3,7 +3,7 @@
 #include "log_init.h"
 #include "runtime/entity/entity.h"
 #include "runtime/entity/entity_manager.h"
-#include "runtime/script/space_bind.h"
+#include "runtime/space/bind/space_bind.h"
 #include "runtime/space/connection_router.h"
 #include "runtime/space/space.h"
 #include "runtime/space/space_manager.h"

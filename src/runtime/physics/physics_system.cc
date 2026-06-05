@@ -17,13 +17,13 @@
 #include <Jolt/Math/Real.h>
 #include <Jolt/Math/Vec3.h>
 
-#include "runtime/physics/physics_bindings.h"
+#include "runtime/physics/bind/physics_bindings.h"
 #include "runtime/physics/physics_log.h"
 #include "runtime/physics/physics_vm.h"
 #include "runtime/profiler/profiler_events.h"
-#include "runtime/script/import_bind.h"
-#include "runtime/script/json_bind.h"
-#include "runtime/script/timer_bind.h"
+#include "runtime/script/bind/import_bind.h"
+#include "runtime/script/bind/json_bind.h"
+#include "runtime/core/timer/bind/timer_bind.h"
 #include "runtime/vm/custom_ptr_store.h"
 #include "runtime/vm/lua_error_handler.h"
 #include "runtime/vm/vm.h"

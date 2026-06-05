@@ -4,11 +4,11 @@
 #include "runtime/database/data_service/db_script_vm.h"
 
 #include "runtime/core/log/log.h"
-#include "runtime/database/data_service/bson_table_codec.h"
+#include "runtime/database/data_service/bind/bson_table_codec.h"
 #include "runtime/database/data_service/db_thread.h"
 #include "runtime/database/mongo/mongo_client.h"
 #include "runtime/database/mongo/mongo_client_pool.h"
-#include "runtime/database/mongo_bind/mongo_bind.h"
+#include "runtime/database/mongo/bind/mongo_bind.h"
 #include "runtime/vm/custom_ptr_store.h"
 #include "runtime/vm/lua_error_handler.h"
 

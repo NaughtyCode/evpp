@@ -498,7 +498,7 @@ Agones、GameLift、Kubernetes、FleetIQ、FlexMatch 这类系统负责“把玩
 - `src/runtime/aoi/spatial_index.cc`
 - `src/runtime/aoi/aoi_manager.h`
 - `src/runtime/aoi/aoi_manager.cc`
-- `src/runtime/script/aoi_bind.cc`
+- `src/runtime/aoi/bind/aoi_bind.cc`
 - `src/client/client.h`
 - `src/client/client_runtime.cpp`
 - `resources/api/aoi/api.md`

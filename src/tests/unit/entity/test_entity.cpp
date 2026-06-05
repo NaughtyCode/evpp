@@ -13,7 +13,7 @@
 #include "runtime/entity/entity_manager.h"
 #include "runtime/core/timer/timer_manager.h"
 #include "runtime/evpp/tcp_conn.h"
-#include "runtime/script/entity_bind.h"
+#include "runtime/entity/bind/entity_bind.h"
 #include "runtime/vm/vm.h"
 
 using namespace engine::entity;

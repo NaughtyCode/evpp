@@ -35,6 +35,7 @@ set(MEM_SOURCES
     ${RUNTIME_DIR}/core/mem/mem.h
     ${RUNTIME_DIR}/core/mem/mem_stats.h
     ${RUNTIME_DIR}/core/mem/mem_stats.cc
+    ${RUNTIME_DIR}/core/mem/bind/mem_bind.cc ${RUNTIME_DIR}/core/mem/bind/mem_bind.h
 )
 source_group("core\\mem" FILES ${MEM_SOURCES})
 
@@ -42,6 +43,7 @@ source_group("core\\mem" FILES ${MEM_SOURCES})
 set(LOG_SOURCES
     ${RUNTIME_DIR}/core/log/log.cc ${RUNTIME_DIR}/core/log/log.h
     ${RUNTIME_DIR}/core/log/log_levels.h ${RUNTIME_DIR}/core/log/log_context.h ${RUNTIME_DIR}/core/log/log_macros.h
+    ${RUNTIME_DIR}/core/log/bind/log_bind.cc ${RUNTIME_DIR}/core/log/bind/log_bind.h
 )
 source_group("core\\log" FILES ${LOG_SOURCES})
 
@@ -51,6 +53,7 @@ set(TIMER_SOURCES
     ${RUNTIME_DIR}/core/timer/timer.h ${RUNTIME_DIR}/core/timer/timer_core.h
     ${RUNTIME_DIR}/core/timer/timer_queue.h ${RUNTIME_DIR}/core/timer/clock_source.h
     ${RUNTIME_DIR}/core/timer/hr_timer.h ${RUNTIME_DIR}/core/timer/timer_wheel.h ${RUNTIME_DIR}/core/timer/alarm_timer.h
+    ${RUNTIME_DIR}/core/timer/bind/timer_bind.cc ${RUNTIME_DIR}/core/timer/bind/timer_bind.h
 )
 source_group("core\\timer" FILES ${TIMER_SOURCES})
 
@@ -59,7 +62,7 @@ set(CONFIG_SOURCES
     ${RUNTIME_DIR}/config/config.cc ${RUNTIME_DIR}/config/config.h
     ${RUNTIME_DIR}/config/config_constants.h ${RUNTIME_DIR}/config/limits.h
     ${RUNTIME_DIR}/config/config_validator.cc ${RUNTIME_DIR}/config/config_validator.h
-    ${RUNTIME_DIR}/config/config_bind.cc ${RUNTIME_DIR}/config/config_bind.h
+    ${RUNTIME_DIR}/config/bind/config_bind.cc ${RUNTIME_DIR}/config/bind/config_bind.h
     ${RUNTIME_DIR}/config/config_table.cc ${RUNTIME_DIR}/config/config_table.h
     ${RUNTIME_DIR}/config/reference_validator.cc ${RUNTIME_DIR}/config/reference_validator.h)
 source_group("config" FILES ${CONFIG_SOURCES})
@@ -67,6 +70,15 @@ source_group("config" FILES ${CONFIG_SOURCES})
 # ── Network codec ───────────────────────────────────────────────────
 set(NETWORK_SOURCES
 	${RUNTIME_DIR}/network/length_prefixed_codec.cc ${RUNTIME_DIR}/network/length_prefixed_codec.h
+    ${RUNTIME_DIR}/network/bind/net_lifetime.cc ${RUNTIME_DIR}/network/bind/net_lifetime.h
+    ${RUNTIME_DIR}/network/bind/net_bind.cc ${RUNTIME_DIR}/network/bind/net_bind.h
+    ${RUNTIME_DIR}/network/bind/net_tcp_client_bind.cc ${RUNTIME_DIR}/network/bind/net_tcp_client_bind.h
+    ${RUNTIME_DIR}/network/bind/net_tcp_server_bind.cc ${RUNTIME_DIR}/network/bind/net_tcp_server_bind.h
+    ${RUNTIME_DIR}/network/bind/net_http_bind.cc ${RUNTIME_DIR}/network/bind/net_http_bind.h
+    ${RUNTIME_DIR}/network/bind/net_udp_client_bind.cc ${RUNTIME_DIR}/network/bind/net_udp_client_bind.h
+    ${RUNTIME_DIR}/network/bind/net_udp_server_bind.cc ${RUNTIME_DIR}/network/bind/net_udp_server_bind.h
+    ${RUNTIME_DIR}/network/bind/net_kcp_client_bind.cc ${RUNTIME_DIR}/network/bind/net_kcp_client_bind.h
+    ${RUNTIME_DIR}/network/bind/net_kcp_server_bind.cc ${RUNTIME_DIR}/network/bind/net_kcp_server_bind.h
 )
 source_group("network" FILES ${NETWORK_SOURCES})
 
@@ -94,6 +106,7 @@ set(ENTITY_SOURCES
     ${RUNTIME_DIR}/entity/attribute.h
     ${RUNTIME_DIR}/entity/entity.cc ${RUNTIME_DIR}/entity/entity.h
     ${RUNTIME_DIR}/entity/entity_manager.cc ${RUNTIME_DIR}/entity/entity_manager.h
+    ${RUNTIME_DIR}/entity/bind/entity_bind.cc ${RUNTIME_DIR}/entity/bind/entity_bind.h
 )
 source_group("entity" FILES ${ENTITY_SOURCES})
 
@@ -103,6 +116,7 @@ set(SPACE_SOURCES
     ${RUNTIME_DIR}/space/space_manager.cc ${RUNTIME_DIR}/space/space_manager.h
     ${RUNTIME_DIR}/space/space.cc ${RUNTIME_DIR}/space/space.h
     ${RUNTIME_DIR}/space/space_message.cc ${RUNTIME_DIR}/space/space_message.h
+    ${RUNTIME_DIR}/space/bind/space_bind.cc ${RUNTIME_DIR}/space/bind/space_bind.h
 )
 source_group("space" FILES ${SPACE_SOURCES})
 
@@ -111,6 +125,7 @@ set(RPC_SOURCES
     ${RUNTIME_DIR}/rpc/rpc_client.cc ${RUNTIME_DIR}/rpc/rpc_client.h
     ${RUNTIME_DIR}/rpc/rpc_server.cc ${RUNTIME_DIR}/rpc/rpc_server.h
     ${RUNTIME_DIR}/rpc/rpc_protocol.h
+    ${RUNTIME_DIR}/rpc/bind/rpc_bind.cc ${RUNTIME_DIR}/rpc/bind/rpc_bind.h
 )
 source_group("rpc" FILES ${RPC_SOURCES})
 
@@ -119,36 +134,19 @@ set(AUTH_SOURCES
     ${RUNTIME_DIR}/auth/auth_backend.cc ${RUNTIME_DIR}/auth/auth_backend.h
     ${RUNTIME_DIR}/auth/session_manager.cc ${RUNTIME_DIR}/auth/session_manager.h
     ${RUNTIME_DIR}/auth/auth_protocol.h
+    ${RUNTIME_DIR}/auth/bind/auth_bind.cc ${RUNTIME_DIR}/auth/bind/auth_bind.h
 )
 source_group("auth" FILES ${AUTH_SOURCES})
 
 # ── Script bindings ────────────────────────────────────────────────
 set(SCRIPT_SOURCES
-    ${RUNTIME_DIR}/script/bind_util.cc ${RUNTIME_DIR}/script/bind_util.h
-    ${RUNTIME_DIR}/script/net_lifetime.cc ${RUNTIME_DIR}/script/net_lifetime.h
-    ${RUNTIME_DIR}/script/script_bind.cc ${RUNTIME_DIR}/script/script_bind.h
-    ${RUNTIME_DIR}/script/log_bind.cc ${RUNTIME_DIR}/script/log_bind.h
-    ${RUNTIME_DIR}/script/timer_bind.cc ${RUNTIME_DIR}/script/timer_bind.h
-    ${RUNTIME_DIR}/script/net_bind.cc ${RUNTIME_DIR}/script/net_bind.h
-    ${RUNTIME_DIR}/script/net_tcp_client_bind.cc ${RUNTIME_DIR}/script/net_tcp_client_bind.h
-    ${RUNTIME_DIR}/script/net_tcp_server_bind.cc ${RUNTIME_DIR}/script/net_tcp_server_bind.h
-    ${RUNTIME_DIR}/script/net_http_bind.cc ${RUNTIME_DIR}/script/net_http_bind.h
-    ${RUNTIME_DIR}/script/net_udp_client_bind.cc ${RUNTIME_DIR}/script/net_udp_client_bind.h
-    ${RUNTIME_DIR}/script/net_udp_server_bind.cc ${RUNTIME_DIR}/script/net_udp_server_bind.h
-    ${RUNTIME_DIR}/script/net_kcp_client_bind.cc ${RUNTIME_DIR}/script/net_kcp_client_bind.h
-    ${RUNTIME_DIR}/script/net_kcp_server_bind.cc ${RUNTIME_DIR}/script/net_kcp_server_bind.h
-    ${RUNTIME_DIR}/script/msgpack_bind.cc ${RUNTIME_DIR}/script/msgpack_bind.h
-    ${RUNTIME_DIR}/script/json_bind.cc ${RUNTIME_DIR}/script/json_bind.h
-    ${RUNTIME_DIR}/script/import_bind.cc ${RUNTIME_DIR}/script/import_bind.h
-    ${RUNTIME_DIR}/script/entity_bind.cc ${RUNTIME_DIR}/script/entity_bind.h
-    ${RUNTIME_DIR}/script/space_bind.cc ${RUNTIME_DIR}/script/space_bind.h
-    ${RUNTIME_DIR}/script/aoi_bind.cc ${RUNTIME_DIR}/script/aoi_bind.h
-    ${RUNTIME_DIR}/script/rpc_bind.cc ${RUNTIME_DIR}/script/rpc_bind.h
-    ${RUNTIME_DIR}/script/auth_bind.cc ${RUNTIME_DIR}/script/auth_bind.h
-    ${RUNTIME_DIR}/script/profiler_bind.cc ${RUNTIME_DIR}/script/profiler_bind.h
-    ${RUNTIME_DIR}/script/mem_bind.cc ${RUNTIME_DIR}/script/mem_bind.h
+    ${RUNTIME_DIR}/script/bind/bind_util.cc ${RUNTIME_DIR}/script/bind/bind_util.h
+    ${RUNTIME_DIR}/script/bind/script_bind.cc ${RUNTIME_DIR}/script/bind/script_bind.h
+    ${RUNTIME_DIR}/script/bind/msgpack_bind.cc ${RUNTIME_DIR}/script/bind/msgpack_bind.h
+    ${RUNTIME_DIR}/script/bind/json_bind.cc ${RUNTIME_DIR}/script/bind/json_bind.h
+    ${RUNTIME_DIR}/script/bind/import_bind.cc ${RUNTIME_DIR}/script/bind/import_bind.h
 )
-source_group("script" FILES ${SCRIPT_SOURCES})
+source_group("script\\bind" FILES ${SCRIPT_SOURCES})
 
 # ── Monitoring ──────────────────────────────────────────────────────
 set(MONITORING_SOURCES
@@ -161,6 +159,7 @@ source_group("monitoring" FILES ${MONITORING_SOURCES})
 set(AOI_SOURCES
     ${RUNTIME_DIR}/aoi/spatial_index.cc ${RUNTIME_DIR}/aoi/spatial_index.h
     ${RUNTIME_DIR}/aoi/aoi_manager.cc ${RUNTIME_DIR}/aoi/aoi_manager.h
+    ${RUNTIME_DIR}/aoi/bind/aoi_bind.cc ${RUNTIME_DIR}/aoi/bind/aoi_bind.h
 )
 source_group("aoi" FILES ${AOI_SOURCES})
 
@@ -169,6 +168,7 @@ set(PROFILER_SOURCES
     ${RUNTIME_DIR}/profiler/profiler_categories.h ${RUNTIME_DIR}/profiler/profiler_core.cc ${RUNTIME_DIR}/profiler/profiler_core.h
     ${RUNTIME_DIR}/profiler/profiler_events.h ${RUNTIME_DIR}/profiler/profiler_macros.h
     ${RUNTIME_DIR}/profiler/profiler_switches.cc ${RUNTIME_DIR}/profiler/profiler_switches.h
+    ${RUNTIME_DIR}/profiler/bind/profiler_bind.cc ${RUNTIME_DIR}/profiler/bind/profiler_bind.h
 )
 source_group("profiler" FILES ${PROFILER_SOURCES})
 
@@ -180,7 +180,7 @@ set(PHYSICS_HEADERS
     ${RUNTIME_DIR}/physics/physics_body_assets.h ${RUNTIME_DIR}/physics/physics_constraint_assets.h
     ${RUNTIME_DIR}/physics/physics_scene_asset.h ${RUNTIME_DIR}/physics/physics_assets.h
     ${RUNTIME_DIR}/physics/physics_world.h ${RUNTIME_DIR}/physics/physics_thread.h ${RUNTIME_DIR}/physics/physics_system.h
-    ${RUNTIME_DIR}/physics/physics_engine_bridge.h ${RUNTIME_DIR}/physics/physics_bindings.h
+    ${RUNTIME_DIR}/physics/physics_engine_bridge.h ${RUNTIME_DIR}/physics/bind/physics_bindings.h
     ${RUNTIME_DIR}/physics/physics_vm.h ${RUNTIME_DIR}/physics/physics_log.h
 )
 source_group("physics" FILES ${PHYSICS_HEADERS})
@@ -194,7 +194,7 @@ set(PHYSICS_CC
     ${RUNTIME_DIR}/physics/physics_assets.cc
     ${RUNTIME_DIR}/physics/physics_world.cc ${RUNTIME_DIR}/physics/physics_thread.cc
     ${RUNTIME_DIR}/physics/physics_system.cc ${RUNTIME_DIR}/physics/physics_engine_bridge.cc
-    ${RUNTIME_DIR}/physics/physics_bindings.cc ${RUNTIME_DIR}/physics/physics_vm.cc
+    ${RUNTIME_DIR}/physics/bind/physics_bindings.cc ${RUNTIME_DIR}/physics/physics_vm.cc
 )
 source_group("physics" FILES ${PHYSICS_CC})
 
@@ -213,6 +213,7 @@ source_group("evpp" FILES ${EVPP_SOURCES})
 set(ORM_SOURCES
     ${RUNTIME_DIR}/database/orm.cc ${RUNTIME_DIR}/database/orm.h
     ${RUNTIME_DIR}/database/cache.h
+    ${RUNTIME_DIR}/database/bind/orm_bind.cc ${RUNTIME_DIR}/database/bind/orm_bind.h
 )
 source_group("database" FILES ${ORM_SOURCES})
 set(MONGO_SOURCES
@@ -253,68 +254,68 @@ set(MONGO_SOURCES
 )
 source_group("database\\mongo" FILES ${MONGO_SOURCES})
 
-# ── Mongo Lua bindings (database/mongo_bind/) ─────────────────────────
+# ── Mongo Lua bindings (database/mongo/bind/) ─────────────────────────
 set(MONGO_BIND_SOURCES
-    ${RUNTIME_DIR}/database/mongo_bind/bind_util.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_bson_document.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bson_document.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_bson_iter.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bson_iter.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_oid.cc ${RUNTIME_DIR}/database/mongo_bind/bind_oid.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_array_builder.cc ${RUNTIME_DIR}/database/mongo_bind/bind_array_builder.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_uri.cc ${RUNTIME_DIR}/database/mongo_bind/bind_uri.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_client.cc ${RUNTIME_DIR}/database/mongo_bind/bind_client.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_database.cc ${RUNTIME_DIR}/database/mongo_bind/bind_database.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_collection.cc ${RUNTIME_DIR}/database/mongo_bind/bind_collection.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_cursor.cc ${RUNTIME_DIR}/database/mongo_bind/bind_cursor.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_client_pool.cc ${RUNTIME_DIR}/database/mongo_bind/bind_client_pool.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_session.cc ${RUNTIME_DIR}/database/mongo_bind/bind_session.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_transaction_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_transaction_opts.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_session_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_session_opts.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_change_stream.cc ${RUNTIME_DIR}/database/mongo_bind/bind_change_stream.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_read_prefs.cc ${RUNTIME_DIR}/database/mongo_bind/bind_read_prefs.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_write_concern.cc ${RUNTIME_DIR}/database/mongo_bind/bind_write_concern.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_read_concern.cc ${RUNTIME_DIR}/database/mongo_bind/bind_read_concern.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_operation.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_operation.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_bulkwrite.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulkwrite.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_opts.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_insert_one_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_insert_one_opts.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_update_one_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_update_one_opts.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_update_many_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_update_many_opts.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_replace_one_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_replace_one_opts.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_delete_one_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_delete_one_opts.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_delete_many_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_delete_many_opts.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_result.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_result.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_exception.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bulk_write_exception.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_server_api.cc ${RUNTIME_DIR}/database/mongo_bind/bind_server_api.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_find_and_modify_opts.cc ${RUNTIME_DIR}/database/mongo_bind/bind_find_and_modify_opts.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_error.cc ${RUNTIME_DIR}/database/mongo_bind/bind_error.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_host_list.cc ${RUNTIME_DIR}/database/mongo_bind/bind_host_list.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_ssl.cc ${RUNTIME_DIR}/database/mongo_bind/bind_ssl.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_gridfs.cc ${RUNTIME_DIR}/database/mongo_bind/bind_gridfs.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_index_model.cc ${RUNTIME_DIR}/database/mongo_bind/bind_index_model.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_topology.cc ${RUNTIME_DIR}/database/mongo_bind/bind_topology.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_bson_vector.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bson_vector.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_bson_ext.cc ${RUNTIME_DIR}/database/mongo_bind/bind_bson_ext.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_stream.cc ${RUNTIME_DIR}/database/mongo_bind/bind_stream.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_socket.cc ${RUNTIME_DIR}/database/mongo_bind/bind_socket.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_log.cc ${RUNTIME_DIR}/database/mongo_bind/bind_log.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_oidc.cc ${RUNTIME_DIR}/database/mongo_bind/bind_oidc.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_encryption.cc ${RUNTIME_DIR}/database/mongo_bind/bind_encryption.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_apm.cc ${RUNTIME_DIR}/database/mongo_bind/bind_apm.h
-    ${RUNTIME_DIR}/database/mongo_bind/bind_misc.cc ${RUNTIME_DIR}/database/mongo_bind/bind_misc.h
-    ${RUNTIME_DIR}/database/mongo_bind/mongo_bind.cc ${RUNTIME_DIR}/database/mongo_bind/mongo_bind.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_util.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_bson_document.cc ${RUNTIME_DIR}/database/mongo/bind/bind_bson_document.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_bson_iter.cc ${RUNTIME_DIR}/database/mongo/bind/bind_bson_iter.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_oid.cc ${RUNTIME_DIR}/database/mongo/bind/bind_oid.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_array_builder.cc ${RUNTIME_DIR}/database/mongo/bind/bind_array_builder.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_uri.cc ${RUNTIME_DIR}/database/mongo/bind/bind_uri.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_client.cc ${RUNTIME_DIR}/database/mongo/bind/bind_client.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_database.cc ${RUNTIME_DIR}/database/mongo/bind/bind_database.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_collection.cc ${RUNTIME_DIR}/database/mongo/bind/bind_collection.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_cursor.cc ${RUNTIME_DIR}/database/mongo/bind/bind_cursor.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_client_pool.cc ${RUNTIME_DIR}/database/mongo/bind/bind_client_pool.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_session.cc ${RUNTIME_DIR}/database/mongo/bind/bind_session.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_transaction_opts.cc ${RUNTIME_DIR}/database/mongo/bind/bind_transaction_opts.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_session_opts.cc ${RUNTIME_DIR}/database/mongo/bind/bind_session_opts.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_change_stream.cc ${RUNTIME_DIR}/database/mongo/bind/bind_change_stream.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_read_prefs.cc ${RUNTIME_DIR}/database/mongo/bind/bind_read_prefs.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_write_concern.cc ${RUNTIME_DIR}/database/mongo/bind/bind_write_concern.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_read_concern.cc ${RUNTIME_DIR}/database/mongo/bind/bind_read_concern.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_operation.cc ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_operation.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_bulkwrite.cc ${RUNTIME_DIR}/database/mongo/bind/bind_bulkwrite.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_opts.cc ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_opts.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_insert_one_opts.cc ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_insert_one_opts.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_update_one_opts.cc ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_update_one_opts.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_update_many_opts.cc ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_update_many_opts.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_replace_one_opts.cc ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_replace_one_opts.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_delete_one_opts.cc ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_delete_one_opts.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_delete_many_opts.cc ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_delete_many_opts.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_result.cc ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_result.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_exception.cc ${RUNTIME_DIR}/database/mongo/bind/bind_bulk_write_exception.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_server_api.cc ${RUNTIME_DIR}/database/mongo/bind/bind_server_api.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_find_and_modify_opts.cc ${RUNTIME_DIR}/database/mongo/bind/bind_find_and_modify_opts.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_error.cc ${RUNTIME_DIR}/database/mongo/bind/bind_error.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_host_list.cc ${RUNTIME_DIR}/database/mongo/bind/bind_host_list.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_ssl.cc ${RUNTIME_DIR}/database/mongo/bind/bind_ssl.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_gridfs.cc ${RUNTIME_DIR}/database/mongo/bind/bind_gridfs.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_index_model.cc ${RUNTIME_DIR}/database/mongo/bind/bind_index_model.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_topology.cc ${RUNTIME_DIR}/database/mongo/bind/bind_topology.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_bson_vector.cc ${RUNTIME_DIR}/database/mongo/bind/bind_bson_vector.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_bson_ext.cc ${RUNTIME_DIR}/database/mongo/bind/bind_bson_ext.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_stream.cc ${RUNTIME_DIR}/database/mongo/bind/bind_stream.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_socket.cc ${RUNTIME_DIR}/database/mongo/bind/bind_socket.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_log.cc ${RUNTIME_DIR}/database/mongo/bind/bind_log.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_oidc.cc ${RUNTIME_DIR}/database/mongo/bind/bind_oidc.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_encryption.cc ${RUNTIME_DIR}/database/mongo/bind/bind_encryption.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_apm.cc ${RUNTIME_DIR}/database/mongo/bind/bind_apm.h
+    ${RUNTIME_DIR}/database/mongo/bind/bind_misc.cc ${RUNTIME_DIR}/database/mongo/bind/bind_misc.h
+    ${RUNTIME_DIR}/database/mongo/bind/mongo_bind.cc ${RUNTIME_DIR}/database/mongo/bind/mongo_bind.h
 )
-source_group("database\\mongo_bind" FILES ${MONGO_BIND_SOURCES})
+source_group("database\\mongo\\bind" FILES ${MONGO_BIND_SOURCES})
 
 # ── Database service (database/data_service/) ──────────────────────────
 set(DB_SERVICE_SOURCES
     ${RUNTIME_DIR}/database/data_service/database_service.cc ${RUNTIME_DIR}/database/data_service/database_service.h
-    ${RUNTIME_DIR}/database/data_service/bson_table_codec.cc ${RUNTIME_DIR}/database/data_service/bson_table_codec.h
+    ${RUNTIME_DIR}/database/data_service/bind/bson_table_codec.cc ${RUNTIME_DIR}/database/data_service/bind/bson_table_codec.h
     ${RUNTIME_DIR}/database/data_service/db_thread.cc ${RUNTIME_DIR}/database/data_service/db_thread.h
     ${RUNTIME_DIR}/database/data_service/db_script_vm.cc ${RUNTIME_DIR}/database/data_service/db_script_vm.h
     ${RUNTIME_DIR}/database/data_service/db_request.h
     ${RUNTIME_DIR}/database/data_service/db_service_config.h
     ${RUNTIME_DIR}/database/data_service/module_access.h
-    ${RUNTIME_DIR}/database/data_service/db_service_main_bind.cc ${RUNTIME_DIR}/database/data_service/db_service_main_bind.h
+    ${RUNTIME_DIR}/database/data_service/bind/db_service_main_bind.cc ${RUNTIME_DIR}/database/data_service/bind/db_service_main_bind.h
 )
 source_group("database\\data_service" FILES ${DB_SERVICE_SOURCES})
 
@@ -344,8 +345,7 @@ set(CLOUD_ENGINE_SOURCES
 )
 
 if(ENGINE_MONGODB_ENABLED AND NOT (CMAKE_SYSTEM_NAME STREQUAL "Android" OR CMAKE_SYSTEM_NAME STREQUAL "iOS"))
-    list(APPEND CLOUD_ENGINE_SOURCES ${MONGO_SOURCES} ${MONGO_BIND_SOURCES} ${DB_SERVICE_SOURCES} ${ORM_SOURCES}
-        ${RUNTIME_DIR}/script/orm_bind.cc ${RUNTIME_DIR}/script/orm_bind.h)
+    list(APPEND CLOUD_ENGINE_SOURCES ${MONGO_SOURCES} ${MONGO_BIND_SOURCES} ${DB_SERVICE_SOURCES} ${ORM_SOURCES})
 endif()
 
 if(ENGINE_PHYSICS_ENABLED)

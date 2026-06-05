@@ -11,10 +11,10 @@
 #include <thread>
 
 #include "runtime/config/config.h"
-#include "runtime/config/config_bind.h"
+#include "runtime/config/bind/config_bind.h"
 #include "runtime/config/config_table.h"
 #include "runtime/config/reference_validator.h"
-#include "runtime/script/script_bind.h"
+#include "runtime/script/bind/script_bind.h"
 #include "runtime/vm/vm.h"
 #include "config_fixture.h"
 

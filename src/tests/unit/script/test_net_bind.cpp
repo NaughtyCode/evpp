@@ -4,7 +4,7 @@
 
 #include "runtime/config/config.h"
 #include "log_init.h"
-#include "runtime/script/net_bind.h"
+#include "runtime/network/bind/net_bind.h"
 #include "runtime/vm/vm.h"
 
 using namespace engine;

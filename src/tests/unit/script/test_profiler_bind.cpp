@@ -7,8 +7,8 @@
 #include "runtime/core/timer/timer_manager.h"
 #include "runtime/profiler/profiler_core.h"
 #include "runtime/profiler/profiler_switches.h"
-#include "runtime/script/profiler_bind.h"
-#include "runtime/script/script_bind.h"
+#include "runtime/profiler/bind/profiler_bind.h"
+#include "runtime/script/bind/script_bind.h"
 #include "runtime/vm/main_thread_vm.h"
 #include "runtime/vm/vm.h"
 

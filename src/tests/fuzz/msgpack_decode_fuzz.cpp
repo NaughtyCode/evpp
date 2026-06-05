@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-#include "runtime/script/msgpack_bind.h"
+#include "runtime/script/bind/msgpack_bind.h"
 #include "runtime/vm/vm.h"
 
 namespace {

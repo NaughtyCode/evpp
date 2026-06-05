@@ -8,7 +8,7 @@
 
 #include "log_init.h"
 #include "runtime/core/mem/mem.h"
-#include "runtime/script/mem_bind.h"
+#include "runtime/core/mem/bind/mem_bind.h"
 #include "runtime/vm/vm.h"
 
 #if defined(ENGINE_MEM_STATS_ENABLED)

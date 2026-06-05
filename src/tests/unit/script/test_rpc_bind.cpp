@@ -9,7 +9,7 @@
 #include "runtime/rpc/rpc_client.h"
 #include "runtime/rpc/rpc_protocol.h"
 #include "runtime/rpc/rpc_server.h"
-#include "runtime/script/rpc_bind.h"
+#include "runtime/rpc/bind/rpc_bind.h"
 #include "runtime/vm/vm.h"
 
 using namespace engine;

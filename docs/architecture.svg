@@ -247,7 +247,7 @@
   <text x="434" y="722" text-anchor="middle" fill="#495057" font-size="9" font-weight="bold">orm_bind</text>
   <text x="434" y="735" text-anchor="middle" fill="#495057" font-size="8">MongoDB ORM</text>
   <rect x="495" y="707" width="108" height="34" rx="4" fill="#d5f5e3" stroke="#11998e" stroke-width="0.5"/>
-  <text x="549" y="722" text-anchor="middle" fill="#495057" font-size="9" font-weight="bold">mongo_bind</text>
+  <text x="549" y="722" text-anchor="middle" fill="#495057" font-size="9" font-weight="bold">mongo/bind</text>
   <text x="549" y="735" text-anchor="middle" fill="#495057" font-size="8">完整 MongoDB API</text>
   <rect x="610" y="707" width="108" height="34" rx="4" fill="#d5f5e3" stroke="#11998e" stroke-width="0.5"/>
   <text x="664" y="722" text-anchor="middle" fill="#495057" font-size="9" font-weight="bold">db_service_bind</text>
@@ -482,7 +482,7 @@
   <text x="445" y="1412" text-anchor="middle" fill="#495057" font-size="8">orm.h/.cc · orm_bind.cc · C++ → Lua</text>
 
   <rect x="560" y="1380" width="300" height="40" rx="5" fill="#d5f5e3" stroke="#11998e" stroke-width="0.5"/>
-  <text x="710" y="1397" text-anchor="middle" fill="#0a5c3a" font-size="10" font-weight="bold">Lua MongoDB Bindings (mongo_bind/ — 60+ 文件)</text>
+  <text x="710" y="1397" text-anchor="middle" fill="#0a5c3a" font-size="10" font-weight="bold">Lua MongoDB Bindings (mongo/bind/ — 60+ 文件)</text>
   <text x="710" y="1412" text-anchor="middle" fill="#495057" font-size="8">client · collection · database · cursor · bson_document · bson_iter · bulkwrite · session · gridfs · ssl · ...</text>
 
   <rect x="875" y="1380" width="270" height="40" rx="5" fill="#d5f5e3" stroke="#11998e" stroke-width="0.5"/>

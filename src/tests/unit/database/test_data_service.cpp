@@ -7,9 +7,9 @@
 #define DATABASE_SERVICE_INTERNAL_ACCESS
 #include "runtime/database/data_service/database_service.h"
 #include "runtime/database/data_service/db_script_vm.h"
-#include "runtime/database/data_service/db_service_main_bind.h"
-#include "runtime/database/mongo_bind/mongo_bind.h"
-#include "runtime/script/json_bind.h"
+#include "runtime/database/data_service/bind/db_service_main_bind.h"
+#include "runtime/database/mongo/bind/mongo_bind.h"
+#include "runtime/script/bind/json_bind.h"
 #include "runtime/vm/vm.h"
 
 extern "C" {

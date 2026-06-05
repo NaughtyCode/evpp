@@ -7,7 +7,7 @@ extern "C" {
 }
 
 #include "log_init.h"
-#include "runtime/script/bind_util.h"
+#include "runtime/script/bind/bind_util.h"
 #include "runtime/vm/vm.h"
 
 namespace {

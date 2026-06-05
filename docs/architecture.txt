@@ -194,7 +194,7 @@ CloudEngine - 全景架构图
 │  │    MongoGridFS, MongoChangeStream, MongoEncryption, MongoSSL         │     │
 │  │    MongoUri, MongoOID, MongoTopology, MongoHostList                  │     │
 │  │                                                                      │     │
-│  │  Lua MongoDB Bindings (mongo_bind/):                                 │     │
+│  │  Lua MongoDB Bindings (mongo/bind/):                                 │     │
 │  │    60+ binding files covering full mongo-c-driver API surface        │     │
 │  │    client, collection, database, cursor, bson, bulkwrite, etc.      │     │
 │  │                                                                      │     │
@@ -554,7 +554,7 @@ CloudEngine - 全景架构图
   │   │   │   +- mongo_gridfs, mongo_change_stream, mongo_encryption
   │   │   │   +- mongo_uri, mongo_oid, mongo_topology, mongo_ssl
   │   │   │   +- mongo_error, mongo_log, mongo_init, ...
-  │   │   +- mongo_bind/            <- MongoDB Lua 绑定 (60+ 文件)
+  │   │   +- mongo/bind/            <- MongoDB Lua 绑定 (60+ 文件)
   │   │   │   +- mongo_bind.h/.cc   <- 主注册入口
   │   │   │   +- bind_client, bind_collection, bind_database, bind_cursor
   │   │   │   +- bind_bson_document, bind_bson_iter, bind_bson_vector

@@ -19,10 +19,10 @@
 #include "runtime/database/mongo/mongo_cursor.h"
 #include "runtime/database/mongo/mongo_error.h"
 #include "runtime/database/mongo/mongo_forward.h"
-#include "runtime/database/mongo_bind/mongo_bind.h"
-#include "runtime/script/import_bind.h"
-#include "runtime/script/json_bind.h"
-#include "runtime/script/timer_bind.h"
+#include "runtime/database/mongo/bind/mongo_bind.h"
+#include "runtime/script/bind/import_bind.h"
+#include "runtime/script/bind/json_bind.h"
+#include "runtime/core/timer/bind/timer_bind.h"
 
 namespace engine {
 

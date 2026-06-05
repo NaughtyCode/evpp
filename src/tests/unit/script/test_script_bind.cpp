@@ -6,7 +6,7 @@
 
 #include "log_init.h"
 #include "runtime/core/timer/timer_manager.h"
-#include "runtime/script/script_bind.h"
+#include "runtime/script/bind/script_bind.h"
 #include "runtime/vm/main_thread_vm.h"
 
 using namespace engine;

@@ -26,9 +26,9 @@ extern "C" {
 #include "runtime/vm/script_importer.h"
 #include "runtime/vm/script_reloader.h"
 #include "runtime/vm/vm.h"
-#include "runtime/script/auth_bind.h"
-#include "runtime/script/bind_util.h"
-#include "runtime/script/import_bind.h"
+#include "runtime/auth/bind/auth_bind.h"
+#include "runtime/script/bind/bind_util.h"
+#include "runtime/script/bind/import_bind.h"
 
 using namespace engine;
 

@@ -5,8 +5,8 @@
 
 #include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
-#include "runtime/script/import_bind.h"
-#include "runtime/script/script_bind.h"
+#include "runtime/script/bind/import_bind.h"
+#include "runtime/script/bind/script_bind.h"
 
 namespace engine {
 
