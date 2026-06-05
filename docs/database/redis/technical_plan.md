@@ -67,7 +67,7 @@ server 和 client 的 CMake option 有 cache 泄漏风险。如果同一构建�
   -> RedisClient 全局单例，线程安全
        - 统一管理 RedisClientThread worker 集合
        - 生成全局 request_id
-       - 按 routing_key 或 round-robin 选择 worker
+       - 按 routing_key 或实时负载选择 worker
   -> worker 自己的 moodycamel::ConcurrentQueue<RedisRequest>
   -> RedisClientThread[n] 独立线程
        - event_base
@@ -249,11 +249,12 @@ class RedisClient {
 - `Shutdown` 可重复调用，必须幂等。
 - `Command` 和 `Eval` 可由任意线程调用。
 - `RedisClient` 内部统一管理一个或多个 `RedisClientThread`；外部调用方不能直接指定 worker id，也不能访问 worker 实例。
-- `Command` 默认按 round-robin 路由到 worker；如果 `RedisCommandOptions::routing_key` 非空，则使用稳定 hash 路由到同一个 worker，便于同一业务键保持同连接内顺序。
-- 普通外部 `Eval` / `redis.eval` 如果未显式设置 `routing_key` 且 `keys` 非空，应默认使用第一个 key 作为 routing key；无 key 的 eval 才走 round-robin。Redis 私有 VM 或内部维护任务设置了 `preferred_worker_index` 时，该内部 preferred worker 优先于 Eval 默认 key。
+- `Command` 未指定 `routing_key` 时，默认根据各 worker 当前负载选择目标 worker；如果 `RedisCommandOptions::routing_key` 非空，则使用稳定 hash 路由到同一个 worker，便于同一业务键保持同连接内顺序。
+- 普通外部 `Eval` / `redis.eval` 如果未显式设置 `routing_key` 且 `keys` 非空，应默认使用第一个 key 作为 routing key；无 key 的 eval 才走实时负载路由。Redis 私有 VM 或内部维护任务设置了 `preferred_worker_index` 时，该内部 preferred worker 优先于 Eval 默认 key。
 - `routing_key` 的稳定性只保证在当前 worker 集合 generation 和当前 `thread_count` 内成立；`thread_count` reload 后，同一个 key 可能映射到不同 worker。
 - 多个 worker 之间不保证全局命令顺序。需要严格顺序的调用方应使用同一个 `routing_key`，或在上一个请求 completion 后再提交下一个请求。
-- 未指定 `routing_key` 时，round-robin 应优先只选择当前 healthy 的 worker；没有 healthy worker 且 `queue_while_disconnected = false` 时同步拒绝为 `kDisconnected`。没有 healthy worker 但 `queue_while_disconnected = true` 时，可以在仍 running 的 worker 中 round-robin 排队；如果 worker 集合不存在或没有 running worker，则同步拒绝为 `kNotRunning` / `kDisconnected`。
+- 未指定 `routing_key` 时，实时负载路由应优先只选择当前 healthy 的 worker；没有 healthy worker 且 `queue_while_disconnected = false` 时同步拒绝为 `kDisconnected`。没有 healthy worker 但 `queue_while_disconnected = true` 时，可以在仍 running 的 worker 中按负载排队；如果 worker 集合不存在或没有 running worker，则同步拒绝为 `kNotRunning` / `kDisconnected`。
+- 实时负载路由的基础评分建议使用 `queued_requests + unsent_requests + inflight_requests`；分数越低优先级越高，平分时用 round-robin tie breaker，避免长期偏向低 index worker。该评分只用于未指定 `routing_key` 且没有内部 `preferred_worker_index` 的请求，不能打破 routing_key 稳定性。
 - 指定 `routing_key` 时不能因为目标 worker unhealthy 而自动改投其他 worker，否则会破坏同 key 顺序；目标 worker unhealthy 且 `queue_while_disconnected = false` 时同步拒绝为 `kDisconnected`。
 - `queue_while_disconnected = true` 时，目标 worker unhealthy 的请求可以进入该 worker 的队列，但入队仍受全局 queue、单请求 timeout 和 shutdown 状态限制；后续真正发送给 hiredis 时仍受 `max_inflight` 限制。
 - 返回 `RedisSubmitResult.accepted = true` 表示请求已被 RedisClient accepted，必须保证最终 completion 一次，并返回本次请求的 `request_id`。
@@ -423,7 +424,7 @@ class RedisClientThread {
 
 1. 调用方线程调用 `RedisClient::Command`。
 2. `RedisClient` 校验参数和 completion，并生成 `request_id`。
-3. `RedisClient` 根据显式 `routing_key`、内部 `preferred_worker_index`、`Eval` 默认 key 或 round-robin 选择目标 worker；优先级为显式 `routing_key` > `preferred_worker_index` > `Eval` 默认 key > round-robin。
+3. `RedisClient` 根据显式 `routing_key`、内部 `preferred_worker_index`、`Eval` 默认 key 或实时负载选择目标 worker；优先级为显式 `routing_key` > `preferred_worker_index` > `Eval` 默认 key > 实时负载。
 4. 请求入目标 worker 的 `request_queue_`。
 5. 唤醒目标 Redis 线程。
 6. Redis 线程 drain `request_queue_` 到线程本地 `unsent_requests_`。
@@ -507,7 +508,7 @@ VM 初始化时：
 - 不要把 raw `redisAsyncContext*` 暴露到 Lua custom ptr store；hiredis context 只允许 `RedisClientThread` 内部 C++ 代码访问。
 - 如果需要内部调试 API，应通过内部 binding 单独导出，不暴露到普通 VM。
 - Redis 私有 VM 发起的 Redis 请求，其 completion 也必须进入 Redis 线程自己的 dispatcher，再由 Redis 线程主循环 dispatch，不能在 hiredis callback 栈上直接调用 Lua。
-- Redis 私有 VM 未显式指定 `routing_key` 时，请求应通过内部 `preferred_worker_index` 固定回所属 `RedisClientThread`；即使 `redis.eval` 带有非空 keys，也不应先合成默认 key 路由覆盖 `preferred_worker_index`。这样可以避免私有脚本请求被默认 round-robin 或 Eval 默认 key 投递到其他 worker。
+- Redis 私有 VM 未显式指定 `routing_key` 时，请求应通过内部 `preferred_worker_index` 固定回所属 `RedisClientThread`；即使 `redis.eval` 带有非空 keys，也不应先合成默认 key 路由覆盖 `preferred_worker_index`。这样可以避免私有脚本请求被默认实时负载路由或 Eval 默认 key 投递到其他 worker。
 - `RedisClientThread` 需要注册一个周期性 tick event，用于执行 timeout 检查、Redis 私有 dispatcher dispatch、`RedisClientScriptVM::UpdateScript()` 和脚本 frame callback；tick 频率由 `thread.main_loop_fps` 控制，默认 60 fps。
 
 ## 8. Lua Binding 设计
@@ -544,7 +545,7 @@ binding 规则：
 - Redis runtime 已编译但 server 配置未启用 Redis 或 `RedisClient` 未初始化时，`redis.is_running()` 返回 false，`redis.command` / `redis.eval` 同步返回 `false, error`，不保存 callback。
 - `redis.is_running()` 只表示 `RedisClient` 已初始化且 worker 集合存在；`redis.is_healthy()` 表示所有 worker 都 healthy。Redis disabled 时二者都返回 false；部分 worker unhealthy 时 `is_running()` 返回 true、`is_healthy()` 返回 false。
 - `redis.command` / `redis.eval` 同步返回 `ok, request_id_or_error`。请求未被 RedisClient accepted 时，`ok = false`，不会产生异步回调；如果 binding 为了构造 completion 已经临时注册 Lua callback，必须在 owner thread 立即 `luaL_unref`。
-- Lua options 中的 `routing_key` 透传到 `RedisCommandOptions::routing_key`；`redis.command` 未指定时由 `RedisClient` round-robin 路由，不保证跨请求顺序。
+- Lua options 中的 `routing_key` 透传到 `RedisCommandOptions::routing_key`；`redis.command` 未指定时由 `RedisClient` 按当前 worker 负载路由，不保证跨请求顺序。
 - 普通 VM 的 `redis.eval` 未显式指定 `routing_key` 且 `keys` 非空时，binding 应使用 `keys[1]` 作为默认 routing key；Redis 私有 VM 的 binding 如果带有内部 `preferred_worker_index`，不得用该默认 key 覆盖 preferred worker。
 - Lua callback 存入当前 VM registry。
 - callback ref 由当前 VM 所属 `AsyncResultDispatcher` 管理。
@@ -686,7 +687,7 @@ bool redis_required = false;
     "dispatch_batch_size": 256
   },
   "thread": {
-    "thread_count": 1,
+    "thread_count": 4,
     "main_loop_fps": 60
   },
   "script": {
@@ -736,7 +737,7 @@ struct RedisQueueConfig {
 };
 
 struct RedisThreadConfig {
-  size_t thread_count = 1;
+  size_t thread_count = 4;
   int main_loop_fps = 60;
 };
 
@@ -929,7 +930,7 @@ redis.connection.password
 - max inflight 必须大于 0。
 - request queue size 和 max inflight 独立校验，不强制大小关系；需要在文档和日志中说明二者共同决定故障时内存上限。
 - dispatch batch size 必须大于 0。
-- thread count 必须大于 0，建议限制在 1 到 64；默认 1，允许配置为多个 RedisClientThread，但避免误配导致大量线程和 Redis 连接。
+- thread count 必须大于 0，建议限制在 1 到 64；默认 4，允许配置为多个 RedisClientThread，但避免误配导致大量线程和 Redis 连接。
 - main loop fps 必须大于 0，建议限制在 1 到 240；默认 60，避免配置过高导致 Redis 线程空转。tick interval 应用微秒或更高精度计算，不能用整数毫秒截断。
 - reconnect delay 必须大于 0。
 - reconnect max delay 必须大于等于 initial delay。
@@ -1212,15 +1213,16 @@ src/tests/unit/database/test_redis_bind.cpp
 - Redis runtime 未编译、`redis_required = false` 且 `server.redis` 保留非空路径时，不加载 Redis 详细配置、不创建 worker，普通 VM 不导出 `redis` 表。
 - `ConfigManager` reload 能为 Redis 详细配置变化生成 `redis.*` change key；password 变化必须 redacted。
 - `ConfigManager::Rollback` 会同时恢复 `server_config_`、`redis_config_` 和 `redis_loaded_`，rollback 后 Redis reload 逻辑看到的路径、loaded 状态和详细配置一致。
-- `thread_count > 1` 时 `RedisClient` 能启动多个 `RedisClientThread`，任一 worker 启动失败会清理已启动 worker。
+- 默认配置 `thread_count = 4` 时 `RedisClient` 能启动 4 个 `RedisClientThread`；`thread_count > 1` 时任一 worker 启动失败会清理已启动 worker。
 - `wait_for_initial_connect = true` 且多 worker 时，首次连接等待使用整体 `connect_timeout_ms` 预算，不按 worker 数串行累加。
 - 多个 worker 的 OS thread name 仍设置为 `RedisClientThread`，worker index 通过 stats/log/profiler context 暴露。
 - `main_loop_fps` 默认值为 60，tick interval 使用微秒或更高精度计算；配置变化能正确更新 tick interval 或触发 worker 集合重启。
-- `routing_key` 相同的请求稳定进入同一个 worker；`Command` 未指定 `routing_key` 时按 round-robin 分配。
+- `routing_key` 相同的请求稳定进入同一个 worker；`Command` 未指定 `routing_key` 时按当前 worker 负载分配。
+- 实时负载路由优先选择 `queued_requests + unsent_requests + inflight_requests` 最低的 healthy worker；分数相同时使用 round-robin tie breaker。
 - 普通外部 `Eval` / Lua `redis.eval` 未显式设置 `routing_key` 且 keys 非空时，默认用第一个 key 路由。
 - `thread_count` reload 后，新的 worker generation 可以改变 `routing_key` 映射，但旧 generation 已 accepted 请求仍必须完成一次。
 - 部分 worker unhealthy 时，未指定 `routing_key` 的请求只路由到 healthy worker；指定 `routing_key` 命中 unhealthy worker 时不改投其他 worker。
-- 全部 worker unhealthy 且 `queue_while_disconnected = true` 时，未指定 `routing_key` 的请求可以在 running worker 中 round-robin 排队；没有 running worker 时同步失败。
+- 全部 worker unhealthy 且 `queue_while_disconnected = true` 时，未指定 `routing_key` 的请求可以在 running worker 中按负载排队；没有 running worker 时同步失败。
 - Redis 私有 VM 未显式指定 `routing_key` 发起请求时，使用内部 `preferred_worker_index` 固定回所属 worker；Lua `redis.eval` 带 keys 但未显式指定 `routing_key` 时，也不能用默认首 key 覆盖 `preferred_worker_index`。
 - Redis runtime 已编译但未在 server 配置中启用时，不创建 worker 集合；Lua `redis.is_running()` / `redis.is_healthy()` 返回 false，`redis.command` 同步失败且不保存 callback ref。
 - 部分 worker unhealthy 时，Lua `redis.is_running()` 返回 true、`redis.is_healthy()` 返回 false。
@@ -1289,7 +1291,7 @@ Redis 集成测试建议 opt-in：
 2. 实现 `RedisSubmitResult`、`RedisRequest`、`RedisResult`、`RedisValue`。
 3. 实现 request queue 和 max inflight 背压计数。
 4. 实现 `RedisClientThread`。
-5. 实现 `RedisClientThread` worker 集合统一管理、启动失败回滚、snapshot/generation 安全替换、round-robin 路由和 `routing_key` 稳定 hash 路由。
+5. 实现 `RedisClientThread` worker 集合统一管理、启动失败回滚、snapshot/generation 安全替换、实时负载路由和 `routing_key` 稳定 hash 路由。
 6. 接入 hiredis async 和 libevent adapter。
 7. 实现 AUTH/SELECT 连接握手和 health 状态。
 8. 实现 wakeup fd、shutdown、timeout、connection error、late callback 去重处理。
@@ -1370,7 +1372,8 @@ Redis 集成测试建议 opt-in：
 
 - server-only 编译开关。
 - RedisClient 公共单例。
-- `RedisClient` 统一管理一个或多个独立 `RedisClientThread` worker。
+- `RedisClient` 统一管理一个或多个独立 `RedisClientThread` worker，默认 4 个 worker。
+- 未指定 `routing_key` 的请求按 worker 当前负载路由。
 - 每个 `RedisClientThread` 主循环默认 60 fps。
 - hiredis async + libevent。
 - RedisClientScriptVM。
