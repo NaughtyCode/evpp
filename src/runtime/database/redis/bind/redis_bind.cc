@@ -33,12 +33,14 @@ struct RedisContextUserdata {
 	RedisLuaBindingContext* context = nullptr;
 };
 
+/* Reads the closure-held Redis binding context from a Lua C function. */
 RedisLuaBindingContext* GetContext(lua_State* L) {
 	auto* userdata = static_cast<RedisContextUserdata*>(
 		luaL_testudata(L, lua_upvalueindex(1), "engine.redis.context"));
 	return userdata ? userdata->context : nullptr;
 }
 
+/* Releases the heap-owned Redis binding context when Lua collects the userdata. */
 int l_context_gc(lua_State* L) {
 	auto* userdata = static_cast<RedisContextUserdata*>(
 		luaL_checkudata(L, 1, "engine.redis.context"));
@@ -47,6 +49,7 @@ int l_context_gc(lua_State* L) {
 	return 0;
 }
 
+/* Reads a Lua array of strings into a binary-safe std::string vector. */
 bool ReadStringArray(lua_State* L, int index, std::vector<std::string>& out) {
 	if (!lua_istable(L, index)) {
 		return false;
@@ -72,6 +75,7 @@ bool ReadStringArray(lua_State* L, int index, std::vector<std::string>& out) {
 	return true;
 }
 
+/* Reads optional timeout, trace, and routing settings from a Lua options table. */
 RedisCommandOptions ReadOptions(lua_State* L, int index) {
 	RedisCommandOptions options;
 	if (!lua_istable(L, index)) {
@@ -106,6 +110,7 @@ RedisCommandOptions ReadOptions(lua_State* L, int index) {
 
 void PushRedisValuePayload(lua_State* L, const RedisValue& value);
 
+/* Pushes a structured Lua table that preserves Redis value type information. */
 void PushRedisValueTable(lua_State* L, const RedisValue& value) {
 	lua_createtable(L, 0, 3);
 	lua_pushstring(L, RedisValueTypeToString(value.type));
@@ -155,6 +160,7 @@ void PushRedisValueTable(lua_State* L, const RedisValue& value) {
 	}
 }
 
+/* Pushes the plain Lua payload form for a Redis value. */
 void PushRedisValuePayload(lua_State* L, const RedisValue& value) {
 	switch (value.type) {
 	case RedisValueType::kNull:
@@ -193,6 +199,7 @@ void PushRedisValuePayload(lua_State* L, const RedisValue& value) {
 	}
 }
 
+/* Pushes the Lua callback result table for a completed Redis request. */
 int PushRedisResult(lua_State* L, const RedisResult& result) {
 	lua_createtable(L, 0, 8);
 	lua_pushstring(L, RedisResultStatusToString(result.status));
@@ -218,6 +225,7 @@ int PushRedisResult(lua_State* L, const RedisResult& result) {
 	return 1;
 }
 
+/* Builds a C++ completion that forwards Redis results onto the Lua dispatcher. */
 auto BuildCompletion(std::shared_ptr<AsyncResultDispatcher> dispatcher,
 					 AsyncCallbackId callback_id) {
 	return [dispatcher = std::move(dispatcher), callback_id](RedisResult result) mutable {
@@ -229,6 +237,7 @@ auto BuildCompletion(std::shared_ptr<AsyncResultDispatcher> dispatcher,
 	};
 }
 
+/* Implements redis.command(argv, callback, options) for Lua scripts. */
 int l_redis_command(lua_State* L) {
 	auto* context = GetContext(L);
 	if (!context || !context->dispatcher) {
@@ -269,6 +278,7 @@ int l_redis_command(lua_State* L) {
 	return 2;
 }
 
+/* Implements redis.eval(script, keys, args, callback, options) for Lua scripts. */
 int l_redis_eval(lua_State* L) {
 	auto* context = GetContext(L);
 	if (!context || !context->dispatcher) {
@@ -319,16 +329,19 @@ int l_redis_eval(lua_State* L) {
 	return 2;
 }
 
+/* Returns RedisClient::IsRunning to Lua. */
 int l_redis_is_running(lua_State* L) {
 	lua_pushboolean(L, RedisClient::Instance().IsRunning() ? 1 : 0);
 	return 1;
 }
 
+/* Returns RedisClient::IsHealthy to Lua. */
 int l_redis_is_healthy(lua_State* L) {
 	lua_pushboolean(L, RedisClient::Instance().IsHealthy() ? 1 : 0);
 	return 1;
 }
 
+/* Dispatches queued Redis Lua callbacks from script code. */
 int l_redis_dispatch(lua_State* L) {
 	auto* context = GetContext(L);
 	if (!context || !context->dispatcher) {
@@ -343,6 +356,7 @@ int l_redis_dispatch(lua_State* L) {
 	return 1;
 }
 
+/* Ensures the Redis context userdata metatable has a GC hook. */
 void EnsureContextMetatable(lua_State* L) {
 	if (luaL_newmetatable(L, "engine.redis.context")) {
 		lua_pushcfunction(L, l_context_gc);
@@ -353,6 +367,7 @@ void EnsureContextMetatable(lua_State* L) {
 
 }  // namespace
 
+/* Exports the Redis Lua module and captures its binding context in closures. */
 void ExportRedis(ScriptVM& vm, RedisLuaBindingContext context) {
 	if (!context.dispatcher) {
 		context.dispatcher = vm.GetAsyncDispatcher();
@@ -406,6 +421,7 @@ void ExportRedis(ScriptVM& vm, RedisLuaBindingContext context) {
 	ENGINE_LOG_INFO(GetLogger(), "ScriptBind: redis module exported");
 }
 
+/* Removes the Redis Lua module from globals and package.loaded. */
 void ShutdownRedisBindings(ScriptVM& vm) {
 	lua_State* L = vm.GetState();
 	if (!L) return;

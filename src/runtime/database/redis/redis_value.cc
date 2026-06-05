@@ -5,10 +5,12 @@
 namespace engine {
 namespace redis {
 
+/* Creates a RedisValue representing a Redis null/nil reply. */
 RedisValue RedisValue::Null() {
 	return {};
 }
 
+/* Creates a RedisValue that owns a binary-safe string payload. */
 RedisValue RedisValue::String(std::string value) {
 	RedisValue out;
 	out.type = RedisValueType::kString;
@@ -16,6 +18,7 @@ RedisValue RedisValue::String(std::string value) {
 	return out;
 }
 
+/* Creates a RedisValue for Redis status replies such as OK. */
 RedisValue RedisValue::Status(std::string value) {
 	RedisValue out;
 	out.type = RedisValueType::kStatus;
@@ -23,6 +26,7 @@ RedisValue RedisValue::Status(std::string value) {
 	return out;
 }
 
+/* Creates a RedisValue for Redis error replies while preserving the message. */
 RedisValue RedisValue::Error(std::string value) {
 	RedisValue out;
 	out.type = RedisValueType::kError;
@@ -30,6 +34,7 @@ RedisValue RedisValue::Error(std::string value) {
 	return out;
 }
 
+/* Creates a RedisValue for integer replies. */
 RedisValue RedisValue::Integer(int64_t value) {
 	RedisValue out;
 	out.type = RedisValueType::kInteger;
@@ -37,6 +42,7 @@ RedisValue RedisValue::Integer(int64_t value) {
 	return out;
 }
 
+/* Creates a RedisValue for RESP3 double replies. */
 RedisValue RedisValue::Double(double value) {
 	RedisValue out;
 	out.type = RedisValueType::kDouble;
@@ -44,6 +50,7 @@ RedisValue RedisValue::Double(double value) {
 	return out;
 }
 
+/* Creates a RedisValue for RESP3 boolean replies. */
 RedisValue RedisValue::Bool(bool value) {
 	RedisValue out;
 	out.type = RedisValueType::kBool;
@@ -51,6 +58,7 @@ RedisValue RedisValue::Bool(bool value) {
 	return out;
 }
 
+/* Creates a RedisValue for array-like Redis replies. */
 RedisValue RedisValue::Array(std::vector<RedisValue> values) {
 	RedisValue out;
 	out.type = RedisValueType::kArray;
@@ -58,6 +66,7 @@ RedisValue RedisValue::Array(std::vector<RedisValue> values) {
 	return out;
 }
 
+/* Creates a RedisValue for RESP3 map replies stored as alternating entries. */
 RedisValue RedisValue::Map(std::vector<RedisValue> values) {
 	RedisValue out;
 	out.type = RedisValueType::kMap;
@@ -65,6 +74,7 @@ RedisValue RedisValue::Map(std::vector<RedisValue> values) {
 	return out;
 }
 
+/* Creates a RedisValue for RESP3 set replies. */
 RedisValue RedisValue::Set(std::vector<RedisValue> values) {
 	RedisValue out;
 	out.type = RedisValueType::kSet;
@@ -72,6 +82,7 @@ RedisValue RedisValue::Set(std::vector<RedisValue> values) {
 	return out;
 }
 
+/* Converts RedisValueType values into stable strings for logs and Lua results. */
 const char* RedisValueTypeToString(RedisValueType type) {
 	switch (type) {
 	case RedisValueType::kNull: return "null";
@@ -94,11 +105,13 @@ const char* RedisValueTypeToString(RedisValueType type) {
 
 namespace {
 
+/* Extracts a binary-safe string from a hiredis reply. */
 std::string ReplyString(const redisReply* reply) {
 	if (!reply || !reply->str || reply->len == 0) return {};
 	return std::string(reply->str, reply->len);
 }
 
+/* Recursively converts hiredis child replies into RedisValue elements. */
 std::vector<RedisValue> ReplyElements(const redisReply* reply) {
 	std::vector<RedisValue> values;
 	if (!reply || reply->elements == 0) return values;
@@ -111,6 +124,7 @@ std::vector<RedisValue> ReplyElements(const redisReply* reply) {
 
 }  // namespace
 
+/* Converts a hiredis reply tree into the runtime RedisValue representation. */
 RedisValue RedisValueFromReply(const redisReply* reply) {
 	if (!reply) {
 		return RedisValue::Null();
@@ -182,4 +196,3 @@ RedisValue RedisValueFromReply(const redisReply* reply) {
 
 }  // namespace redis
 }  // namespace engine
-

@@ -11,6 +11,7 @@ namespace redis {
 
 namespace {
 
+/* Hashes routing keys so related Redis commands stay on the same worker. */
 uint64_t Fnv1a64(const std::string& value) {
 	uint64_t hash = 14695981039346656037ull;
 	for (unsigned char ch : value) {
@@ -22,13 +23,16 @@ uint64_t Fnv1a64(const std::string& value) {
 
 }  // namespace
 
+/* Creates a worker group with shared counters ready for startup. */
 RedisClientThreadGroup::RedisClientThreadGroup()
 	: counters_(std::make_shared<RedisSharedCounters>()) {}
 
+/* Stops all workers before destroying the group. */
 RedisClientThreadGroup::~RedisClientThreadGroup() {
 	Stop();
 }
 
+/* Starts the configured worker threads and optionally waits for initial Redis connections. */
 bool RedisClientThreadGroup::Start(const RedisClientConfig& config,
 								   bool wait_for_initial_connect) {
 	if (config.thread.thread_count == 0) {
@@ -79,6 +83,7 @@ bool RedisClientThreadGroup::Start(const RedisClientConfig& config,
 	return true;
 }
 
+/* Stops and joins every worker owned by the group. */
 void RedisClientThreadGroup::Stop() {
 	std::vector<std::unique_ptr<RedisClientThread>> workers;
 	{
@@ -93,6 +98,7 @@ void RedisClientThreadGroup::Stop() {
 	}
 }
 
+/* Reserves one global unsent slot for accepted-but-not-yet-sent work. */
 bool RedisClientThreadGroup::ReserveUnsentSlot() {
 	size_t current = counters_->unsent_global.load(std::memory_order_acquire);
 	while (true) {
@@ -106,10 +112,12 @@ bool RedisClientThreadGroup::ReserveUnsentSlot() {
 	}
 }
 
+/* Releases one global unsent slot after send, rejection, timeout, or shutdown. */
 void RedisClientThreadGroup::ReleaseUnsentSlot() {
 	counters_->unsent_global.fetch_sub(1, std::memory_order_acq_rel);
 }
 
+/* Chooses the worker that should receive a request according to routing and health. */
 size_t RedisClientThreadGroup::ChooseWorker(bool has_routing_key,
 											const std::string& routing_key,
 											RedisSubmitStatus& rejected_status,
@@ -167,6 +175,7 @@ size_t RedisClientThreadGroup::ChooseWorker(bool has_routing_key,
 	return static_cast<size_t>(-1);
 }
 
+/* Applies group-level backpressure and enqueues a request on the chosen worker. */
 bool RedisClientThreadGroup::Submit(RedisRequest& request,
 									bool has_routing_key,
 									const std::string& routing_key,
@@ -225,6 +234,7 @@ bool RedisClientThreadGroup::Submit(RedisRequest& request,
 	return true;
 }
 
+/* Reports whether any worker thread is currently running. */
 bool RedisClientThreadGroup::IsRunning() const {
 	std::lock_guard<std::mutex> lock(mutex_);
 	return std::any_of(workers_.begin(), workers_.end(), [](const auto& worker) {
@@ -232,6 +242,7 @@ bool RedisClientThreadGroup::IsRunning() const {
 	});
 }
 
+/* Reports whether all configured workers are connected and healthy. */
 bool RedisClientThreadGroup::IsHealthy() const {
 	std::lock_guard<std::mutex> lock(mutex_);
 	return !workers_.empty() &&
@@ -240,6 +251,7 @@ bool RedisClientThreadGroup::IsHealthy() const {
 		   });
 }
 
+/* Aggregates group counters and per-worker stats into a client stats snapshot. */
 RedisClientStats RedisClientThreadGroup::GetStats(RedisClientState state) const {
 	std::lock_guard<std::mutex> lock(mutex_);
 	RedisClientStats stats;

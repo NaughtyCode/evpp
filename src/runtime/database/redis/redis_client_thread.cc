@@ -30,6 +30,7 @@ namespace {
 
 constexpr size_t kDrainBatch = 1024;
 
+/* Detects null replies and Redis error replies from hiredis callbacks. */
 bool IsReplyError(void* reply_ptr, std::string* error) {
 	auto* reply = static_cast<redisReply*>(reply_ptr);
 	if (!reply) {
@@ -54,12 +55,15 @@ struct RedisClientThread::PendingRequest {
 	std::atomic<bool> completed{false};
 };
 
+/* Creates a Redis worker thread object before it owns any thread resources. */
 RedisClientThread::RedisClientThread() = default;
 
+/* Ensures the worker thread is stopped before object destruction. */
 RedisClientThread::~RedisClientThread() {
 	Stop();
 }
 
+/* Starts the event-loop thread and optionally waits for the first Redis connection. */
 bool RedisClientThread::Start(size_t index,
 							  const RedisClientConfig& config,
 							  std::shared_ptr<RedisSharedCounters> counters,
@@ -126,6 +130,7 @@ bool RedisClientThread::Start(size_t index,
 	return true;
 }
 
+/* Requests event-loop shutdown and joins the worker thread. */
 void RedisClientThread::Stop() {
 	if (!running_.load(std::memory_order_acquire) && !thread_.joinable()) {
 		return;
@@ -138,6 +143,7 @@ void RedisClientThread::Stop() {
 	}
 }
 
+/* Enqueues an accepted Redis request and wakes the event loop. */
 bool RedisClientThread::Enqueue(RedisRequest&& request) {
 	if (!running_.load(std::memory_order_acquire)) {
 		return false;
@@ -151,20 +157,24 @@ bool RedisClientThread::Enqueue(RedisRequest&& request) {
 	return true;
 }
 
+/* Returns whether the worker event-loop thread is active. */
 bool RedisClientThread::IsRunning() const {
 	return running_.load(std::memory_order_acquire);
 }
 
+/* Returns whether the worker has a ready Redis connection. */
 bool RedisClientThread::IsHealthy() const {
 	return healthy_.load(std::memory_order_acquire);
 }
 
+/* Computes the worker load used for least-loaded routing. */
 size_t RedisClientThread::LoadScore() const {
 	return queued_requests_.load(std::memory_order_acquire) +
 		   unsent_requests_count_.load(std::memory_order_acquire) +
 		   inflight_requests_count_.load(std::memory_order_acquire);
 }
 
+/* Captures a per-worker stats snapshot from atomic counters. */
 RedisWorkerStats RedisClientThread::GetStats() const {
 	RedisWorkerStats stats;
 	stats.worker_index = index_;
@@ -178,21 +188,25 @@ RedisWorkerStats RedisClientThread::GetStats() const {
 	return stats;
 }
 
+/* Waits until the worker event loop has completed startup initialization. */
 bool RedisClientThread::WaitForStartup(std::chrono::milliseconds timeout) {
 	std::unique_lock<std::mutex> lock(startup_mutex_);
 	return startup_cv_.wait_for(lock, timeout, [this] { return startup_finished_; });
 }
 
+/* Waits until the first Redis connection attempt has succeeded or failed. */
 bool RedisClientThread::WaitForInitialConnect(std::chrono::milliseconds timeout) {
 	std::unique_lock<std::mutex> lock(initial_mutex_);
 	return initial_cv_.wait_for(lock, timeout, [this] { return initial_connect_finished_; });
 }
 
+/* Returns the result of the initial Redis connection attempt. */
 bool RedisClientThread::InitialConnectSucceeded() const {
 	std::lock_guard<std::mutex> lock(initial_mutex_);
 	return initial_connect_finished_ && initial_connect_ok_;
 }
 
+/* Runs the libevent loop, script VM, Redis connection, and worker tick cycle. */
 void RedisClientThread::EventLoop() {
 	SetCurrentThreadName("RedisClientThread");
 	try {
@@ -228,6 +242,7 @@ void RedisClientThread::EventLoop() {
 	MarkInitialConnectFinished(false);
 }
 
+/* Allocates the libevent base, wakeup socketpair, and periodic tick event. */
 void RedisClientThread::SetupEventBase() {
 	event_base_ = event_base_new();
 	if (!event_base_) {
@@ -265,6 +280,7 @@ void RedisClientThread::SetupEventBase() {
 	last_frame_time_ = std::chrono::steady_clock::now();
 }
 
+/* Completes outstanding work and releases Redis, script, socket, and event resources. */
 void RedisClientThread::CleanupOnThread() {
 	CompleteAllQueued(RedisResultStatus::kShutdown, "redis worker shutting down");
 	CompleteAllUnsent(RedisResultStatus::kShutdown, "redis worker shutting down");
@@ -301,6 +317,7 @@ void RedisClientThread::CleanupOnThread() {
 	}
 }
 
+/* Opens a hiredis async connection and attaches it to this worker event loop. */
 void RedisClientThread::Connect() {
 	if (stopping_.load(std::memory_order_acquire) || context_) {
 		return;
@@ -339,6 +356,7 @@ void RedisClientThread::Connect() {
 	}
 }
 
+/* Schedules the next reconnect attempt using the configured backoff policy. */
 void RedisClientThread::ScheduleReconnect() {
 	if (!config_.reconnect.enabled || stopping_.load(std::memory_order_acquire)) {
 		return;
@@ -355,6 +373,7 @@ void RedisClientThread::ScheduleReconnect() {
 									   std::max(1, config_.reconnect.backoff_multiplier));
 }
 
+/* Publishes the event-loop startup result to the starting thread. */
 void RedisClientThread::MarkStartupFinished(bool ok) {
 	std::lock_guard<std::mutex> lock(startup_mutex_);
 	if (!startup_finished_) {
@@ -364,6 +383,7 @@ void RedisClientThread::MarkStartupFinished(bool ok) {
 	}
 }
 
+/* Publishes the initial Redis connection result to waiters. */
 void RedisClientThread::MarkInitialConnectFinished(bool ok) {
 	std::lock_guard<std::mutex> lock(initial_mutex_);
 	if (!initial_connect_finished_) {
@@ -373,6 +393,7 @@ void RedisClientThread::MarkInitialConnectFinished(bool ok) {
 	}
 }
 
+/* Marks the connection healthy and resumes flushing queued Redis commands. */
 void RedisClientThread::MarkHealthy() {
 	reconnect_delay_ms_ = config_.reconnect.initial_delay_ms;
 	healthy_.store(true, std::memory_order_release);
@@ -380,6 +401,7 @@ void RedisClientThread::MarkHealthy() {
 	FlushUnsent();
 }
 
+/* Handles the hiredis connect callback and starts AUTH/SELECT handshakes. */
 void RedisClientThread::OnConnect(int status) {
 	if (status != REDIS_OK) {
 		ENGINE_LOG_ERROR(GetLogger(), "RedisClientThread[{}]: connect failed", index_);
@@ -428,6 +450,7 @@ void RedisClientThread::OnConnect(int status) {
 	MarkHealthy();
 }
 
+/* Handles Redis disconnects, request completion, and reconnect scheduling. */
 void RedisClientThread::OnDisconnect(int status) {
 	healthy_.store(false, std::memory_order_release);
 	context_ = nullptr;
@@ -442,6 +465,7 @@ void RedisClientThread::OnDisconnect(int status) {
 	}
 }
 
+/* Handles AUTH replies and continues the connection handshake. */
 void RedisClientThread::OnAuthReply(void* reply) {
 	std::string error;
 	if (IsReplyError(reply, &error)) {
@@ -464,6 +488,7 @@ void RedisClientThread::OnAuthReply(void* reply) {
 	MarkHealthy();
 }
 
+/* Handles SELECT replies and marks the worker healthy when database selection succeeds. */
 void RedisClientThread::OnSelectReply(void* reply) {
 	std::string error;
 	if (IsReplyError(reply, &error)) {
@@ -476,6 +501,7 @@ void RedisClientThread::OnSelectReply(void* reply) {
 	MarkHealthy();
 }
 
+/* Advances reconnects, queues, timeouts, script callbacks, and script updates. */
 void RedisClientThread::Tick() {
 	if (reconnect_scheduled_ && !context_ &&
 		std::chrono::steady_clock::now() >= reconnect_due_) {
@@ -491,6 +517,7 @@ void RedisClientThread::Tick() {
 	++frame_count_;
 }
 
+/* Drains the wakeup socket so the event remains edge-safe across bursts. */
 void RedisClientThread::DrainWakeup() {
 	char buffer[256];
 	while (true) {
@@ -500,6 +527,7 @@ void RedisClientThread::DrainWakeup() {
 	}
 }
 
+/* Moves accepted requests from the MPSC queue into the worker-owned unsent queue. */
 void RedisClientThread::DrainRequests() {
 	size_t drained = 0;
 	RedisRequest request;
@@ -529,6 +557,7 @@ void RedisClientThread::DrainRequests() {
 	}
 }
 
+/* Reserves a global inflight slot before sending a command to Redis. */
 bool RedisClientThread::TryReserveInflight() {
 	size_t current = counters_->inflight_global.load(std::memory_order_acquire);
 	while (true) {
@@ -543,15 +572,18 @@ bool RedisClientThread::TryReserveInflight() {
 	}
 }
 
+/* Releases one global and per-worker inflight slot. */
 void RedisClientThread::ReleaseInflight() {
 	counters_->inflight_global.fetch_sub(1, std::memory_order_acq_rel);
 	inflight_requests_count_.fetch_sub(1, std::memory_order_acq_rel);
 }
 
+/* Releases one global unsent slot after a request leaves the unsent state. */
 void RedisClientThread::ReleaseUnsentSlot() {
 	counters_->unsent_global.fetch_sub(1, std::memory_order_acq_rel);
 }
 
+/* Sends ready unsent commands to Redis while respecting the inflight limit. */
 void RedisClientThread::FlushUnsent() {
 	if (!healthy_.load(std::memory_order_acquire) || !context_) {
 		return;
@@ -611,6 +643,7 @@ void RedisClientThread::FlushUnsent() {
 	}
 }
 
+/* Expires unsent and pending requests whose deadlines have passed. */
 void RedisClientThread::CheckTimeouts() {
 	const auto now = std::chrono::steady_clock::now();
 	bool released_inflight = false;
@@ -651,6 +684,7 @@ void RedisClientThread::CheckTimeouts() {
 	}
 }
 
+/* Completes every request still waiting in the cross-thread queue. */
 void RedisClientThread::CompleteAllQueued(RedisResultStatus status, const std::string& error) {
 	RedisRequest request;
 	while (request_queue_.try_dequeue(request)) {
@@ -659,6 +693,7 @@ void RedisClientThread::CompleteAllQueued(RedisResultStatus status, const std::s
 	}
 }
 
+/* Completes every request retained in the unsent queue. */
 void RedisClientThread::CompleteAllUnsent(RedisResultStatus status, const std::string& error) {
 	while (!unsent_requests_.empty()) {
 		RedisRequest request = std::move(unsent_requests_.front());
@@ -668,6 +703,7 @@ void RedisClientThread::CompleteAllUnsent(RedisResultStatus status, const std::s
 	}
 }
 
+/* Completes every in-flight Redis command still waiting for a reply. */
 void RedisClientThread::CompleteAllPending(RedisResultStatus status, const std::string& error) {
 	for (auto& [id, pending] : pending_) {
 		RedisResult result;
@@ -679,6 +715,7 @@ void RedisClientThread::CompleteAllPending(RedisResultStatus status, const std::
 	pending_.clear();
 }
 
+/* Completes a request that never reached Redis and invokes its completion safely. */
 void RedisClientThread::CompleteUnsentRequest(RedisRequest&& request,
 											  RedisResultStatus status,
 											  std::string error) {
@@ -707,6 +744,7 @@ void RedisClientThread::CompleteUnsentRequest(RedisRequest&& request,
 	counters_->completed_requests.fetch_add(1, std::memory_order_relaxed);
 }
 
+/* Completes an in-flight request exactly once and records elapsed/slow-command data. */
 void RedisClientThread::TryCompletePending(const std::shared_ptr<PendingRequest>& pending,
 										   RedisResult result,
 										   bool release_inflight) {
@@ -751,6 +789,7 @@ void RedisClientThread::TryCompletePending(const std::shared_ptr<PendingRequest>
 	counters_->completed_requests.fetch_add(1, std::memory_order_relaxed);
 }
 
+/* Wakes the libevent loop from another thread. */
 void RedisClientThread::Wakeup() {
 	if (wakeup_fds_[0] == -1) {
 		return;
@@ -759,17 +798,20 @@ void RedisClientThread::Wakeup() {
 	send(wakeup_fds_[0], &byte, 1, 0);
 }
 
+/* Handles wakeup socket readability and runs one worker tick. */
 void RedisClientThread::WakeupEventCallback(evutil_socket_t, short, void* arg) {
 	auto* self = static_cast<RedisClientThread*>(arg);
 	self->DrainWakeup();
 	self->Tick();
 }
 
+/* Handles periodic timer events for reconnects, flushing, and script updates. */
 void RedisClientThread::TickEventCallback(evutil_socket_t, short, void* arg) {
 	auto* self = static_cast<RedisClientThread*>(arg);
 	self->Tick();
 }
 
+/* Bridges hiredis connect callbacks back to the worker instance. */
 void RedisClientThread::ConnectCallback(const redisAsyncContext* context, int status) {
 	auto* self = static_cast<RedisClientThread*>(context ? context->data : nullptr);
 	if (self) {
@@ -777,6 +819,7 @@ void RedisClientThread::ConnectCallback(const redisAsyncContext* context, int st
 	}
 }
 
+/* Bridges hiredis disconnect callbacks back to the worker instance. */
 void RedisClientThread::DisconnectCallback(const redisAsyncContext* context, int status) {
 	auto* self = static_cast<RedisClientThread*>(context ? context->data : nullptr);
 	if (self) {
@@ -784,6 +827,7 @@ void RedisClientThread::DisconnectCallback(const redisAsyncContext* context, int
 	}
 }
 
+/* Bridges AUTH replies back to the worker connection handshake. */
 void RedisClientThread::AuthCallback(redisAsyncContext*, void* reply, void* privdata) {
 	auto* self = static_cast<RedisClientThread*>(privdata);
 	if (self) {
@@ -791,6 +835,7 @@ void RedisClientThread::AuthCallback(redisAsyncContext*, void* reply, void* priv
 	}
 }
 
+/* Bridges SELECT replies back to the worker connection handshake. */
 void RedisClientThread::SelectCallback(redisAsyncContext*, void* reply, void* privdata) {
 	auto* self = static_cast<RedisClientThread*>(privdata);
 	if (self) {
@@ -798,6 +843,7 @@ void RedisClientThread::SelectCallback(redisAsyncContext*, void* reply, void* pr
 	}
 }
 
+/* Converts hiredis command replies into RedisResult and completes the pending request. */
 void RedisClientThread::CommandCallback(redisAsyncContext*, void* reply, void* privdata) {
 	std::unique_ptr<std::shared_ptr<PendingRequest>> token(
 		static_cast<std::shared_ptr<PendingRequest>*>(privdata));

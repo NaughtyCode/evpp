@@ -18,6 +18,7 @@ enum class RedisResultStatus {
 	kDropped
 };
 
+/* Converts RedisResultStatus values into stable strings for logs and Lua results. */
 inline const char* RedisResultStatusToString(RedisResultStatus status) {
 	switch (status) {
 	case RedisResultStatus::kOk: return "ok";

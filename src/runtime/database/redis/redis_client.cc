@@ -13,6 +13,7 @@ namespace redis {
 
 namespace {
 
+/* Normalizes a Redis command token before validation and dispatch. */
 std::string UpperCommand(std::string_view command) {
 	std::string upper;
 	upper.reserve(command.size());
@@ -22,6 +23,7 @@ std::string UpperCommand(std::string_view command) {
 	return upper;
 }
 
+/* Blocks connection/session-level commands that are owned by the Redis runtime. */
 bool IsUnsupportedCommand(const std::string& command) {
 	return command == "AUTH" || command == "HELLO" || command == "SELECT" ||
 		   command == "QUIT" || command == "RESET" || command == "CLIENT" ||
@@ -34,6 +36,7 @@ bool IsUnsupportedCommand(const std::string& command) {
 		   command == "WAIT" || command == "WAITAOF";
 }
 
+/* Detects commands that can block a worker event loop. */
 bool IsBlockingCommand(const std::vector<std::string>& argv) {
 	if (argv.empty()) return false;
 	const auto command = UpperCommand(argv.front());
@@ -57,6 +60,7 @@ bool IsBlockingCommand(const std::vector<std::string>& argv) {
 	return false;
 }
 
+/* Rejects empty command names and control characters before queueing. */
 bool IsInvalidCommandName(std::string_view command) {
 	if (command.empty()) return true;
 	for (unsigned char ch : command) {
@@ -69,11 +73,13 @@ bool IsInvalidCommandName(std::string_view command) {
 
 }  // namespace
 
+/* Returns the process-wide Redis client singleton. */
 RedisClient& RedisClient::Instance() {
 	static RedisClient instance;
 	return instance;
 }
 
+/* Validates configuration and starts the Redis worker group. */
 bool RedisClient::Initialize(const RedisClientConfig& config,
 							 const RedisClientStartOptions& options) {
 	const auto validation = ValidateRedisClientConfig(config);
@@ -127,6 +133,7 @@ bool RedisClient::Initialize(const RedisClientConfig& config,
 	return true;
 }
 
+/* Stops the active worker group and completes outstanding requests as shutdown. */
 void RedisClient::Shutdown() {
 	std::shared_ptr<RedisClientThreadGroup> group;
 	{
@@ -148,16 +155,19 @@ void RedisClient::Shutdown() {
 	ENGINE_LOG_INFO(GetLogger(), "RedisClient: shutdown complete");
 }
 
+/* Reports whether the client is in the running state with an active worker group. */
 bool RedisClient::IsRunning() const {
 	std::lock_guard<std::mutex> lock(mutex_);
 	return state_ == RedisClientState::kRunning && group_ && group_->IsRunning();
 }
 
+/* Reports whether all active Redis workers currently consider their connections healthy. */
 bool RedisClient::IsHealthy() const {
 	std::lock_guard<std::mutex> lock(mutex_);
 	return state_ == RedisClientState::kRunning && group_ && group_->IsHealthy();
 }
 
+/* Builds a client-level stats snapshot from the current worker group. */
 RedisClientStats RedisClient::GetStats() const {
 	std::lock_guard<std::mutex> lock(mutex_);
 	if (!group_) {
@@ -171,6 +181,7 @@ RedisClientStats RedisClient::GetStats() const {
 	return stats;
 }
 
+/* Public command entry that submits a raw Redis argv vector. */
 RedisSubmitResult RedisClient::Command(std::vector<std::string> argv,
 									   RedisCompletion completion,
 									   RedisCommandOptions options) {
@@ -178,6 +189,7 @@ RedisSubmitResult RedisClient::Command(std::vector<std::string> argv,
 						   std::nullopt);
 }
 
+/* Validates, normalizes, deadlines, and routes a Redis command request. */
 RedisSubmitResult RedisClient::CommandInternal(
 	std::vector<std::string> argv,
 	RedisCompletion completion,
@@ -240,6 +252,7 @@ RedisSubmitResult RedisClient::CommandInternal(
 	return SubmitRequest(std::move(request));
 }
 
+/* Public script entry that submits an EVAL command with keys and arguments. */
 RedisSubmitResult RedisClient::Eval(std::string script,
 									std::vector<std::string> keys,
 									std::vector<std::string> args,
@@ -249,6 +262,7 @@ RedisSubmitResult RedisClient::Eval(std::string script,
 						std::move(completion), std::move(options), std::nullopt);
 }
 
+/* Converts script, keys, and args into the Redis EVAL argv form before dispatch. */
 RedisSubmitResult RedisClient::EvalInternal(
 	std::string script,
 	std::vector<std::string> keys,
@@ -274,6 +288,7 @@ RedisSubmitResult RedisClient::EvalInternal(
 						   preferred_worker_index);
 }
 
+/* Publishes an accepted request into the worker group and maps rejection states. */
 RedisSubmitResult RedisClient::SubmitRequest(RedisRequest request) {
 	std::shared_ptr<RedisClientThreadGroup> group;
 	RedisClientState state;

@@ -36,6 +36,7 @@ struct RedisSubmitResult {
 	uint64_t request_id = 0;
 	std::string error;
 
+	/* Returns true when the request was accepted by the Redis runtime. */
 	bool accepted() const { return status == RedisSubmitStatus::kAccepted; }
 };
 

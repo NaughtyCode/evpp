@@ -64,7 +64,9 @@ public:
 	bool WaitForInitialConnect(std::chrono::milliseconds timeout);
 	bool InitialConnectSucceeded() const;
 
+	/* Returns this worker's stable index inside the thread group. */
 	size_t Index() const { return index_; }
+	/* Returns the Redis configuration snapshot used by this worker. */
 	const RedisClientConfig& GetConfig() const { return config_; }
 
 private:

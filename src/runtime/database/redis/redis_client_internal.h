@@ -17,6 +17,7 @@ namespace internal {
 
 class RedisClientAccess {
 public:
+	/* Submits a command to RedisClient while preserving worker-affinity metadata. */
 	static RedisSubmitResult Command(std::vector<std::string> argv,
 									 RedisCompletion completion,
 									 RedisCommandOptions options,
@@ -28,6 +29,7 @@ public:
 			preferred_worker_index);
 	}
 
+	/* Submits an EVAL request to RedisClient while preserving worker affinity. */
 	static RedisSubmitResult Eval(std::string script,
 								  std::vector<std::string> keys,
 								  std::vector<std::string> args,
