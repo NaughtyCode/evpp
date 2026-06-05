@@ -3,13 +3,17 @@
 #define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/bind/physics_bind_common.h"
 
+#include <cmath>
 #include <filesystem>
+#include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include <glaze/glaze.hpp>
 
 #include "runtime/physics/physics_asset_common.h"
+#include "runtime/physics/physics_layers.h"
 #include "runtime/physics/physics_materials.h"
 #include "runtime/physics/physics_scene_asset.h"
 
@@ -40,6 +44,61 @@ void PushUInt8Array(lua_State* L, const std::vector<uint8_t>& values) {
 		lua_pushinteger(L, static_cast<lua_Integer>(values[i]));
 		lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
 	}
+}
+
+bool ReadNumberArray(lua_State* L,
+					 int index,
+					 size_t expected,
+					 std::vector<double>& out,
+					 std::string& error) {
+	index = lua_absindex(L, index);
+	if (!lua_istable(L, index)) {
+		error = "expected number array";
+		return false;
+	}
+	const size_t len = lua_rawlen(L, index);
+	if (len != expected) {
+		error = "number array has unexpected length";
+		return false;
+	}
+	out.clear();
+	out.reserve(expected);
+	for (size_t i = 1; i <= expected; ++i) {
+		lua_rawgeti(L, index, static_cast<lua_Integer>(i));
+		if (!lua_isnumber(L, -1)) {
+			lua_pop(L, 1);
+			error = "number array entries must be numbers";
+			return false;
+		}
+		double value = lua_tonumber(L, -1);
+		lua_pop(L, 1);
+		if (!std::isfinite(value)) {
+			error = "number array entries must be finite";
+			return false;
+		}
+		out.push_back(value);
+	}
+	return true;
+}
+
+bool ReadFloatArray(lua_State* L,
+					int index,
+					size_t expected,
+					std::vector<float>& out,
+					std::string& error) {
+	std::vector<double> values;
+	if (!ReadNumberArray(L, index, expected, values, error)) return false;
+	out.clear();
+	out.reserve(expected);
+	for (double value : values) {
+		if (value < -static_cast<double>((std::numeric_limits<float>::max)()) ||
+			value > static_cast<double>((std::numeric_limits<float>::max)())) {
+			error = "number array entries exceed float range";
+			return false;
+		}
+		out.push_back(static_cast<float>(value));
+	}
+	return true;
 }
 
 void PushOptionalNumberArray(lua_State* L,
@@ -411,14 +470,308 @@ int LuaResolveAssetPath(lua_State* L) {
 	return 1;
 }
 
+void PushRVec3(lua_State* L, JPH::RVec3Arg value) {
+	lua_newtable(L);
+	SetField(L, "x", value.GetX());
+	SetField(L, "y", value.GetY());
+	SetField(L, "z", value.GetZ());
+	lua_pushnumber(L, value.GetX());
+	lua_rawseti(L, -2, 1);
+	lua_pushnumber(L, value.GetY());
+	lua_rawseti(L, -2, 2);
+	lua_pushnumber(L, value.GetZ());
+	lua_rawseti(L, -2, 3);
+}
+
+void PushVec3(lua_State* L, JPH::Vec3Arg value) {
+	lua_newtable(L);
+	SetField(L, "x", value.GetX());
+	SetField(L, "y", value.GetY());
+	SetField(L, "z", value.GetZ());
+	lua_pushnumber(L, value.GetX());
+	lua_rawseti(L, -2, 1);
+	lua_pushnumber(L, value.GetY());
+	lua_rawseti(L, -2, 2);
+	lua_pushnumber(L, value.GetZ());
+	lua_rawseti(L, -2, 3);
+}
+
+void PushQuat(lua_State* L, JPH::QuatArg value) {
+	lua_newtable(L);
+	SetField(L, "x", value.GetX());
+	SetField(L, "y", value.GetY());
+	SetField(L, "z", value.GetZ());
+	SetField(L, "w", value.GetW());
+	lua_pushnumber(L, value.GetX());
+	lua_rawseti(L, -2, 1);
+	lua_pushnumber(L, value.GetY());
+	lua_rawseti(L, -2, 2);
+	lua_pushnumber(L, value.GetZ());
+	lua_rawseti(L, -2, 3);
+	lua_pushnumber(L, value.GetW());
+	lua_rawseti(L, -2, 4);
+}
+
+int LuaParseVec3(lua_State* L) {
+	std::vector<double> values;
+	std::string error;
+	if (!ReadNumberArray(L, 1, 3, values, error) || !IsFiniteDoubleVec(values, 3)) {
+		return PushNilError(L, error.empty() ? "invalid vec3" : error.c_str());
+	}
+	PushRVec3(L, ParsePhysicsVec3(values));
+	return 1;
+}
+
+int LuaParseFloatVec3(lua_State* L) {
+	std::vector<float> values;
+	std::string error;
+	if (!ReadFloatArray(L, 1, 3, values, error) || !IsFiniteFloatVec(values, 3)) {
+		return PushNilError(L, error.empty() ? "invalid float vec3" : error.c_str());
+	}
+	PushVec3(L, ParsePhysicsFloatVec3(values));
+	return 1;
+}
+
+int LuaParseQuat(lua_State* L) {
+	std::vector<float> values;
+	std::string error;
+	if (!ReadFloatArray(L, 1, 4, values, error) || !IsFiniteFloatVec(values, 4)) {
+		return PushNilError(L, error.empty() ? "invalid quaternion" : error.c_str());
+	}
+	PushQuat(L, ParsePhysicsQuat(values));
+	return 1;
+}
+
+int LuaNormalizeQuat(lua_State* L) {
+	std::vector<float> values;
+	std::string error;
+	if (!ReadFloatArray(L, 1, 4, values, error) || !IsFiniteFloatVec(values, 4)) {
+		return PushNilError(L, error.empty() ? "invalid quaternion" : error.c_str());
+	}
+	PushQuat(L, NormalizePhysicsQuat(JPH::Quat(values[0], values[1], values[2], values[3])));
+	return 1;
+}
+
+int LuaIsPositiveFinite(lua_State* L) {
+	double value = luaL_checknumber(L, 1);
+	lua_pushboolean(L, IsPositiveFinite(value) ? 1 : 0);
+	return 1;
+}
+
+int LuaIsFiniteFloat(lua_State* L) {
+	double value = luaL_checknumber(L, 1);
+	bool finite = value >= -static_cast<double>((std::numeric_limits<float>::max)()) &&
+				  value <= static_cast<double>((std::numeric_limits<float>::max)()) &&
+				  IsFiniteFloat(static_cast<float>(value));
+	lua_pushboolean(L, finite ? 1 : 0);
+	return 1;
+}
+
+int LuaIsFiniteDoubleVec(lua_State* L) {
+	lua_Integer expected_arg = luaL_checkinteger(L, 2);
+	luaL_argcheck(L, expected_arg >= 0, 2, "expected length must be >= 0");
+	size_t expected = static_cast<size_t>(expected_arg);
+	std::vector<double> values;
+	std::string error;
+	bool ok = ReadNumberArray(L, 1, expected, values, error) && IsFiniteDoubleVec(values, expected);
+	lua_pushboolean(L, ok ? 1 : 0);
+	return 1;
+}
+
+int LuaIsFiniteFloatVec(lua_State* L) {
+	lua_Integer expected_arg = luaL_checkinteger(L, 2);
+	luaL_argcheck(L, expected_arg >= 0, 2, "expected length must be >= 0");
+	size_t expected = static_cast<size_t>(expected_arg);
+	std::vector<float> values;
+	std::string error;
+	bool ok = ReadFloatArray(L, 1, expected, values, error) && IsFiniteFloatVec(values, expected);
+	lua_pushboolean(L, ok ? 1 : 0);
+	return 1;
+}
+
+int LuaIsMaterialValid(lua_State* L) {
+	JsonMaterial material;
+	if (lua_istable(L, 1)) {
+		lua_getfield(L, 1, "friction");
+		double friction = lua_isnumber(L, -1) ? lua_tonumber(L, -1) : -1.0;
+		lua_pop(L, 1);
+		lua_getfield(L, 1, "restitution");
+		double restitution = lua_isnumber(L, -1) ? lua_tonumber(L, -1) : -1.0;
+		lua_pop(L, 1);
+		if (!std::isfinite(friction) ||
+			friction < -static_cast<double>((std::numeric_limits<float>::max)()) ||
+			friction > static_cast<double>((std::numeric_limits<float>::max)()) ||
+			!std::isfinite(restitution) ||
+			restitution < -static_cast<double>((std::numeric_limits<float>::max)()) ||
+			restitution > static_cast<double>((std::numeric_limits<float>::max)())) {
+			lua_pushboolean(L, 0);
+			return 1;
+		}
+		material.friction = static_cast<float>(friction);
+		material.restitution = static_cast<float>(restitution);
+	} else {
+		material.friction = CheckFiniteFloat(L, 1, "friction must be finite");
+		material.restitution = CheckFiniteFloat(L, 2, "restitution must be finite");
+	}
+	lua_pushboolean(L, IsMaterialValid(material) ? 1 : 0);
+	return 1;
+}
+
+const char* MotionTypeName(JPH::EMotionType type) {
+	switch (type) {
+		case JPH::EMotionType::Static:
+			return "static";
+		case JPH::EMotionType::Kinematic:
+			return "kinematic";
+		case JPH::EMotionType::Dynamic:
+			return "dynamic";
+		default:
+			return "unknown";
+	}
+}
+
+const char* MotionQualityName(JPH::EMotionQuality quality) {
+	switch (quality) {
+		case JPH::EMotionQuality::Discrete:
+			return "discrete";
+		case JPH::EMotionQuality::LinearCast:
+			return "linear_cast";
+		default:
+			return "unknown";
+	}
+}
+
+int LuaParseMotionType(lua_State* L) {
+	const char* name = luaL_checkstring(L, 1);
+	auto type = ParseMotionType(name);
+	lua_newtable(L);
+	SetField(L, "name", MotionTypeName(type));
+	SetField(L, "value", static_cast<int>(type));
+	return 1;
+}
+
+int LuaParseMotionQuality(lua_State* L) {
+	const char* name = luaL_checkstring(L, 1);
+	auto quality = ParseMotionQuality(name);
+	lua_newtable(L);
+	SetField(L, "name", MotionQualityName(quality));
+	SetField(L, "value", static_cast<int>(quality));
+	return 1;
+}
+
+std::optional<JPH::ObjectLayer> ResolveObjectLayerByName(const PhysicsConfig& config,
+														 const std::string& name,
+														 std::string& error) {
+	JPH::ObjectLayer layer = 0;
+	if (!ResolveObjectLayer(config.layer_config, name, layer, error)) {
+		return std::nullopt;
+	}
+	return layer;
+}
+
+std::optional<JPH::BroadPhaseLayer> ResolveBroadPhaseLayerByName(const PhysicsConfig& config,
+																 const std::string& name,
+																 std::string& error) {
+	auto it = config.layer_config.broad_phase_layers.find(name);
+	if (it == config.layer_config.broad_phase_layers.end()) {
+		error = "unknown broadPhaseLayer '" + name + "'";
+		return std::nullopt;
+	}
+	return JPH::BroadPhaseLayer(it->second);
+}
+
+int LuaGetBroadPhaseLayer(lua_State* L) {
+	BindingContext ctx;
+	if (!CheckSystem(L, ctx)) return 2;
+	const char* name = luaL_checkstring(L, 1);
+	auto config = ctx.system->GetPhysicsConfigSnapshot();
+	if (!config.has_value()) {
+		return PushNilError(L, "physics config not available");
+	}
+	std::string error;
+	auto object_layer = ResolveObjectLayerByName(*config, name, error);
+	if (!object_layer.has_value()) {
+		return PushNilError(L, error.c_str());
+	}
+	BPLayerInterfaceImpl bp_iface(config->layer_config);
+	auto bp_layer = bp_iface.GetBroadPhaseLayer(*object_layer);
+	lua_pushinteger(L, static_cast<lua_Integer>(bp_layer.GetValue()));
+	return 1;
+}
+
+int LuaObjectLayersShouldCollide(lua_State* L) {
+	BindingContext ctx;
+	if (!CheckSystem(L, ctx)) return 2;
+	const char* lhs = luaL_checkstring(L, 1);
+	const char* rhs = luaL_checkstring(L, 2);
+	auto config = ctx.system->GetPhysicsConfigSnapshot();
+	if (!config.has_value()) {
+		return PushNilError(L, "physics config not available");
+	}
+	std::string error;
+	auto lhs_layer = ResolveObjectLayerByName(*config, lhs, error);
+	if (!lhs_layer.has_value()) return PushNilError(L, error.c_str());
+	auto rhs_layer = ResolveObjectLayerByName(*config, rhs, error);
+	if (!rhs_layer.has_value()) return PushNilError(L, error.c_str());
+	ObjectLayerPairFilterImpl filter(config->layer_config);
+	lua_pushboolean(L, filter.ShouldCollide(*lhs_layer, *rhs_layer) ? 1 : 0);
+	return 1;
+}
+
+int LuaObjectVsBroadPhaseShouldCollide(lua_State* L) {
+	BindingContext ctx;
+	if (!CheckSystem(L, ctx)) return 2;
+	const char* object_name = luaL_checkstring(L, 1);
+	auto config = ctx.system->GetPhysicsConfigSnapshot();
+	if (!config.has_value()) {
+		return PushNilError(L, "physics config not available");
+	}
+	std::string error;
+	auto object_layer = ResolveObjectLayerByName(*config, object_name, error);
+	if (!object_layer.has_value()) return PushNilError(L, error.c_str());
+
+	std::optional<JPH::BroadPhaseLayer> bp_layer;
+	if (lua_isinteger(L, 2)) {
+		lua_Integer value = lua_tointeger(L, 2);
+		if (value < 0 || value > 255) {
+			return PushNilError(L, "broad phase layer value out of range");
+		}
+		bp_layer = JPH::BroadPhaseLayer(static_cast<JPH::BroadPhaseLayer::Type>(value));
+	} else {
+		const char* bp_name = luaL_checkstring(L, 2);
+		bp_layer = ResolveBroadPhaseLayerByName(*config, bp_name, error);
+	}
+	if (!bp_layer.has_value()) return PushNilError(L, error.c_str());
+
+	BPLayerInterfaceImpl bp_iface(config->layer_config);
+	ObjectVSBLayerFilterImpl filter(config->layer_config, bp_iface);
+	lua_pushboolean(L, filter.ShouldCollide(*object_layer, *bp_layer) ? 1 : 0);
+	return 1;
+}
+
 const luaL_Reg kAssetFunctions[] = {{"load_configured_scene_asset", LuaLoadConfiguredSceneAsset},
 									{"load_scene_asset", LuaLoadSceneAsset},
 									{"parse_scene_asset_json", LuaParseSceneAssetJson},
 									{"parse_materials_json", LuaParseMaterialsJson},
+									{"parse_vec3", LuaParseVec3},
+									{"parse_float_vec3", LuaParseFloatVec3},
+									{"parse_quat", LuaParseQuat},
+									{"normalize_quat", LuaNormalizeQuat},
+									{"is_positive_finite", LuaIsPositiveFinite},
+									{"is_finite_float", LuaIsFiniteFloat},
+									{"is_finite_double_vec", LuaIsFiniteDoubleVec},
+									{"is_finite_float_vec", LuaIsFiniteFloatVec},
+									{"is_material_valid", LuaIsMaterialValid},
+									{"parse_motion_type", LuaParseMotionType},
+									{"parse_motion_quality", LuaParseMotionQuality},
 									{"is_motion_type_name", LuaIsMotionTypeName},
 									{"is_motion_quality_name", LuaIsMotionQualityName},
 									{"build_allowed_dofs", LuaBuildAllowedDofs},
 									{"resolve_object_layer", LuaResolveObjectLayer},
+									{"get_broad_phase_layer", LuaGetBroadPhaseLayer},
+									{"object_layers_should_collide", LuaObjectLayersShouldCollide},
+									{"object_vs_broad_phase_should_collide",
+									 LuaObjectVsBroadPhaseShouldCollide},
 									{"get_asset_directory", LuaGetAssetDirectory},
 									{"resolve_asset_path", LuaResolveAssetPath},
 									{nullptr, nullptr}};

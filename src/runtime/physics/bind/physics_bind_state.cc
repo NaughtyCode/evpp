@@ -3,12 +3,15 @@
 #define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/bind/physics_bind_common.h"
 
+#include <cmath>
+#include <limits>
 #include <string>
 
 #include <Jolt/Physics/Body/MotionQuality.h>
 #include <Jolt/Physics/Body/MotionType.h>
 
 #include "runtime/physics/physics_body_assets.h"
+#include "runtime/physics/physics_diff.h"
 
 namespace engine {
 namespace physics_bindings {
@@ -127,6 +130,196 @@ void PushDiffPacket(lua_State* L, const DiffPacket& packet) {
 		lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
 	}
 	lua_setfield(L, -2, "values");
+}
+
+bool ReadVec3Like(lua_State* L, int index, double& x, double& y, double& z) {
+	index = lua_absindex(L, index);
+	if (!lua_istable(L, index)) return false;
+	lua_rawgeti(L, index, 1);
+	lua_rawgeti(L, index, 2);
+	lua_rawgeti(L, index, 3);
+	if (lua_isnumber(L, -3) && lua_isnumber(L, -2) && lua_isnumber(L, -1)) {
+		x = lua_tonumber(L, -3);
+		y = lua_tonumber(L, -2);
+		z = lua_tonumber(L, -1);
+		lua_pop(L, 3);
+		return std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
+	}
+	lua_pop(L, 3);
+
+	lua_getfield(L, index, "x");
+	lua_getfield(L, index, "y");
+	lua_getfield(L, index, "z");
+	if (!lua_isnumber(L, -3) || !lua_isnumber(L, -2) || !lua_isnumber(L, -1)) {
+		lua_pop(L, 3);
+		return false;
+	}
+	x = lua_tonumber(L, -3);
+	y = lua_tonumber(L, -2);
+	z = lua_tonumber(L, -1);
+	lua_pop(L, 3);
+	return std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
+}
+
+bool FitsFloat(double value);
+
+bool ReadQuatLike(lua_State* L, int index, float& x, float& y, float& z, float& w) {
+	index = lua_absindex(L, index);
+	if (!lua_istable(L, index)) return false;
+	lua_rawgeti(L, index, 1);
+	lua_rawgeti(L, index, 2);
+	lua_rawgeti(L, index, 3);
+	lua_rawgeti(L, index, 4);
+	if (lua_isnumber(L, -4) && lua_isnumber(L, -3) && lua_isnumber(L, -2) &&
+		lua_isnumber(L, -1)) {
+		double dx = lua_tonumber(L, -4);
+		double dy = lua_tonumber(L, -3);
+		double dz = lua_tonumber(L, -2);
+		double dw = lua_tonumber(L, -1);
+		lua_pop(L, 4);
+		if (!FitsFloat(dx) || !FitsFloat(dy) || !FitsFloat(dz) || !FitsFloat(dw)) {
+			return false;
+		}
+		x = static_cast<float>(dx);
+		y = static_cast<float>(dy);
+		z = static_cast<float>(dz);
+		w = static_cast<float>(dw);
+		return true;
+	}
+	lua_pop(L, 4);
+
+	lua_getfield(L, index, "x");
+	lua_getfield(L, index, "y");
+	lua_getfield(L, index, "z");
+	lua_getfield(L, index, "w");
+	if (!lua_isnumber(L, -4) || !lua_isnumber(L, -3) || !lua_isnumber(L, -2) ||
+		!lua_isnumber(L, -1)) {
+		lua_pop(L, 4);
+		return false;
+	}
+	double dx = lua_tonumber(L, -4);
+	double dy = lua_tonumber(L, -3);
+	double dz = lua_tonumber(L, -2);
+	double dw = lua_tonumber(L, -1);
+	lua_pop(L, 4);
+	if (!FitsFloat(dx) || !FitsFloat(dy) || !FitsFloat(dz) || !FitsFloat(dw)) {
+		return false;
+	}
+	x = static_cast<float>(dx);
+	y = static_cast<float>(dy);
+	z = static_cast<float>(dz);
+	w = static_cast<float>(dw);
+	return true;
+}
+
+bool ReadStateVec3Field(lua_State* L,
+						int table_index,
+						const char* name,
+						const char* fallback_name,
+						double& x,
+						double& y,
+						double& z) {
+	table_index = lua_absindex(L, table_index);
+	lua_getfield(L, table_index, name);
+	if (!lua_istable(L, -1) && fallback_name) {
+		lua_pop(L, 1);
+		lua_getfield(L, table_index, fallback_name);
+	}
+	bool ok = ReadVec3Like(L, -1, x, y, z);
+	lua_pop(L, 1);
+	return ok;
+}
+
+bool ReadStateQuatField(lua_State* L,
+						int table_index,
+						const char* name,
+						float& x,
+						float& y,
+						float& z,
+						float& w) {
+	table_index = lua_absindex(L, table_index);
+	lua_getfield(L, table_index, name);
+	bool ok = ReadQuatLike(L, -1, x, y, z, w);
+	lua_pop(L, 1);
+	return ok;
+}
+
+bool FitsReal(double value) {
+	return std::isfinite(value) &&
+		   std::abs(value) <= static_cast<double>((std::numeric_limits<JPH::Real>::max)());
+}
+
+bool FitsFloat(double value) {
+	return std::isfinite(value) &&
+		   value >= -static_cast<double>((std::numeric_limits<float>::max)()) &&
+		   value <= static_cast<double>((std::numeric_limits<float>::max)());
+}
+
+bool ReadSnapshot(lua_State* L, int index, BodyStateSnapshot& out) {
+	index = lua_absindex(L, index);
+	double px = 0.0;
+	double py = 0.0;
+	double pz = 0.0;
+	if (!ReadStateVec3Field(L, index, "position", nullptr, px, py, pz)) return false;
+	if (!FitsReal(px) || !FitsReal(py) || !FitsReal(pz)) return false;
+	out.position = JPH::RVec3(
+		static_cast<JPH::Real>(px), static_cast<JPH::Real>(py), static_cast<JPH::Real>(pz));
+
+	float qx = 0.0f;
+	float qy = 0.0f;
+	float qz = 0.0f;
+	float qw = 1.0f;
+	if (!ReadStateQuatField(L, index, "rotation", qx, qy, qz, qw)) return false;
+	out.rotation = NormalizedOrIdentity(qx, qy, qz, qw);
+
+	double lvx = 0.0;
+	double lvy = 0.0;
+	double lvz = 0.0;
+	if (!ReadStateVec3Field(L, index, "linear_velocity", "linearVelocity", lvx, lvy, lvz)) {
+		return false;
+	}
+	if (!FitsFloat(lvx) || !FitsFloat(lvy) || !FitsFloat(lvz)) return false;
+	out.linear_velocity = JPH::Vec3(
+		static_cast<float>(lvx), static_cast<float>(lvy), static_cast<float>(lvz));
+
+	double avx = 0.0;
+	double avy = 0.0;
+	double avz = 0.0;
+	if (!ReadStateVec3Field(L, index, "angular_velocity", "angularVelocity", avx, avy, avz)) {
+		return false;
+	}
+	if (!FitsFloat(avx) || !FitsFloat(avy) || !FitsFloat(avz)) return false;
+	out.angular_velocity = JPH::Vec3(
+		static_cast<float>(avx), static_cast<float>(avy), static_cast<float>(avz));
+	return true;
+}
+
+ThresholdsConfig ReadThresholds(lua_State* L, int index, ThresholdsConfig defaults) {
+	if (!lua_istable(L, index)) return defaults;
+	index = lua_absindex(L, index);
+	auto read_field = [&](const char* snake, const char* camel, float& out) {
+		lua_getfield(L, index, snake);
+		if (!lua_isnumber(L, -1) && camel) {
+			lua_pop(L, 1);
+			lua_getfield(L, index, camel);
+		}
+		if (lua_isnumber(L, -1)) {
+			double value = lua_tonumber(L, -1);
+			if (FitsFloat(value) && value >= 0.0) {
+				out = static_cast<float>(value);
+			}
+		}
+		lua_pop(L, 1);
+	};
+	read_field("position_epsilon", "positionEpsilon", defaults.position_epsilon);
+	read_field("rotation_epsilon", "rotationEpsilon", defaults.rotation_epsilon);
+	read_field("linear_velocity_epsilon",
+			   "linearVelocityEpsilon",
+			   defaults.linear_velocity_epsilon);
+	read_field("angular_velocity_epsilon",
+			   "angularVelocityEpsilon",
+			   defaults.angular_velocity_epsilon);
+	return defaults;
 }
 
 void PushFrameResult(lua_State* L, const PhysicsFrameResult& result) {
@@ -277,12 +470,38 @@ int LuaListPrototypes(lua_State* L) {
 	return 1;
 }
 
+int LuaGetPrototype(lua_State* L) {
+	BindingContext ctx;
+	if (!CheckInit(L, ctx)) return 2;
+	if (!CheckWorldDirectRead(L, ctx)) return 2;
+
+	const char* proto_id = luaL_checkstring(L, 1);
+	const auto& prototypes = ctx.world->GetPrototypes();
+	auto it = prototypes.find(proto_id);
+	if (it == prototypes.end()) {
+		lua_pushnil(L);
+		return 1;
+	}
+	PushPrototype(L, it->second);
+	return 1;
+}
+
 int LuaGetRegistrySize(lua_State* L) {
 	BindingContext ctx;
 	if (!CheckInit(L, ctx)) return 2;
 	if (!CheckWorldDirectRead(L, ctx)) return 2;
 
 	lua_pushinteger(L, static_cast<lua_Integer>(ctx.world->GetRegistry().Size()));
+	return 1;
+}
+
+int LuaHasBodyId(lua_State* L) {
+	BindingContext ctx;
+	if (!CheckInit(L, ctx)) return 2;
+	if (!CheckWorldDirectRead(L, ctx)) return 2;
+
+	uint32_t body_id = CheckUInt32(L, 1, "body_id must be a uint32");
+	lua_pushboolean(L, ctx.world->GetRegistry().Has(body_id) ? 1 : 0);
 	return 1;
 }
 
@@ -316,6 +535,37 @@ int LuaGetBodyId(lua_State* L) {
 	return 1;
 }
 
+int LuaGenerateDiff(lua_State* L) {
+	uint32_t body_id = CheckUInt32(L, 1, "body_id must be a uint32");
+	BodyStateSnapshot current;
+	BodyStateSnapshot previous;
+	if (!ReadSnapshot(L, 2, current)) {
+		return PushNilError(L, "current state must contain position, rotation, linear_velocity, angular_velocity");
+	}
+	if (!ReadSnapshot(L, 3, previous)) {
+		return PushNilError(L, "previous state must contain position, rotation, linear_velocity, angular_velocity");
+	}
+
+	ThresholdsConfig thresholds;
+	BindingContext ctx = GetContext(L);
+	if (ctx.system) {
+		if (auto snapshot = ctx.system->GetThresholdsConfigSnapshot()) {
+			thresholds = *snapshot;
+		}
+	}
+	if (lua_gettop(L) >= 4 && lua_istable(L, 4)) {
+		thresholds = ReadThresholds(L, 4, thresholds);
+	}
+
+	auto diff = GenerateDiff(body_id, current, previous, thresholds);
+	if (!diff.has_value()) {
+		lua_pushnil(L);
+		return 1;
+	}
+	PushDiffPacket(L, *diff);
+	return 1;
+}
+
 const luaL_Reg kStateFunctions[] = {{"tick", LuaTick},
 									{"fetch_result", LuaFetchResult},
 									{"save_state", LuaSaveState},
@@ -324,9 +574,12 @@ const luaL_Reg kStateFunctions[] = {{"tick", LuaTick},
 									{"get_stats", LuaGetStats},
 									{"get_physics_stats", LuaGetStats},
 									{"list_prototypes", LuaListPrototypes},
+									{"get_prototype", LuaGetPrototype},
 									{"get_registry_size", LuaGetRegistrySize},
+									{"has_body_id", LuaHasBodyId},
 									{"get_asset_name", LuaGetAssetName},
 									{"get_body_id", LuaGetBodyId},
+									{"generate_diff", LuaGenerateDiff},
 									{nullptr, nullptr}};
 
 }  // namespace

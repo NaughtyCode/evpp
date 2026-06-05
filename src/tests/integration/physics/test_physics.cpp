@@ -133,10 +133,17 @@ local prototypes = physics.list_prototypes()
 if type(prototypes) ~= "table" or #prototypes == 0 then
 	error("missing physics prototypes")
 end
+local crate_proto = physics.get_prototype("crate")
+if type(crate_proto) ~= "table" or crate_proto.proto_id ~= "crate" then
+	error("missing crate prototype")
+end
 
 local body_id, err = physics.spawn("crate", 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 1.0, 123)
 if not body_id or body_id <= 0 then
 	error(err or "physics.spawn failed")
+end
+if not physics.has_body_id(body_id) then
+	error("spawned body not registered")
 end
 
 local x, y, z = physics.get_transform(body_id)
@@ -236,12 +243,48 @@ assert(scene_by_path.counts.staticBodies >= 1)
 assert(parsed_scene.counts.materials == 1)
 assert(parsed_scene.materials[1].name == "script_mat")
 assert(materials.count == 1)
+local vec3 = physics.parse_vec3({1, 2, 3})
+local fvec3 = physics.parse_float_vec3({4, 5, 6})
+local quat = physics.normalize_quat({0, 0, 0, 2})
+local parsed_quat = physics.parse_quat({0, 0, 0, 0})
+assert(vec3.x == 1 and vec3[2] == 2)
+assert(fvec3.z == 6)
+assert(math.abs(quat.w - 1.0) < 0.0001)
+assert(parsed_quat.w == 1)
+assert(physics.is_positive_finite(1.0) == true)
+assert(physics.is_positive_finite(0.0) == false)
+assert(physics.is_finite_float(1.0) == true)
+assert(physics.is_finite_double_vec({1, 2, 3}, 3) == true)
+assert(physics.is_finite_float_vec({1, 2, 3}, 3) == true)
+assert(physics.is_material_valid({friction = 0.4, restitution = 0.1}) == true)
+assert(physics.parse_motion_type("kinematic").name == "kinematic")
+assert(physics.parse_motion_quality("linearCast").name == "linear_cast")
 assert(physics.is_motion_type_name("dynamic") == true)
 assert(physics.is_motion_quality_name("discrete") == true)
 assert(physics.build_allowed_dofs({0, 1, 2}) > 0)
 assert(physics.resolve_object_layer("dynamic") == phys.layerConfig.objectLayers.dynamic)
+assert(physics.get_broad_phase_layer("dynamic") == phys.layerConfig.broadPhaseLayers.dynamic)
+assert(physics.object_layers_should_collide("static", "dynamic") == true)
+assert(physics.object_layers_should_collide("static", "static") == false)
+assert(physics.object_vs_broad_phase_should_collide("dynamic", "static") == true)
 assert(physics.get_asset_directory(paths.assetsPath) ~= "")
 assert(physics.resolve_asset_path(scene.assetsDir, "scene.json") ~= "")
+local diff = physics.generate_diff(7, {
+	position = {1, 0, 0},
+	rotation = {0, 0, 0, 1},
+	linear_velocity = {1, 0, 0},
+	angular_velocity = {0, 1, 0}
+}, {
+	position = {0, 0, 0},
+	rotation = {0, 0, 0, 1},
+	linear_velocity = {0, 0, 0},
+	angular_velocity = {0, 0, 0}
+}, {
+	position_epsilon = 0.001,
+	linear_velocity_epsilon = 0.001,
+	angular_velocity_epsilon = 0.001
+})
+assert(type(diff) == "table" and diff.object_id == 7 and #diff.values >= 3)
 assert(physics.COMMAND_SPAWN == "spawn")
 assert(physics.COLLISION_START == "start")
 assert(type(physics.log_info) == "function")
