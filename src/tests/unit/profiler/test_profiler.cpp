@@ -134,6 +134,10 @@ TEST_CASE("Profiler runtime switches parse and gate event arguments", "[profiler
 										 ProfilerEventGroupBit(ProfilerEventGroup::Script)) ==
 			"physics,script");
 	REQUIRE(ProfilerEventGroupFromCategory("engine.physics") == ProfilerEventGroup::Physics);
+	REQUIRE(ProfilerEventGroupFromCategory("engine.physics.step") ==
+			ProfilerEventGroup::Physics);
+	REQUIRE(ProfilerEventGroupFromCategory("engine.physics2") == ProfilerEventGroup::Engine);
+	REQUIRE(ProfilerEventGroupFromCategory("engine.network") == ProfilerEventGroup::Engine);
 	REQUIRE(ProfilerEventGroupFromCategory("engine.frame") == ProfilerEventGroup::Frame);
 	REQUIRE(ProfilerEventGroupFromCategory("engine") == ProfilerEventGroup::Engine);
 
@@ -162,4 +166,18 @@ TEST_CASE("Profiler runtime switches parse and gate event arguments", "[profiler
 	profiler.SetEnabledEventGroups(kProfilerAllEventGroups);
 	REQUIRE(profiler.IsEventGroupEnabled(ProfilerEventGroup::All));
 	REQUIRE(profiler.EnabledEventGroups() == kProfilerAllEventGroups);
+
+#ifndef ENGINE_PROFILER_ENABLED
+	ProfilerConfig cfg;
+	cfg.runtime_enabled = false;
+	cfg.enabled_event_groups = ProfilerEventGroupBit(ProfilerEventGroup::Script);
+	REQUIRE_FALSE(profiler.Initialize(cfg));
+	REQUIRE_FALSE(profiler.IsInitialized());
+	REQUIRE_FALSE(profiler.IsRuntimeEnabled());
+	REQUIRE(profiler.EnabledEventGroups() == ProfilerEventGroupBit(ProfilerEventGroup::Script));
+
+	int disabled_command_evaluated = 0;
+	ENGINE_PROFILE_PHYSICS_CMD_DEQUEUE(++disabled_command_evaluated);
+	REQUIRE(disabled_command_evaluated == 0);
+#endif
 }

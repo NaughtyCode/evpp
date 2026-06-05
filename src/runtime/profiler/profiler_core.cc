@@ -1,6 +1,13 @@
 #ifdef ENGINE_PROFILER_ENABLED
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4459)
+#endif
 #include "thirdparty/perfetto/perfetto.h"
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 // Category declarations must be visible before STATIC_STORAGE since
 // the storage expansion references kCategoryCount, kCategories, etc.
@@ -412,7 +419,14 @@ bool ProfilerManager::WriteTraceToFileLocked(const std::string& path,
 #include "runtime/core/log/log_macros.h"
 #include "runtime/profiler/profiler_core.h"
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4459)
+#endif
 #include "thirdparty/perfetto/perfetto.h"
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 namespace engine {
 
@@ -428,7 +442,7 @@ bool ProfilerManager::Initialize(const ProfilerConfig& cfg) {
 	auto normalized = NormalizeConfig(cfg);
 	ProfilerRuntimeSetEnabled(normalized.runtime_enabled);
 	ProfilerRuntimeSetEnabledGroups(normalized.enabled_event_groups);
-	return true;
+	return false;
 }
 
 void ProfilerManager::Shutdown() {

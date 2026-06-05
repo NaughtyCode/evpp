@@ -39,7 +39,9 @@ constexpr ProfilerEventGroupMask ProfilerEventGroupBit(ProfilerEventGroup group)
 
 inline constexpr bool ProfilerCategoryStartsWith(std::string_view value,
 												 std::string_view prefix) noexcept {
-	return value.size() >= prefix.size() && value.substr(0, prefix.size()) == prefix;
+	return value == prefix ||
+		   (value.size() > prefix.size() && value.substr(0, prefix.size()) == prefix &&
+			value[prefix.size()] == '.');
 }
 
 inline ProfilerEventGroup ProfilerEventGroupFromCategory(std::string_view category) noexcept {

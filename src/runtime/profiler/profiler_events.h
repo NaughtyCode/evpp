@@ -96,8 +96,9 @@ inline thread_local uint64_t g_profiler_physics_frame_id = UINT64_MAX;
 
 #define ENGINE_PROFILE_PHYSICS_CMD_DEQUEUE(command)                                            \
 	do {                                                                                       \
-		if ((command).type == CommandType::Tick) {                                             \
-			auto* _prof_args = std::get_if<TickArgs>(&(command).args);                         \
+		auto&& engine_profile_command__ = (command);                                           \
+		if (engine_profile_command__.type == CommandType::Tick) {                              \
+			auto* _prof_args = std::get_if<TickArgs>(&engine_profile_command__.args);           \
 			g_profiler_physics_frame_id = _prof_args ? _prof_args->frame_id : UINT64_MAX;      \
 		} else {                                                                               \
 			g_profiler_physics_frame_id = UINT64_MAX;                                          \
@@ -106,7 +107,7 @@ inline thread_local uint64_t g_profiler_physics_frame_id = UINT64_MAX;
 								   "engine.physics",                                           \
 								   "CmdDequeue",                                               \
 								   "command_type",                                             \
-								   static_cast<int>((command).type));                           \
+								   static_cast<int>(engine_profile_command__.type));            \
 	} while (0)
 
 #define ENGINE_PROFILE_PHYSICS_STEP(delta_time)           \
@@ -270,7 +271,6 @@ inline thread_local uint64_t g_profiler_physics_frame_id = UINT64_MAX;
 	} while (0)
 #define ENGINE_PROFILE_PHYSICS_CMD_DEQUEUE(command) \
 	do {                                            \
-		(void) (command);                           \
 	} while (0)
 #define ENGINE_PROFILE_PHYSICS_STEP(delta_time) \
 	do {                                        \

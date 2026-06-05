@@ -2,7 +2,14 @@
 
 #ifdef ENGINE_PROFILER_ENABLED
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4459)
+#endif
 #include "thirdparty/perfetto/perfetto.h"
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 PERFETTO_DEFINE_CATEGORIES(
 	perfetto::Category("engine").SetDescription("Engine general (frame loop, lifecycle)"),
