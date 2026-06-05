@@ -54,6 +54,8 @@ CLOUD_ENGINE_API void ShutdownRpcBindings(ScriptVM& vm);
 CLOUD_ENGINE_API void ExportAuth(ScriptVM& vm);
 CLOUD_ENGINE_API void ExportMem(ScriptVM& vm);
 CLOUD_ENGINE_API void ExportConfigBindings(ScriptVM& vm);
+CLOUD_ENGINE_API bool ExportProfiler(ScriptVM& vm);
+CLOUD_ENGINE_API void ShutdownProfilerBindings(ScriptVM& vm);
 
 }  // namespace script
 }  // namespace engine

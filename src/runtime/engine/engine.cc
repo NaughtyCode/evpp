@@ -738,6 +738,7 @@ void Engine::Cleanup() {
 	cleanup_phase_.store(CleanupPhase::ScriptDestroyed, std::memory_order_release);
 	if (script_vm_) {
 		script_vm_->DestroyScript();
+		script::ShutdownProfilerBindings(*script_vm_);
 		int mem_kb = lua_gc(script_vm_->GetState(), LUA_GCCOUNT, 0);
 		ENGINE_LOG_INFO(logger, "ScriptVM: final memory [{} KB], exiting", mem_kb);
 	}

@@ -26,6 +26,7 @@ struct ExportAllFixture {
 		script::ShutdownNetBindings();
 		script::ShutdownEntityBindings();
 		script::ShutdownTimerBindings(vm);
+		script::ShutdownProfilerBindings(vm);
 		timer_mgr.shutdown();
 	}
 
@@ -66,6 +67,8 @@ local required = {
     auth and auth.authenticate,
     auth and auth.create_session,
     config and config.get,
+    profiler and profiler.is_runtime_enabled,
+    profiler and profiler.set_enabled_groups,
     import and import.setpath,
 }
 

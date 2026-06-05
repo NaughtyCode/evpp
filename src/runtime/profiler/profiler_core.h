@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "runtime/core/engine_api.h"
+#include "runtime/profiler/profiler_switches.h"
 
 namespace perfetto {
 class TracingSession;
@@ -22,6 +23,8 @@ struct CLOUD_ENGINE_API ProfilerConfig {
 	uint32_t duration_ms = 0;
 	uint32_t flush_interval_ms = 5000;
 	bool write_into_file = false;
+	bool runtime_enabled = true;
+	ProfilerEventGroupMask enabled_event_groups = kProfilerAllEventGroups;
 };
 
 class CLOUD_ENGINE_API ProfilerManager {
@@ -37,6 +40,15 @@ class CLOUD_ENGINE_API ProfilerManager {
 	bool IsInitialized() const;
 	bool IsActive() const;
 	static bool IsEnabled();
+
+	void SetRuntimeEnabled(bool enabled);
+	bool IsRuntimeEnabled() const;
+	void SetEnabledEventGroups(ProfilerEventGroupMask mask);
+	void EnableEventGroups(ProfilerEventGroupMask mask);
+	void DisableEventGroups(ProfilerEventGroupMask mask);
+	void SetEventGroupEnabled(ProfilerEventGroup group, bool enabled);
+	bool IsEventGroupEnabled(ProfilerEventGroup group) const;
+	ProfilerEventGroupMask EnabledEventGroups() const;
 
 	void Flush();
 	std::vector<char> ReadTrace();

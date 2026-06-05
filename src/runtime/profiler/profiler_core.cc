@@ -78,6 +78,8 @@ bool ProfilerManager::Initialize(const ProfilerConfig& cfg) {
 	}
 
 	config_ = std::move(normalized);
+	ProfilerRuntimeSetEnabled(config_.runtime_enabled);
+	ProfilerRuntimeSetEnabledGroups(config_.enabled_event_groups);
 
 	if (!tracing_runtime_initialized_) {
 		ENGINE_LOG_INFO(logger, "ProfilerManager: initializing Perfetto runtime");
@@ -208,6 +210,38 @@ bool ProfilerManager::IsEnabled() {
 #endif
 }
 
+void ProfilerManager::SetRuntimeEnabled(bool enabled) {
+	ProfilerRuntimeSetEnabled(enabled);
+}
+
+bool ProfilerManager::IsRuntimeEnabled() const {
+	return ProfilerRuntimeIsEnabled();
+}
+
+void ProfilerManager::SetEnabledEventGroups(ProfilerEventGroupMask mask) {
+	ProfilerRuntimeSetEnabledGroups(mask);
+}
+
+void ProfilerManager::EnableEventGroups(ProfilerEventGroupMask mask) {
+	ProfilerRuntimeEnableGroups(mask);
+}
+
+void ProfilerManager::DisableEventGroups(ProfilerEventGroupMask mask) {
+	ProfilerRuntimeDisableGroups(mask);
+}
+
+void ProfilerManager::SetEventGroupEnabled(ProfilerEventGroup group, bool enabled) {
+	ProfilerRuntimeSetGroupEnabled(group, enabled);
+}
+
+bool ProfilerManager::IsEventGroupEnabled(ProfilerEventGroup group) const {
+	return ProfilerRuntimeIsGroupEnabled(group);
+}
+
+ProfilerEventGroupMask ProfilerManager::EnabledEventGroups() const {
+	return ProfilerRuntimeEnabledGroups();
+}
+
 void ProfilerManager::Flush() {
 	std::lock_guard<std::mutex> lock(mutex_);
 	if (session_) {
@@ -283,6 +317,7 @@ ProfilerConfig ProfilerManager::NormalizeConfig(ProfilerConfig cfg) {
 	} else if (cfg.buffer_size_kb < kMinBufferSizeKb) {
 		cfg.buffer_size_kb = kMinBufferSizeKb;
 	}
+	cfg.enabled_event_groups &= kProfilerAllEventGroups;
 	return cfg;
 }
 
@@ -390,7 +425,9 @@ ProfilerManager::ProfilerManager() = default;
 ProfilerManager::~ProfilerManager() = default;
 
 bool ProfilerManager::Initialize(const ProfilerConfig& cfg) {
-	(void) cfg;
+	auto normalized = NormalizeConfig(cfg);
+	ProfilerRuntimeSetEnabled(normalized.runtime_enabled);
+	ProfilerRuntimeSetEnabledGroups(normalized.enabled_event_groups);
 	return true;
 }
 
@@ -414,6 +451,38 @@ bool ProfilerManager::IsActive() const {
 
 bool ProfilerManager::IsEnabled() {
 	return false;
+}
+
+void ProfilerManager::SetRuntimeEnabled(bool enabled) {
+	ProfilerRuntimeSetEnabled(enabled);
+}
+
+bool ProfilerManager::IsRuntimeEnabled() const {
+	return ProfilerRuntimeIsEnabled();
+}
+
+void ProfilerManager::SetEnabledEventGroups(ProfilerEventGroupMask mask) {
+	ProfilerRuntimeSetEnabledGroups(mask);
+}
+
+void ProfilerManager::EnableEventGroups(ProfilerEventGroupMask mask) {
+	ProfilerRuntimeEnableGroups(mask);
+}
+
+void ProfilerManager::DisableEventGroups(ProfilerEventGroupMask mask) {
+	ProfilerRuntimeDisableGroups(mask);
+}
+
+void ProfilerManager::SetEventGroupEnabled(ProfilerEventGroup group, bool enabled) {
+	ProfilerRuntimeSetGroupEnabled(group, enabled);
+}
+
+bool ProfilerManager::IsEventGroupEnabled(ProfilerEventGroup group) const {
+	return ProfilerRuntimeIsGroupEnabled(group);
+}
+
+ProfilerEventGroupMask ProfilerManager::EnabledEventGroups() const {
+	return ProfilerRuntimeEnabledGroups();
 }
 
 void ProfilerManager::Flush() {
@@ -444,6 +513,7 @@ void ProfilerManager::ClearCachedTrace() {
 }
 
 ProfilerConfig ProfilerManager::NormalizeConfig(ProfilerConfig cfg) {
+	cfg.enabled_event_groups &= kProfilerAllEventGroups;
 	return cfg;
 }
 

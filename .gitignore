@@ -145,3 +145,5 @@ artifacts/build-android/*
 artifacts/android/*
 artifacts/release*/
 artifacts/build-physics/*
+artifacts/build-profiler-switch/*
+artifacts/build-profiler-switch-off/*

@@ -96,6 +96,7 @@ std::filesystem::path RemoveLuaExtension(std::filesystem::path path) {
 
 ScriptVM::ScriptVM(LuaSandboxLevel level) {
 	ENGINE_PROFILE_SCOPE("engine.vm", "ScriptVM::ctor");
+	owner_thread_id_ = std::this_thread::get_id();
 
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "ScriptVM: creating lua state...");
@@ -124,8 +125,13 @@ ScriptVM::~ScriptVM() {
 	}
 }
 
-ScriptVM::ScriptVM(ScriptVM&& other) noexcept : L_(other.L_) {
+ScriptVM::ScriptVM(ScriptVM&& other) noexcept
+	: L_(other.L_),
+	  owner_thread_id_(other.owner_thread_id_),
+	  is_main_thread_vm_(other.is_main_thread_vm_) {
 	other.L_ = nullptr;
+	other.owner_thread_id_ = {};
+	other.is_main_thread_vm_ = false;
 	callbacks_ = std::move(other.callbacks_);
 	importer_ = std::move(other.importer_);
 	script_roots_ = std::move(other.script_roots_);
@@ -138,11 +144,30 @@ ScriptVM& ScriptVM::operator=(ScriptVM&& other) noexcept {
 		}
 		L_ = other.L_;
 		other.L_ = nullptr;
+		owner_thread_id_ = other.owner_thread_id_;
+		is_main_thread_vm_ = other.is_main_thread_vm_;
+		other.owner_thread_id_ = {};
+		other.is_main_thread_vm_ = false;
 		callbacks_ = std::move(other.callbacks_);
 		importer_ = std::move(other.importer_);
 		script_roots_ = std::move(other.script_roots_);
 	}
 	return *this;
+}
+
+bool ScriptVM::IsOwnerThread() const noexcept {
+	return owner_thread_id_ != std::thread::id{} &&
+		   owner_thread_id_ == std::this_thread::get_id();
+}
+
+bool ScriptVM::IsMainThreadVM() const noexcept {
+	return is_main_thread_vm_;
+}
+
+void ScriptVM::MarkAsMainThreadVM() noexcept {
+	if (IsOwnerThread()) {
+		is_main_thread_vm_ = true;
+	}
 }
 
 // Script lifecycle helpers

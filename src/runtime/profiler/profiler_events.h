@@ -19,25 +19,33 @@ inline thread_local uint64_t g_profiler_physics_frame_id = UINT64_MAX;
 
 // ── Engine lifecycle ────────────────────────────────────────────────────
 
-#define ENGINE_PROFILE_TICK() ENGINE_PROFILE_SCOPE("engine", "Tick")
+#define ENGINE_PROFILE_TICK() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Frame, "engine", "Tick")
 
 #define ENGINE_PROFILE_FRAME_BEGIN(frame_no, dt_ms)                                               \
 	do {                                                                                          \
-		ENGINE_PROFILE_COUNTER_TRACK("engine", g_frame_no_track, static_cast<int64_t>(frame_no)); \
-		ENGINE_PROFILE_COUNTER_TRACK("engine", g_frame_dt_track, static_cast<int64_t>(dt_ms));    \
-		ENGINE_PROFILE_BEGIN("engine",                                                            \
-							 "Frame",                                                             \
-							 "frame_no",                                                          \
-							 static_cast<int64_t>(frame_no),                                      \
-							 "dt_ms",                                                             \
-							 static_cast<int64_t>(dt_ms));                                        \
+		ENGINE_PROFILE_COUNTER_TRACK_GROUP(                                                        \
+			::engine::ProfilerEventGroup::Frame, "engine", g_frame_no_track,                       \
+			static_cast<int64_t>(frame_no));                                                       \
+		ENGINE_PROFILE_COUNTER_TRACK_GROUP(                                                        \
+			::engine::ProfilerEventGroup::Frame, "engine", g_frame_dt_track,                       \
+			static_cast<int64_t>(dt_ms));                                                          \
+		ENGINE_PROFILE_BEGIN_GROUP(::engine::ProfilerEventGroup::Frame,                            \
+								   "engine",                                                       \
+								   "Frame",                                                        \
+								   "frame_no",                                                     \
+								   static_cast<int64_t>(frame_no),                                 \
+								   "dt_ms",                                                        \
+								   static_cast<int64_t>(dt_ms));                                   \
 	} while (0)
 
 #define ENGINE_PROFILE_FRAME_END(elapsed_ms)                                 \
 	do {                                                                     \
-		ENGINE_PROFILE_COUNTER_TRACK(                                        \
-			"engine", g_frame_time_track, static_cast<int64_t>(elapsed_ms)); \
-		ENGINE_PROFILE_END("engine");                                        \
+		ENGINE_PROFILE_COUNTER_TRACK_GROUP(::engine::ProfilerEventGroup::Frame,                    \
+										   "engine",                                               \
+										   g_frame_time_track,                                      \
+										   static_cast<int64_t>(elapsed_ms));                       \
+		ENGINE_PROFILE_END_GROUP(::engine::ProfilerEventGroup::Frame, "engine");                  \
 	} while (0)
 
 #define ENGINE_PROFILE_SLOW_FRAME(elapsed_ms, threshold_ms)                       \
@@ -45,7 +53,8 @@ inline thread_local uint64_t g_profiler_physics_frame_id = UINT64_MAX;
 		const auto engine_profile_elapsed_ms__ = (elapsed_ms);                   \
 		const auto engine_profile_threshold_ms__ = (threshold_ms);               \
 		if (engine_profile_elapsed_ms__ > engine_profile_threshold_ms__) {       \
-			ENGINE_PROFILE_INSTANT(                                              \
+			ENGINE_PROFILE_INSTANT_GROUP(                                        \
+				::engine::ProfilerEventGroup::Frame,                             \
 				"engine",                                                       \
 				"SlowFrame",                                                    \
 				"elapsed_ms",                                                   \
@@ -57,22 +66,29 @@ inline thread_local uint64_t g_profiler_physics_frame_id = UINT64_MAX;
 
 // ── Frame sub-stages ────────────────────────────────────────────────────
 
-#define ENGINE_PROFILE_TIMER_UPDATE() ENGINE_PROFILE_SCOPE("engine.timer", "TimerUpdate")
+#define ENGINE_PROFILE_TIMER_UPDATE() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Timer, "engine.timer", "TimerUpdate")
 
 #define ENGINE_PROFILE_PHYSICS_TICK(frame_no)            \
-	ENGINE_PROFILE_SCOPE("engine.physics",               \
-						 "PhysicsTick",                  \
-						 "frame_no",                     \
-						 static_cast<int64_t>(frame_no), \
-						 perfetto::Flow::ProcessScoped(static_cast<uint64_t>(frame_no)))
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Physics, \
+							   "engine.physics",                     \
+							   "PhysicsTick",                        \
+							   "frame_no",                           \
+							   static_cast<int64_t>(frame_no),        \
+							   perfetto::Flow::ProcessScoped(static_cast<uint64_t>(frame_no)))
 
-#define ENGINE_PROFILE_SCRIPT_UPDATE() ENGINE_PROFILE_SCOPE("engine.script", "ScriptUpdate")
+#define ENGINE_PROFILE_SCRIPT_UPDATE() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Script, "engine.script", "ScriptUpdate")
 
 #define ENGINE_PROFILE_PHYSICS_FETCH(frame_no) \
-	ENGINE_PROFILE_SCOPE(                      \
-		"engine.physics", "PhysicsFetch", "frame_no", static_cast<int64_t>(frame_no))
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Physics, \
+							   "engine.physics",                     \
+							   "PhysicsFetch",                       \
+							   "frame_no",                           \
+							   static_cast<int64_t>(frame_no))
 
-#define ENGINE_PROFILE_SCRIPT_CALLBACK() ENGINE_PROFILE_SCOPE("engine.script", "ScriptCallback")
+#define ENGINE_PROFILE_SCRIPT_CALLBACK() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Script, "engine.script", "ScriptCallback")
 
 // ── Physics thread ──────────────────────────────────────────────────────
 
@@ -84,104 +100,142 @@ inline thread_local uint64_t g_profiler_physics_frame_id = UINT64_MAX;
 		} else {                                                                               \
 			g_profiler_physics_frame_id = UINT64_MAX;                                          \
 		}                                                                                      \
-		ENGINE_PROFILE_SCOPE(                                                                  \
-			"engine.physics", "CmdDequeue", "command_type", static_cast<int>((command).type)); \
+		ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Physics,                       \
+								   "engine.physics",                                           \
+								   "CmdDequeue",                                               \
+								   "command_type",                                             \
+								   static_cast<int>((command).type));                           \
 	} while (0)
 
 #define ENGINE_PROFILE_PHYSICS_STEP(delta_time)           \
-	ENGINE_PROFILE_SCOPE("engine.physics",                \
-						 "PhysicsStep",                   \
-						 "delta_time",                    \
-						 static_cast<double>(delta_time), \
-						 perfetto::TerminatingFlow::ProcessScoped(g_profiler_physics_frame_id))
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Physics,                   \
+							   "engine.physics",                                       \
+							   "PhysicsStep",                                          \
+							   "delta_time",                                           \
+							   static_cast<double>(delta_time),                         \
+							   perfetto::TerminatingFlow::ProcessScoped(                \
+								   g_profiler_physics_frame_id))
 
-#define ENGINE_PROFILE_PHYSICS_COLLISION() ENGINE_PROFILE_SCOPE("engine.physics", "Collision")
+#define ENGINE_PROFILE_PHYSICS_COLLISION() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Physics, "engine.physics", "Collision")
 
-#define ENGINE_PROFILE_PHYSICS_TRANSFORM() ENGINE_PROFILE_SCOPE("engine.physics", "Transform")
+#define ENGINE_PROFILE_PHYSICS_TRANSFORM() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Physics, "engine.physics", "Transform")
 
-#define ENGINE_PROFILE_PHYSICS_DIFF() ENGINE_PROFILE_SCOPE("engine.physics", "Diff")
+#define ENGINE_PROFILE_PHYSICS_DIFF() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Physics, "engine.physics", "Diff")
 
 #define ENGINE_PROFILE_PHYSICS_RESULT_ENQUEUE() \
-	ENGINE_PROFILE_SCOPE("engine.physics", "ResultEnqueue")
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Physics, "engine.physics", "ResultEnqueue")
 
 // ── Entity system ───────────────────────────────────────────────────────
 
-#define ENGINE_PROFILE_ENTITY_CREATE() ENGINE_PROFILE_SCOPE("engine.entity", "CreateEntity")
+#define ENGINE_PROFILE_ENTITY_CREATE() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Entity, "engine.entity", "CreateEntity")
 
-#define ENGINE_PROFILE_ENTITY_DESTROY() ENGINE_PROFILE_SCOPE("engine.entity", "DestroyEntity")
+#define ENGINE_PROFILE_ENTITY_DESTROY() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Entity, "engine.entity", "DestroyEntity")
 
-#define ENGINE_PROFILE_ENTITY_GET() ENGINE_PROFILE_SCOPE("engine.entity", "GetEntity")
+#define ENGINE_PROFILE_ENTITY_GET() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Entity, "engine.entity", "GetEntity")
 
-#define ENGINE_PROFILE_ENTITY_ACTIVATE() ENGINE_PROFILE_SCOPE("engine.entity", "Activate")
+#define ENGINE_PROFILE_ENTITY_ACTIVATE() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Entity, "engine.entity", "Activate")
 
-#define ENGINE_PROFILE_ENTITY_SUSPEND() ENGINE_PROFILE_SCOPE("engine.entity", "Suspend")
+#define ENGINE_PROFILE_ENTITY_SUSPEND() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Entity, "engine.entity", "Suspend")
 
 // ── Space system ────────────────────────────────────────────────────────
 
-#define ENGINE_PROFILE_SPACE_CREATE() ENGINE_PROFILE_SCOPE("engine.space", "CreateSpace")
+#define ENGINE_PROFILE_SPACE_CREATE() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Space, "engine.space", "CreateSpace")
 
-#define ENGINE_PROFILE_SPACE_DESTROY() ENGINE_PROFILE_SCOPE("engine.space", "DestroySpace")
+#define ENGINE_PROFILE_SPACE_DESTROY() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Space, "engine.space", "DestroySpace")
 
-#define ENGINE_PROFILE_SPACE_GET() ENGINE_PROFILE_SCOPE("engine.space", "GetSpace")
+#define ENGINE_PROFILE_SPACE_GET() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Space, "engine.space", "GetSpace")
 
-#define ENGINE_PROFILE_SPACE_JOIN() ENGINE_PROFILE_SCOPE("engine.space", "OnPlayerJoin")
+#define ENGINE_PROFILE_SPACE_JOIN() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Space, "engine.space", "OnPlayerJoin")
 
-#define ENGINE_PROFILE_SPACE_LEAVE() ENGINE_PROFILE_SCOPE("engine.space", "OnPlayerLeave")
+#define ENGINE_PROFILE_SPACE_LEAVE() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Space, "engine.space", "OnPlayerLeave")
 
-#define ENGINE_PROFILE_SPACE_UPDATE() ENGINE_PROFILE_SCOPE("engine.space", "Update")
+#define ENGINE_PROFILE_SPACE_UPDATE() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Space, "engine.space", "Update")
 
-#define ENGINE_PROFILE_SPACE_LOAD_SCRIPTS() ENGINE_PROFILE_SCOPE("engine.space", "LoadScripts")
+#define ENGINE_PROFILE_SPACE_LOAD_SCRIPTS() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Space, "engine.space", "LoadScripts")
 
-#define ENGINE_PROFILE_SPACE_MSG_SEND() ENGINE_PROFILE_SCOPE("engine.space", "SendMessage")
+#define ENGINE_PROFILE_SPACE_MSG_SEND() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Space, "engine.space", "SendMessage")
 
-#define ENGINE_PROFILE_SPACE_MSG_PROCESS() ENGINE_PROFILE_SCOPE("engine.space", "ProcessPending")
+#define ENGINE_PROFILE_SPACE_MSG_PROCESS() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Space, "engine.space", "ProcessPending")
 
-#define ENGINE_PROFILE_SPACE_ROUTE_CONN() ENGINE_PROFILE_SCOPE("engine.space", "RouteConnection")
+#define ENGINE_PROFILE_SPACE_ROUTE_CONN() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Space, "engine.space", "RouteConnection")
 
-#define ENGINE_PROFILE_SPACE_ROUTE_MSG() ENGINE_PROFILE_SCOPE("engine.space", "RouteMessage")
+#define ENGINE_PROFILE_SPACE_ROUTE_MSG() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Space, "engine.space", "RouteMessage")
 
 #define ENGINE_PROFILE_SPACE_ROUTE_DISCONN() \
-	ENGINE_PROFILE_SCOPE("engine.space", "RouteDisconnection")
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Space, "engine.space", "RouteDisconnection")
 
 // ── AOI system ──────────────────────────────────────────────────────────
 
-#define ENGINE_PROFILE_AOI_REGISTER() ENGINE_PROFILE_SCOPE("engine.aoi", "RegisterEntity")
+#define ENGINE_PROFILE_AOI_REGISTER() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Aoi, "engine.aoi", "RegisterEntity")
 
-#define ENGINE_PROFILE_AOI_UNREGISTER() ENGINE_PROFILE_SCOPE("engine.aoi", "UnregisterEntity")
+#define ENGINE_PROFILE_AOI_UNREGISTER() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Aoi, "engine.aoi", "UnregisterEntity")
 
-#define ENGINE_PROFILE_AOI_MOVE() ENGINE_PROFILE_SCOPE("engine.aoi", "OnEntityMove")
+#define ENGINE_PROFILE_AOI_MOVE() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Aoi, "engine.aoi", "OnEntityMove")
 
-#define ENGINE_PROFILE_AOI_VISIBILITY() ENGINE_PROFILE_SCOPE("engine.aoi", "RecomputeVisibility")
+#define ENGINE_PROFILE_AOI_VISIBILITY() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Aoi, "engine.aoi", "RecomputeVisibility")
 
-#define ENGINE_PROFILE_AOI_QUERY() ENGINE_PROFILE_SCOPE("engine.aoi", "QueryRadius")
+#define ENGINE_PROFILE_AOI_QUERY() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Aoi, "engine.aoi", "QueryRadius")
 
-#define ENGINE_PROFILE_AOI_GRID_INSERT() ENGINE_PROFILE_SCOPE("engine.aoi", "GridInsert")
+#define ENGINE_PROFILE_AOI_GRID_INSERT() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Aoi, "engine.aoi", "GridInsert")
 
-#define ENGINE_PROFILE_AOI_GRID_UPDATE() ENGINE_PROFILE_SCOPE("engine.aoi", "GridUpdate")
+#define ENGINE_PROFILE_AOI_GRID_UPDATE() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Aoi, "engine.aoi", "GridUpdate")
 
-#define ENGINE_PROFILE_AOI_GRID_REMOVE() ENGINE_PROFILE_SCOPE("engine.aoi", "GridRemove")
+#define ENGINE_PROFILE_AOI_GRID_REMOVE() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Aoi, "engine.aoi", "GridRemove")
 
 // ── Auth system ─────────────────────────────────────────────────────────
 
-#define ENGINE_PROFILE_AUTH_AUTHENTICATE() ENGINE_PROFILE_SCOPE("engine.auth", "Authenticate")
+#define ENGINE_PROFILE_AUTH_AUTHENTICATE() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Auth, "engine.auth", "Authenticate")
 
-#define ENGINE_PROFILE_AUTH_VALIDATE() ENGINE_PROFILE_SCOPE("engine.auth", "ValidateSession")
+#define ENGINE_PROFILE_AUTH_VALIDATE() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Auth, "engine.auth", "ValidateSession")
 
-#define ENGINE_PROFILE_AUTH_CREATE_SESSION() ENGINE_PROFILE_SCOPE("engine.auth", "CreateSession")
+#define ENGINE_PROFILE_AUTH_CREATE_SESSION() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Auth, "engine.auth", "CreateSession")
 
-#define ENGINE_PROFILE_AUTH_GET_SESSION() ENGINE_PROFILE_SCOPE("engine.auth", "GetSession")
+#define ENGINE_PROFILE_AUTH_GET_SESSION() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Auth, "engine.auth", "GetSession")
 
-#define ENGINE_PROFILE_AUTH_REVOKE() ENGINE_PROFILE_SCOPE("engine.auth", "RevokeSession")
+#define ENGINE_PROFILE_AUTH_REVOKE() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Auth, "engine.auth", "RevokeSession")
 
-#define ENGINE_PROFILE_AUTH_CLEANUP() ENGINE_PROFILE_SCOPE("engine.auth", "CleanupExpired")
+#define ENGINE_PROFILE_AUTH_CLEANUP() \
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Auth, "engine.auth", "CleanupExpired")
 
 // ── Script system ───────────────────────────────────────────────────────
 
 #define ENGINE_PROFILE_SCRIPT_DOFILE(path) \
-	ENGINE_PROFILE_SCOPE("engine.script", "DoFile", "path", path)
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Script, "engine.script", "DoFile", "path", path)
 
 #define ENGINE_PROFILE_SCRIPT_EXPORT(name) \
-	ENGINE_PROFILE_SCOPE("engine.script", "Export", "name", name)
+	ENGINE_PROFILE_SCOPE_GROUP(::engine::ProfilerEventGroup::Script, "engine.script", "Export", "name", name)
 
 #else  // ENGINE_PROFILER_ENABLED not defined
 

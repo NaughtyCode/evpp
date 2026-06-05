@@ -8,6 +8,7 @@
 
 #include "runtime/profiler/profiler_core.h"
 #include "runtime/profiler/profiler_macros.h"
+#include "runtime/profiler/profiler_switches.h"
 
 using namespace engine;
 
@@ -117,4 +118,40 @@ TEST_CASE("ProfilerManager auto-saves exact output path when requested", "[profi
 #else
 	REQUIRE_FALSE(ProfilerManager::IsEnabled());
 #endif
+}
+
+TEST_CASE("Profiler runtime switches parse and gate event arguments", "[profiler]") {
+	auto& profiler = ProfilerManager::Get();
+	profiler.SetRuntimeEnabled(true);
+	profiler.SetEnabledEventGroups(kProfilerAllEventGroups);
+
+	REQUIRE(ParseProfilerEventGroupMask("physics,script,engine.aoi") ==
+			(ProfilerEventGroupBit(ProfilerEventGroup::Physics) |
+			 ProfilerEventGroupBit(ProfilerEventGroup::Script) |
+			 ProfilerEventGroupBit(ProfilerEventGroup::Aoi)));
+	REQUIRE(FormatProfilerEventGroupMask(ProfilerEventGroupBit(ProfilerEventGroup::Physics) |
+										 ProfilerEventGroupBit(ProfilerEventGroup::Script)) ==
+			"physics,script");
+	REQUIRE(ProfilerEventGroupFromCategory("engine.physics") == ProfilerEventGroup::Physics);
+	REQUIRE(ProfilerEventGroupFromCategory("engine") == ProfilerEventGroup::Engine);
+
+	profiler.SetEventGroupEnabled(ProfilerEventGroup::Physics, false);
+	REQUIRE_FALSE(profiler.IsEventGroupEnabled(ProfilerEventGroup::Physics));
+	REQUIRE(profiler.IsEventGroupEnabled(ProfilerEventGroup::Script));
+
+	int evaluated = 0;
+	ENGINE_PROFILE_INSTANT("engine.physics", "DisabledPhysics", "value", ++evaluated);
+	REQUIRE(evaluated == 0);
+
+	ENGINE_PROFILE_BEGIN("engine.physics", "DisabledPhysicsRange", "value", ++evaluated);
+	ENGINE_PROFILE_END("engine.physics");
+	REQUIRE(evaluated == 0);
+
+	profiler.SetRuntimeEnabled(false);
+	ENGINE_PROFILE_INSTANT("engine.script", "DisabledRuntime", "value", ++evaluated);
+	REQUIRE(evaluated == 0);
+
+	profiler.SetRuntimeEnabled(true);
+	profiler.SetEnabledEventGroups(kProfilerAllEventGroups);
+	REQUIRE(profiler.EnabledEventGroups() == kProfilerAllEventGroups);
 }

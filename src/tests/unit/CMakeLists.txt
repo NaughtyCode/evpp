@@ -115,6 +115,10 @@ add_unit_test(test_script_bind script/test_script_bind.cpp)
 add_test(NAME unit.script_bind COMMAND test_script_bind)
 set_tests_properties(unit.script_bind PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
+add_unit_test(test_profiler_bind script/test_profiler_bind.cpp)
+add_test(NAME unit.profiler_bind COMMAND test_profiler_bind)
+set_tests_properties(unit.profiler_bind PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+
 # ── Auth tests ──────────────────────────────────────────────────────
 add_unit_test(test_auth auth/test_auth.cpp)
 add_test(NAME unit.auth COMMAND test_auth)

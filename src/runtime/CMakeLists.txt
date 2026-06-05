@@ -144,6 +144,7 @@ set(SCRIPT_SOURCES
     ${RUNTIME_DIR}/script/aoi_bind.cc ${RUNTIME_DIR}/script/aoi_bind.h
     ${RUNTIME_DIR}/script/rpc_bind.cc ${RUNTIME_DIR}/script/rpc_bind.h
     ${RUNTIME_DIR}/script/auth_bind.cc ${RUNTIME_DIR}/script/auth_bind.h
+    ${RUNTIME_DIR}/script/profiler_bind.cc ${RUNTIME_DIR}/script/profiler_bind.h
     ${RUNTIME_DIR}/script/mem_bind.cc ${RUNTIME_DIR}/script/mem_bind.h
 )
 source_group("script" FILES ${SCRIPT_SOURCES})
@@ -166,6 +167,7 @@ source_group("aoi" FILES ${AOI_SOURCES})
 set(PROFILER_SOURCES
     ${RUNTIME_DIR}/profiler/profiler_categories.h ${RUNTIME_DIR}/profiler/profiler_core.cc ${RUNTIME_DIR}/profiler/profiler_core.h
     ${RUNTIME_DIR}/profiler/profiler_events.h ${RUNTIME_DIR}/profiler/profiler_macros.h
+    ${RUNTIME_DIR}/profiler/profiler_switches.cc ${RUNTIME_DIR}/profiler/profiler_switches.h
 )
 source_group("profiler" FILES ${PROFILER_SOURCES})
 

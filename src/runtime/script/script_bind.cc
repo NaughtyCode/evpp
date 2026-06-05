@@ -15,6 +15,7 @@
 #include "runtime/script/entity_bind.h"
 #include "runtime/script/msgpack_bind.h"
 #include "runtime/script/net_bind.h"
+#include "runtime/script/profiler_bind.h"
 #include "runtime/script/space_bind.h"
 #include "runtime/script/timer_bind.h"
 #if defined(ENGINE_MEM_STATS_ENABLED)
@@ -30,6 +31,8 @@ namespace engine {
 namespace script {
 
 void ExportAll(ScriptVM& vm, TimerManager& tm) {
+	vm.MarkAsMainThreadVM();
+
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "ScriptBind: exporting all APIs to Lua...");
 
@@ -88,6 +91,10 @@ void ExportAll(ScriptVM& vm, TimerManager& tm) {
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("config");
 		ExportConfigBindings(vm);
+	}
+	{
+		ENGINE_PROFILE_SCRIPT_EXPORT("profiler");
+		ExportProfiler(vm);
 	}
 	{
 		ENGINE_PROFILE_SCRIPT_EXPORT("import");
