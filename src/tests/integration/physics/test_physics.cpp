@@ -225,6 +225,42 @@ local parsed_scene = physics.parse_scene_asset_json([[
   "constraints": []
 }
 ]], "inline_scene.json")
+local scene_query_json = [[
+{
+  "materials": [
+    {"name": "script_mat", "friction": 0.4, "restitution": 0.1}
+  ],
+  "staticBodies": [
+    {
+      "id": "floor",
+      "shape": {"type": "box", "params": {"halfExtent": [1, 1, 1]}},
+      "material": {"friction": 0.4, "restitution": 0.1},
+      "transform": {"position": [0, 0, 0], "rotation": [0, 0, 0, 1]},
+      "objectLayer": "static"
+    }
+  ],
+  "dynamicPrototypes": [
+    {
+      "protoId": "crate_script",
+      "shape": {"type": "box", "params": {"halfExtent": [0.5, 0.5, 0.5]}},
+      "mass": 1.0,
+      "material": {"friction": 0.4, "restitution": 0.1},
+      "objectLayer": "dynamic"
+    }
+  ],
+  "dynamicBodies": [
+    {
+      "id": "crate_instance",
+      "protoId": "crate_script",
+      "transform": {"position": [0, 2, 0], "rotation": [0, 0, 0, 1]},
+      "userData": 77
+    }
+  ],
+  "constraints": [
+    {"type": "fixed", "bodyA": "floor", "bodyB": "crate_instance", "pivot": [0, 1, 0], "axis": [0, 1, 0]}
+  ]
+}
+]]
 local materials_json = [[
 [
   {"name": "script_mat", "friction": 0.4, "restitution": 0.1}
@@ -255,6 +291,20 @@ assert(scene.counts.dynamicPrototypes >= 1)
 assert(scene_by_path.counts.staticBodies >= 1)
 assert(parsed_scene.counts.materials == 1)
 assert(parsed_scene.materials[1].name == "script_mat")
+local scene_validation = physics.validate_scene_asset_json(scene_query_json, "query_scene.json")
+assert(scene_validation.valid == true and scene_validation.counts.staticBodies == 1)
+local bad_scene_validation = physics.validate_scene_asset_json([[{
+  "dynamicBodies": [
+    {"id": "bad_body", "protoId": "missing", "transform": {"position": [0, 0, 0], "rotation": [0, 0, 0, 1]}}
+  ]
+}]], "bad_scene.json")
+assert(bad_scene_validation.valid == false and bad_scene_validation.error:find("prototype") ~= nil)
+assert(physics.find_scene_material_json(scene_query_json, "script_mat").name == "script_mat")
+assert(physics.find_scene_static_body_json(scene_query_json, "floor").objectLayer == "static")
+assert(physics.find_scene_dynamic_prototype_json(scene_query_json, "crate_script").protoId == "crate_script")
+assert(physics.find_scene_dynamic_body_json(scene_query_json, "crate_instance").userData == 77)
+assert(physics.get_scene_constraint_json(scene_query_json, 1).bodyA == "floor")
+assert(physics.find_scene_dynamic_body_json(scene_query_json, "missing") == nil)
 assert(materials.count == 1)
 assert(materials.empty == false)
 assert(math.abs(materials.byName.script_mat.friction - 0.4) < 0.0001)
@@ -335,6 +385,11 @@ local frame = physics.make_frame_result(12)
 assert(frame.frameId == 12 and #frame.transforms == 0 and #frame.diffPackets == 0)
 assert(physics.command_type_name(physics.COMMAND_TICK) == physics.COMMAND_TICK)
 assert(physics.collision_type_name(physics.COLLISION_END) == physics.COLLISION_END)
+local load_result = physics.make_asset_load_result(true, "", 1, 2, 3, 4, 5)
+assert(load_result.success == true and load_result.counts.sceneObjects == 5)
+local body_record = physics.make_scene_body_record(99, "crate_instance", {1, 2, 3}, {0, 0, 0, 1}, {4, 5, 6}, {7, 8, 9}, true)
+assert(body_record.bodyId == 99 and body_record.assetId == "crate_instance")
+assert(body_record.position[2] == 2 and body_record.linearVelocity.z == 6 and body_record.dynamic == true)
 
 return table.concat({
 	tostring(status.initialized),
