@@ -146,7 +146,6 @@ resources/script/redis/
 
 ```cpp
 struct RedisClientConfig;
-struct RedisClientStats;
 struct RedisResult;
 
 using RedisCompletion = std::function<void(RedisResult&&)>;
@@ -154,7 +153,7 @@ using RedisCompletion = std::function<void(RedisResult&&)>;
 struct RedisCommandOptions {
   int timeout_ms = 0;       // 0 = use config.connection.command_timeout_ms
   std::string trace_tag;    // optional, for logs/metrics only
-  std::string routing_key;  // optional, stable route to the same RedisClientThread
+  std::string routing_key;  // optional, stable within current worker generation
 };
 
 enum class RedisSubmitStatus {
@@ -171,6 +170,42 @@ struct RedisSubmitResult {
   uint64_t request_id = 0;
   RedisSubmitStatus status = RedisSubmitStatus::kNotRunning;
   std::string error;
+};
+
+enum class RedisClientState {
+  kDisabled,
+  kStarting,
+  kConnecting,
+  kHealthy,
+  kDegraded,
+  kReconnecting,
+  kStopping,
+  kStopped,
+  kError
+};
+
+struct RedisClientStats {
+  struct Worker {
+    size_t worker_index = 0;
+    bool running = false;
+    bool healthy = false;
+    size_t queued_requests = 0;
+    size_t inflight_requests = 0;
+    uint64_t completed_requests = 0;
+    uint64_t timed_out_requests = 0;
+  };
+
+  RedisClientState state = RedisClientState::kDisabled;
+  size_t worker_count = 0;
+  size_t healthy_worker_count = 0;
+  size_t unhealthy_worker_count = 0;
+  size_t queued_requests = 0;
+  size_t inflight_requests = 0;
+  uint64_t accepted_requests = 0;
+  uint64_t rejected_requests = 0;
+  uint64_t completed_requests = 0;
+  uint64_t timed_out_requests = 0;
+  std::vector<Worker> workers;
 };
 
 struct RedisClientStartOptions {
@@ -213,7 +248,11 @@ class RedisClient {
 - `Command` 和 `Eval` 可由任意线程调用。
 - `RedisClient` 内部统一管理一个或多个 `RedisClientThread`；外部调用方不能直接指定 worker id，也不能访问 worker 实例。
 - `Command` 和 `Eval` 默认按 round-robin 路由到 worker；如果 `RedisCommandOptions::routing_key` 非空，则使用稳定 hash 路由到同一个 worker，便于同一业务键保持同连接内顺序。
+- `routing_key` 的稳定性只保证在当前 worker 集合 generation 和当前 `thread_count` 内成立；`thread_count` reload 后，同一个 key 可能映射到不同 worker。
 - 多个 worker 之间不保证全局命令顺序。需要严格顺序的调用方应使用同一个 `routing_key`，或在上一个请求 completion 后再提交下一个请求。
+- 未指定 `routing_key` 时，round-robin 应只选择当前 healthy 的 worker；没有 healthy worker 且 `queue_while_disconnected = false` 时同步拒绝为 `kDisconnected`。
+- 指定 `routing_key` 时不能因为目标 worker unhealthy 而自动改投其他 worker，否则会破坏同 key 顺序；目标 worker unhealthy 且 `queue_while_disconnected = false` 时同步拒绝为 `kDisconnected`。
+- `queue_while_disconnected = true` 时，目标 worker unhealthy 的请求可以进入该 worker 的队列，但仍受全局 queue、全局 inflight、单请求 timeout 和 shutdown 状态限制。
 - 返回 `RedisSubmitResult.accepted = true` 表示请求已被 RedisClient accepted，必须保证最终 completion 一次，并返回本次请求的 `request_id`。
 - 返回 `accepted = false` 表示请求未被接受，不触发 completion；`status` 和 `error` 描述同步拒绝原因。Lua binding 应把这种情况转换为同步错误返回。
 - 队列满、模块未启动、正在关闭、未连接且禁止断线排队、参数非法或 completion 为空时返回 `accepted = false`。
@@ -230,12 +269,15 @@ struct RedisRequest {
   std::vector<std::string> argv;
   RedisCommandOptions options;
   RedisCompletion completion;
+  std::optional<size_t> preferred_worker_index;  // internal only
 };
 ```
 
 `argv` 使用 `std::string` 保存参数，hiredis 调用时使用 `redisAsyncCommandArgv`，保证二进制安全。
 
 不建议在 `RedisRequest` 中直接保存 Lua registry ref。Lua ref 应由调用方线程的 dispatcher/registry 管理，Redis 请求只保存一个线程安全 completion adapter。
+
+`preferred_worker_index` 只允许 Redis 模块内部设置，用于 Redis 私有 VM 或内部维护任务在没有显式 `routing_key` 时把请求固定回所属 worker；普通外部 API 不暴露 worker id。
 
 ### 5.3 RedisResult
 
@@ -363,13 +405,13 @@ class RedisClientThread {
 - 如果任一 worker 基础初始化失败，`RedisClient::Initialize` 必须停止并清理已经启动的 worker，然后返回 false。
 - 如果 `wait_for_initial_connect = true`，`RedisClient::Initialize` 还应等待所有 worker 首次连接完成，等待时间由 `connect_timeout_ms` 控制；任一 worker 连接失败则返回 false，并清理整个 worker 集合。
 - 如果 `wait_for_initial_connect = false`，`Initialize` 可以在所有 worker 基础设施初始化成功后返回 true，即使首次连接失败，也通过后台重连和 health 状态反映。
-- `RedisClient::IsHealthy()` 默认要求所有 worker 都 healthy；如果只有部分 worker healthy，状态应暴露为 degraded，stats 中记录 unhealthy worker 数量。
+- `RedisClient::IsHealthy()` 默认要求所有 worker 都 healthy；如果只有部分 worker healthy，`RedisClientState` 应为 `kDegraded`，stats 中记录 unhealthy worker 数量。
 
 ### 6.2 请求流程
 
 1. 调用方线程调用 `RedisClient::Command`。
 2. `RedisClient` 校验参数和 completion，并生成 `request_id`。
-3. `RedisClient` 根据 `routing_key` 稳定 hash 或 round-robin 选择目标 worker。
+3. `RedisClient` 根据 `routing_key` 稳定 hash、内部 `preferred_worker_index` 或 round-robin 选择目标 worker；优先级为 `routing_key` > `preferred_worker_index` > round-robin。
 4. 请求入目标 worker 的 `request_queue_`。
 5. 唤醒目标 Redis 线程。
 6. Redis 线程 drain 队列。
@@ -387,6 +429,7 @@ class RedisClientThread {
 - `request_queue_size` 限制 RedisClient 已 accepted 但尚未被任一 Redis 线程 drain 的请求总数。
 - `max_inflight` 限制所有 worker 中已经发送给 hiredis、正在等待 Redis reply 的请求总数。
 - `request_queue_size` 和 `max_inflight` 是两个独立上限，不要求彼此大小关系；内存预算应按二者之和估算。
+- 多 worker 场景下全局上限是 hard cap。每个 worker 还应记录本地 queued/inflight 计数并写入 stats，便于发现 `routing_key` 热点导致的单 worker 倾斜；第一版不额外增加 per-worker 容量配置。
 - accepted 后如果 Redis 线程发送失败，仍必须完成为 `kConnectionError` 或 `kProtocolError`，不能把失败退回成同步拒绝。
 
 跨线程唤醒要求：
@@ -445,6 +488,7 @@ VM 初始化时：
 - 不要把 raw `redisAsyncContext*` 暴露到 Lua custom ptr store；hiredis context 只允许 `RedisClientThread` 内部 C++ 代码访问。
 - 如果需要内部调试 API，应通过内部 binding 单独导出，不暴露到普通 VM。
 - Redis 私有 VM 发起的 Redis 请求，其 completion 也必须进入 Redis 线程自己的 dispatcher，再由 Redis 线程主循环 dispatch，不能在 hiredis callback 栈上直接调用 Lua。
+- Redis 私有 VM 未指定 `routing_key` 时，请求应通过内部 `preferred_worker_index` 固定回所属 `RedisClientThread`，避免默认 round-robin 把私有脚本请求投递到其他 worker 造成不必要的跨 Redis 线程跳转。
 - `RedisClientThread` 需要注册一个周期性 tick event，用于执行 timeout 检查、Redis 私有 dispatcher dispatch、`RedisClientScriptVM::UpdateScript()` 和脚本 frame callback；tick 频率由 `thread.main_loop_fps` 控制，默认 60 fps。
 
 ## 8. Lua Binding 设计
@@ -799,11 +843,11 @@ RedisClient reload 行为：
 
 - `server.redis` 从空变为非空：加载 Redis config 后启动 `RedisClient`；若加载或启动失败，按新的 `redis_required` 规则处理 readiness 和错误日志。
 - `server.redis` 从非空变为空：调用 `RedisClient::Shutdown()`，Redis 状态变为 disabled；未完成请求按 `kShutdown` 完成。
-- `server.redis` 路径变化且新配置加载成功：按新配置重启 `RedisClientThread` worker 集合；如果新配置加载失败，`redis_required = true` 时 reload 失败并保留旧配置，`redis_required = false` 时可以切换到 error/disabled 状态但必须记录日志。
+- `server.redis` 路径变化且新配置加载成功：先按新配置启动新的 `RedisClientThread` worker 集合，成功后再原子替换旧集合并关闭旧集合；如果新集合启动失败，`redis_required = true` 时 reload 失败并保留旧集合和旧配置，`redis_required = false` 时可以保留旧集合继续服务或切换到 error/disabled 状态，但必须记录日志和最终状态。
 - host、port、password、database 变化：需要重连；password 的 change old/new 值必须 redacted。
 - username 变化：需要重新认证，第一版按重连处理。
 - timeout、queue、dispatch batch 变化：可以运行时更新。
-- `thread_count` 变化：需要重建 `RedisClientThread` worker 集合；reload 失败时按 `redis_required` 规则回滚或降级。
+- `thread_count` 变化：需要重建 `RedisClientThread` worker 集合；重建同样必须先启动新集合、再替换旧集合，失败时按 `redis_required` 规则回滚或降级。
 - `main_loop_fps` 变化：可以更新所有 worker 的 tick event interval；如果实现复杂，第一版也可以按 worker 集合重启处理。
 - reconnect delay 和 `queue_while_disconnected` 变化：可以运行时更新。
 - script dir 或 auto_load 变化：RedisClientScriptVM 需要重新加载脚本，或标记为下次重启生效。第一版建议“下次重启生效”，避免运行时卸载脚本的生命周期风险。
@@ -848,7 +892,7 @@ redis.connection.password
 - max inflight 必须大于 0。
 - request queue size 和 max inflight 独立校验，不强制大小关系；需要在文档和日志中说明二者共同决定故障时内存上限。
 - dispatch batch size 必须大于 0。
-- thread count 必须大于 0；默认 1，允许配置为多个 RedisClientThread。
+- thread count 必须大于 0，建议限制在 1 到 64；默认 1，允许配置为多个 RedisClientThread，但避免误配导致大量线程和 Redis 连接。
 - main loop fps 必须大于 0，建议限制在 1 到 240；默认 60，避免配置过高导致 Redis 线程空转。
 - reconnect delay 必须大于 0。
 - reconnect max delay 必须大于等于 initial delay。
@@ -939,24 +983,17 @@ hiredis 接入建议：
 
 ```cmake
 if(ENGINE_REDIS_RUNTIME_ENABLED AND NOT TARGET hiredis)
-  if(DEFINED BUILD_SHARED_LIBS)
-    set(_ENGINE_HAD_BUILD_SHARED_LIBS ON)
-    set(_ENGINE_SAVED_BUILD_SHARED_LIBS "${BUILD_SHARED_LIBS}")
-  else()
-    set(_ENGINE_HAD_BUILD_SHARED_LIBS OFF)
-  endif()
-  set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
-  set(DISABLE_TESTS ON CACHE BOOL "Disable hiredis tests" FORCE)
-  set(ENABLE_EXAMPLES OFF CACHE BOOL "Disable hiredis examples" FORCE)
-  set(ENABLE_SSL OFF CACHE BOOL "Disable hiredis SSL" FORCE)
-  set(ENABLE_NUGET OFF CACHE BOOL "Disable hiredis NuGet metadata" FORCE)
-  add_subdirectory(${ENGINE_ROOT}/thirdparty/hiredis
-                   ${CMAKE_BINARY_DIR}/hiredis EXCLUDE_FROM_ALL)
-  if(_ENGINE_HAD_BUILD_SHARED_LIBS)
-    set(BUILD_SHARED_LIBS "${_ENGINE_SAVED_BUILD_SHARED_LIBS}" CACHE BOOL "Build shared libraries" FORCE)
-  else()
-    unset(BUILD_SHARED_LIBS CACHE)
-  endif()
+  block(SCOPE_FOR VARIABLES)
+    set(BUILD_SHARED_LIBS OFF)
+    set(DISABLE_TESTS ON)
+    set(ENABLE_EXAMPLES OFF)
+    set(ENABLE_SSL OFF)
+    set(ENABLE_SSL_TESTS OFF)
+    set(ENABLE_ASYNC_TESTS OFF)
+    set(ENABLE_NUGET OFF)
+    add_subdirectory(${ENGINE_ROOT}/thirdparty/hiredis
+                     ${CMAKE_BINARY_DIR}/hiredis EXCLUDE_FROM_ALL)
+  endblock()
 endif()
 ```
 
@@ -968,8 +1005,8 @@ include/link：
 
 注意：
 
-- `BUILD_SHARED_LIBS` 是 CMake 全局 cache 变量，设置 hiredis 前后要保存和恢复，或把 hiredis 放在所有依赖 `BUILD_SHARED_LIBS` 的第三方库之后添加。
-- `DISABLE_TESTS`、`ENABLE_EXAMPLES`、`ENABLE_SSL`、`ENABLE_NUGET` 也是 hiredis 使用的 cache 变量。如果同一构建树中其他第三方库也使用同名变量，应和 `BUILD_SHARED_LIBS` 一样保存/恢复，或把 hiredis 配置封装成 helper 函数避免污染父作用域。
+- 当前工程 `cmake_minimum_required(VERSION 4.0)`，hiredis 的 `option()` 会遵守同名普通变量；优先在 `block(SCOPE_FOR VARIABLES)` 中设置普通变量，不要用 `CACHE FORCE` 污染父作用域。
+- `BUILD_SHARED_LIBS`、`DISABLE_TESTS`、`ENABLE_EXAMPLES`、`ENABLE_SSL`、`ENABLE_SSL_TESTS`、`ENABLE_ASYNC_TESTS`、`ENABLE_NUGET` 都是 hiredis 使用的选项名。如果后续必须使用 cache 变量，应保存/恢复这些变量，或把 hiredis 配置封装成 helper 函数。
 - `ENGINE_REDIS_ENABLED` compile definition 只应在 `ENGINE_REDIS_RUNTIME_ENABLED` 为 true 时加到 server target；client target 不应看到该宏。
 
 ## 12. 引擎生命周期
@@ -1041,23 +1078,9 @@ Redis 命令错误，例如 `WRONGTYPE`，应作为 `kCommandError` 返回；已
 
 - `RedisClient::IsHealthy()` 返回 false。
 - 如果 `redis_required = true`，server 初始化可以失败，readiness 必须失败。
-- 如果 `redis_required = false`，server 可以继续启动，但 Redis 请求返回 connection error。
-- 连接断开时，所有已发送但未完成的 pending request 应立即完成为 `kConnectionError`，不要静默等待重连，避免非幂等命令在不确定状态下重复执行。
-
-建议状态枚举：
-
-```cpp
-enum class RedisClientState {
-  kDisabled,
-  kStarting,
-  kConnecting,
-  kHealthy,
-  kReconnecting,
-  kStopping,
-  kStopped,
-  kError
-};
-```
+- 如果 `redis_required = false`，server 可以继续启动；全部 worker 不可用时 Redis 请求返回 connection error，部分 worker 不可用时按路由规则处理。
+- 单个 worker 连接断开时，该 worker 所有已发送但未完成的 pending request 应立即完成为 `kConnectionError`，不要静默等待重连，避免非幂等命令在不确定状态下重复执行。
+- 使用 5.1 中定义的 `RedisClientState`：所有 worker healthy 时为 `kHealthy`，部分 worker unhealthy 时为 `kDegraded`，全部 worker 不可用或启动失败时进入 `kError` / `kReconnecting` / `kStopped` 等对应状态。
 
 readiness 规则：
 
@@ -1080,12 +1103,12 @@ readiness 规则：
 
 第一版建议支持简单重连：
 
-- disconnect callback 设置 healthy false。
-- 所有 pending request 立即完成为 `kConnectionError`。
-- 定时重连。
-- 重连成功后 healthy true。
-- 断线期间新请求默认不进入 Redis 队列，`RedisClient::Command` 返回 `accepted = false`，Lua binding 同步返回错误。
-- 只有 `queue_while_disconnected = true` 时，断线期间新请求才允许入队；入队仍必须受 request queue size、max inflight 和 command timeout 限制。
+- 每个 worker 的 disconnect callback 只把该 worker 设置为 healthy false。
+- 该 worker 的所有 pending request 立即完成为 `kConnectionError`。
+- 该 worker 定时重连。
+- 该 worker 重连成功后 healthy true，并更新 `RedisClient` 聚合 health/state。
+- 断线期间新请求默认不进入 unhealthy worker 队列，`RedisClient::Command` 返回 `accepted = false`，Lua binding 同步返回错误；未指定 `routing_key` 的请求可以继续路由到其他 healthy worker。
+- 只有 `queue_while_disconnected = true` 时，断线 worker 才允许接收新请求入队；入队仍必须受 request queue size、max inflight 和 command timeout 限制。
 - command timeout 从请求 accepted 时开始计算，包含断线排队等待重连的时间；超时后即使尚未发送到 Redis，也必须完成为 `kTimeout`。
 
 默认不排队的原因：
@@ -1134,6 +1157,9 @@ src/tests/unit/database/test_redis_bind.cpp
 - `thread_count > 1` 时 `RedisClient` 能启动多个 `RedisClientThread`，任一 worker 启动失败会清理已启动 worker。
 - `main_loop_fps` 默认值为 60，配置变化能正确更新 tick interval 或触发 worker 集合重启。
 - `routing_key` 相同的请求稳定进入同一个 worker；未指定 `routing_key` 的请求按 round-robin 分配。
+- `thread_count` reload 后，新的 worker generation 可以改变 `routing_key` 映射，但旧 generation 已 accepted 请求仍必须完成一次。
+- 部分 worker unhealthy 时，未指定 `routing_key` 的请求只路由到 healthy worker；指定 `routing_key` 命中 unhealthy worker 时不改投其他 worker。
+- Redis 私有 VM 未指定 `routing_key` 发起请求时，使用内部 `preferred_worker_index` 固定回所属 worker。
 - Redis 未在 server 配置中启用时，Lua `redis.command` 同步失败且不保存 callback ref。
 - request id 由 `Command` / `Eval` 返回，异步 `RedisResult.request_id` 与提交结果一致。
 - request queue 和 max inflight 由显式计数器强制限制，不依赖 `ConcurrentQueue` 自身容量，并且二者大小关系互不限制。
@@ -1145,6 +1171,7 @@ src/tests/unit/database/test_redis_bind.cpp
 - timed out 请求的 hiredis late callback 不触发 use-after-free。
 - `queue_while_disconnected = false` 时断线请求同步失败；`true` 时按上限入队。
 - reload 时 `server.redis` 空/非空切换能正确启动或关闭 RedisClient，失败时按 `redis_required` 决定 reload 成败。
+- reload 重建 worker 集合时先启动新集合再原子替换旧集合；新集合启动失败时保留旧集合或按 `redis_required` 降级。
 
 ### 15.2 集成测试
 
@@ -1191,7 +1218,7 @@ Redis 集成测试建议 opt-in：
 2. 实现 `RedisSubmitResult`、`RedisRequest`、`RedisResult`、`RedisValue`。
 3. 实现 request queue 和 max inflight 背压计数。
 4. 实现 `RedisClientThread`。
-5. 实现 `RedisClientThread` worker 集合统一管理、启动失败回滚、round-robin 路由和 `routing_key` 稳定 hash 路由。
+5. 实现 `RedisClientThread` worker 集合统一管理、启动失败回滚、snapshot/generation 安全替换、round-robin 路由和 `routing_key` 稳定 hash 路由。
 6. 接入 hiredis async 和 libevent adapter。
 7. 实现 AUTH/SELECT 连接握手和 health 状态。
 8. 实现 wakeup fd、shutdown、timeout、connection error、late callback 去重处理。
@@ -1259,6 +1286,12 @@ Redis 集成测试建议 opt-in：
 风险：多个 `RedisClientThread` 意味着多个 Redis 连接；不同 worker 上的命令没有全局顺序，同一业务对象的连续操作如果被路由到不同 worker，可能出现业务层观察到的顺序问题。
 
 规避：`RedisClient` 必须统一管理路由策略；提供 `routing_key`，保证相同 key 稳定进入同一个 worker。文档和 Lua binding 都要说明未指定 `routing_key` 时不保证跨请求顺序；需要严格顺序的调用方应串行提交或使用相同 `routing_key`。
+
+### 17.7 worker 集合 reload 竞态
+
+风险：reload 重建 `RedisClientThread` worker 集合时，请求路由可能拿到旧集合指针；如果旧集合同时关闭，会出现 accepted 请求被错误丢弃、重复完成或访问已销毁 worker。
+
+规避：worker 集合应通过 `std::shared_ptr` 快照或 generation id 管理。`Command` / `Eval` 在路由前获取当前集合快照；reload 先启动新集合，原子发布新快照，再关闭旧集合。旧集合关闭时仍必须把已经 accepted 的请求完成为正常结果或 `kShutdown`，不能静默丢弃。
 
 ## 18. 推荐第一版交付边界
 
