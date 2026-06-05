@@ -405,8 +405,9 @@ class RedisClientThread {
 - connect callback 成功只表示 TCP/RESP 连接建立，不代表 RedisClient healthy。
 - 如果配置了 password 或 username，必须先发送 `AUTH`。username 非空时使用 `AUTH username password`；username 为空但 password 非空时使用 `AUTH password`。
 - 如果 `database > 0`，AUTH 成功后发送 `SELECT database`。
-- 只有 AUTH 和 SELECT 都成功后，`IsHealthy()` 才能返回 true，Redis 线程才可以 drain 外部命令请求。
+- 只有 AUTH 和 SELECT 都成功后，`IsHealthy()` 才能返回 true，Redis 线程才可以 drain 普通 Redis 请求。
 - AUTH 或 SELECT 失败应完成握手为 `kAuthError` 或 `kConnectionError`，设置 unhealthy，并按重连策略处理。
+- AUTH/SELECT 握手命令由 `RedisClientThread` 内部直接发送，不构造成普通 `RedisRequest`，也不经过普通 `Command` 的 unsupported-command 校验；普通外部 API 和 Lua binding 仍必须拒绝 `AUTH` / `SELECT`。
 
 启动同步策略：
 
@@ -450,7 +451,7 @@ class RedisClientThread {
 
 发送门槛：
 
-- 外部请求只有在该 worker 已完成连接握手、AUTH/SELECT 成功且 `healthy = true` 后，才能发送给 hiredis。
+- 普通 Redis 请求（外部请求和 Redis 私有 VM 发起的请求）只有在该 worker 已完成连接握手、AUTH/SELECT 成功且 `healthy = true` 后，才能发送给 hiredis；内部 AUTH/SELECT 握手命令不受该门槛影响。
 - `queue_while_disconnected = true` 时，unhealthy worker 可以保留已 accepted 但尚未发送的请求；这些请求在排队期间仍按 accepted 时间计算 timeout，超时后完成为 `kTimeout`，不能等到重连后再发送。
 - worker 重新 healthy 后才能继续 drain 这些排队请求并发送给 hiredis；如果 shutdown 先发生，则排队请求完成为 `kShutdown`。
 
@@ -864,7 +865,7 @@ redis.reconnect.queue_while_disconnected
 RedisClient reload 行为：
 
 - Redis runtime 未编译：`server.redis` 变化只更新配置字段，不加载 Redis 详细配置、不启动 `RedisClient`；如果新的 `redis_required = true`，reload 校验失败并保留旧配置。
-- Redis runtime 已编译且 `server.redis` 从空变为非空：加载 Redis config 后启动 `RedisClient`；若加载或启动失败，按新的 `redis_required` 规则处理 readiness 和错误日志。
+- Redis runtime 已编译且 `server.redis` 从空变为非空：由 `ConfigManager` reload 流程加载并缓存 Redis config 后启动 `RedisClient`；若加载或启动失败，按新的 `redis_required` 规则处理 readiness 和错误日志。
 - `server.redis` 从非空变为空且 `redis_required = false`：调用 `RedisClient::Shutdown()`，Redis 状态变为 disabled；未完成请求按 `kShutdown` 完成。
 - `server.redis` 变为空且 `redis_required = true`：reload 校验失败，保留旧配置和旧 RedisClient 状态。
 - `server.redis` 路径变化且新配置加载成功：先按新配置启动新的 `RedisClientThread` worker 集合，成功后再原子替换旧集合并关闭旧集合；如果新集合启动失败，`redis_required = true` 时 reload 失败并保留旧集合和旧配置；`redis_required = false` 且旧集合存在时保留旧集合继续服务并记录 reload error，旧集合不存在时进入 error/disabled 状态。
@@ -1048,13 +1049,13 @@ include/link：
 1. 加载 server config。
 2. 初始化 logger。
 3. 初始化主 EventLoop。
-4. 如果 Redis runtime 已编译且 `server.redis` 非空，加载 Redis config；Redis runtime 未编译时不加载 Redis 详细配置。
-5. 如果 Redis config 加载成功，初始化 `RedisClient`；如果 `server.redis` 为空、Redis runtime 未编译且 `redis_required = false`，或 Redis config 加载失败但 `redis_required = false`，保持 Redis 状态为 disabled/error，不创建 worker 集合。
+4. 如果 Redis runtime 已编译且 `ConfigManager::IsRedisConfigLoaded()` 为 true，从 `ConfigManager` 读取缓存的 `RedisClientConfig`；Redis runtime 未编译时不加载 Redis 详细配置。
+5. 如果缓存的 Redis config 可用，初始化 `RedisClient`；如果 `server.redis` 为空、Redis runtime 未编译且 `redis_required = false`，或 Redis config 加载失败但 `redis_required = false`，保持 Redis 状态为 disabled/error，不创建 worker 集合。
 6. 初始化 Mongo / DatabaseService。
 7. 创建主 `MainThreadScriptVM`。
 8. 导出 runtime bindings；Redis runtime 编译启用时，包含访问 `RedisClient` 的 Redis Lua binding。
 
-Redis 启用时放在 Mongo / DatabaseService 之前初始化，是为了让后续 DB 线程、业务线程或脚本 VM 在创建时可以安全导出访问 `RedisClient` 的 Redis Lua binding。Engine 读取 `server.redis_required` 后，转成 `RedisClientStartOptions::wait_for_initial_connect` 传给 `RedisClient::Initialize`：`redis_required = true` 时必须等待所有 `RedisClientThread` worker 的首次连接结果；`redis_required = false` 时只要求所有 Redis worker 基础设施启动成功。`server.redis` 为空且 `redis_required = false` 时不调用 `RedisClient::Initialize`；`server.redis` 为空但 `redis_required = true` 必须在配置校验阶段失败。Redis runtime 未编译且 `redis_required = false` 时也不调用 `RedisClient::Initialize`，即使 `server.redis` 保留了旧路径。
+Redis 详细配置由 `ConfigManager` 在 server config 加载阶段按 10.4 的规则解析和缓存，Engine 不应绕过 `ConfigManager` 再次直接读取 `redis.json`。Redis 启用时放在 Mongo / DatabaseService 之前初始化，是为了让后续 DB 线程、业务线程或脚本 VM 在创建时可以安全导出访问 `RedisClient` 的 Redis Lua binding。Engine 读取 `server.redis_required` 后，转成 `RedisClientStartOptions::wait_for_initial_connect` 传给 `RedisClient::Initialize`：`redis_required = true` 时必须等待所有 `RedisClientThread` worker 的首次连接结果；`redis_required = false` 时只要求所有 Redis worker 基础设施启动成功。`server.redis` 为空且 `redis_required = false` 时不调用 `RedisClient::Initialize`；`server.redis` 为空但 `redis_required = true` 必须在配置校验阶段失败。Redis runtime 未编译且 `redis_required = false` 时也不调用 `RedisClient::Initialize`，即使 `server.redis` 保留了旧路径。
 
 ### 12.2 每帧更新
 
@@ -1091,6 +1092,7 @@ final logs
 原因：
 
 - 需要同步更新 `Engine::CleanupPhase` 枚举和 `engine.h` 中的 cleanup 顺序注释，避免监控日志和生命周期文档遗漏 Redis 阶段。
+- 需要同步更新 `src/runtime/monitoring/admin_http.cc` 中的 `CleanupPhaseToString`，否则 admin cleanup/drain 接口无法正确输出 `RedisShutdown`。
 - Redis pending completion 可能投递到主 VM、Space VM、DB VM、Physics VM 或 Redis 私有 VM 的 dispatcher。
 - 如果先销毁任一 VM owner，再让 Redis 线程返回结果，会造成 dispatcher 失效或 Lua ref 悬挂。
 - Redis shutdown 应先停止接收新请求，再让每个 `RedisClientThread` worker 把 pending 请求转成 `kShutdown`，最后唤醒目标 dispatcher；目标 dispatcher 是否执行 `kShutdown` 对应的 Lua/业务回调，由 owner thread 在本模块 shutdown 期间决定。
@@ -1191,10 +1193,12 @@ src/tests/unit/database/test_redis_bind.cpp
 - 二进制安全字符串。
 - `RedisSubmitResult` 在参数非法、completion 为空、未启动、断线、队列满、正在关闭时返回正确同步拒绝状态，且不触发 completion。
 - `AUTH`、`SELECT`、Pub/Sub、blocking command、transaction command 等 unsupported command 返回 `kUnsupportedCommand`，不入队、不触发 completion。
+- 配置驱动的 AUTH/SELECT 连接握手能正常执行，不被普通 unsupported-command helper 拦截；但外部 C++ API 和 Lua binding 直接提交 `AUTH` / `SELECT` 仍同步拒绝。
 - Lua `redis.command` 调用 unsupported command 时同步返回 `false, error`，且不保存 callback ref。
 - `Initialize` 失败后清理完整，允许后续重试初始化。
 - `Initialize` 运行中重复调用会失败；`Shutdown` 完成后允许重新 `Initialize`，用于 reload 从 disabled 重新启用 Redis。
 - `server.redis_required = true` 但 `server.redis` 为空时，配置校验失败并阻止 server 初始化。
+- Engine 初始化只在 `ConfigManager::IsRedisConfigLoaded()` 为 true 时消费缓存的 `RedisClientConfig`，不绕过 `ConfigManager` 二次读取 `redis.json`。
 - Redis runtime 未编译、`redis_required = false` 且 `server.redis` 保留非空路径时，不加载 Redis 详细配置、不创建 worker，普通 VM 不导出 `redis` 表。
 - `thread_count > 1` 时 `RedisClient` 能启动多个 `RedisClientThread`，任一 worker 启动失败会清理已启动 worker。
 - `wait_for_initial_connect = true` 且多 worker 时，首次连接等待使用整体 `connect_timeout_ms` 预算，不按 worker 数串行累加。
@@ -1216,6 +1220,7 @@ src/tests/unit/database/test_redis_bind.cpp
 - VM 销毁后结果不再回调 Lua，晚到 Redis result 只被丢弃并记录日志。
 - accepted 请求在 shutdown、timeout、connection error 下只完成一次。
 - timed out 请求的 hiredis late callback 不触发 use-after-free。
+- 新增 `RedisShutdown` 后，admin cleanup/drain 输出的 `cleanup_phase` 能正确显示 `RedisShutdown`，不落入 unknown/default 文本。
 - `queue_while_disconnected = false` 时断线请求同步失败；`true` 时按上限入队。
 - `queue_while_disconnected = true` 时，断线排队请求在 worker 重新 healthy 前不会发送给 hiredis；排队期间超时完成为 `kTimeout`，shutdown 完成为 `kShutdown`。
 - reload 时 `server.redis` 空/非空切换能正确启动或关闭 RedisClient，失败时按 `redis_required` 决定 reload 成败。
