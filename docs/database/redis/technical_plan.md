@@ -261,6 +261,8 @@ class RedisClient {
 
 ### 5.2 RedisRequest
 
+`RedisRequest` 是 Redis 模块内部传输结构，用于 `RedisClient` 向 worker 队列投递请求；它不属于外部可调用 API，也不应被普通业务模块直接构造或保存。
+
 建议字段：
 
 ```cpp
@@ -370,7 +372,7 @@ class RedisClientThread {
 - `RedisClientScriptVM script_vm_`
 - `moodycamel::ConcurrentQueue<RedisRequest> request_queue_`
 - `std::unordered_map<uint64_t, PendingRedisRequest> pending_requests_`
-- main loop tick event，默认 60 fps
+- main loop tick event，默认 60 fps，使用微秒级或更高精度计算 interval
 - wakeup event
 - logger
 - stats
@@ -380,7 +382,7 @@ class RedisClientThread {
 
 1. `RedisClient::Initialize` 校验 `thread.thread_count`，创建 `RedisClientThread` worker 集合。
 2. `RedisClientThread::Start` 为每个 worker 创建独立线程。
-3. 线程名设置为 `RedisClientThread-{index}`；如果平台线程名长度受限，可以截断但必须保留 index。
+3. 线程名设置为 `RedisClientThread`，保持与草稿要求一致；多 worker 的 index 写入日志、stats 和 profiler context，不依赖 OS thread name 区分。
 4. 线程内创建 `event_base`。
 5. 初始化 `RedisClientScriptVM`。
 6. 加载 Redis 线程脚本目录。
@@ -388,7 +390,7 @@ class RedisClientThread {
 8. 调用 `redisLibeventAttach(redis_context_, event_base_)`。
 9. 设置 connect callback 和 disconnect callback。
 10. 注册 wakeup event。
-11. 注册周期性 tick event，间隔由 `thread.main_loop_fps` 计算，默认 60 fps。
+11. 注册周期性 tick event，间隔由 `thread.main_loop_fps` 计算，默认 60 fps；使用微秒级或更高精度计算，避免 `1000 / 60` 整数毫秒截断成 16ms。
 12. 进入 `event_base_dispatch`。
 
 连接握手：
@@ -404,6 +406,7 @@ class RedisClientThread {
 - `Start` 应等待每个 Redis 线程完成基础初始化，也就是 `event_base`、wakeup fd、tick event、`RedisClientScriptVM` 创建完成。
 - 如果任一 worker 基础初始化失败，`RedisClient::Initialize` 必须停止并清理已经启动的 worker，然后返回 false。
 - 如果 `wait_for_initial_connect = true`，`RedisClient::Initialize` 还应等待所有 worker 首次连接完成，等待时间由 `connect_timeout_ms` 控制；任一 worker 连接失败则返回 false，并清理整个 worker 集合。
+- 多 worker 的首次连接应并发发起；`connect_timeout_ms` 是本次 Initialize 的整体等待预算，不应按 worker 数串行累加。
 - 如果 `wait_for_initial_connect = false`，`Initialize` 可以在所有 worker 基础设施初始化成功后返回 true，即使首次连接失败，也通过后台重连和 health 状态反映。
 - `RedisClient::IsHealthy()` 默认要求所有 worker 都 healthy；如果只有部分 worker healthy，`RedisClientState` 应为 `kDegraded`，stats 中记录 unhealthy worker 数量。
 
@@ -523,6 +526,7 @@ redis.eval(script, keys, args, callback, {
 binding 规则：
 
 - 只要编译启用了 Redis runtime，普通 VM 可以导出 `redis` 表；如果 server 配置未启用 Redis 或 `RedisClient` 未初始化，`redis.is_running()` 返回 false，`redis.command` / `redis.eval` 同步返回 `false, error`，不保存 callback。
+- `redis.is_running()` 只表示 `RedisClient` 已初始化且 worker 集合存在；`redis.is_healthy()` 表示所有 worker 都 healthy。Redis disabled 时二者都返回 false；部分 worker unhealthy 时 `is_running()` 返回 true、`is_healthy()` 返回 false。
 - `redis.command` / `redis.eval` 同步返回 `ok, request_id_or_error`。请求未被 RedisClient accepted 时，`ok = false`，不会产生异步回调；如果 binding 为了构造 completion 已经临时注册 Lua callback，必须在 owner thread 立即 `luaL_unref`。
 - Lua options 中的 `routing_key` 透传到 `RedisCommandOptions::routing_key`；未指定时由 `RedisClient` round-robin 路由，不保证跨请求顺序。
 - Lua callback 存入当前 VM registry。
@@ -617,7 +621,8 @@ Redis 配置模块由三部分组成：
 
 启动策略：
 
-- `redis` 为空时，不启动 Redis 模块。
+- `redis` 为空且 `redis_required = false` 时，不启动 Redis 模块。
+- `redis` 为空且 `redis_required = true` 时，配置校验失败，server 初始化失败。
 - `redis` 非空但加载失败：
   - `redis_required = true`：server 初始化失败。
   - `redis_required = false`：server 继续启动，Redis 状态为 error，且不创建 `RedisClientThread` worker 集合。
@@ -842,7 +847,8 @@ redis.reconnect.queue_while_disconnected
 RedisClient reload 行为：
 
 - `server.redis` 从空变为非空：加载 Redis config 后启动 `RedisClient`；若加载或启动失败，按新的 `redis_required` 规则处理 readiness 和错误日志。
-- `server.redis` 从非空变为空：调用 `RedisClient::Shutdown()`，Redis 状态变为 disabled；未完成请求按 `kShutdown` 完成。
+- `server.redis` 从非空变为空且 `redis_required = false`：调用 `RedisClient::Shutdown()`，Redis 状态变为 disabled；未完成请求按 `kShutdown` 完成。
+- `server.redis` 变为空且 `redis_required = true`：reload 校验失败，保留旧配置和旧 RedisClient 状态。
 - `server.redis` 路径变化且新配置加载成功：先按新配置启动新的 `RedisClientThread` worker 集合，成功后再原子替换旧集合并关闭旧集合；如果新集合启动失败，`redis_required = true` 时 reload 失败并保留旧集合和旧配置，`redis_required = false` 时可以保留旧集合继续服务或切换到 error/disabled 状态，但必须记录日志和最终状态。
 - host、port、password、database 变化：需要重连；password 的 change old/new 值必须 redacted。
 - username 变化：需要重新认证，第一版按重连处理。
@@ -851,7 +857,7 @@ RedisClient reload 行为：
 - `main_loop_fps` 变化：可以更新所有 worker 的 tick event interval；如果实现复杂，第一版也可以按 worker 集合重启处理。
 - reconnect delay 和 `queue_while_disconnected` 变化：可以运行时更新。
 - script dir 或 auto_load 变化：RedisClientScriptVM 需要重新加载脚本，或标记为下次重启生效。第一版建议“下次重启生效”，避免运行时卸载脚本的生命周期风险。
-- `redis_required` 变化：影响 health/readiness，不强制重启 `RedisClientThread` worker 集合。
+- `redis_required` 变化：影响 health/readiness，不强制重启 `RedisClientThread` worker 集合；如果变为 true 但 `server.redis` 为空，reload 必须失败。
 
 ### 10.6 Lua 配置访问
 
@@ -884,6 +890,7 @@ redis.connection.password
 ### 10.7 配置校验
 
 - host 不能为空。
+- `server.redis_required = true` 时，`server.redis` 必须非空。
 - port 必须在 1 到 65535。
 - username 可以为空；非空时必须随 AUTH username password 形式认证。
 - database 必须大于等于 0。
@@ -893,7 +900,7 @@ redis.connection.password
 - request queue size 和 max inflight 独立校验，不强制大小关系；需要在文档和日志中说明二者共同决定故障时内存上限。
 - dispatch batch size 必须大于 0。
 - thread count 必须大于 0，建议限制在 1 到 64；默认 1，允许配置为多个 RedisClientThread，但避免误配导致大量线程和 Redis 连接。
-- main loop fps 必须大于 0，建议限制在 1 到 240；默认 60，避免配置过高导致 Redis 线程空转。
+- main loop fps 必须大于 0，建议限制在 1 到 240；默认 60，避免配置过高导致 Redis 线程空转。tick interval 应用微秒或更高精度计算，不能用整数毫秒截断。
 - reconnect delay 必须大于 0。
 - reconnect max delay 必须大于等于 initial delay。
 - reconnect backoff multiplier 必须大于等于 1。
@@ -967,7 +974,8 @@ endif()
 runtime CMake 建议：
 
 ```cmake
-if(ENGINE_REDIS_RUNTIME_ENABLED)
+if(ENGINE_REDIS_RUNTIME_ENABLED AND
+   NOT (CMAKE_SYSTEM_NAME STREQUAL "Android" OR CMAKE_SYSTEM_NAME STREQUAL "iOS"))
   list(APPEND CLOUD_ENGINE_SOURCES ${REDIS_SOURCES})
 endif()
 ```
@@ -982,7 +990,7 @@ set(ENGINE_REDIS_RUNTIME_ENABLED OFF)
 hiredis 接入建议：
 
 ```cmake
-if(ENGINE_REDIS_RUNTIME_ENABLED AND NOT TARGET hiredis)
+if(ENGINE_REDIS_RUNTIME_ENABLED AND NOT TARGET hiredis::hiredis)
   block(SCOPE_FOR VARIABLES)
     set(BUILD_SHARED_LIBS OFF)
     set(DISABLE_TESTS ON)
@@ -1018,13 +1026,13 @@ include/link：
 1. 加载 server config。
 2. 初始化 logger。
 3. 初始化主 EventLoop。
-4. 加载 Redis config。
-5. 初始化 `RedisClient`。
+4. 如果 `server.redis` 非空，加载 Redis config。
+5. 如果 Redis config 加载成功，初始化 `RedisClient`；如果 `server.redis` 为空且 `redis_required = false`，保持 Redis 状态为 disabled，不创建 worker 集合。
 6. 初始化 Mongo / DatabaseService。
 7. 创建主 `MainThreadScriptVM`。
 8. 导出 runtime bindings，其中包含 Redis binding。
 
-Redis 放在 Mongo / DatabaseService 之前初始化，是为了让后续 DB 线程、业务线程或脚本 VM 在创建时可以安全导出 Redis binding。Engine 读取 `server.redis_required` 后，转成 `RedisClientStartOptions::wait_for_initial_connect` 传给 `RedisClient::Initialize`：`redis_required = true` 时必须等待所有 `RedisClientThread` worker 的首次连接结果；`redis_required = false` 时只要求所有 Redis worker 基础设施启动成功。
+Redis 启用时放在 Mongo / DatabaseService 之前初始化，是为了让后续 DB 线程、业务线程或脚本 VM 在创建时可以安全导出 Redis binding。Engine 读取 `server.redis_required` 后，转成 `RedisClientStartOptions::wait_for_initial_connect` 传给 `RedisClient::Initialize`：`redis_required = true` 时必须等待所有 `RedisClientThread` worker 的首次连接结果；`redis_required = false` 时只要求所有 Redis worker 基础设施启动成功。`server.redis` 为空且 `redis_required = false` 时不调用 `RedisClient::Initialize`；`server.redis` 为空但 `redis_required = true` 必须在配置校验阶段失败。
 
 ### 12.2 每帧更新
 
@@ -1084,7 +1092,8 @@ Redis 命令错误，例如 `WRONGTYPE`，应作为 `kCommandError` 返回；已
 
 readiness 规则：
 
-- `server.redis` 为空：Redis 状态为 disabled，不影响 readiness。
+- `server.redis` 为空且 `redis_required = false`：Redis 状态为 disabled，不影响 readiness。
+- `server.redis` 为空且 `redis_required = true`：配置无效，server 不应进入 ready 流程。
 - `server.redis` 非空且 `redis_required = false`：Redis unhealthy 只标记 degraded，不导致整体 readiness fail。
 - `server.redis` 非空且 `redis_required = true`：Redis 未 healthy 时整体 readiness fail。
 
@@ -1154,13 +1163,17 @@ src/tests/unit/database/test_redis_bind.cpp
 - 二进制安全字符串。
 - `RedisSubmitResult` 在参数非法、completion 为空、未启动、断线、队列满、正在关闭时返回正确同步拒绝状态，且不触发 completion。
 - `Initialize` 失败后清理完整，允许后续重试初始化。
+- `server.redis_required = true` 但 `server.redis` 为空时，配置校验失败并阻止 server 初始化。
 - `thread_count > 1` 时 `RedisClient` 能启动多个 `RedisClientThread`，任一 worker 启动失败会清理已启动 worker。
-- `main_loop_fps` 默认值为 60，配置变化能正确更新 tick interval 或触发 worker 集合重启。
+- `wait_for_initial_connect = true` 且多 worker 时，首次连接等待使用整体 `connect_timeout_ms` 预算，不按 worker 数串行累加。
+- 多个 worker 的 OS thread name 仍设置为 `RedisClientThread`，worker index 通过 stats/log/profiler context 暴露。
+- `main_loop_fps` 默认值为 60，tick interval 使用微秒或更高精度计算；配置变化能正确更新 tick interval 或触发 worker 集合重启。
 - `routing_key` 相同的请求稳定进入同一个 worker；未指定 `routing_key` 的请求按 round-robin 分配。
 - `thread_count` reload 后，新的 worker generation 可以改变 `routing_key` 映射，但旧 generation 已 accepted 请求仍必须完成一次。
 - 部分 worker unhealthy 时，未指定 `routing_key` 的请求只路由到 healthy worker；指定 `routing_key` 命中 unhealthy worker 时不改投其他 worker。
 - Redis 私有 VM 未指定 `routing_key` 发起请求时，使用内部 `preferred_worker_index` 固定回所属 worker。
-- Redis 未在 server 配置中启用时，Lua `redis.command` 同步失败且不保存 callback ref。
+- Redis 未在 server 配置中启用时，不创建 worker 集合；Lua `redis.is_running()` / `redis.is_healthy()` 返回 false，`redis.command` 同步失败且不保存 callback ref。
+- 部分 worker unhealthy 时，Lua `redis.is_running()` 返回 true、`redis.is_healthy()` 返回 false。
 - request id 由 `Command` / `Eval` 返回，异步 `RedisResult.request_id` 与提交结果一致。
 - request queue 和 max inflight 由显式计数器强制限制，不依赖 `ConcurrentQueue` 自身容量，并且二者大小关系互不限制。
 - `AsyncResultDispatcher` 跨线程 enqueue，同线程 dispatch。
@@ -1171,6 +1184,7 @@ src/tests/unit/database/test_redis_bind.cpp
 - timed out 请求的 hiredis late callback 不触发 use-after-free。
 - `queue_while_disconnected = false` 时断线请求同步失败；`true` 时按上限入队。
 - reload 时 `server.redis` 空/非空切换能正确启动或关闭 RedisClient，失败时按 `redis_required` 决定 reload 成败。
+- reload 把 `server.redis` 置空且 `redis_required = true` 时必须失败并保留旧配置。
 - reload 重建 worker 集合时先启动新集合再原子替换旧集合；新集合启动失败时保留旧集合或按 `redis_required` 降级。
 
 ### 15.2 集成测试
@@ -1192,7 +1206,7 @@ Redis 集成测试建议 opt-in：
 - mobile target 不编译 Redis。
 - `ENGINE_REDIS_ENABLED=OFF` 时 server 可正常编译。
 - 同一构建树先配置 server 再配置 client 时，client 仍不继承 `ENGINE_REDIS_RUNTIME_ENABLED`。
-- `ENGINE_REDIS_ENABLED=ON` 但 `server.redis` 为空时，server 编译和启动均不强制连接 Redis。
+- `ENGINE_REDIS_ENABLED=ON`、`server.redis` 为空且 `redis_required = false` 时，server 编译和启动均不强制连接 Redis。
 
 ## 16. 实施步骤
 
@@ -1222,7 +1236,7 @@ Redis 集成测试建议 opt-in：
 6. 接入 hiredis async 和 libevent adapter。
 7. 实现 AUTH/SELECT 连接握手和 health 状态。
 8. 实现 wakeup fd、shutdown、timeout、connection error、late callback 去重处理。
-9. 实现 Redis 私有 VM tick event，默认 `main_loop_fps = 60`。
+9. 实现 Redis 私有 VM tick event，默认 `main_loop_fps = 60`，interval 使用微秒或更高精度计算。
 
 ### 阶段四：Lua VM 和 binding
 
