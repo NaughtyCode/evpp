@@ -66,6 +66,11 @@ int l_config_get(lua_State* L) {
     auto rt = cfg.GetRuntimeConfig();
     auto client = cfg.GetClientConfig();
     auto srv = cfg.GetServerConfig();
+    const bool redis_loaded = cfg.IsRedisConfigLoaded();
+    RedisClientConfig redis;
+    if (redis_loaded) {
+        redis = cfg.GetRedisClientConfig();
+    }
 
     // RuntimeConfig - top-level
     if (p == "resource_dir")           return PushConfigValue(L, rt.resource_dir);
@@ -123,6 +128,8 @@ int l_config_get(lua_State* L) {
     if (p == "server.mongodb_dev")            return PushConfigValue(L, srv.mongodb_dev);
     if (p == "server.mongodb_public")         return PushConfigValue(L, srv.mongodb_public);
     if (p == "server.db_required")            return PushConfigValue(L, srv.db_required);
+    if (p == "server.redis")                  return PushConfigValue(L, srv.redis);
+    if (p == "server.redis_required")         return PushConfigValue(L, srv.redis_required);
     if (p == "server.msgpack.max_nesting_depth") return PushConfigValue(L, srv.msgpack.max_nesting_depth);
     if (p == "server.msgpack.max_payload_size")  return PushConfigValue(L, srv.msgpack.max_payload_size);
     if (p == "server.resource_limits.max_message_size") return PushConfigValue(L, static_cast<lua_Integer>(srv.resource_limits.max_message_size));
@@ -136,6 +143,34 @@ int l_config_get(lua_State* L) {
     if (p == "server.instance.region") return PushConfigValue(L, srv.instance.region);
     if (p == "server.instance.zone") return PushConfigValue(L, srv.instance.zone);
     if (p == "server.instance.cluster") return PushConfigValue(L, srv.instance.cluster);
+
+    // RedisConfig - non-sensitive cached values only.
+    if (p == "redis.loaded") return PushConfigValue(L, redis_loaded);
+    if (redis_loaded) {
+        if (p == "redis.connection.host") return PushConfigValue(L, redis.connection.host);
+        if (p == "redis.connection.port") return PushConfigValue(L, redis.connection.port);
+        if (p == "redis.connection.username") {
+            return PushConfigValue(L, redis.connection.username.empty() ? std::string("unset") : std::string("set"));
+        }
+        if (p == "redis.connection.database") return PushConfigValue(L, redis.connection.database);
+        if (p == "redis.connection.connect_timeout_ms") return PushConfigValue(L, redis.connection.connect_timeout_ms);
+        if (p == "redis.connection.command_timeout_ms") return PushConfigValue(L, redis.connection.command_timeout_ms);
+        if (p == "redis.connection.keepalive") return PushConfigValue(L, redis.connection.keepalive);
+        if (p == "redis.queue.request_queue_size") return PushConfigValue(L, redis.queue.request_queue_size);
+        if (p == "redis.queue.max_inflight") return PushConfigValue(L, redis.queue.max_inflight);
+        if (p == "redis.queue.dispatch_batch_size") return PushConfigValue(L, redis.queue.dispatch_batch_size);
+        if (p == "redis.thread.thread_count") return PushConfigValue(L, redis.thread.thread_count);
+        if (p == "redis.thread.main_loop_fps") return PushConfigValue(L, redis.thread.main_loop_fps);
+        if (p == "redis.script.redis_scripts_dir") return PushConfigValue(L, redis.script.redis_scripts_dir);
+        if (p == "redis.script.auto_load") return PushConfigValue(L, redis.script.auto_load);
+        if (p == "redis.log.enabled") return PushConfigValue(L, redis.log.enabled);
+        if (p == "redis.log.slow_command_ms") return PushConfigValue(L, redis.log.slow_command_ms);
+        if (p == "redis.reconnect.enabled") return PushConfigValue(L, redis.reconnect.enabled);
+        if (p == "redis.reconnect.initial_delay_ms") return PushConfigValue(L, redis.reconnect.initial_delay_ms);
+        if (p == "redis.reconnect.max_delay_ms") return PushConfigValue(L, redis.reconnect.max_delay_ms);
+        if (p == "redis.reconnect.backoff_multiplier") return PushConfigValue(L, redis.reconnect.backoff_multiplier);
+        if (p == "redis.reconnect.queue_while_disconnected") return PushConfigValue(L, redis.reconnect.queue_while_disconnected);
+    }
 
     lua_pushnil(L);
     return 1;

@@ -219,6 +219,18 @@ ConfigValidator::Result ConfigValidator::ValidateServer(const ServerConfig& conf
 			   "tcp_keepalive.interval_sec");
 	CheckRange(r, config.tcp_keepalive.count, 0, 100, "tcp_keepalive.count");
 	CheckEnum(r, config.active_mongodb, kValidMongoSelections, "active_mongodb");
+	if (config.redis_required && config.redis.empty()) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "redis_required=true requires server.redis";
+	}
+#if !defined(ENGINE_REDIS_ENABLED)
+	if (config.redis_required) {
+		r.valid = false;
+		if (!r.errors.empty()) r.errors += "; ";
+		r.errors += "redis_required=true but Redis runtime is not compiled";
+	}
+#endif
 	if (config.resource_limits.max_message_size > 1024 * 1024 * 1024) {
 		CheckWarning(r, true,
 			"resource_limits.max_message_size=" + std::to_string(config.resource_limits.max_message_size) +

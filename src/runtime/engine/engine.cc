@@ -26,6 +26,9 @@
 #include "runtime/engine/engine.h"
 #include "runtime/entity/entity_manager.h"
 #include "runtime/monitoring/metrics.h"
+#if defined(ENGINE_REDIS_ENABLED)
+#include "runtime/database/redis/redis_client.h"
+#endif
 #if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
 #include "runtime/database/data_service/database_service.h"
 #include "runtime/database/data_service/db_service_config.h"
@@ -187,6 +190,28 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		loop_ = owned_loop_.get();
 		ENGINE_LOG_INFO(logger, "EventLoop created");
 	}
+
+	// ---- Redis runtime initialization ----
+#if defined(ENGINE_REDIS_ENABLED)
+	{
+		auto server_cfg = ConfigManager::Instance().GetServerConfig();
+		if (ConfigManager::Instance().IsRedisConfigLoaded()) {
+			auto redis_config = ConfigManager::Instance().GetRedisClientConfig();
+			redis::RedisClientStartOptions options;
+			options.required = server_cfg.redis_required;
+			options.wait_for_initial_connect = server_cfg.redis_required;
+			bool ok = redis::RedisClient::Instance().Initialize(redis_config, options);
+			ENGINE_LOG_INFO(logger, "redis client initialized, ok=[{}]", ok);
+			if (!ok && server_cfg.redis_required) {
+				throw std::runtime_error("redis required but initialization failed");
+			}
+		} else if (server_cfg.redis_required) {
+			throw std::runtime_error("redis required but config was not loaded");
+		} else {
+			ENGINE_LOG_INFO(logger, "redis client skipped: no redis config configured");
+		}
+	}
+#endif
 
 	// ---- MongoDB driver initialization ----
 #if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
@@ -679,6 +704,12 @@ void Engine::Cleanup() {
 	}
 	check_timeout("PhysicsShutdown");
 
+	cleanup_phase_.store(CleanupPhase::RedisShutdown, std::memory_order_release);
+#if defined(ENGINE_REDIS_ENABLED)
+	redis::RedisClient::Instance().Shutdown();
+#endif
+	check_timeout("RedisShutdown");
+
 	cleanup_phase_.store(CleanupPhase::DatabaseShutdown, std::memory_order_release);
 #if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
 	DatabaseService::Instance().Shutdown();
@@ -819,6 +850,7 @@ void Engine::FrameLoop() {
 		if (script_vm_) {
 			// Deliver configuration change callbacks bound via config.on_change().
 			script::FlushConfigCallbacks(script_vm_->GetState());
+			script_vm_->DispatchAsyncResults(256);
 			script_vm_->UpdateScript();
 			script::UpdateRpcBindings(*script_vm_);
 		}

@@ -8,6 +8,7 @@
 
 #include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
+#include "runtime/vm/async_result_dispatcher.h"
 #include "runtime/vm/lua_error_handler.h"
 
 namespace engine {
@@ -120,6 +121,7 @@ ScriptVM::ScriptVM(LuaSandboxLevel level) {
 	ENGINE_LOG_INFO(logger,
 					"ScriptVM: lua state created, version=[{}]",
 					LUA_VERSION);
+	async_dispatcher_ = std::make_shared<AsyncResultDispatcher>(L_);
 
 	int mem_kb = lua_gc(L_, LUA_GCCOUNT, 0);
 	ENGINE_LOG_INFO(logger, "ScriptVM: initial memory usage [{} KB]", mem_kb);
@@ -129,6 +131,10 @@ ScriptVM::~ScriptVM() {
 	ENGINE_PROFILE_SCOPE("engine.vm", "ScriptVM::dtor");
 
 	if (L_) {
+		if (async_dispatcher_ && IsOwnerThread()) {
+			async_dispatcher_->ShutdownOnOwnerThread();
+		}
+		async_dispatcher_.reset();
 		lua_close(L_);
 		L_ = nullptr;
 	}
@@ -142,11 +148,16 @@ ScriptVM::ScriptVM(ScriptVM&& other) noexcept
 	callbacks_ = std::move(other.callbacks_);
 	importer_ = std::move(other.importer_);
 	script_roots_ = std::move(other.script_roots_);
+	async_dispatcher_ = std::move(other.async_dispatcher_);
 }
 
 ScriptVM& ScriptVM::operator=(ScriptVM&& other) noexcept {
 	if (this != &other) {
 		if (L_) {
+			if (async_dispatcher_ && IsOwnerThread()) {
+				async_dispatcher_->ShutdownOnOwnerThread();
+			}
+			async_dispatcher_.reset();
 			lua_close(L_);
 		}
 		L_ = other.L_;
@@ -156,6 +167,7 @@ ScriptVM& ScriptVM::operator=(ScriptVM&& other) noexcept {
 		callbacks_ = std::move(other.callbacks_);
 		importer_ = std::move(other.importer_);
 		script_roots_ = std::move(other.script_roots_);
+		async_dispatcher_ = std::move(other.async_dispatcher_);
 	}
 	return *this;
 }
@@ -167,6 +179,26 @@ bool ScriptVM::IsOwnerThread() const noexcept {
 
 bool ScriptVM::IsMainThreadVM() const noexcept {
 	return false;
+}
+
+void ScriptVM::AdoptCurrentThread() {
+	owner_thread_id_ = std::this_thread::get_id();
+	async_dispatcher_ = std::make_shared<AsyncResultDispatcher>(L_);
+}
+
+std::shared_ptr<AsyncResultDispatcher> ScriptVM::GetAsyncDispatcher() const {
+	return async_dispatcher_;
+}
+
+size_t ScriptVM::DispatchAsyncResults(size_t max_count) {
+	if (!async_dispatcher_) return 0;
+	return async_dispatcher_->Dispatch(max_count);
+}
+
+void ScriptVM::ShutdownAsyncDispatcher() {
+	if (async_dispatcher_ && IsOwnerThread()) {
+		async_dispatcher_->ShutdownOnOwnerThread();
+	}
 }
 
 // Script lifecycle helpers

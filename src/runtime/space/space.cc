@@ -7,6 +7,9 @@
 #include "runtime/profiler/profiler_events.h"
 #include "runtime/space/bind/space_bind.h"
 #include "runtime/vm/vm.h"
+#if defined(ENGINE_REDIS_ENABLED)
+#include "runtime/database/redis/bind/redis_bind.h"
+#endif
 
 namespace engine {
 namespace space {
@@ -31,6 +34,9 @@ Space::Space(SpaceId id, const SpaceConfig& config)
 	, config_(config) {
 	vm_ = std::make_unique<ScriptVM>();
 	script::ExportSpace(*vm_, this);
+#if defined(ENGINE_REDIS_ENABLED)
+	script::ExportRedis(*vm_);
+#endif
 	auto* logger = GetLogger();
 	if (logger) {
 		ENGINE_LOG_INFO(logger, "Space [{}]: created, name=[{}], max_entities=[{}]",
@@ -47,6 +53,10 @@ Space::~Space() {
 
 	if (vm_) {
 		vm_->DestroyScript();
+#if defined(ENGINE_REDIS_ENABLED)
+		script::ShutdownRedisBindings(*vm_);
+#endif
+		vm_->ShutdownAsyncDispatcher();
 		script::ClearCurrentSpace(*vm_);
 	}
 
@@ -181,6 +191,7 @@ evpp::TCPConnPtr Space::GetPlayerConnection(entity::EntityId player_id) const {
 void Space::Update(int64_t delta_ms) {
 	ENGINE_PROFILE_SPACE_UPDATE();
 	if (!vm_) return;
+	vm_->DispatchAsyncResults(256);
 	vm_->UpdateScript();
 }
 

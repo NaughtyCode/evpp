@@ -5,6 +5,7 @@
 #include "config_fixture.h"
 #include "runtime/config/config_validator.h"
 #include "runtime/config/platform_paths.h"
+#include "runtime/config/redis_config.h"
 
 namespace {
 
@@ -103,6 +104,21 @@ TEST_CASE("ConfigManager loads ServerConfig db_required from JSON", "[config][lo
 // ═══════════════════════════════════════════════════════════════════════════
 // ConfigManager: error paths
 // ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("ConfigManager loads ServerConfig redis fields from JSON", "[config][load][redis]") {
+    auto& cfg = engine::ConfigManager::Instance();
+    REQUIRE(cfg.LoadServerFromString(R"({
+        "http": { "timeout_sec": 5.0 },
+        "msgpack": { "max_nesting_depth": 16 },
+        "redis": "redis.json",
+        "redis_required": false,
+        "scripts_dir": "."
+    })"));
+
+    auto srv = cfg.GetServerConfig();
+    REQUIRE(srv.redis == "redis.json");
+    REQUIRE_FALSE(srv.redis_required);
+}
 
 TEST_CASE("ConfigManager rejects invalid JSON", "[config][error]") {
     auto& cfg = engine::ConfigManager::Instance();
@@ -342,6 +358,33 @@ TEST_CASE("ConfigValidator rejects invalid operational server settings", "[confi
 // ConfigValidator: cross-field validation
 // ═══════════════════════════════════════════════════════════════════════════
 
+TEST_CASE("ConfigValidator rejects redis_required without redis path", "[config][validation][redis]") {
+    engine::ServerConfig sc;
+    sc.admin_port = 0;
+    sc.http.timeout_sec = 5.0;
+    sc.msgpack.max_nesting_depth = 16;
+    sc.scripts_dir = ".";
+    sc.redis_required = true;
+
+    REQUIRE_FALSE(engine::ConfigValidator::ValidateServer(sc).valid);
+}
+
+TEST_CASE("ConfigValidator handles redis_required according to build flags", "[config][validation][redis]") {
+    engine::ServerConfig sc;
+    sc.admin_port = 0;
+    sc.http.timeout_sec = 5.0;
+    sc.msgpack.max_nesting_depth = 16;
+    sc.scripts_dir = ".";
+    sc.redis = "redis.json";
+    sc.redis_required = true;
+
+#if defined(ENGINE_REDIS_ENABLED)
+    REQUIRE(engine::ConfigValidator::ValidateServer(sc).valid);
+#else
+    REQUIRE_FALSE(engine::ConfigValidator::ValidateServer(sc).valid);
+#endif
+}
+
 TEST_CASE("ConfigValidator warns on target_fps vs interval_ms mismatch", "[config][validation]") {
     auto& cfg = engine::ConfigManager::Instance();
     // target_fps=60 but interval_ms=33 (should be ~16)
@@ -515,6 +558,24 @@ TEST_CASE("Diff detects hot_reload changes", "[config][diff]") {
 // ═══════════════════════════════════════════════════════════════════════════
 // ConfigManager: RegisterReloadCallback with ConfigChangeSet
 // ═══════════════════════════════════════════════════════════════════════════
+
+TEST_CASE("RedisClientConfig validates defaults and rejects invalid values", "[config][redis]") {
+    engine::RedisClientConfig cfg;
+    REQUIRE(engine::ValidateRedisClientConfig(cfg).valid);
+
+    cfg.connection.host.clear();
+    REQUIRE_FALSE(engine::ValidateRedisClientConfig(cfg).valid);
+
+    cfg.connection.host = "127.0.0.1";
+    cfg.queue.request_queue_size = 0;
+    REQUIRE_FALSE(engine::ValidateRedisClientConfig(cfg).valid);
+}
+
+TEST_CASE("Redis password diff values are redacted", "[config][redis][diff]") {
+    REQUIRE(engine::RedactedRedisPasswordForDiff("", "") == "");
+    REQUIRE(engine::RedactedRedisPasswordForDiff("secret", "secret") == "<redacted:unchanged>");
+    REQUIRE(engine::RedactedRedisPasswordForDiff("old", "new") == "<redacted:changed>");
+}
 
 TEST_CASE("RegisterReloadCallback with ConfigChangeSet signature", "[config][callback]") {
     ConfigFixture f;

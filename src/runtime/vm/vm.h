@@ -20,6 +20,8 @@ extern "C" {
 
 namespace engine {
 
+class AsyncResultDispatcher;
+
 // ScriptVM — RAII wrapper around a Lua lua_State.
 //
 // Exposes the raw lua_State* via GetState() so callers have full access to
@@ -40,6 +42,10 @@ class CLOUD_ENGINE_API ScriptVM {
 
 	bool IsOwnerThread() const noexcept;
 	virtual bool IsMainThreadVM() const noexcept;
+	void AdoptCurrentThread();
+	std::shared_ptr<AsyncResultDispatcher> GetAsyncDispatcher() const;
+	size_t DispatchAsyncResults(size_t max_count = 256);
+	void ShutdownAsyncDispatcher();
 
 	// Raw state access — use this for any Lua C API call not directly
 	// wrapped by this class.
@@ -209,6 +215,7 @@ class CLOUD_ENGINE_API ScriptVM {
 	std::unique_ptr<ScriptImporter> importer_;
 	std::vector<std::string> script_roots_;
 	std::thread::id owner_thread_id_{};
+	std::shared_ptr<AsyncResultDispatcher> async_dispatcher_;
 };
 
 // Template implementations

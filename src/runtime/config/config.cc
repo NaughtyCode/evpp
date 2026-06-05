@@ -37,6 +37,28 @@ void CheckPlaintextCredentials(const std::string& uri, const std::string& contex
 	}
 }
 
+bool IsRedisRuntimeCompiled() {
+#if defined(ENGINE_REDIS_ENABLED)
+	return true;
+#else
+	return false;
+#endif
+}
+
+void WarnRedisPasswordConfigured(const RedisClientConfig& config) {
+	if (config.connection.password.empty()) return;
+	if (auto* l = GetLogger()) {
+		ENGINE_LOG_WARN(l,
+			"ConfigManager: redis password is configured and will be redacted in logs");
+	}
+}
+
+void AppendRedisConfigDiff(ConfigChangeSet& changes,
+						   const RedisClientConfig& old_config,
+						   bool old_loaded,
+						   const RedisClientConfig& new_config,
+						   bool new_loaded);
+
 // Recursively interpolate ${VAR} and ${VAR:-default} in all string fields of a
 // glaze-reflectable config struct. Called automatically after every Load/Reload.
 template <typename T>
@@ -159,10 +181,16 @@ bool ConfigManager::LoadServerFromString(const std::string& json) {
 	RuntimeConfig old_runtime;
 	ServerConfig old_server;
 	ServerConfig new_server;
+	RedisClientConfig old_redis;
+	bool old_redis_loaded = false;
+	RedisClientConfig current_redis;
+	bool current_redis_loaded = false;
 	{
 		std::shared_lock<std::shared_mutex> lock(config_mutex_);
 		old_runtime = runtime_config_;
 		old_server = server_config_;
+		old_redis = redis_config_;
+		old_redis_loaded = redis_loaded_;
 	}
 	auto ec = glz::read_json(temp, json);
 	if (ec) {
@@ -190,18 +218,32 @@ bool ConfigManager::LoadServerFromString(const std::string& json) {
 		if (!public_loaded) return false;
 		CheckPlaintextCredentials(new_mongo_public.connection.uri, "mongodb_public");
 	}
+	RedisClientConfig new_redis;
+	bool redis_loaded = false;
+	if (!LoadRedisConfigForServer(temp, new_redis, redis_loaded)) {
+		return false;
+	}
 	{
 		std::lock_guard<std::shared_mutex> lock(config_mutex_);
 		previous_server_config_ = server_config_;
+		previous_redis_config_ = redis_config_;
+		previous_redis_loaded_ = redis_loaded_;
 		server_config_ = std::move(temp);
 		mongo_dev_config_ = std::move(new_mongo_dev);
 		mongo_public_config_ = std::move(new_mongo_public);
 		mongo_dev_loaded_ = dev_loaded;
 		mongo_public_loaded_ = public_loaded;
+		redis_config_ = std::move(new_redis);
+		redis_loaded_ = redis_loaded;
 		has_previous_ = true;
 		new_server = server_config_;
+		current_redis = redis_config_;
+		current_redis_loaded = redis_loaded_;
 	}
-	NotifyReloadCallbacks(Diff(old_runtime, old_runtime, old_server, new_server));
+	auto changes = Diff(old_runtime, old_runtime, old_server, new_server);
+	AppendRedisConfigDiff(changes, old_redis, old_redis_loaded,
+						  current_redis, current_redis_loaded);
+	NotifyReloadCallbacks(changes);
 	return true;
 }
 
@@ -282,14 +324,23 @@ bool ConfigManager::LoadServerFromFile(const std::string& path) {
 		if (!public_loaded) return false;
 		CheckPlaintextCredentials(new_mongo_public.connection.uri, "mongodb_public");
 	}
+	RedisClientConfig new_redis;
+	bool redis_loaded = false;
+	if (!LoadRedisConfigForServer(temp, new_redis, redis_loaded)) {
+		return false;
+	}
 	{
 		std::lock_guard<std::shared_mutex> lock(config_mutex_);
 		previous_server_config_ = server_config_;
+		previous_redis_config_ = redis_config_;
+		previous_redis_loaded_ = redis_loaded_;
 		server_config_ = std::move(temp);
 		mongo_dev_config_ = std::move(new_mongo_dev);
 		mongo_public_config_ = std::move(new_mongo_public);
 		mongo_dev_loaded_ = dev_loaded;
 		mongo_public_loaded_ = public_loaded;
+		redis_config_ = std::move(new_redis);
+		redis_loaded_ = redis_loaded;
 		has_previous_ = true;
 	}
 	return true;
@@ -571,6 +622,79 @@ void EmitChange(ConfigChangeSet& changes, const std::string& path,
 	}
 }
 
+void AppendRedisConfigDiff(ConfigChangeSet& changes,
+						   const RedisClientConfig& old_config,
+						   bool old_loaded,
+						   const RedisClientConfig& new_config,
+						   bool new_loaded) {
+	EmitChange(changes, "redis.loaded", ToString(old_loaded), ToString(new_loaded));
+	if (!old_loaded || !new_loaded) {
+		return;
+	}
+
+	EmitChange(changes, "redis.connection.host",
+			   old_config.connection.host, new_config.connection.host);
+	EmitChange(changes, "redis.connection.port",
+			   ToString(old_config.connection.port), ToString(new_config.connection.port));
+	EmitChange(changes, "redis.connection.username",
+			   old_config.connection.username.empty() ? "unset" : "set",
+			   new_config.connection.username.empty() ? "unset" : "set");
+	if (old_config.connection.password != new_config.connection.password) {
+		changes.push_back({"redis.connection.password",
+						   RedactedRedisPasswordForDiff(old_config.connection.password,
+														old_config.connection.password),
+						   RedactedRedisPasswordForDiff(old_config.connection.password,
+														new_config.connection.password)});
+	}
+	EmitChange(changes, "redis.connection.database",
+			   ToString(old_config.connection.database), ToString(new_config.connection.database));
+	EmitChange(changes, "redis.connection.connect_timeout_ms",
+			   ToString(old_config.connection.connect_timeout_ms),
+			   ToString(new_config.connection.connect_timeout_ms));
+	EmitChange(changes, "redis.connection.command_timeout_ms",
+			   ToString(old_config.connection.command_timeout_ms),
+			   ToString(new_config.connection.command_timeout_ms));
+	EmitChange(changes, "redis.connection.keepalive",
+			   ToString(old_config.connection.keepalive), ToString(new_config.connection.keepalive));
+	EmitChange(changes, "redis.queue.request_queue_size",
+			   ToString(old_config.queue.request_queue_size),
+			   ToString(new_config.queue.request_queue_size));
+	EmitChange(changes, "redis.queue.max_inflight",
+			   ToString(old_config.queue.max_inflight), ToString(new_config.queue.max_inflight));
+	EmitChange(changes, "redis.queue.dispatch_batch_size",
+			   ToString(old_config.queue.dispatch_batch_size),
+			   ToString(new_config.queue.dispatch_batch_size));
+	EmitChange(changes, "redis.thread.thread_count",
+			   ToString(old_config.thread.thread_count), ToString(new_config.thread.thread_count));
+	EmitChange(changes, "redis.thread.main_loop_fps",
+			   ToString(old_config.thread.main_loop_fps),
+			   ToString(new_config.thread.main_loop_fps));
+	EmitChange(changes, "redis.script.redis_scripts_dir",
+			   old_config.script.redis_scripts_dir, new_config.script.redis_scripts_dir);
+	EmitChange(changes, "redis.script.auto_load",
+			   ToString(old_config.script.auto_load), ToString(new_config.script.auto_load));
+	EmitChange(changes, "redis.log.enabled",
+			   ToString(old_config.log.enabled), ToString(new_config.log.enabled));
+	EmitChange(changes, "redis.log.slow_command_ms",
+			   ToString(old_config.log.slow_command_ms),
+			   ToString(new_config.log.slow_command_ms));
+	EmitChange(changes, "redis.reconnect.enabled",
+			   ToString(old_config.reconnect.enabled),
+			   ToString(new_config.reconnect.enabled));
+	EmitChange(changes, "redis.reconnect.initial_delay_ms",
+			   ToString(old_config.reconnect.initial_delay_ms),
+			   ToString(new_config.reconnect.initial_delay_ms));
+	EmitChange(changes, "redis.reconnect.max_delay_ms",
+			   ToString(old_config.reconnect.max_delay_ms),
+			   ToString(new_config.reconnect.max_delay_ms));
+	EmitChange(changes, "redis.reconnect.backoff_multiplier",
+			   ToString(old_config.reconnect.backoff_multiplier),
+			   ToString(new_config.reconnect.backoff_multiplier));
+	EmitChange(changes, "redis.reconnect.queue_while_disconnected",
+			   ToString(old_config.reconnect.queue_while_disconnected),
+			   ToString(new_config.reconnect.queue_while_disconnected));
+}
+
 }  // namespace
 
 ConfigChangeSet ConfigManager::Diff(const RuntimeConfig& old_rt,
@@ -638,6 +762,9 @@ ConfigChangeSet ConfigManager::Diff(const RuntimeConfig& old_rt,
 	EmitChange(changes, "db_service", old_srv.db_service, new_srv.db_service);
 	EmitChange(changes, "db_required",
 			   ToString(old_srv.db_required), ToString(new_srv.db_required));
+	EmitChange(changes, "server.redis", old_srv.redis, new_srv.redis);
+	EmitChange(changes, "server.redis_required",
+			   ToString(old_srv.redis_required), ToString(new_srv.redis_required));
 	EmitChange(changes, "shutdown_timeout_sec",
 			   ToString(old_srv.shutdown_timeout_sec), ToString(new_srv.shutdown_timeout_sec));
 	EmitChange(changes, "connection_drain_timeout_sec",
@@ -700,8 +827,8 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 	{
 		std::string profile_path =
 			config_dir + "/profiles/" + EnvironmentToString(active_environment) + ".json";
-		std::error_code ec;
-		if (std::filesystem::exists(profile_path, ec)) {
+		std::error_code exists_ec;
+		if (std::filesystem::exists(profile_path, exists_ec)) {
 			RuntimeConfig profile_overlay = new_runtime;
 			std::string buf2;
 			auto err = glz::read_file_json(profile_overlay, profile_path, buf2);
@@ -787,6 +914,8 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 	MongoDbConfig new_mongo_dev;
 	MongoDbConfig new_mongo_public;
 	bool dev_loaded = false, public_loaded = false;
+	RedisClientConfig new_redis;
+	bool redis_loaded = false;
 	if (have_server) {
 		if (!new_server.mongodb_dev.empty()) {
 			dev_loaded = LoadMongoDbConfigFromFile(new_server.mongodb_dev, new_mongo_dev);
@@ -805,6 +934,11 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 								 new_server.mongodb_public);
 				return false;
 			}
+		}
+		if (!LoadRedisConfigForServer(new_server, new_redis, redis_loaded)) {
+			ENGINE_LOG_ERROR(logger,
+							 "ConfigManager: reload failed because redis config could not be loaded");
+			return false;
 		}
 	}
 
@@ -826,11 +960,15 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 	RuntimeConfig old_runtime;
 	ClientConfig old_client;
 	ServerConfig old_server;
+	RedisClientConfig old_redis;
+	bool old_redis_loaded = false;
 	{
 		std::shared_lock<std::shared_mutex> lock(config_mutex_);
 		old_runtime = runtime_config_;
 		old_client = client_config_;
 		old_server = server_config_;
+		old_redis = redis_config_;
+		old_redis_loaded = redis_loaded_;
 	}
 
 	{
@@ -845,6 +983,8 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 			mongo_public_config_ = std::move(new_mongo_public);
 			mongo_dev_loaded_ = dev_loaded;
 			mongo_public_loaded_ = public_loaded;
+			redis_config_ = std::move(new_redis);
+			redis_loaded_ = redis_loaded;
 		}
 	}
 
@@ -854,6 +994,8 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 		previous_runtime_config_ = std::move(old_runtime);
 		previous_client_config_ = std::move(old_client);
 		previous_server_config_ = std::move(old_server);
+		previous_redis_config_ = std::move(old_redis);
+		previous_redis_loaded_ = old_redis_loaded;
 		has_previous_ = true;
 	}
 
@@ -862,6 +1004,8 @@ bool ConfigManager::Reload(const std::string& config_dir) {
 		std::shared_lock<std::shared_mutex> lock(config_mutex_);
 		ConfigChangeSet changes = Diff(previous_runtime_config_, runtime_config_,
 									   previous_server_config_, server_config_);
+		AppendRedisConfigDiff(changes, previous_redis_config_, previous_redis_loaded_,
+							  redis_config_, redis_loaded_);
 		for (const auto& entry : changes) {
 			ENGINE_LOG_INFO(logger, "config: {}: {} -> {}",
 							entry.field_path, entry.old_value, entry.new_value);
@@ -929,6 +1073,82 @@ bool ConfigManager::LoadDbServiceConfigFromFile(const std::string& path, DbServi
 	return true;
 }
 
+bool ConfigManager::LoadRedisClientConfigFromFile(const std::string& path,
+												  RedisClientConfig& out) {
+	std::string buf;
+	auto ec = glz::read_file_json(out, path, buf);
+	if (ec) {
+		if (auto* l = GetLogger()) {
+			ENGINE_LOG_ERROR(l, "ConfigManager: failed to load redis config [{}]: {}",
+							 path, glz::format_error(ec, buf));
+		}
+		return false;
+	}
+	InterpolateConfigStrings(out);
+	auto vr = ValidateRedisClientConfig(out);
+	if (!vr.valid) {
+		if (auto* l = GetLogger()) {
+			ENGINE_LOG_ERROR(l, "ConfigManager: redis config validation failed [{}]: {}",
+							 path, vr.errors);
+		}
+		return false;
+	}
+	if (!vr.warnings.empty()) {
+		if (auto* l = GetLogger()) {
+			ENGINE_LOG_WARN(l, "ConfigManager: redis config validation warning [{}]: {}",
+							path, vr.warnings);
+		}
+	}
+	WarnRedisPasswordConfigured(out);
+	return true;
+}
+
+bool ConfigManager::LoadRedisConfigForServer(const ServerConfig& server,
+											 RedisClientConfig& out,
+											 bool& loaded) const {
+	out = RedisClientConfig{};
+	loaded = false;
+
+	if (!IsRedisRuntimeCompiled()) {
+		if (server.redis_required) {
+			if (auto* l = GetLogger()) {
+				ENGINE_LOG_ERROR(l,
+					"ConfigManager: redis_required=true but Redis runtime is not compiled");
+			}
+			return false;
+		}
+		return true;
+	}
+
+	if (server.redis.empty()) {
+		if (server.redis_required) {
+			if (auto* l = GetLogger()) {
+				ENGINE_LOG_ERROR(l,
+					"ConfigManager: redis_required=true but server.redis is empty");
+			}
+			return false;
+		}
+		return true;
+	}
+
+	RedisClientConfig candidate;
+	if (!LoadRedisClientConfigFromFile(server.redis, candidate)) {
+		if (server.redis_required) {
+			return false;
+		}
+		if (auto* l = GetLogger()) {
+			ENGINE_LOG_WARN(l,
+				"ConfigManager: redis config [{}] failed to load; Redis disabled because redis_required=false",
+				server.redis);
+		}
+		return true;
+	}
+
+	out = std::move(candidate);
+	loaded = true;
+	return true;
+}
+
 bool ConfigManager::LoadMongoDbDevConfig(MongoDbConfig& out) const {
 	std::string path = GetMongoDbDevPath();
 	if (path.empty()) return false;
@@ -954,6 +1174,12 @@ bool ConfigManager::LoadMongoDbPublicConfigLocked(MongoDbConfig& out) const {
 	return LoadMongoDbConfigFromFile(server_config_.mongodb_public, out);
 }
 
+bool ConfigManager::LoadRedisClientConfigLocked(RedisClientConfig& out) const {
+	std::shared_lock<std::shared_mutex> lock(config_mutex_);
+	if (server_config_.redis.empty()) return false;
+	return LoadRedisClientConfigFromFile(server_config_.redis, out);
+}
+
 // Cached MongoDB config access
 
 MongoDbConfig ConfigManager::GetMongoDbDevConfig() const {
@@ -974,6 +1200,16 @@ bool ConfigManager::IsMongoDbDevLoaded() const {
 bool ConfigManager::IsMongoDbPublicLoaded() const {
 	std::shared_lock<std::shared_mutex> lock(config_mutex_);
 	return mongo_public_loaded_;
+}
+
+RedisClientConfig ConfigManager::GetRedisClientConfig() const {
+	std::shared_lock<std::shared_mutex> lock(config_mutex_);
+	return redis_config_;
+}
+
+bool ConfigManager::IsRedisConfigLoaded() const {
+	std::shared_lock<std::shared_mutex> lock(config_mutex_);
+	return redis_loaded_;
 }
 
 bool ConfigManager::ReloadMongoDbConfigs() {
@@ -1064,27 +1300,39 @@ bool ConfigManager::Rollback() {
 	RuntimeConfig reverted_runtime;
 	ClientConfig reverted_client;
 	ServerConfig reverted_server;
+	RedisClientConfig old_redis;
+	bool old_redis_loaded = false;
+	RedisClientConfig reverted_redis;
+	bool reverted_redis_loaded = false;
 	bool has_snapshot = false;
 	{
 		std::lock_guard<std::shared_mutex> lock(config_mutex_);
 		if (!has_previous_) return false;
 
-		old_runtime = std::move(runtime_config_);
-		old_client = std::move(client_config_);
-		old_server = std::move(server_config_);
+		old_runtime = runtime_config_;
+		old_client = client_config_;
+		old_server = server_config_;
+		old_redis = redis_config_;
+		old_redis_loaded = redis_loaded_;
 
-		runtime_config_ = std::move(previous_runtime_config_);
-		client_config_ = std::move(previous_client_config_);
-		server_config_ = std::move(previous_server_config_);
+		runtime_config_ = previous_runtime_config_;
+		client_config_ = previous_client_config_;
+		server_config_ = previous_server_config_;
+		redis_config_ = previous_redis_config_;
+		redis_loaded_ = previous_redis_loaded_;
 
-		previous_runtime_config_ = std::move(old_runtime);
-		previous_client_config_ = std::move(old_client);
-		previous_server_config_ = std::move(old_server);
+		previous_runtime_config_ = old_runtime;
+		previous_client_config_ = old_client;
+		previous_server_config_ = old_server;
+		previous_redis_config_ = old_redis;
+		previous_redis_loaded_ = old_redis_loaded;
 		has_snapshot = true;
 
 		reverted_runtime = runtime_config_;
 		reverted_client = client_config_;
 		reverted_server = server_config_;
+		reverted_redis = redis_config_;
+		reverted_redis_loaded = redis_loaded_;
 	}
 
 	auto* logger = GetLogger();
@@ -1093,6 +1341,8 @@ bool ConfigManager::Rollback() {
 	// Build change set (swap old/new since we reverted)
 	ConfigChangeSet changes = Diff(old_runtime, reverted_runtime,
 								   old_server, reverted_server);
+	AppendRedisConfigDiff(changes, old_redis, old_redis_loaded,
+						  reverted_redis, reverted_redis_loaded);
 	for (const auto& entry : changes) {
 		ENGINE_LOG_INFO(logger, "config (rollback): {}: {} -> {}",
 						entry.field_path, entry.old_value, entry.new_value);
@@ -1312,11 +1562,19 @@ ConfigValidator::Result ConfigManager::ValidateOnly(const std::string& config_di
 				if (!combined.errors.empty()) combined.errors += "; ";
 				combined.errors += "server.json: parse error: " + glz::format_error(ec2, buf);
 			} else {
+				InterpolateConfigStrings(temp);
 				ConfigValidator::Result vr = ConfigValidator::ValidateServer(temp);
 				if (!vr.valid) {
 					combined.valid = false;
 					if (!combined.errors.empty()) combined.errors += "; ";
 					combined.errors += vr.errors;
+				}
+				RedisClientConfig redis_config;
+				bool redis_loaded = false;
+				if (!LoadRedisConfigForServer(temp, redis_config, redis_loaded)) {
+					combined.valid = false;
+					if (!combined.errors.empty()) combined.errors += "; ";
+					combined.errors += "redis config validation failed";
 				}
 			}
 		}

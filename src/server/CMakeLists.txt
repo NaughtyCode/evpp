@@ -10,6 +10,7 @@ get_filename_component(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}" DIRECTORY)
 
 option(ENGINE_PROFILER_ENABLED "Enable perfetto profiler" ON)
 option(ENGINE_MONGODB_ENABLED "Enable MongoDB driver support" ON)
+option(ENGINE_REDIS_ENABLED "Enable Redis runtime module" ON)
 option(ENGINE_PHYSICS_ENABLED "Enable Jolt Physics integration" ON)
 option(ENGINE_MEM_STATS_ENABLED "Enable memory allocation statistics tracking" OFF)
 option(HTTPS "Enable HTTPS/SSL support" OFF)
@@ -20,7 +21,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Android" OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
     if(ENGINE_MONGODB_ENABLED)
         message(STATUS "ENGINE_MONGODB_ENABLED forced OFF on mobile platform ${CMAKE_SYSTEM_NAME}")
     endif()
+    if(ENGINE_REDIS_ENABLED)
+        message(STATUS "ENGINE_REDIS_ENABLED forced OFF on mobile platform ${CMAKE_SYSTEM_NAME}")
+    endif()
     set(ENGINE_MONGODB_ENABLED OFF CACHE BOOL "Enable MongoDB driver support" FORCE)
+    set(ENGINE_REDIS_ENABLED OFF CACHE BOOL "Enable Redis runtime module" FORCE)
 endif()
 
 if(UNIX)
@@ -128,6 +133,8 @@ if(NOT TARGET copy_resources)
     )
 endif()
 
+set(ENGINE_REDIS_RUNTIME_ENABLED ${ENGINE_REDIS_ENABLED})
+
 message(STATUS "This is BINARY dir ${PROJECT_BINARY_DIR}")
 message(STATUS "This is SOURCE dir ${PROJECT_SOURCE_DIR}")
 message(STATUS "CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
@@ -164,6 +171,21 @@ if(NOT TARGET event_core_static)
     add_subdirectory(${ENGINE_ROOT}/thirdparty/libevent ${CMAKE_BINARY_DIR}/libevent)
     set_property(TARGET event_core_static event_extra_static event_static PROPERTY FOLDER "thirdparty")
     set_property(TARGET event_core event_extra event PROPERTY FOLDER "thirdparty")
+endif()
+
+if(ENGINE_REDIS_ENABLED AND NOT TARGET hiredis)
+    block(SCOPE_FOR VARIABLES)
+        set(BUILD_SHARED_LIBS OFF)
+        set(ENABLE_SSL OFF)
+        set(ENABLE_SSL_TESTS OFF)
+        set(DISABLE_TESTS ON)
+        set(ENABLE_EXAMPLES OFF)
+        set(ENABLE_ASYNC_TESTS OFF)
+        set(ENABLE_NUGET OFF)
+        add_subdirectory(${ENGINE_ROOT}/thirdparty/hiredis
+                         ${CMAKE_BINARY_DIR}/hiredis EXCLUDE_FROM_ALL)
+    endblock()
+    set_property(TARGET hiredis PROPERTY FOLDER "thirdparty")
 endif()
 
 if(ENGINE_MONGODB_ENABLED AND NOT TARGET bson_static)
@@ -251,6 +273,12 @@ set(ENGINE_RUNTIME_INCLUDE_DIRS
     ${ENGINE_ROOT}/thirdparty/concurrentqueue/concurrentqueue
 )
 
+if(ENGINE_REDIS_ENABLED)
+    list(APPEND ENGINE_RUNTIME_INCLUDE_DIRS
+        ${ENGINE_ROOT}/thirdparty/hiredis
+    )
+endif()
+
 if(TARGET bson_static)
     list(APPEND ENGINE_RUNTIME_INCLUDE_DIRS
         ${ENGINE_ROOT}/thirdparty/mongo-c-driver/src/libbson/src
@@ -282,6 +310,9 @@ set(ENGINE_RUNTIME_LINK_LIBS
 
 if(ENGINE_PROFILER_ENABLED)
     list(APPEND ENGINE_RUNTIME_LINK_LIBS engine_perfetto_static)
+endif()
+if(ENGINE_REDIS_ENABLED AND TARGET hiredis::hiredis)
+    list(APPEND ENGINE_RUNTIME_LINK_LIBS hiredis::hiredis)
 endif()
 if(ENGINE_PHYSICS_ENABLED)
     list(APPEND ENGINE_RUNTIME_LINK_LIBS Jolt)
@@ -321,6 +352,9 @@ if(ENGINE_PROFILER_ENABLED)
 endif()
 if(ENGINE_MONGODB_ENABLED)
     target_compile_definitions(GameServer PRIVATE ENGINE_MONGODB_ENABLED)
+endif()
+if(ENGINE_REDIS_ENABLED)
+    target_compile_definitions(GameServer PRIVATE ENGINE_REDIS_ENABLED)
 endif()
 if(ENGINE_MEM_STATS_ENABLED)
     target_compile_definitions(GameServer PRIVATE ENGINE_MEM_STATS_ENABLED)

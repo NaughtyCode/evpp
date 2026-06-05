@@ -27,6 +27,9 @@
 #include "runtime/vm/custom_ptr_store.h"
 #include "runtime/vm/lua_error_handler.h"
 #include "runtime/vm/vm.h"
+#if defined(ENGINE_REDIS_ENABLED)
+#include "runtime/database/redis/bind/redis_bind.h"
+#endif
 
 namespace engine {
 
@@ -193,6 +196,10 @@ bool PhysicsSystem::Start() {
 		if (!script_vm_ || scripts_dir_.empty()) {
 			return true;
 		}
+		script_vm_->AdoptCurrentThread();
+#if defined(ENGINE_REDIS_ENABLED)
+		script::ExportRedis(*script_vm_);
+#endif
 
 		size_t failed = script_vm_->DoDirectory(scripts_dir_);
 		if (failed > 0) {
@@ -210,7 +217,11 @@ bool PhysicsSystem::Start() {
 			return;
 		}
 		script_vm_->DestroyScript();
+#if defined(ENGINE_REDIS_ENABLED)
+		script::ShutdownRedisBindings(*script_vm_);
+#endif
 		script::ShutdownTimerBindings(*script_vm_);
+		script_vm_->ShutdownAsyncDispatcher();
 	});
 
 	bool ok = physics_thread_.Start(config_manager_->GetPhysicsConfig(),
@@ -242,7 +253,11 @@ void PhysicsSystem::Shutdown() {
 	physics_thread_.SetShutdownCallback({});
 
 	if (script_vm_) {
+#if defined(ENGINE_REDIS_ENABLED)
+		script::ShutdownRedisBindings(*script_vm_);
+#endif
 		script::ShutdownTimerBindings(*script_vm_);
+		script_vm_->ShutdownAsyncDispatcher();
 		script_vm_.reset();
 	}
 
@@ -557,6 +572,7 @@ void PhysicsSystem::UpdateScript(const std::vector<CollisionEvent>& collision_ev
 	if (!script_vm_) return;
 
 	// Drive Lua coroutines
+	script_vm_->DispatchAsyncResults(256);
 	script_vm_->UpdateScript();
 
 	if (collision_events.empty()) return;

@@ -23,6 +23,9 @@
 #include "runtime/script/bind/import_bind.h"
 #include "runtime/script/bind/json_bind.h"
 #include "runtime/core/timer/bind/timer_bind.h"
+#if defined(ENGINE_REDIS_ENABLED)
+#include "runtime/database/redis/bind/redis_bind.h"
+#endif
 
 namespace engine {
 
@@ -370,6 +373,7 @@ void DBThread::EnqueueResponse(DbResponse&& resp) {
 
 void DBThread::EventLoop() {
 	SetCurrentThreadName("DBThread-" + std::to_string(index_));
+	script_vm_.AdoptCurrentThread();
 
 	// ── Phase 1: Acquire MongoClient from shared pool ──────────────────
 	client_ = pool_->Pop();
@@ -393,6 +397,9 @@ void DBThread::EventLoop() {
 
 		// 2c2. Glaze JSON bindings: json / json_safe global tables.
 		script::ExportJson(script_vm_);
+#if defined(ENGINE_REDIS_ENABLED)
+		script::ExportRedis(script_vm_);
+#endif
 
 		// 2d. Wire global tables into the module system so require() works
 		if (!script_vm_.DoString("package.loaded.mongoc = mongoc; "
@@ -490,6 +497,7 @@ void DBThread::EventLoop() {
 					delta = std::chrono::duration<double>(now - last_frame_time_).count();
 				}
 				last_frame_time_ = now;
+				script_vm_.DispatchAsyncResults(256);
 				script_vm_.CallFrameCallback(frame_count_, delta);
 			}
 
@@ -533,6 +541,10 @@ void DBThread::EventLoop() {
 		timer_mgr_.reset();
 	}
 	script_vm_.DestroyScript();
+#if defined(ENGINE_REDIS_ENABLED)
+	script::ShutdownRedisBindings(script_vm_);
+#endif
+	script_vm_.ShutdownAsyncDispatcher();
 	if (client_) {
 		pool_->Push(client_);
 		client_ = nullptr;

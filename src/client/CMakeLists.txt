@@ -150,6 +150,7 @@ message (STATUS "LIBRARY_OUTPUT_PATH " ${LIBRARY_OUTPUT_PATH})
 
 # ── Runtime source-file organization ──────────────────────────────────
 # Provides CLOUD_ENGINE_SOURCES and per-module source lists.
+set(ENGINE_REDIS_RUNTIME_ENABLED OFF)
 include(${ENGINE_ROOT}/runtime/CMakeLists.txt)
 
 if(NOT TARGET engine_lua_static)

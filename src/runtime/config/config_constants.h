@@ -11,6 +11,7 @@ inline constexpr const char* kConfigDir = "resources/config";
 inline constexpr const char* kRuntimeConfigFile = "/runtime/runtime.json";
 inline constexpr const char* kClientConfigFile = "/client/client.json";
 inline constexpr const char* kServerConfigFile = "/server/server.json";
+inline constexpr const char* kRedisConfigFile = "/server/redis.json";
 
 // Resource / script directory defaults
 

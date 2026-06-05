@@ -1,0 +1,36 @@
+{
+  "connection": {
+    "host": "127.0.0.1",
+    "port": 6379,
+    "username": "",
+    "password": "${REDIS_PASSWORD:-}",
+    "database": 0,
+    "connect_timeout_ms": 5000,
+    "command_timeout_ms": 5000,
+    "keepalive": true
+  },
+  "queue": {
+    "request_queue_size": 4096,
+    "max_inflight": 4096,
+    "dispatch_batch_size": 256
+  },
+  "thread": {
+    "thread_count": 4,
+    "main_loop_fps": 60
+  },
+  "script": {
+    "redis_scripts_dir": "resources/script/redis",
+    "auto_load": true
+  },
+  "log": {
+    "enabled": true,
+    "slow_command_ms": 100
+  },
+  "reconnect": {
+    "enabled": true,
+    "initial_delay_ms": 500,
+    "max_delay_ms": 5000,
+    "backoff_multiplier": 2,
+    "queue_while_disconnected": false
+  }
+}

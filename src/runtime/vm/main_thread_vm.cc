@@ -7,6 +7,9 @@
 #include "runtime/profiler/profiler_events.h"
 #include "runtime/script/bind/import_bind.h"
 #include "runtime/script/bind/script_bind.h"
+#if defined(ENGINE_REDIS_ENABLED)
+#include "runtime/database/redis/bind/redis_bind.h"
+#endif
 
 namespace engine {
 
@@ -113,6 +116,12 @@ void MainThreadScriptVM::ExportRuntimeBindings(TimerManager& timer_mgr) {
 		script::ExportDbService(*this);
 	}
 #endif
+#if defined(ENGINE_REDIS_ENABLED)
+	{
+		ENGINE_PROFILE_SCRIPT_EXPORT("redis");
+		script::ExportRedis(*this);
+	}
+#endif
 
 	ENGINE_LOG_INFO(logger, "ScriptBind: all APIs exported");
 }
@@ -122,6 +131,9 @@ void MainThreadScriptVM::ShutdownNetworkBindings() {
 
 	script::ShutdownRpcBindings(*this);
 	script::ShutdownConfigBindings(*this);
+#if defined(ENGINE_REDIS_ENABLED)
+	script::ShutdownRedisBindings(*this);
+#endif
 	script::ShutdownNetBindings();
 }
 

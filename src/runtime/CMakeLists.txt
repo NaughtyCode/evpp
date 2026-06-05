@@ -60,6 +60,7 @@ source_group("core\\timer" FILES ${TIMER_SOURCES})
 # ── Config ─────────────────────────────────────────────────────────
 set(CONFIG_SOURCES
     ${RUNTIME_DIR}/config/config.cc ${RUNTIME_DIR}/config/config.h
+    ${RUNTIME_DIR}/config/redis_config.cc ${RUNTIME_DIR}/config/redis_config.h
     ${RUNTIME_DIR}/config/config_constants.h ${RUNTIME_DIR}/config/limits.h
     ${RUNTIME_DIR}/config/config_validator.cc ${RUNTIME_DIR}/config/config_validator.h
     ${RUNTIME_DIR}/config/bind/config_bind.cc ${RUNTIME_DIR}/config/bind/config_bind.h
@@ -89,6 +90,7 @@ source_group("engine" FILES ${ENGINE_SOURCES})
 # ── Script VM ─────────────────────────────────────────────────────
 set(VM_SOURCES
     ${RUNTIME_DIR}/vm/vm.cc ${RUNTIME_DIR}/vm/vm.h
+    ${RUNTIME_DIR}/vm/async_result_dispatcher.cc ${RUNTIME_DIR}/vm/async_result_dispatcher.h
     ${RUNTIME_DIR}/vm/main_thread_vm.cc ${RUNTIME_DIR}/vm/main_thread_vm.h
     ${RUNTIME_DIR}/vm/sandbox.cc ${RUNTIME_DIR}/vm/sandbox.h
     ${RUNTIME_DIR}/vm/script_importer.cc ${RUNTIME_DIR}/vm/script_importer.h
@@ -327,6 +329,20 @@ set(DB_SERVICE_SOURCES
 )
 source_group("database\\data_service" FILES ${DB_SERVICE_SOURCES})
 
+set(REDIS_SOURCES
+    ${RUNTIME_DIR}/database/redis/redis_client.cc ${RUNTIME_DIR}/database/redis/redis_client.h
+    ${RUNTIME_DIR}/database/redis/redis_client_thread.cc ${RUNTIME_DIR}/database/redis/redis_client_thread.h
+    ${RUNTIME_DIR}/database/redis/redis_client_thread_group.cc ${RUNTIME_DIR}/database/redis/redis_client_thread_group.h
+    ${RUNTIME_DIR}/database/redis/redis_client_script_vm.cc ${RUNTIME_DIR}/database/redis/redis_client_script_vm.h
+    ${RUNTIME_DIR}/database/redis/redis_connection.cc ${RUNTIME_DIR}/database/redis/redis_connection.h
+    ${RUNTIME_DIR}/database/redis/redis_request.h
+    ${RUNTIME_DIR}/database/redis/redis_result.h
+    ${RUNTIME_DIR}/database/redis/redis_value.cc ${RUNTIME_DIR}/database/redis/redis_value.h
+    ${RUNTIME_DIR}/database/redis/module_access.h
+    ${RUNTIME_DIR}/database/redis/bind/redis_bind.cc ${RUNTIME_DIR}/database/redis/bind/redis_bind.h
+)
+source_group("database\\redis" FILES ${REDIS_SOURCES})
+
 # ═══════════════════════════════════════════════════════════════════════
 # Combined sources
 # ═══════════════════════════════════════════════════════════════════════
@@ -354,6 +370,10 @@ set(CLOUD_ENGINE_SOURCES
 
 if(ENGINE_MONGODB_ENABLED AND NOT (CMAKE_SYSTEM_NAME STREQUAL "Android" OR CMAKE_SYSTEM_NAME STREQUAL "iOS"))
     list(APPEND CLOUD_ENGINE_SOURCES ${MONGO_SOURCES} ${MONGO_BIND_SOURCES} ${DB_SERVICE_SOURCES} ${ORM_SOURCES})
+endif()
+
+if(ENGINE_REDIS_RUNTIME_ENABLED AND NOT (CMAKE_SYSTEM_NAME STREQUAL "Android" OR CMAKE_SYSTEM_NAME STREQUAL "iOS"))
+    list(APPEND CLOUD_ENGINE_SOURCES ${REDIS_SOURCES})
 endif()
 
 if(ENGINE_PHYSICS_ENABLED)

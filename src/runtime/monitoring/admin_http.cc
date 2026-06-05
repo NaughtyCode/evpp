@@ -13,6 +13,9 @@
 #include "runtime/evpp/http/service.h"
 #include "runtime/monitoring/metrics.h"
 #include "runtime/physics/physics_engine_bridge.h"
+#if defined(ENGINE_REDIS_ENABLED)
+#include "runtime/database/redis/redis_client.h"
+#endif
 #if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
 #include "runtime/database/data_service/database_service.h"
 #include "runtime/database/mongo/mongo_system.h"
@@ -103,6 +106,7 @@ const char* CleanupPhaseToString(engine::Engine::CleanupPhase phase) {
 	switch (phase) {
 	case engine::Engine::CleanupPhase::NotStarted:      return "NotStarted";
 	case engine::Engine::CleanupPhase::PhysicsShutdown:  return "PhysicsShutdown";
+	case engine::Engine::CleanupPhase::RedisShutdown:    return "RedisShutdown";
 	case engine::Engine::CleanupPhase::DatabaseShutdown: return "DatabaseShutdown";
 	case engine::Engine::CleanupPhase::NetworkShutdown:  return "NetworkShutdown";
 	case engine::Engine::CleanupPhase::TimerShutdown:    return "TimerShutdown";
@@ -176,6 +180,7 @@ void HandleReadiness(evpp::EventLoop*, const evpp::http::ContextPtr& ctx,
 
 	DepStatus db{"ok", ""};
 	DepStatus mongodb{"ok", ""};
+	DepStatus redis{"ok", ""};
 	DepStatus physics{"ok", ""};
 	bool all_healthy = true;
 
@@ -221,6 +226,43 @@ void HandleReadiness(evpp::EventLoop*, const evpp::http::ContextPtr& ctx,
 	mongodb = {"disabled", "MongoDB not compiled"};
 #endif
 
+	// Redis health
+#if defined(ENGINE_REDIS_ENABLED)
+	{
+		auto server_cfg = ConfigManager::Instance().GetServerConfig();
+		if (!ConfigManager::Instance().IsRedisConfigLoaded()) {
+			if (server_cfg.redis_required) {
+				redis.status = "error";
+				redis.message = "redis config not loaded";
+				all_healthy = false;
+			} else if (!server_cfg.redis.empty()) {
+				redis.status = "error";
+				redis.message = "redis config not loaded";
+			} else {
+				redis.status = "disabled";
+				redis.message = "Redis not configured";
+			}
+		} else if (!redis::RedisClient::Instance().IsRunning()) {
+			if (server_cfg.redis_required) {
+				redis.status = "error";
+				redis.message = "RedisClient not running";
+				all_healthy = false;
+			} else {
+				redis.status = "degraded";
+				redis.message = "RedisClient not running";
+			}
+		} else if (!redis::RedisClient::Instance().IsHealthy()) {
+			redis.status = "degraded";
+			redis.message = "one or more Redis workers unhealthy";
+			if (server_cfg.redis_required) {
+				all_healthy = false;
+			}
+		}
+	}
+#else
+	redis = {"disabled", "Redis not compiled"};
+#endif
+
 	// Physics health
 	if (!PhysicsEngineBridge::Instance().IsInitialized()) {
 		physics.status = "error";
@@ -237,6 +279,7 @@ void HandleReadiness(evpp::EventLoop*, const evpp::http::ContextPtr& ctx,
 		<< ",\"checks\":{"
 		<< "\"db\":" << make_check(db)
 		<< ",\"mongodb\":" << make_check(mongodb)
+		<< ",\"redis\":" << make_check(redis)
 		<< ",\"physics\":" << make_check(physics)
 		<< "}}";
 	int code = all_healthy ? 200 : 503;
@@ -300,8 +343,23 @@ void HandleStats(evpp::EventLoop*, const evpp::http::ContextPtr&,
 		<< ",\"messages_sent\":" << metrics.messages_sent_total().Value()
 		<< ",\"timers_fired\":" << metrics.timers_fired_total().Value()
 		<< ",\"db_requests\":" << metrics.db_requests_total().Value()
-		<< ",\"db_dropped\":" << metrics.db_requests_dropped_total().Value()
+		<< ",\"db_dropped\":" << metrics.db_requests_dropped_total().Value();
+#if defined(ENGINE_REDIS_ENABLED)
+	auto redis_stats = redis::RedisClient::Instance().GetStats();
+	oss << ",\"redis\":{"
+		<< "\"running\":" << (redis_stats.running ? "true" : "false")
+		<< ",\"healthy\":" << (redis_stats.healthy ? "true" : "false")
+		<< ",\"workers\":" << redis_stats.worker_count
+		<< ",\"queued_requests\":" << redis_stats.queued_requests
+		<< ",\"unsent_requests\":" << redis_stats.unsent_requests
+		<< ",\"inflight_requests\":" << redis_stats.inflight_requests
+		<< ",\"accepted_requests\":" << redis_stats.accepted_requests
+		<< ",\"rejected_requests\":" << redis_stats.rejected_requests
+		<< ",\"completed_requests\":" << redis_stats.completed_requests
+		<< ",\"timed_out_requests\":" << redis_stats.timed_out_requests
 		<< "}";
+#endif
+	oss << "}";
 	respcb(oss.str());
 }
 

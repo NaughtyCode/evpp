@@ -46,19 +46,21 @@ class CLOUD_ENGINE_API Engine {
 	/*
 	 * Cleanup Lifecycle Order (MUST be maintained):
 	 *
-	 *   1. Physics Shutdown      — stops physics VM + physics thread
-	 *   2. Database Shutdown     — stops DB threads + drains queues
-	 *   3. Network Shutdown      — [REQUIRES script_vm_ alive]
-	 *   4. Timer Shutdown        — [REQUIRES script_vm_ alive]
-	 *   5. DestroyScript         — destroys Lua VM + lifecycle hooks
-	 *   6. Final Logs            — GC stats, cleanup confirmation
+	 *   1. Physics Shutdown      - stops physics VM + physics thread
+	 *   2. Redis Shutdown        - stops Redis workers before VM owners
+	 *   3. Database Shutdown     - stops DB threads + drains queues
+	 *   4. Network Shutdown      - [REQUIRES script_vm_ alive]
+	 *   5. Timer Shutdown        - [REQUIRES script_vm_ alive]
+	 *   6. DestroyScript         - destroys Lua VM + lifecycle hooks
+	 *   7. Final Logs            - GC stats, cleanup confirmation
 	 *
-	 * CRITICAL: Steps 3-4 require script_vm_ to be alive.
+	 * CRITICAL: Steps 4-5 require script_vm_ to be alive.
 	 * Do NOT reorder without updating ALL callers.
 	 */
 	enum class CleanupPhase {
 		NotStarted,
 		PhysicsShutdown,
+		RedisShutdown,
 		DatabaseShutdown,
 		NetworkShutdown,
 		TimerShutdown,

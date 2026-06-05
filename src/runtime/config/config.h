@@ -15,6 +15,7 @@
 #include "runtime/config/config_constants.h"
 #include "runtime/config/i_config_manager.h"
 #include "runtime/config/limits.h"
+#include "runtime/config/redis_config.h"
 #include "runtime/core/engine_api.h"
 #include "runtime/vm/file_watcher.h"
 
@@ -372,6 +373,10 @@ struct ServerConfig {
 	std::string db_service = "resources/config/server/db_service.json";
 	bool db_required = false;  // true = startup/readiness fail when DB is unavailable
 
+	// Redis client config file path (relative to working dir).
+	std::string redis;
+	bool redis_required = false;  // true = startup/readiness fail when Redis is unavailable
+
 	// Explicit MongoDB selection override. When non-empty, this forces
 	// which MongoDB cluster to use ("dev" or "public"), overriding the
 	// environment-based default. Empty (default) = use environment.
@@ -588,6 +593,10 @@ class CLOUD_ENGINE_API ConfigManager : public IConfigManager {
 	// Load a DbServiceConfig from a JSON file path.
 	static bool LoadDbServiceConfigFromFile(const std::string& path, DbServiceConfig& out);
 
+	// Load a RedisClientConfig from a JSON file path.
+	static bool LoadRedisClientConfigFromFile(const std::string& path,
+											  RedisClientConfig& out);
+
 	// Load the dev/public cluster config using the currently configured
 	// path from server.json.
 	bool LoadMongoDbDevConfig(MongoDbConfig& out) const;
@@ -606,6 +615,9 @@ class CLOUD_ENGINE_API ConfigManager : public IConfigManager {
 	bool IsMongoDbDevLoaded() const;
 	bool IsMongoDbPublicLoaded() const;
 
+	bool IsRedisConfigLoaded() const;
+	RedisClientConfig GetRedisClientConfig() const;
+
 	// Reload the mongodb configs from the currently configured paths.
 	// Returns true if all configured configs loaded successfully (or
 	// none were configured). Called automatically by Load/Reload.
@@ -615,6 +627,7 @@ class CLOUD_ENGINE_API ConfigManager : public IConfigManager {
 	// Prefer these over GetMongoDbDevPath() + LoadMongoDbConfigFromFile().
 	bool LoadMongoDbDevConfigLocked(MongoDbConfig& out) const;
 	bool LoadMongoDbPublicConfigLocked(MongoDbConfig& out) const;
+	bool LoadRedisClientConfigLocked(RedisClientConfig& out) const;
 
 	// Build a field-level change set by diffing old and new configs.
 	static ConfigChangeSet Diff(const RuntimeConfig& old_rt,
@@ -635,6 +648,9 @@ class CLOUD_ENGINE_API ConfigManager : public IConfigManager {
 	// Shared loading helper: after server config is populated, load
 	// any referenced mongodb config files.
 	bool LoadMongoDbConfigsFromServer();
+	bool LoadRedisConfigForServer(const ServerConfig& server_config,
+								  RedisClientConfig& out,
+								  bool& loaded) const;
 
 	// Notify all registered reload callbacks with the given change set.
 	void NotifyReloadCallbacks(const ConfigChangeSet& changes);
@@ -648,6 +664,8 @@ class CLOUD_ENGINE_API ConfigManager : public IConfigManager {
 	RuntimeConfig previous_runtime_config_;
 	ClientConfig previous_client_config_;
 	ServerConfig previous_server_config_;
+	RedisClientConfig previous_redis_config_;
+	bool previous_redis_loaded_ = false;
 	bool has_previous_ = false;
 
 	// Cached mongodb cluster configs — loaded alongside server.json.
@@ -655,6 +673,8 @@ class CLOUD_ENGINE_API ConfigManager : public IConfigManager {
 	MongoDbConfig mongo_public_config_;
 	bool mongo_dev_loaded_ = false;
 	bool mongo_public_loaded_ = false;
+	RedisClientConfig redis_config_;
+	bool redis_loaded_ = false;
 
 	// Reload notification (plain mutex — callbacks are low-frequency)
 	mutable std::mutex callbacks_mutex_;
