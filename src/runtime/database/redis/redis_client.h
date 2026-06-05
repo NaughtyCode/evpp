@@ -27,7 +27,8 @@ enum class RedisSubmitStatus {
 	kInvalidArgument,
 	kInvalidCommand = kInvalidArgument,
 	kUnsupportedCommand,
-	kShutdown
+	kShuttingDown,
+	kShutdown = kShuttingDown
 };
 
 struct RedisSubmitResult {

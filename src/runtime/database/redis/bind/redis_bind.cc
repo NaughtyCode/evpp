@@ -34,7 +34,9 @@ struct RedisContextUserdata {
 };
 
 RedisLuaBindingContext* GetContext(lua_State* L) {
-	return static_cast<RedisLuaBindingContext*>(lua_touserdata(L, lua_upvalueindex(1)));
+	auto* userdata = static_cast<RedisContextUserdata*>(
+		luaL_testudata(L, lua_upvalueindex(1), "engine.redis.context"));
+	return userdata ? userdata->context : nullptr;
 }
 
 int l_context_gc(lua_State* L) {
@@ -83,6 +85,14 @@ RedisCommandOptions ReadOptions(lua_State* L, int index) {
 	}
 	lua_pop(L, 1);
 
+	lua_getfield(L, index, "trace_tag");
+	if (lua_isstring(L, -1)) {
+		size_t len = 0;
+		const char* value = lua_tolstring(L, -1, &len);
+		options.trace_tag.assign(value, len);
+	}
+	lua_pop(L, 1);
+
 	lua_getfield(L, index, "routing_key");
 	if (lua_isstring(L, -1)) {
 		size_t len = 0;
@@ -94,7 +104,9 @@ RedisCommandOptions ReadOptions(lua_State* L, int index) {
 	return options;
 }
 
-void PushRedisValue(lua_State* L, const RedisValue& value) {
+void PushRedisValuePayload(lua_State* L, const RedisValue& value);
+
+void PushRedisValueTable(lua_State* L, const RedisValue& value) {
 	lua_createtable(L, 0, 3);
 	lua_pushstring(L, RedisValueTypeToString(value.type));
 	lua_setfield(L, -2, "type");
@@ -131,7 +143,7 @@ void PushRedisValue(lua_State* L, const RedisValue& value) {
 	case RedisValueType::kAttribute:
 		lua_createtable(L, static_cast<int>(value.array_value.size()), 0);
 		for (size_t i = 0; i < value.array_value.size(); ++i) {
-			PushRedisValue(L, value.array_value[i]);
+			PushRedisValueTable(L, value.array_value[i]);
 			lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
 		}
 		lua_setfield(L, -2, "value");
@@ -143,20 +155,66 @@ void PushRedisValue(lua_State* L, const RedisValue& value) {
 	}
 }
 
+void PushRedisValuePayload(lua_State* L, const RedisValue& value) {
+	switch (value.type) {
+	case RedisValueType::kNull:
+		lua_pushnil(L);
+		break;
+	case RedisValueType::kString:
+	case RedisValueType::kStatus:
+	case RedisValueType::kError:
+	case RedisValueType::kBigNumber:
+	case RedisValueType::kVerbatimString:
+		lua_pushlstring(L, value.string_value.data(), value.string_value.size());
+		break;
+	case RedisValueType::kInteger:
+		lua_pushinteger(L, static_cast<lua_Integer>(value.integer_value));
+		break;
+	case RedisValueType::kDouble:
+		lua_pushnumber(L, static_cast<lua_Number>(value.double_value));
+		break;
+	case RedisValueType::kBool:
+		lua_pushboolean(L, value.bool_value ? 1 : 0);
+		break;
+	case RedisValueType::kArray:
+	case RedisValueType::kMap:
+	case RedisValueType::kSet:
+	case RedisValueType::kPush:
+	case RedisValueType::kAttribute:
+		lua_createtable(L, static_cast<int>(value.array_value.size()), 0);
+		for (size_t i = 0; i < value.array_value.size(); ++i) {
+			PushRedisValuePayload(L, value.array_value[i]);
+			lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+		}
+		break;
+	default:
+		lua_pushnil(L);
+		break;
+	}
+}
+
 int PushRedisResult(lua_State* L, const RedisResult& result) {
-	lua_createtable(L, 0, 5);
+	lua_createtable(L, 0, 8);
 	lua_pushstring(L, RedisResultStatusToString(result.status));
 	lua_setfield(L, -2, "status");
-	lua_pushboolean(L, result.status == redis::RedisResultStatus::kOk ? 1 : 0);
+	lua_pushboolean(L, result.success ? 1 : 0);
+	lua_setfield(L, -2, "success");
+	lua_pushboolean(L, result.success ? 1 : 0);
 	lua_setfield(L, -2, "ok");
 	lua_pushinteger(L, static_cast<lua_Integer>(result.request_id));
 	lua_setfield(L, -2, "request_id");
+	lua_pushinteger(L, static_cast<lua_Integer>(result.elapsed_ms));
+	lua_setfield(L, -2, "elapsed_ms");
 	if (!result.error.empty()) {
 		lua_pushlstring(L, result.error.data(), result.error.size());
 		lua_setfield(L, -2, "error");
 	}
-	PushRedisValue(L, result.value);
+	lua_pushstring(L, RedisValueTypeToString(result.value.type));
+	lua_setfield(L, -2, "value_type");
+	PushRedisValuePayload(L, result.value);
 	lua_setfield(L, -2, "value");
+	PushRedisValueTable(L, result.value);
+	lua_setfield(L, -2, "value_detail");
 	return 1;
 }
 
@@ -303,45 +361,47 @@ void ExportRedis(ScriptVM& vm, RedisLuaBindingContext context) {
 	if (!L) return;
 
 	EnsureContextMetatable(L);
-	auto* heap_context = new RedisLuaBindingContext(std::move(context));
+	auto* userdata = static_cast<RedisContextUserdata*>(
+		lua_newuserdatauv(L, sizeof(RedisContextUserdata), 0));
+	userdata->context = new RedisLuaBindingContext(std::move(context));
+	luaL_getmetatable(L, "engine.redis.context");
+	lua_setmetatable(L, -2);
+	const int context_index = lua_gettop(L);
 
 	lua_createtable(L, 0, 5);
-	lua_pushlightuserdata(L, heap_context);
+	const int redis_table_index = lua_gettop(L);
+	lua_pushvalue(L, context_index);
 	lua_pushcclosure(L, l_redis_command, 1);
 	lua_setfield(L, -2, "command");
-	lua_pushlightuserdata(L, heap_context);
+	lua_pushvalue(L, context_index);
 	lua_pushcclosure(L, l_redis_eval, 1);
 	lua_setfield(L, -2, "eval");
-	lua_pushlightuserdata(L, heap_context);
+	lua_pushvalue(L, context_index);
 	lua_pushcclosure(L, l_redis_is_running, 1);
 	lua_setfield(L, -2, "is_running");
-	lua_pushlightuserdata(L, heap_context);
+	lua_pushvalue(L, context_index);
 	lua_pushcclosure(L, l_redis_is_healthy, 1);
 	lua_setfield(L, -2, "is_healthy");
-	lua_pushlightuserdata(L, heap_context);
+	lua_pushvalue(L, context_index);
 	lua_pushcclosure(L, l_redis_dispatch, 1);
 	lua_setfield(L, -2, "dispatch");
 
-	auto* userdata = static_cast<RedisContextUserdata*>(
-		lua_newuserdatauv(L, sizeof(RedisContextUserdata), 0));
-	userdata->context = heap_context;
-	luaL_getmetatable(L, "engine.redis.context");
-	lua_setmetatable(L, -2);
+	lua_pushvalue(L, context_index);
 	lua_setfield(L, -2, "_context");
 
-	lua_pushvalue(L, -1);
+	lua_pushvalue(L, redis_table_index);
 	lua_setglobal(L, "redis");
 	lua_getglobal(L, "package");
 	if (lua_istable(L, -1)) {
 		lua_getfield(L, -1, "loaded");
 		if (lua_istable(L, -1)) {
-			lua_pushvalue(L, -3);
+			lua_pushvalue(L, redis_table_index);
 			lua_setfield(L, -2, "redis");
 		}
 		lua_pop(L, 1);
 	}
 	lua_pop(L, 1);
-	lua_pop(L, 1);
+	lua_pop(L, 2);
 
 	ENGINE_LOG_INFO(GetLogger(), "ScriptBind: redis module exported");
 }

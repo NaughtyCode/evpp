@@ -194,6 +194,12 @@ RedisSubmitResult RedisClient::CommandInternal(
 		rejected_requests_.fetch_add(1, std::memory_order_relaxed);
 		return result;
 	}
+	if (options.timeout_ms < 0) {
+		result.status = RedisSubmitStatus::kInvalidArgument;
+		result.error = "redis command timeout_ms must be >= 0";
+		rejected_requests_.fetch_add(1, std::memory_order_relaxed);
+		return result;
+	}
 
 	RedisRequest request;
 	request.request_id = next_request_id_.fetch_add(1, std::memory_order_relaxed);
@@ -211,10 +217,10 @@ RedisSubmitResult RedisClient::CommandInternal(
 	const int timeout_ms = request.options.timeout_ms > 0
 		? request.options.timeout_ms
 		: default_timeout_ms;
-	request.deadline = std::chrono::steady_clock::now() +
-					   std::chrono::milliseconds(timeout_ms);
+	const auto now = std::chrono::steady_clock::now();
+	request.accepted_at = now;
+	request.deadline = now + std::chrono::milliseconds(timeout_ms);
 
-	result.request_id = request.request_id;
 	return SubmitRequest(std::move(request));
 }
 
@@ -261,7 +267,6 @@ RedisSubmitResult RedisClient::SubmitRequest(RedisRequest request) {
 		state = state_;
 	}
 	RedisSubmitResult result;
-	result.request_id = request.request_id;
 
 	if (state == RedisClientState::kStopping) {
 		result.status = RedisSubmitStatus::kShutdown;
@@ -287,6 +292,7 @@ RedisSubmitResult RedisClient::SubmitRequest(RedisRequest request) {
 	}
 
 	result.status = RedisSubmitStatus::kAccepted;
+	result.request_id = request.request_id;
 	return result;
 }
 

@@ -35,9 +35,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Android" OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
     if(ENGINE_MONGODB_ENABLED)
         message(STATUS "ENGINE_MONGODB_ENABLED forced OFF on mobile platform ${CMAKE_SYSTEM_NAME}")
     endif()
+    if(ENGINE_REDIS_ENABLED)
+        message(STATUS "ENGINE_REDIS_ENABLED forced OFF on mobile platform ${CMAKE_SYSTEM_NAME}")
+    endif()
     set(ENGINE_MONGODB_ENABLED OFF CACHE BOOL "Enable MongoDB driver support" FORCE)
+    set(ENGINE_REDIS_ENABLED OFF CACHE BOOL "Enable Redis runtime module" FORCE)
 endif()
 
+set(ENGINE_REDIS_RUNTIME_ENABLED ${ENGINE_REDIS_ENABLED})
 include(${ENGINE_ROOT}/runtime/CMakeLists.txt)
 include(${ENGINE_ROOT}/cmake/JoltPhysics.cmake)
 
@@ -57,6 +62,21 @@ if(ENGINE_PHYSICS_ENABLED AND NOT TARGET Jolt)
     configure_engine_jolt_physics(${ENGINE_ROOT})
 endif()
 
+if(ENGINE_REDIS_ENABLED AND NOT TARGET hiredis)
+    block(SCOPE_FOR VARIABLES)
+        set(BUILD_SHARED_LIBS OFF)
+        set(ENABLE_SSL OFF)
+        set(ENABLE_SSL_TESTS OFF)
+        set(DISABLE_TESTS ON)
+        set(ENABLE_EXAMPLES OFF)
+        set(ENABLE_ASYNC_TESTS OFF)
+        set(ENABLE_NUGET OFF)
+        add_subdirectory(${ENGINE_ROOT}/thirdparty/hiredis
+                         ${CMAKE_BINARY_DIR}/hiredis EXCLUDE_FROM_ALL)
+    endblock()
+    set_property(TARGET hiredis PROPERTY FOLDER "thirdparty")
+endif()
+
 set(ENGINE_EMBEDDED_TEST_CONFIG_HEADER
     "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/embedded_test_config.h"
 )
@@ -74,6 +94,12 @@ set(TEST_COMMON_INCLUDES
     "${ENGINE_ROOT}/thirdparty/glaze/glaze/include"
     "${ENGINE_ROOT}/thirdparty/concurrentqueue/concurrentqueue"
 )
+
+if(ENGINE_REDIS_ENABLED)
+    list(APPEND TEST_COMMON_INCLUDES
+        "${ENGINE_ROOT}/thirdparty/hiredis"
+    )
+endif()
 
 # ── Embedded runtime-under-test and shared target wiring ─────────────
 if(TARGET bson_static)
@@ -114,6 +140,9 @@ set(ENGINE_EMBEDDED_TEST_LINK_LIBS
 if(ENGINE_PROFILER_ENABLED)
     list(APPEND ENGINE_EMBEDDED_TEST_LINK_LIBS engine_perfetto_static)
 endif()
+if(ENGINE_REDIS_ENABLED AND TARGET hiredis::hiredis)
+    list(APPEND ENGINE_EMBEDDED_TEST_LINK_LIBS hiredis::hiredis)
+endif()
 if(ENGINE_PHYSICS_ENABLED)
     list(APPEND ENGINE_EMBEDDED_TEST_LINK_LIBS Jolt)
 endif()
@@ -142,6 +171,9 @@ target_compile_definitions(engine_runtime_test_objects PRIVATE
     ENGINE_EMBEDDED_TESTS=1
     ENGINE_TEST_RUNTIME=1
 )
+if(MSVC)
+    target_compile_options(engine_runtime_test_objects PRIVATE /FS)
+endif()
 
 if(WIN32)
     target_compile_definitions(engine_runtime_test_objects PRIVATE
@@ -160,6 +192,9 @@ if(ENGINE_PROFILER_ENABLED)
 endif()
 if(ENGINE_MONGODB_ENABLED)
     target_compile_definitions(engine_runtime_test_objects PRIVATE ENGINE_MONGODB_ENABLED)
+endif()
+if(ENGINE_REDIS_ENABLED)
+    target_compile_definitions(engine_runtime_test_objects PRIVATE ENGINE_REDIS_ENABLED)
 endif()
 if(ENGINE_MEM_STATS_ENABLED)
     target_compile_definitions(engine_runtime_test_objects PRIVATE ENGINE_MEM_STATS_ENABLED)
@@ -226,6 +261,9 @@ function(configure_embedded_runtime_test_target name suite_macro)
     if(ENGINE_MONGODB_ENABLED)
         target_compile_definitions(${name} PRIVATE ENGINE_MONGODB_ENABLED)
     endif()
+    if(ENGINE_REDIS_ENABLED)
+        target_compile_definitions(${name} PRIVATE ENGINE_REDIS_ENABLED)
+    endif()
     if(ENGINE_MEM_STATS_ENABLED)
         target_compile_definitions(${name} PRIVATE ENGINE_MEM_STATS_ENABLED)
     endif()
@@ -251,6 +289,9 @@ function(configure_embedded_client_api_test_target name suite_macro)
     endif()
     if(ENGINE_MONGODB_ENABLED)
         target_compile_definitions(${name} PRIVATE ENGINE_MONGODB_ENABLED)
+    endif()
+    if(ENGINE_REDIS_ENABLED)
+        target_compile_definitions(${name} PRIVATE ENGINE_REDIS_ENABLED)
     endif()
     if(ENGINE_MEM_STATS_ENABLED)
         target_compile_definitions(${name} PRIVATE ENGINE_MEM_STATS_ENABLED)

@@ -34,9 +34,11 @@ inline const char* RedisResultStatusToString(RedisResultStatus status) {
 
 struct RedisResult {
 	RedisResultStatus status = RedisResultStatus::kDropped;
+	bool success = false;
 	RedisValue value;
 	std::string error;
 	uint64_t request_id = 0;
+	uint64_t elapsed_ms = 0;
 };
 
 }  // namespace redis

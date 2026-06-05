@@ -685,8 +685,15 @@ void RedisClientThread::CompleteUnsentRequest(RedisRequest&& request,
 	ReleaseUnsentSlot();
 	RedisResult result;
 	result.status = status;
+	result.success = status == RedisResultStatus::kOk;
 	result.error = std::move(error);
 	result.request_id = request.request_id;
+	if (request.accepted_at.time_since_epoch().count() != 0) {
+		result.elapsed_ms = static_cast<uint64_t>(
+			std::chrono::duration_cast<std::chrono::milliseconds>(
+				std::chrono::steady_clock::now() - request.accepted_at)
+				.count());
+	}
 	auto completion = std::move(request.completion);
 	if (completion) {
 		try {
@@ -710,14 +717,24 @@ void RedisClientThread::TryCompletePending(const std::shared_ptr<PendingRequest>
 		ReleaseInflight();
 	}
 	result.request_id = pending->request.request_id;
+	result.success = result.status == RedisResultStatus::kOk;
+	const auto now = std::chrono::steady_clock::now();
+	if (pending->request.accepted_at.time_since_epoch().count() != 0) {
+		result.elapsed_ms = static_cast<uint64_t>(
+			std::chrono::duration_cast<std::chrono::milliseconds>(
+				now - pending->request.accepted_at)
+				.count());
+	}
 	if (config_.log.enabled) {
 		const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-			std::chrono::steady_clock::now() - pending->sent_at).count();
+			now - pending->sent_at).count();
 		if (elapsed_ms >= config_.log.slow_command_ms && !pending->request.argv.empty()) {
+			const std::string& trace_tag = pending->request.options.trace_tag;
 			ENGINE_LOG_WARN(GetLogger(),
-							"RedisClientThread[{}]: slow redis command [{}] took {}ms",
+							"RedisClientThread[{}]: slow redis command [{}] trace=[{}] took {}ms",
 							index_,
 							pending->request.argv.front(),
+							trace_tag,
 							elapsed_ms);
 		}
 	}

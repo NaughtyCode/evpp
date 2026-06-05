@@ -145,6 +145,12 @@ add_unit_test(test_cache database/test_cache.cpp)
 add_test(NAME unit.database.cache COMMAND test_cache)
 set_tests_properties(unit.database.cache PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
 
+if(ENGINE_REDIS_ENABLED)
+    add_unit_test(test_redis database/test_redis.cpp)
+    add_test(NAME unit.database.redis COMMAND test_redis)
+    set_tests_properties(unit.database.redis PROPERTIES LABELS "unit" WORKING_DIRECTORY "${TEST_WORKING_DIR}")
+endif()
+
 # ── Monitoring tests ─────────────────────────────────────────────────
 add_unit_test(test_metrics monitoring/test_metrics.cpp)
 add_test(NAME unit.metrics COMMAND test_metrics)
