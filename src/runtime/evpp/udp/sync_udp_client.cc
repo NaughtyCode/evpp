@@ -116,7 +116,7 @@ std::string Client::DoRequest(const std::string& data, uint32_t timeout_ms) {
 	MessagePtr msg(CLOUDENGINE_MEM_NEW(Message, sockfd_, buf_size));
 	socklen_t addrLen = sizeof(struct sockaddr_storage);
 	int readn =
-		::recvfrom(sockfd_, msg->WriteBegin(), buf_size, 0, msg->mutable_remote_addr(), &addrLen);
+		::recvfrom(sockfd_, msg->WriteBegin(), static_cast<int>(buf_size), 0, msg->mutable_remote_addr(), &addrLen);
 	int err = EVPP_ERRNO;
 	if (readn >= 0) {
 		msg->WriteBytes(readn);

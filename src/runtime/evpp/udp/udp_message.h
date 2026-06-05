@@ -25,7 +25,7 @@ class CLOUD_ENGINE_API Message : public Buffer {
 
 	private:
 	struct sockaddr_storage remote_addr_;
-	int sockfd_;
+	evpp_socket_t sockfd_;
 };
 typedef std::shared_ptr<Message> MessagePtr;
 

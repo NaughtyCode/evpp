@@ -14,6 +14,15 @@ namespace engine {
 
 namespace {
 
+int CountLuaRegFunctions(const luaL_Reg* functions) {
+	int count = 0;
+	if (!functions) return count;
+	for (const luaL_Reg* r = functions; r->name != nullptr; ++r) {
+		if (r->func) ++count;
+	}
+	return count;
+}
+
 std::vector<std::string> SplitPathList(const std::string& paths) {
 	std::vector<std::string> result;
 	size_t start = 0;
@@ -413,7 +422,8 @@ void ScriptVM::RegisterFunctions(const luaL_Reg* functions) {
 void ScriptVM::RegisterModule(std::string_view name, const luaL_Reg* functions) {
 	if (!L_ || !functions) return;
 
-	luaL_newlib(L_, functions);
+	lua_createtable(L_, 0, CountLuaRegFunctions(functions));
+	luaL_setfuncs(L_, functions, 0);
 	lua_setglobal(L_, std::string(name).c_str());
 
 	auto* logger = GetLogger();

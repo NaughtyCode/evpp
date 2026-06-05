@@ -200,7 +200,16 @@ inline void CallInstMethodTableStr(lua_State* L, int inst_ref, const char* metho
 //------------------------------------------------------------------------------
 
 inline void PushLibrary(lua_State* L, const luaL_Reg* funcs) {
-	luaL_newlib(L, funcs);
+	int count = 0;
+	if (funcs) {
+		for (const luaL_Reg* r = funcs; r->name != nullptr; ++r) {
+			if (r->func) ++count;
+		}
+	}
+	lua_createtable(L, 0, count);
+	if (funcs) {
+		luaL_setfuncs(L, funcs, 0);
+	}
 }
 
 //------------------------------------------------------------------------------
