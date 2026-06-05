@@ -13,7 +13,7 @@
 - Redis 模块对外只暴露全局单例 `RedisClient`。
 - 任意线程都可以通过 `RedisClient` 发起 Redis 请求。
 - 请求通过 `moodycamel::ConcurrentQueue` 传递给 `RedisClientThread`。
-- Redis 请求成功、失败、连接错误、超时、关闭丢弃等情况都要回调调用方。
+- RedisClient accepted 的请求，在成功、命令失败、连接错误、超时、关闭丢弃等情况下都要完成一次。
 - 每个线程自己的 Lua VM 都可以导出 Redis API。
 - Redis 结果不能在 Redis 线程直接访问调用方 Lua VM，必须先进入调用方所属线程的结果队列，再由调用方线程主循环 dispatch。
 - `RedisClientScriptVM` 是 Redis 线程私有 Lua VM，外部不可访问。
@@ -100,14 +100,16 @@ src/runtime/database/redis/
   redis_request.h
   redis_result.h
   redis_value.h
-  redis_client_config.h
-  redis_client_config.cc
   redis_connection.h
   redis_connection.cc
   module_access.h
   bind/
     redis_bind.h
     redis_bind.cc
+
+src/runtime/config/
+  redis_config.h
+  redis_config.cc
 
 src/runtime/core/async/
   async_result_dispatcher.h
@@ -122,6 +124,8 @@ resources/script/redis/
 
 如果工程不希望新增 `runtime/core/async`，也可以放在 `src/runtime/script/async_result_dispatcher.*`。但从复用性看，更推荐独立公共目录。
 
+`RedisClientConfig` 建议放在 `src/runtime/config/redis_config.h`，而不是放在 `database/redis` 内。原因是 `ConfigManager` 需要在公共配置层解析、缓存和 diff Redis 配置；把配置结构放在 config 模块可以避免 `config.h` 反向依赖 server-only 的 Redis runtime 实现。`database/redis` 只消费该配置结构，不把 hiredis/libevent 细节泄漏到配置层。
+
 ## 5. 公共 API 设计
 
 ### 5.1 RedisClient
@@ -131,11 +135,19 @@ resources/script/redis/
 建议接口：
 
 ```cpp
+using RedisCompletion = std::function<void(RedisResult&&)>;
+
+struct RedisClientStartOptions {
+  bool wait_for_initial_connect = false;
+};
+
 class RedisClient {
  public:
   static RedisClient& Instance();
 
-  bool Initialize(const RedisClientConfig& config);
+  bool Initialize(
+      const RedisClientConfig& config,
+      RedisClientStartOptions options = {});
   void Shutdown();
 
   bool IsRunning() const;
@@ -146,14 +158,14 @@ class RedisClient {
 
   bool Command(
       std::vector<std::string> argv,
-      RedisResultCallback callback,
+      RedisCompletion completion,
       RedisCommandOptions options = {});
 
   bool Eval(
       std::string script,
       std::vector<std::string> keys,
       std::vector<std::string> args,
-      RedisResultCallback callback,
+      RedisCompletion completion,
       RedisCommandOptions options = {});
 };
 ```
@@ -161,11 +173,14 @@ class RedisClient {
 要求：
 
 - `Initialize` 只能成功执行一次。
+- `Initialize` 不应从 `ConfigManager` 隐式读取 `redis_required`；Engine 读取 `ServerConfig.redis_required` 后，通过 `RedisClientStartOptions::wait_for_initial_connect` 显式传入启动策略。
 - `Shutdown` 可重复调用，必须幂等。
 - `Command` 和 `Eval` 可由任意线程调用。
-- 请求 accepted 后，必须保证最终回调一次。
-- 如果队列满、模块未启动、正在关闭，应立即返回失败，或同步生成失败回调。具体策略建议保持一致：未入队返回 `false`；已入队必回调。
-- callback 必须按草稿要求是线程安全的。Lua binding 层传入的 callback 不直接操作 Lua，只负责投递到 dispatcher。
+- 返回 `true` 表示请求已被 RedisClient accepted，必须保证最终 completion 一次。
+- 返回 `false` 表示请求未被接受，不触发 completion。Lua binding 应把这种情况转换为同步错误返回。
+- 队列满、模块未启动、正在关闭、参数非法时返回 `false`。
+- `RedisCompletion` 是 RedisClient 的低层完成回调，默认在 `RedisClientThread` 中执行，必须线程安全，且不能直接访问任何外部 Lua VM。
+- Lua binding 和非线程安全 C++ 调用方必须使用 `AsyncResultDispatcher` 包装 completion，把最终业务回调投递回调用方所属线程。
 
 ### 5.2 RedisRequest
 
@@ -176,13 +191,14 @@ struct RedisRequest {
   uint64_t request_id = 0;
   std::vector<std::string> argv;
   RedisCommandOptions options;
-  RedisResultCallback callback;
-  std::weak_ptr<AsyncResultDispatcher> caller_dispatcher;
+  RedisCompletion completion;
   std::string trace_tag;
 };
 ```
 
 `argv` 使用 `std::string` 保存参数，hiredis 调用时使用 `redisAsyncCommandArgv`，保证二进制安全。
+
+不建议在 `RedisRequest` 中直接保存 Lua registry ref。Lua ref 应由调用方线程的 dispatcher/registry 管理，Redis 请求只保存一个线程安全 completion adapter。
 
 ### 5.3 RedisResult
 
@@ -191,8 +207,12 @@ struct RedisRequest {
 ```cpp
 enum class RedisResultStatus {
   kOk,
+  kInvalidArgument,
+  kNotRunning,
   kCommandError,
   kConnectionError,
+  kAuthError,
+  kProtocolError,
   kTimeout,
   kQueueFull,
   kShutdown,
@@ -291,6 +311,12 @@ class RedisClientThread {
 10. 注册 wakeup event。
 11. 进入 `event_base_dispatch`。
 
+启动同步策略：
+
+- `Start` 应等待 Redis 线程完成基础初始化，也就是 `event_base`、wakeup fd、`RedisClientScriptVM` 创建完成。
+- 如果 `wait_for_initial_connect = true`，`RedisClient::Initialize` 还应等待首次连接完成，等待时间由 `connect_timeout_ms` 控制；连接失败则返回 false。
+- 如果 `wait_for_initial_connect = false`，`Initialize` 可以在线程初始化成功后返回 true，即使首次连接失败，也通过后台重连和 health 状态反映。
+
 ### 6.2 请求流程
 
 1. 调用方线程调用 `RedisClient::Command`。
@@ -303,8 +329,14 @@ class RedisClientThread {
 8. hiredis 回调触发。
 9. hiredis reply 转换成 `RedisResult`。
 10. 从 `pending_requests_` 删除请求。
-11. 调用 request callback。
-12. callback 把结果投递给调用方 dispatcher。
+11. 调用 request completion。
+12. 如果该 completion 是 Lua binding 或 dispatcher 包装器，则只把结果投递给调用方 dispatcher；真正的 Lua/C++ 业务回调在调用方线程 dispatch 时执行。
+
+跨线程唤醒要求：
+
+- 调用方线程不能直接操作 `event_base` 或 libevent `event*`，除非显式启用了 libevent thread support。
+- 第一版建议使用 `evutil_socketpair`、pipe 或 eventfd 作为 wakeup fd；调用方只写入 wakeup fd，Redis 线程中的 libevent read event 负责 drain 请求队列。
+- Windows 下优先使用 libevent 提供的 `evutil_socketpair`；如果不可用，再封装 loopback socket。
 
 ### 6.3 关闭流程
 
@@ -320,7 +352,7 @@ class RedisClientThread {
 
 关闭必须保证：
 
-- 不遗留 pending callback。
+- 不遗留 pending completion。
 - 不访问已销毁 VM。
 - `Shutdown` 可重复调用。
 
@@ -401,18 +433,38 @@ binding 规则：
 - 只允许目标线程调用 `Dispatch`。
 - 支持 C++ continuation 和 Lua callback 两类任务。
 - VM 销毁或线程退出时可以 shutdown。
+- Lua registry ref 只能在 dispatcher owner thread 创建和释放，不能由 Redis 线程析构释放。
 
 建议接口：
 
 ```cpp
+using AsyncCallbackId = uint64_t;
+
 class AsyncResultDispatcher {
  public:
+  AsyncCallbackId RegisterLuaCallback(lua_State* L, int function_index);
   bool Enqueue(AsyncTask task);
+  bool EnqueueLuaResult(AsyncCallbackId callback_id, RedisResult result);
   size_t Dispatch(size_t max_count);
-  void Shutdown();
+  void ShutdownOnOwnerThread();
   bool IsShutdown() const;
 };
 ```
+
+Lua binding 使用方式：
+
+1. 在调用方线程通过 `RegisterLuaCallback` 保存 Lua function，得到 `AsyncCallbackId`。
+2. Redis 请求的 `RedisCompletion` 捕获 `weak_ptr<AsyncResultDispatcher>` 和 `AsyncCallbackId`。
+3. Redis 线程收到结果后，只调用 `dispatcher->EnqueueLuaResult(callback_id, result)`。
+4. 调用方线程主循环执行 `Dispatch`，取出结果并调用 Lua function。
+5. callback 调用完成后，由 dispatcher 在 owner thread 调用 `luaL_unref`。
+6. dispatcher shutdown 时，在 owner thread 统一释放仍未完成的 Lua refs。
+
+禁止事项：
+
+- 禁止跨线程保存 `lua_State*` 后在 Redis 线程调用 Lua API。
+- 禁止把会在 Redis 线程析构的对象设计成自动 `luaL_unref`。
+- 禁止在 dispatcher 已 shutdown 后继续接受 Lua result；这种结果只记录 debug 日志并丢弃。
 
 需要接入的主循环：
 
@@ -426,6 +478,7 @@ class AsyncResultDispatcher {
 
 - 在对应 VM `UpdateScript` 前执行，这样脚本本帧可以看到异步结果。
 - 每帧设置 `dispatch_batch_size`，避免单帧处理过多回调导致卡顿。
+- shutdown 阶段由 owner thread 调用 `ShutdownOnOwnerThread`，释放 callback ref；不要依赖跨线程析构释放 Lua 资源。
 
 ## 10. 配置模块设计
 
@@ -440,7 +493,7 @@ Redis 配置模块由三部分组成：
 `resources/config/server/server.json` 增加：
 
 ```json
-"redis": "resources/config/server/redis.json",
+"redis": "",
 "redis_required": false
 ```
 
@@ -454,7 +507,7 @@ Redis 配置模块由三部分组成：
 - `redis` 为空时，不启动 Redis 模块。
 - `redis` 非空但加载失败：
   - `redis_required = true`：server 初始化失败。
-  - `redis_required = false`：server 继续启动，Redis 状态为 disabled/error。
+  - `redis_required = false`：server 继续启动，Redis 状态为 error，且不创建 `RedisClientThread`。
 - `redis` 加载成功但连接失败：
   - `redis_required = true`：server 初始化失败或 readiness fail。
   - `redis_required = false`：server 继续启动，Redis 请求返回 connection error，并按重连策略后台重连。
@@ -463,7 +516,7 @@ Redis 配置模块由三部分组成：
 
 ```cpp
 // Redis client config file path (relative to working dir).
-std::string redis = "resources/config/server/redis.json";
+std::string redis;
 bool redis_required = false;
 ```
 
@@ -484,6 +537,7 @@ bool redis_required = false;
   "connection": {
     "host": "127.0.0.1",
     "port": 6379,
+    "username": "",
     "password": "",
     "database": 0,
     "connect_timeout_ms": 5000,
@@ -507,19 +561,27 @@ bool redis_required = false;
     "enabled": true,
     "initial_delay_ms": 500,
     "max_delay_ms": 5000,
-    "backoff_multiplier": 2
+    "backoff_multiplier": 2,
+    "queue_while_disconnected": false
   }
 }
 ```
 
+默认保持空字符串，避免旧环境升级后因为缺少 Redis 服务而出现启动噪声或后台重连。需要启用 Redis 时，再在 server 配置中显式写入：
+
+```json
+"redis": "resources/config/server/redis.json"
+```
+
 ### 10.3 C++ 配置结构
 
-新增 `src/runtime/database/redis/redis_client_config.h`：
+新增 `src/runtime/config/redis_config.h`：
 
 ```cpp
 struct RedisConnectionConfig {
   std::string host = "127.0.0.1";
   int port = 6379;
+  std::string username;
   std::string password;
   int database = 0;
   int connect_timeout_ms = 5000;
@@ -548,6 +610,7 @@ struct RedisReconnectConfig {
   int initial_delay_ms = 500;
   int max_delay_ms = 5000;
   int backoff_multiplier = 2;
+  bool queue_while_disconnected = false;
 };
 
 struct RedisClientConfig {
@@ -580,7 +643,7 @@ static bool LoadRedisClientConfigFromFile(
 实例侧增加缓存和访问接口：
 
 ```cpp
-bool LoadRedisClientConfig(RedisClientConfig& out) const;
+bool LoadRedisClientConfigLocked(RedisClientConfig& out) const;
 bool IsRedisConfigLoaded() const;
 RedisClientConfig GetRedisClientConfig() const;
 ```
@@ -597,7 +660,7 @@ bool redis_loaded_ = false;
 1. `LoadServerFromFile` 先解析 `server.json`。
 2. 如果 `server.redis` 非空，调用 `LoadRedisClientConfigFromFile(server.redis, new_redis)`。
 3. Redis 配置加载成功后，写入 `redis_config_` 和 `redis_loaded_`。
-4. Redis 配置加载失败时，根据 `server.redis_required` 决定 `LoadServerFromFile` 是否失败。
+4. Redis 配置加载失败时，根据 `server.redis_required` 决定 `LoadServerFromFile` 是否失败；如果 `redis_required = false`，`LoadServerFromFile` 可以成功，但必须记录错误并设置 `redis_loaded_ = false`。
 5. 日志中禁止输出明文 password。
 
 建议在 `src/runtime/config/config_constants.h` 增加默认路径：
@@ -607,6 +670,12 @@ inline constexpr const char* kRedisConfigFile = "/server/redis.json";
 ```
 
 如果保持当前配置文件中的完整相对路径，也可以不依赖该常量；但新增常量有利于默认值、测试和文档统一。
+
+实现注意：
+
+- `config.h` 如果需要按值缓存 `RedisClientConfig`，应包含 `runtime/config/redis_config.h`。
+- `redis_config.h` 不能包含 hiredis、libevent 或 `database/redis` 内部头文件。
+- 如果后续决定不在 `ConfigManager` 缓存 Redis 详细配置，则 `redis.json` 变化不会自然进入 `ConfigChangeSet`；这种实现必须让 `RedisClient` 自己订阅文件变化并重新加载，复杂度更高，不建议第一版采用。
 
 ### 10.5 热重载策略
 
@@ -625,6 +694,8 @@ server.redis
 server.redis_required
 redis.connection.host
 redis.connection.port
+redis.connection.username
+redis.connection.password
 redis.connection.database
 redis.connection.connect_timeout_ms
 redis.connection.command_timeout_ms
@@ -636,12 +707,18 @@ redis.script.auto_load
 redis.log.enabled
 redis.log.slow_command_ms
 redis.reconnect.enabled
+redis.reconnect.initial_delay_ms
+redis.reconnect.max_delay_ms
+redis.reconnect.backoff_multiplier
+redis.reconnect.queue_while_disconnected
 ```
 
 RedisClient reload 行为：
 
-- host、port、password、database 变化：需要重连。
+- host、port、password、database 变化：需要重连；password 的 change old/new 值必须 redacted。
+- username 变化：需要重新认证，第一版按重连处理。
 - timeout、queue、dispatch batch 变化：可以运行时更新。
+- reconnect delay 和 `queue_while_disconnected` 变化：可以运行时更新。
 - script dir 或 auto_load 变化：RedisClientScriptVM 需要重新加载脚本，或标记为下次重启生效。第一版建议“下次重启生效”，避免运行时卸载脚本的生命周期风险。
 - `redis_required` 变化：影响 health/readiness，不强制重启 Redis 线程。
 
@@ -659,6 +736,7 @@ Redis 详细配置不建议默认全部暴露给普通业务脚本，尤其是 p
 ```text
 config.get("redis.connection.host")
 config.get("redis.connection.port")
+config.get("redis.connection.username")
 config.get("redis.connection.database")
 config.get("redis.queue.dispatch_batch_size")
 config.get("redis.log.slow_command_ms")
@@ -674,6 +752,7 @@ redis.connection.password
 
 - host 不能为空。
 - port 必须在 1 到 65535。
+- username 可以为空；非空时必须随 AUTH username password 形式认证。
 - database 必须大于等于 0。
 - connect timeout 和 command timeout 必须大于 0。
 - request queue size 必须大于 0。
@@ -682,6 +761,8 @@ redis.connection.password
 - dispatch batch size 必须大于 0。
 - reconnect delay 必须大于 0。
 - reconnect max delay 必须大于等于 initial delay。
+- reconnect backoff multiplier 必须大于等于 1。
+- `queue_while_disconnected = true` 时必须同时配置严格的 queue size、max inflight 和 command timeout，避免 Redis 长时间不可用时积压无界请求。
 - slow command 阈值必须大于等于 0，0 表示记录所有命令。
 - password 不允许出现在日志、health、metrics 和 Lua config 输出中。
 
@@ -694,7 +775,7 @@ redis.connection.password
 
 默认建议：
 
-- server 默认配置文件中写入 `redis` 路径，但 `redis_required = false`。
+- server 默认配置文件中保留 `redis` 为空，Redis 默认不启动。
 - 如果项目环境没有 Redis，server 仍可启动。
 - `ENGINE_REDIS_ENABLED=OFF` 时，`server.redis` 字段可以保留，但不会启动 Redis 模块。
 - client/mobile 不解析 Redis 详细配置。
@@ -710,7 +791,7 @@ Redis 配置 JSON 建议全部使用 snake_case，与当前 `ServerConfig`、`db
 敏感字段处理：
 
 - `password` 只参与连接，不进入 `ConfigChange` 的明文 old/new 值。
-- reload 日志中只记录 password 是否变化，不记录变化前后的值。
+- reload 日志中只记录 password 是否变化，例如 `<redacted:changed>`，不记录变化前后的值。
 - metrics、health、admin API、Lua config binding 均不能返回 password。
 
 ## 11. CMake 集成方案
@@ -723,27 +804,64 @@ option(ENGINE_REDIS_ENABLED "Enable Redis runtime module" ON)
 
 server target 中：
 
+- 在 `include(${ENGINE_ROOT}/runtime/CMakeLists.txt)` 之前设置 `ENGINE_REDIS_RUNTIME_ENABLED`，因为 runtime CMake 会根据该变量决定是否把 Redis 源文件加入 `CLOUD_ENGINE_SOURCES`。
 - 添加 hiredis subdirectory。
-- 关闭 hiredis tests/examples。
-- 链接 hiredis 和 libevent。
+- 关闭 hiredis tests/examples/SSL。
+- 链接 `hiredis::hiredis` 和 libevent。
 - 添加 `ENGINE_REDIS_ENABLED` compile definition。
 
 runtime CMake 中：
 
-- 只有 `ENGINE_REDIS_ENABLED` 且非 mobile 时追加 Redis 源码。
+- 只根据 `ENGINE_REDIS_RUNTIME_ENABLED` 且非 mobile 追加 Redis 源码。
 - client/mobile 必须显式不编译 Redis 源码。
 - 避免因为 CMake cache 导致 client 误继承 server 的 Redis 开关。
 
-建议增加内部判断变量，例如：
+server CMake 建议在 include runtime 之前：
 
 ```cmake
 set(ENGINE_REDIS_RUNTIME_ENABLED OFF)
-if(ENGINE_REDIS_ENABLED AND NOT IS_MOBILE_PLATFORM)
+if(ENGINE_REDIS_ENABLED AND
+   NOT (CMAKE_SYSTEM_NAME STREQUAL "Android" OR CMAKE_SYSTEM_NAME STREQUAL "iOS"))
   set(ENGINE_REDIS_RUNTIME_ENABLED ON)
 endif()
 ```
 
-如果 client target 会经过同一份 runtime CMake，client 侧需要显式将 Redis runtime disabled。
+runtime CMake 建议：
+
+```cmake
+if(ENGINE_REDIS_RUNTIME_ENABLED)
+  list(APPEND CLOUD_ENGINE_SOURCES ${REDIS_SOURCES})
+endif()
+```
+
+client CMake 建议显式禁用：
+
+```cmake
+option(ENGINE_REDIS_ENABLED "Enable Redis runtime module" OFF)
+set(ENGINE_REDIS_RUNTIME_ENABLED OFF)
+```
+
+hiredis 接入建议：
+
+```cmake
+if(ENGINE_REDIS_RUNTIME_ENABLED AND NOT TARGET hiredis)
+  set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
+  set(DISABLE_TESTS ON CACHE BOOL "Disable hiredis tests" FORCE)
+  set(ENABLE_EXAMPLES OFF CACHE BOOL "Disable hiredis examples" FORCE)
+  set(ENABLE_SSL OFF CACHE BOOL "Disable hiredis SSL" FORCE)
+  set(ENABLE_NUGET OFF CACHE BOOL "Disable hiredis NuGet metadata" FORCE)
+  add_subdirectory(${ENGINE_ROOT}/thirdparty/hiredis
+                   ${CMAKE_BINARY_DIR}/hiredis EXCLUDE_FROM_ALL)
+endif()
+```
+
+include/link：
+
+- `ENGINE_RUNTIME_INCLUDE_DIRS` 增加 `${ENGINE_ROOT}/thirdparty/hiredis`，用于包含 `hiredis.h`、`async.h` 和 `adapters/libevent.h`。
+- `ENGINE_RUNTIME_LINK_LIBS` 增加 `hiredis::hiredis`。
+- Windows 下 hiredis target 会带上 `ws2_32`、`crypt32`，server target 仍可保留现有 `ws2_32` 链接。
+
+注意：`BUILD_SHARED_LIBS` 是 CMake 全局 cache 变量。应在接入 hiredis 前确认不会影响后续第三方库；如果后续第三方也依赖该变量，应把 hiredis 的 `add_subdirectory` 放在其他动态库无关的位置，或在添加后恢复原值。
 
 ## 12. 引擎生命周期
 
@@ -754,11 +872,13 @@ endif()
 1. 加载 server config。
 2. 初始化 logger。
 3. 初始化主 EventLoop。
-4. 初始化 Mongo / DatabaseService。
-5. 加载 Redis config。
-6. 初始化 `RedisClient`。
+4. 加载 Redis config。
+5. 初始化 `RedisClient`。
+6. 初始化 Mongo / DatabaseService。
 7. 创建主 `MainThreadScriptVM`。
 8. 导出 runtime bindings，其中包含 Redis binding。
+
+Redis 放在 Mongo / DatabaseService 之前初始化，是为了让后续 DB 线程、业务线程或脚本 VM 在创建时可以安全导出 Redis binding。Engine 读取 `server.redis_required` 后，转成 `RedisClientStartOptions::wait_for_initial_connect` 传给 `RedisClient::Initialize`：`redis_required = true` 时必须等待首次连接结果；`redis_required = false` 时只要求 Redis 线程基础设施启动成功。
 
 ### 12.2 每帧更新
 
@@ -779,34 +899,61 @@ physics result dispatch
 
 ### 12.3 关闭
 
-Redis 应在 VM 销毁前停止：
+Redis 应在所有可能拥有 Lua VM/dispatcher 的模块销毁前停止。建议在 Engine cleanup 中新增 `RedisShutdown` 阶段，并把它放在 `PhysicsShutdown`、`DatabaseShutdown`、`NetworkShutdown`、`TimerShutdown` 和 `DestroyScript` 之前：
 
 ```text
 RedisClient::Shutdown
+PhysicsEngineBridge::Shutdown
 DatabaseService::Shutdown
 MongoSystem::Shutdown
-destroy VMs
-destroy network/timer/logger
+ShutdownNetworkBindings
+ShutdownTimerBindings
+DestroyScript / destroy VMs
+final logs
 ```
 
 原因：
 
-- Redis pending callback 可能持有 Lua registry ref。
-- 如果先销毁 VM，再派发 Redis 回调，会造成悬挂引用。
+- Redis pending completion 可能投递到主 VM、Space VM、DB VM、Physics VM 或 Redis 私有 VM 的 dispatcher。
+- 如果先销毁任一 VM owner，再让 Redis 线程返回结果，会造成 dispatcher 失效或 Lua ref 悬挂。
+- Redis shutdown 应先停止接收新请求，再把 pending 请求转成 `kShutdown`，最后唤醒目标 dispatcher；目标 dispatcher 是否执行 `kShutdown` 对应的 Lua/业务回调，由 owner thread 在本模块 shutdown 期间决定。
+- VM 销毁前必须调用对应 dispatcher 的 `ShutdownOnOwnerThread`，释放未完成 Lua callback ref。
 
 ## 13. 错误处理和重连策略
 
 ### 13.1 命令失败
 
-Redis 命令错误，例如 `WRONGTYPE`，应作为 `kCommandError` 返回，callback 必须执行。
+Redis 命令错误，例如 `WRONGTYPE`，应作为 `kCommandError` 返回；已 accepted 请求的 completion 必须执行，Lua/业务回调再由 dispatcher 派发。
 
 ### 13.2 连接失败
 
 连接失败时：
 
 - `RedisClient::IsHealthy()` 返回 false。
-- 如果 `redis_required = true`，server 初始化可以失败。
+- 如果 `redis_required = true`，server 初始化可以失败，readiness 必须失败。
 - 如果 `redis_required = false`，server 可以继续启动，但 Redis 请求返回 connection error。
+- 连接断开时，所有已发送但未完成的 pending request 应立即完成为 `kConnectionError`，不要静默等待重连，避免非幂等命令在不确定状态下重复执行。
+
+建议状态枚举：
+
+```cpp
+enum class RedisClientState {
+  kDisabled,
+  kStarting,
+  kConnecting,
+  kHealthy,
+  kReconnecting,
+  kStopping,
+  kStopped,
+  kError
+};
+```
+
+readiness 规则：
+
+- `server.redis` 为空：Redis 状态为 disabled，不影响 readiness。
+- `server.redis` 非空且 `redis_required = false`：Redis unhealthy 只标记 degraded，不导致整体 readiness fail。
+- `server.redis` 非空且 `redis_required = true`：Redis 未 healthy 时整体 readiness fail。
 
 ### 13.3 超时
 
@@ -815,19 +962,26 @@ Redis 命令错误，例如 `WRONGTYPE`，应作为 `kCommandError` 返回，cal
 Redis 线程通过定时 event 检查超时：
 
 - 超时请求从 pending map 删除。
-- callback 返回 `kTimeout`。
+- completion 返回 `kTimeout`。
 - 如果 hiredis 后续又返回该 request，必须识别为已完成并丢弃。
+- hiredis callback 的 `privdata` 不能指向会在超时时释放的 `PendingRedisRequest`。建议传递稳定 token，例如只包含 `request_id` 的 heap token，或 `shared_ptr<PendingToken>`；超时只标记完成，不让晚到 callback 发生 use-after-free。
 
 ### 13.4 重连
 
 第一版建议支持简单重连：
 
 - disconnect callback 设置 healthy false。
+- 所有 pending request 立即完成为 `kConnectionError`。
 - 定时重连。
 - 重连成功后 healthy true。
-- 断线期间新请求可以进入队列，但应受 max inflight 和 queue size 限制。
+- 断线期间新请求默认不进入 Redis 队列，`RedisClient::Command` 返回 false，Lua binding 同步返回错误。
+- 只有 `queue_while_disconnected = true` 时，断线期间新请求才允许入队；入队仍必须受 request queue size、max inflight 和 command timeout 限制。
 
-如果业务不需要排队等待重连，也可以配置为断线期间立即失败。
+默认不排队的原因：
+
+- Redis 命令可能不是幂等操作。
+- 断线前已发送命令的执行结果可能未知。
+- 排队等待重连会放大故障期间内存压力和恢复瞬间的流量尖峰。
 
 ## 14. 不建议第一版支持的能力
 
@@ -866,8 +1020,11 @@ src/tests/unit/database/test_redis_bind.cpp
 - 二进制安全字符串。
 - `AsyncResultDispatcher` 跨线程 enqueue，同线程 dispatch。
 - dispatcher shutdown 后拒绝投递。
-- Lua callback registry ref 生命周期。
-- VM 销毁后结果不再回调 Lua。
+- Lua callback registry ref 生命周期，确认 `luaL_unref` 只在 owner thread 执行。
+- VM 销毁后结果不再回调 Lua，晚到 Redis result 只被丢弃并记录日志。
+- accepted 请求在 shutdown、timeout、connection error 下只完成一次。
+- timed out 请求的 hiredis late callback 不触发 use-after-free。
+- `queue_while_disconnected = false` 时断线请求同步失败；`true` 时按上限入队。
 
 ### 15.2 集成测试
 
@@ -875,6 +1032,7 @@ Redis 集成测试建议 opt-in：
 
 - 环境变量 `ENGINE_REDIS_TEST_URL` 或 `ENGINE_REDIS_TEST_ENABLED=1`。
 - 本地 Redis 可用时测试 `PING`、`SET`、`GET`、错误命令、超时、断线。
+- Redis 6+ 可用时测试 username/password AUTH；否则至少测试 password-only AUTH。
 - 默认 CI 如果没有 Redis，不运行集成测试。
 
 ### 15.3 编译测试
@@ -885,22 +1043,26 @@ Redis 集成测试建议 opt-in：
 - client target 不编译 Redis。
 - mobile target 不编译 Redis。
 - `ENGINE_REDIS_ENABLED=OFF` 时 server 可正常编译。
+- 同一构建树先配置 server 再配置 client 时，client 仍不继承 `ENGINE_REDIS_RUNTIME_ENABLED`。
+- `ENGINE_REDIS_ENABLED=ON` 但 `server.redis` 为空时，server 编译和启动均不强制连接 Redis。
 
 ## 16. 实施步骤
 
 ### 阶段一：工程骨架
 
 1. 增加 `ENGINE_REDIS_ENABLED`。
-2. server CMake 接入 hiredis。
-3. 新增 Redis 模块目录和空类。
-4. 新增 Redis config 结构和配置文件。
-5. 确认 client/mobile 不编译 Redis。
+2. 在 server/client CMake 中设置 `ENGINE_REDIS_RUNTIME_ENABLED`，并确认 runtime 源列表判断发生在 include runtime 前。
+3. server CMake 接入 hiredis。
+4. 新增 Redis 模块目录和空类。
+5. 新增 `runtime/config/redis_config.h/.cc`、Redis config 结构和配置文件。
+6. 确认 client/mobile 不编译 Redis。
 
 ### 阶段二：公共派发基础设施
 
 1. 实现 `AsyncResultDispatcher`。
-2. 为主 VM、space VM、DB VM、physics VM 接入 dispatcher。
-3. 增加 dispatcher 单元测试。
+2. 实现 Lua callback registry token 机制，保证 Lua ref 只在 owner thread 释放。
+3. 为主 VM、space VM、DB VM、physics VM 接入 dispatcher。
+4. 增加 dispatcher 单元测试。
 
 ### 阶段三：Redis 核心线程
 
@@ -908,7 +1070,7 @@ Redis 集成测试建议 opt-in：
 2. 实现 `RedisRequest`、`RedisResult`、`RedisValue`。
 3. 实现 `RedisClientThread`。
 4. 接入 hiredis async 和 libevent adapter。
-5. 实现 shutdown、timeout、connection error 处理。
+5. 实现 wakeup fd、shutdown、timeout、connection error、late callback 去重处理。
 
 ### 阶段四：Lua VM 和 binding
 
@@ -922,9 +1084,10 @@ Redis 集成测试建议 opt-in：
 
 1. Engine 初始化 Redis。
 2. Engine 关闭 Redis。
-3. 增加 Redis health 和 stats。
-4. 增加慢命令日志。
-5. 增加连接失败和重连日志。
+3. 增加 `RedisShutdown` cleanup 阶段，保证早于所有 VM owner 销毁。
+4. 增加 Redis health、readiness 和 stats。
+5. 增加慢命令日志。
+6. 增加连接失败和重连日志。
 
 ### 阶段六：测试和文档
 
@@ -939,13 +1102,13 @@ Redis 集成测试建议 opt-in：
 
 风险：hiredis callback 在 Redis 线程执行，如果直接调用外部 Lua VM，会造成线程安全问题。
 
-规避：hiredis callback 只生成 `RedisResult`，然后投递到调用方 dispatcher。
+规避：hiredis callback 只完成 Redis 请求并生成 `RedisResult`。低层 `RedisCompletion` 必须线程安全；Lua callback 和非线程安全业务 continuation 必须通过 `AsyncResultDispatcher` 投递回 owner thread。
 
 ### 17.2 VM 生命周期
 
 风险：Lua callback ref 所属 VM 已销毁，但 Redis 结果稍后返回。
 
-规避：dispatcher 使用 weak ownership；VM shutdown 时 dispatcher 标记关闭并释放 callback ref。
+规避：dispatcher 使用 weak ownership；VM shutdown 时 dispatcher 在 owner thread 标记关闭并释放 callback ref。
 
 ### 17.3 请求永不回调
 
@@ -953,13 +1116,19 @@ Redis 集成测试建议 opt-in：
 
 规避：所有 accepted request 必须进入 pending 管理；关闭和超时统一生成失败结果。
 
-### 17.4 client 误编译 Redis
+### 17.4 晚到 reply 二次完成
+
+风险：请求已超时或断线失败后，hiredis late callback 又返回同一 request，导致二次回调或访问已释放 pending 对象。
+
+规避：pending token 必须稳定存在到 hiredis callback 结束；request 完成状态使用原子或 Redis 线程内状态机保护，late callback 只能记录并丢弃。
+
+### 17.5 client 误编译 Redis
 
 风险：CMake cache 导致 client 继承 server 的 `ENGINE_REDIS_ENABLED`。
 
 规避：使用 target-specific 变量或在 client/mobile 明确禁用 Redis runtime。
 
-### 17.5 单线程吞吐瓶颈
+### 17.6 单线程吞吐瓶颈
 
 风险：单个 `RedisClientThread` 无法满足高并发。
 
@@ -976,8 +1145,9 @@ Redis 集成测试建议 opt-in：
 - RedisClientScriptVM。
 - Lua `redis.command`、`redis.eval`、`redis.is_healthy`。
 - 跨线程 dispatcher。
-- 请求成功、命令失败、连接失败、超时、关闭失败回调。
-- 基础配置、日志、health、stats。
+- 请求成功、命令失败、连接失败、超时、关闭失败 completion。
+- Lua/业务回调按 owner thread dispatcher 派发。
+- 基础配置、日志、health、readiness、stats。
 - 单元测试和可选 Redis 集成测试。
 
 第一版不交付：
