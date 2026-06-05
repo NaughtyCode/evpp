@@ -192,6 +192,7 @@ struct RedisClientStats {
     bool running = false;
     bool healthy = false;
     size_t queued_requests = 0;
+    size_t unsent_requests = 0;
     size_t inflight_requests = 0;
     uint64_t completed_requests = 0;
     uint64_t timed_out_requests = 0;
@@ -202,6 +203,7 @@ struct RedisClientStats {
   size_t healthy_worker_count = 0;
   size_t unhealthy_worker_count = 0;
   size_t queued_requests = 0;
+  size_t unsent_requests = 0;
   size_t inflight_requests = 0;
   uint64_t accepted_requests = 0;
   uint64_t rejected_requests = 0;
@@ -255,6 +257,7 @@ class RedisClient {
 - 多个 worker 之间不保证全局命令顺序。需要严格顺序的调用方应使用同一个 `routing_key`，或在上一个请求 completion 后再提交下一个请求。
 - 未指定 `routing_key` 时，实时负载路由应优先只选择当前 healthy 的 worker；没有 healthy worker 且 `queue_while_disconnected = false` 时同步拒绝为 `kDisconnected`。没有 healthy worker 但 `queue_while_disconnected = true` 时，可以在仍 running 的 worker 中按负载排队；如果 worker 集合不存在或没有 running worker，则同步拒绝为 `kNotRunning` / `kDisconnected`。
 - 实时负载路由的基础评分建议使用 `queued_requests + unsent_requests + inflight_requests`；分数越低优先级越高，平分时用 round-robin tie breaker，避免长期偏向低 index worker。该评分只用于未指定 `routing_key` 且没有内部 `preferred_worker_index` 的请求，不能打破 routing_key 稳定性。
+- 参与实时负载路由的 worker 计数必须来自原子计数或 worker snapshot；评分允许短暂滞后，但不能绕过 `request_queue_size` / `max_inflight` 全局 hard cap。
 - 指定 `routing_key` 时不能因为目标 worker unhealthy 而自动改投其他 worker，否则会破坏同 key 顺序；目标 worker unhealthy 且 `queue_while_disconnected = false` 时同步拒绝为 `kDisconnected`。
 - `queue_while_disconnected = true` 时，目标 worker unhealthy 的请求可以进入该 worker 的队列，但入队仍受全局 queue、单请求 timeout 和 shutdown 状态限制；后续真正发送给 hiredis 时仍受 `max_inflight` 限制。
 - 返回 `RedisSubmitResult.accepted = true` 表示请求已被 RedisClient accepted，必须保证最终 completion 一次，并返回本次请求的 `request_id`。
@@ -381,6 +384,7 @@ class RedisClientThread {
 - `moodycamel::ConcurrentQueue<RedisRequest> request_queue_`
 - `std::deque<RedisRequest> unsent_requests_`，仅 Redis 线程访问，用于保存已 drain 但尚未发送给 hiredis 的请求
 - `std::unordered_map<uint64_t, PendingRedisRequest> pending_requests_`
+- worker 负载计数，用于 stats 和实时负载路由；跨线程读取的计数必须是 atomic 或来自安全 snapshot
 - main loop tick event，默认 60 fps，使用微秒级或更高精度计算 interval
 - wakeup event
 - logger
@@ -440,10 +444,12 @@ class RedisClientThread {
 
 - `moodycamel::ConcurrentQueue` 本身不应被当作容量控制来源；`request_queue_size` 和 `max_inflight` 必须由 RedisClient 维护全局原子计数，同时由各 worker 维护本地计数用于 stats 和调试。
 - `request_queue_size` 限制 RedisClient 已 accepted 但尚未发送给 hiredis 的请求总数，包含 `request_queue_` 中未 drain 的请求和 worker 本地 `unsent_requests_` 中等待发送的请求。
+- stats 中 `queued_requests` 表示仍在 `request_queue_` 中未 drain 的请求，`unsent_requests` 表示已 drain 到 worker 本地但尚未发送给 hiredis 的请求，`inflight_requests` 表示已发送并正在等待 Redis reply 的请求。
 - `max_inflight` 限制所有 worker 中已经发送给 hiredis、正在等待 Redis reply 的请求总数。
-- 请求从 `unsent_requests_` 成功发送并进入 `pending_requests_` 时，必须原子地从 queued 计数转移到 inflight 计数；发送失败、超时或 shutdown 完成时必须释放 queued 计数，pending 请求在 reply、timeout、connection error 或 shutdown 完成时必须释放 inflight 计数。
+- 请求 accepted 入队时先增加全局未发送计数和目标 worker 的 `queued_requests`；Redis 线程从 `request_queue_` drain 到 `unsent_requests_` 时，只把该 worker 的 `queued_requests` 转移到 `unsent_requests`，全局未发送计数不变。
+- 请求从 `unsent_requests_` 成功发送并进入 `pending_requests_` 时，必须原子地减少全局未发送计数和该 worker 的 `unsent_requests`，并增加全局/worker `inflight_requests`；发送失败、超时或 shutdown 完成时必须释放对应的未发送计数，pending 请求在 reply、timeout、connection error 或 shutdown 完成时必须释放 inflight 计数。
 - `request_queue_size` 和 `max_inflight` 是两个独立上限，不要求彼此大小关系；内存预算应按二者之和估算。
-- 多 worker 场景下全局上限是 hard cap。每个 worker 还应记录本地 queued/inflight 计数并写入 stats，便于发现 `routing_key` 热点导致的单 worker 倾斜；第一版不额外增加 per-worker 容量配置。
+- 多 worker 场景下全局上限是 hard cap。每个 worker 还应记录本地 queued/unsent/inflight 计数并写入 stats，便于发现 `routing_key` 热点导致的单 worker 倾斜；第一版不额外增加 per-worker 容量配置。
 - accepted 后如果 Redis 线程发送失败，仍必须完成为 `kConnectionError` 或 `kProtocolError`，不能把失败退回成同步拒绝。
 
 跨线程唤醒要求：
@@ -1229,6 +1235,8 @@ src/tests/unit/database/test_redis_bind.cpp
 - request id 由 `Command` / `Eval` 返回，异步 `RedisResult.request_id` 与提交结果一致。
 - request queue 和 max inflight 由显式计数器强制限制，不依赖 `ConcurrentQueue` 自身容量，并且二者大小关系互不限制。
 - `request_queue_size` 统计 `request_queue_` 和 `unsent_requests_` 中所有未发送请求；断线排队不会绕过全局 queue hard cap。
+- `RedisClientStats` 聚合和每个 worker 都暴露 `queued_requests`、`unsent_requests`、`inflight_requests`；实时负载路由使用同一套计数来源。
+- 请求 accepted、drain 到 `unsent_requests_`、发送进入 `pending_requests_` 时，`queued_requests`、`unsent_requests`、`inflight_requests` 和全局未发送计数按 6.2 的状态迁移更新，不重复扣减也不漏释放。
 - `AsyncResultDispatcher` 跨线程 enqueue，同线程 dispatch。
 - dispatcher shutdown 后拒绝投递。
 - Lua callback registry ref 生命周期，确认 `luaL_unref` 只在 owner thread 执行。
