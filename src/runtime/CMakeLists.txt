@@ -9,6 +9,22 @@
 # ENGINE_ROOT always points to the shared src/ directory.
 get_filename_component(ENGINE_ROOT "${CMAKE_CURRENT_LIST_DIR}" DIRECTORY)
 
+# concurrentqueue is vendored as either:
+#   thirdparty/concurrentqueue/concurrentqueue.h
+# or:
+#   thirdparty/concurrentqueue/concurrentqueue/concurrentqueue.h
+set(ENGINE_CONCURRENTQUEUE_INCLUDE_DIR
+    "${ENGINE_ROOT}/thirdparty/concurrentqueue/concurrentqueue"
+)
+if(NOT EXISTS "${ENGINE_CONCURRENTQUEUE_INCLUDE_DIR}/concurrentqueue.h")
+    set(ENGINE_CONCURRENTQUEUE_INCLUDE_DIR
+        "${ENGINE_ROOT}/thirdparty/concurrentqueue"
+    )
+endif()
+if(NOT EXISTS "${ENGINE_CONCURRENTQUEUE_INCLUDE_DIR}/concurrentqueue.h")
+    message(FATAL_ERROR "concurrentqueue.h not found under ${ENGINE_ROOT}/thirdparty/concurrentqueue")
+endif()
+
 # Absolute path to this (runtime/) source directory.
 set(RUNTIME_DIR "${CMAKE_CURRENT_LIST_DIR}")
 

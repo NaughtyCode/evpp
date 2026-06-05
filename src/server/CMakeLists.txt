@@ -269,8 +269,8 @@ set(ENGINE_RUNTIME_INCLUDE_DIRS
     ${CMAKE_BINARY_DIR}/libevent/include
     ${ENGINE_ROOT}/thirdparty/quill/quill/include
     ${ENGINE_ROOT}/thirdparty/lua/src
-    ${ENGINE_ROOT}/thirdparty/glaze/glaze/include
-    ${ENGINE_ROOT}/thirdparty/concurrentqueue/concurrentqueue
+    ${ENGINE_ROOT}/thirdparty/glaze/include
+    ${ENGINE_CONCURRENTQUEUE_INCLUDE_DIR}
 )
 
 if(ENGINE_REDIS_ENABLED)
@@ -293,7 +293,7 @@ if(TARGET mongoc_static)
 endif()
 if(ENGINE_PHYSICS_ENABLED)
     list(APPEND ENGINE_RUNTIME_INCLUDE_DIRS
-        ${ENGINE_ROOT}/thirdparty/JoltPhysics/JoltPhysics
+        ${ENGINE_JOLT_PHYSICS_ROOT}
     )
 endif()
 if(HTTPS)

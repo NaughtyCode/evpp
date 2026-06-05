@@ -152,6 +152,7 @@ message (STATUS "LIBRARY_OUTPUT_PATH " ${LIBRARY_OUTPUT_PATH})
 # Provides CLOUD_ENGINE_SOURCES and per-module source lists.
 set(ENGINE_REDIS_RUNTIME_ENABLED OFF)
 include(${ENGINE_ROOT}/runtime/CMakeLists.txt)
+include(${ENGINE_ROOT}/cmake/JoltPhysics.cmake)
 
 if(NOT TARGET engine_lua_static)
     add_subdirectory(${ENGINE_ROOT}/thirdparty/lua ${CMAKE_BINARY_DIR}/lua)
@@ -265,9 +266,8 @@ if(ENGINE_MONGODB_ENABLED AND NOT TARGET bson_static)
 endif()
 
 # ── JoltPhysics ───────────────────────────────────────────────────────
-if(ENGINE_PHYSICS_ENABLED AND NOT TARGET Jolt)
-    add_subdirectory(${ENGINE_ROOT}/thirdparty/JoltPhysics/JoltPhysics/Build jolt)
-    set_target_properties(Jolt PROPERTIES FOLDER "thirdparty")
+if(ENGINE_PHYSICS_ENABLED)
+    configure_engine_jolt_physics(${ENGINE_ROOT})
     set(CMAKE_CXX_STANDARD 23)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
@@ -299,8 +299,8 @@ target_include_directories(GameClient
         ${CMAKE_BINARY_DIR}/libevent/include
         ${ENGINE_ROOT}/thirdparty/quill/quill/include
         ${ENGINE_ROOT}/thirdparty/lua/src
-        ${ENGINE_ROOT}/thirdparty/glaze/glaze/include
-        ${ENGINE_ROOT}/thirdparty/concurrentqueue/concurrentqueue
+        ${ENGINE_ROOT}/thirdparty/glaze/include
+        ${ENGINE_CONCURRENTQUEUE_INCLUDE_DIR}
 )
 
 if(TARGET bson_static)
@@ -318,7 +318,7 @@ endif()
 
 if(ENGINE_PHYSICS_ENABLED)
     target_include_directories(GameClient PRIVATE
-        ${ENGINE_ROOT}/thirdparty/JoltPhysics/JoltPhysics
+        ${ENGINE_JOLT_PHYSICS_ROOT}
     )
 endif()
 
