@@ -4,9 +4,11 @@
 
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
@@ -98,6 +100,59 @@ bool InferSquareSampleCount(size_t total_samples, uint32_t& out_sample_count) {
 
 JPH::ShapeSettings::ShapeResult CreateShapeResult(JPH::ShapeSettings& settings) {
 	return settings.Create();
+}
+
+bool IsPathInside(const std::filesystem::path& root, const std::filesystem::path& target) {
+	auto root_it = root.begin();
+	auto target_it = target.begin();
+	for (; root_it != root.end(); ++root_it, ++target_it) {
+		if (target_it == target.end() || *root_it != *target_it) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool ResolveDataFilePath(const std::string& assets_dir,
+						 const std::string& input,
+						 std::string& out_path,
+						 std::string& out_error) {
+	if (assets_dir.empty()) {
+		out_error = "height_field dataFile requires a scene asset directory";
+		return false;
+	}
+	if (input.empty()) {
+		out_error = "height_field dataFile must not be empty";
+		return false;
+	}
+
+	std::filesystem::path raw(input);
+	const bool has_drive_prefix = input.size() >= 2 && input[1] == ':';
+	const bool is_unc_path = input.rfind("\\\\", 0) == 0;
+	if (raw.is_absolute() || has_drive_prefix || is_unc_path) {
+		out_error = "height_field dataFile must be relative to the scene asset directory";
+		return false;
+	}
+
+	std::error_code ec;
+	std::filesystem::path root = std::filesystem::weakly_canonical(assets_dir, ec);
+	if (ec) {
+		out_error = "height_field dataFile asset directory is invalid: " + assets_dir;
+		return false;
+	}
+	ec.clear();
+	std::filesystem::path target = std::filesystem::weakly_canonical(root / raw, ec);
+	if (ec) {
+		out_error = "height_field dataFile path is invalid: " + input;
+		return false;
+	}
+	if (!IsPathInside(root, target)) {
+		out_error = "height_field dataFile must stay inside the scene asset directory";
+		return false;
+	}
+
+	out_path = target.string();
+	return true;
 }
 
 }  // namespace
@@ -412,7 +467,11 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 			return result;
 		}
 		if (!data_path.empty()) {
-			data_path = ResolveAssetPath(assets_dir, data_path);
+			std::string resolved_data_path;
+			if (!ResolveDataFilePath(assets_dir, data_path, resolved_data_path, result.error)) {
+				return result;
+			}
+			data_path = std::move(resolved_data_path);
 			std::ifstream bf(data_path, std::ios::binary);
 			if (!bf) {
 				result.error = "height_field: cannot open data file: " + data_path;

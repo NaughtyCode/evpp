@@ -23,6 +23,10 @@ namespace physics_bindings {
 
 namespace {
 
+constexpr size_t kMaxLuaNumericArrayLength = 65536;
+constexpr size_t kMaxLuaInlineJsonBytes = 16 * 1024 * 1024;
+constexpr size_t kMaxLuaAllowedDofs = 6;
+
 void PushNumberArray(lua_State* L, const std::vector<double>& values) {
 	lua_newtable(L);
 	for (size_t i = 0; i < values.size(); ++i) {
@@ -60,6 +64,10 @@ bool ReadNumberArray(lua_State* L,
 	const size_t len = lua_rawlen(L, index);
 	if (len != expected) {
 		error = "number array has unexpected length";
+		return false;
+	}
+	if (expected > kMaxLuaNumericArrayLength) {
+		error = "number array length exceeds limit";
 		return false;
 	}
 	out.clear();
@@ -404,6 +412,8 @@ int PushSceneLoadResult(lua_State* L, const PhysicsSceneAssetLoadResult& result)
 	return 1;
 }
 
+PhysicsSceneAssetLoadResult ReadSceneJson(lua_State* L, int json_index, int source_index);
+
 int LuaLoadConfiguredSceneAsset(lua_State* L) {
 	BindingContext ctx;
 	if (!CheckSystem(L, ctx)) return 2;
@@ -426,18 +436,17 @@ int LuaLoadSceneAsset(lua_State* L) {
 }
 
 int LuaParseSceneAssetJson(lua_State* L) {
-	size_t len = 0;
-	const char* json = luaL_checklstring(L, 1, &len);
-	std::string source_path;
-	if (lua_gettop(L) >= 2 && lua_type(L, 2) == LUA_TSTRING) {
-		source_path = lua_tostring(L, 2);
-	}
-	return PushSceneLoadResult(L, PhysicsSceneAsset::LoadFromJson(std::string(json, len), source_path));
+	return PushSceneLoadResult(L, ReadSceneJson(L, 1, 2));
 }
 
 PhysicsSceneAssetLoadResult ReadSceneJson(lua_State* L, int json_index, int source_index) {
+	PhysicsSceneAssetLoadResult result;
 	size_t len = 0;
 	const char* json = luaL_checklstring(L, json_index, &len);
+	if (len > kMaxLuaInlineJsonBytes) {
+		result.error = "scene json exceeds maximum inline size";
+		return result;
+	}
 	std::string source_path;
 	if (lua_gettop(L) >= source_index && lua_type(L, source_index) == LUA_TSTRING) {
 		source_path = lua_tostring(L, source_index);
@@ -781,6 +790,9 @@ int LuaGetSceneConstraintJson(lua_State* L) {
 int LuaParseMaterialsJson(lua_State* L) {
 	size_t len = 0;
 	const char* json = luaL_checklstring(L, 1, &len);
+	if (len > kMaxLuaInlineJsonBytes) {
+		return PushNilError(L, "materials json exceeds maximum inline size");
+	}
 	MaterialTable table;
 	if (!table.LoadFromJson(std::string(json, len))) {
 		return PushNilError(L, "materials json parse failed");
@@ -893,6 +905,9 @@ int LuaMakeSceneBodyRecord(lua_State* L) {
 int LuaHasMaterialInJson(lua_State* L) {
 	size_t len = 0;
 	const char* json = luaL_checklstring(L, 1, &len);
+	if (len > kMaxLuaInlineJsonBytes) {
+		return PushNilError(L, "materials json exceeds maximum inline size");
+	}
 	const char* name = luaL_checkstring(L, 2);
 	MaterialTable table;
 	if (!table.LoadFromJson(std::string(json, len))) {
@@ -905,6 +920,9 @@ int LuaHasMaterialInJson(lua_State* L) {
 int LuaGetMaterialInJson(lua_State* L) {
 	size_t len = 0;
 	const char* json = luaL_checklstring(L, 1, &len);
+	if (len > kMaxLuaInlineJsonBytes) {
+		return PushNilError(L, "materials json exceeds maximum inline size");
+	}
 	const char* name = luaL_checkstring(L, 2);
 	MaterialTable table;
 	if (!table.LoadFromJson(std::string(json, len))) {
@@ -935,10 +953,13 @@ int LuaIsMotionQualityName(lua_State* L) {
 int LuaBuildAllowedDofs(lua_State* L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
 	std::vector<uint8_t> dofs;
-	const lua_Integer len = static_cast<lua_Integer>(lua_rawlen(L, 1));
-	dofs.reserve(static_cast<size_t>(len));
-	for (lua_Integer i = 1; i <= len; ++i) {
-		lua_rawgeti(L, 1, i);
+	const size_t len = lua_rawlen(L, 1);
+	if (len > kMaxLuaAllowedDofs) {
+		return PushNilError(L, "allowed dof table is too large");
+	}
+	dofs.reserve(len);
+	for (size_t i = 1; i <= len; ++i) {
+		lua_rawgeti(L, 1, static_cast<lua_Integer>(i));
 		if (!lua_isinteger(L, -1)) {
 			lua_pop(L, 1);
 			return PushNilError(L, "allowed dof entries must be integers");

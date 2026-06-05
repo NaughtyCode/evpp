@@ -19,6 +19,9 @@ struct Point3 {
 	double z = 0.0;
 };
 
+constexpr size_t kMaxLuaContactPoints = 1024;
+constexpr size_t kMaxLuaDiffValues = 16;
+
 uint16_t CheckUInt16(lua_State* L, int index, const char* name) {
 	lua_Integer value = luaL_checkinteger(L, index);
 	luaL_argcheck(L,
@@ -229,6 +232,10 @@ std::vector<Point3> ReadContactPoints(lua_State* L, int index) {
 	luaL_checktype(L, index, LUA_TTABLE);
 	index = lua_absindex(L, index);
 	const size_t len = lua_rawlen(L, index);
+	luaL_argcheck(L,
+				  len <= kMaxLuaContactPoints,
+				  index,
+				  "too many contact points");
 	points.reserve(len);
 	for (size_t i = 1; i <= len; ++i) {
 		lua_rawgeti(L, index, static_cast<lua_Integer>(i));
@@ -248,6 +255,7 @@ std::vector<float> ReadFloatValues(lua_State* L, int index) {
 	luaL_checktype(L, index, LUA_TTABLE);
 	index = lua_absindex(L, index);
 	const size_t len = lua_rawlen(L, index);
+	luaL_argcheck(L, len <= kMaxLuaDiffValues, index, "too many diff values");
 	std::vector<float> values;
 	values.reserve(len);
 	for (size_t i = 1; i <= len; ++i) {

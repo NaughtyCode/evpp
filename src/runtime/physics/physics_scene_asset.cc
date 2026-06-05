@@ -3,8 +3,8 @@
 #include "runtime/physics/physics_assets.h"
 
 #include <cmath>
+#include <cstdint>
 #include <fstream>
-#include <iterator>
 #include <unordered_set>
 #include <utility>
 
@@ -21,6 +21,8 @@ struct JsonAssetFile {
 };
 
 namespace {
+
+constexpr uint64_t kMaxSceneAssetJsonBytes = 64ULL * 1024ULL * 1024ULL;
 
 void StripUtf8Bom(std::string& text) {
 	if (text.size() >= 3 && static_cast<unsigned char>(text[0]) == 0xEF &&
@@ -239,12 +241,29 @@ namespace engine {
 
 PhysicsSceneAssetLoadResult PhysicsSceneAsset::LoadFromFile(const std::string& json_path) {
 	PhysicsSceneAssetLoadResult result;
-	std::ifstream f(json_path, std::ios::binary);
+	std::ifstream f(json_path, std::ios::binary | std::ios::ate);
 	if (!f) {
 		result.error = "asset file not found: " + json_path;
 		return result;
 	}
-	std::string json((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+	std::streampos end = f.tellg();
+	if (end < 0) {
+		result.error = "failed to determine asset file size: " + json_path;
+		return result;
+	}
+	if (static_cast<uint64_t>(end) > kMaxSceneAssetJsonBytes) {
+		result.error = "asset file exceeds maximum size: " + json_path;
+		return result;
+	}
+	std::string json(static_cast<size_t>(end), '\0');
+	f.seekg(0, std::ios::beg);
+	if (!json.empty()) {
+		f.read(json.data(), static_cast<std::streamsize>(json.size()));
+		if (!f) {
+			result.error = "failed to read asset file: " + json_path;
+			return result;
+		}
+	}
 	StripUtf8Bom(json);
 	return LoadFromJson(json, json_path);
 }
@@ -252,6 +271,10 @@ PhysicsSceneAssetLoadResult PhysicsSceneAsset::LoadFromFile(const std::string& j
 PhysicsSceneAssetLoadResult PhysicsSceneAsset::LoadFromJson(const std::string& json,
 															const std::string& source_path) {
 	PhysicsSceneAssetLoadResult result;
+	if (json.size() > kMaxSceneAssetJsonBytes) {
+		result.error = "scene json exceeds maximum size";
+		return result;
+	}
 	JsonAssetFile asset;
 	auto ec = glz::read_json(asset, json);
 	if (ec) {

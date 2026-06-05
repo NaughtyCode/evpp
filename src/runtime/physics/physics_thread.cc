@@ -5,6 +5,7 @@
 
 #include <cassert>
 #include <chrono>
+#include <exception>
 #include <cstdio>
 #include <thread>
 
@@ -376,49 +377,62 @@ void PhysicsThread::EventLoop() {
 	}
 
 	auto shutdown_thread_resources = [this]() {
-		if (shutdown_callback_) {
-			shutdown_callback_();
-		}
-		if (timer_mgr_) {
-			timer_mgr_->shutdown();
+		try {
+			if (shutdown_callback_) {
+				shutdown_callback_();
+			}
+			if (timer_mgr_) {
+				timer_mgr_->shutdown();
+			}
+		} catch (const std::exception& e) {
+			PHYSICS_LOG_ERROR(logger_, "PhysicsThread: shutdown callback exception: {}", e.what());
+		} catch (...) {
+			PHYSICS_LOG_ERROR(logger_, "PhysicsThread: unknown shutdown callback exception");
 		}
 	};
 
-	// Initialize PhysicsWorld with configs captured at Start()
-	bool ok = world_.Initialize(
-		physics_config_, threading_config_, thresholds_config_, logger_, assets_path_);
-	if (!ok) {
-		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: world initialization failed");
+	auto fail_startup = [this, &shutdown_thread_resources](const char* message) {
+		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: {}", message);
 		healthy_.store(false, std::memory_order_release);
 		running_.store(false, std::memory_order_release);
 		shutdown_thread_resources();
 		health_cv_.notify_all();
-		return;
-	}
-	if (!restore_state_on_start_.empty()) {
-		if (!world_.RestoreState(restore_state_on_start_)) {
-			PHYSICS_LOG_ERROR(logger_,
-							  "PhysicsThread: state restoration failed during startup "
-							  "([{}] bytes)",
-							  restore_state_on_start_.size());
-			restore_state_on_start_.clear();
-			healthy_.store(false, std::memory_order_release);
-			running_.store(false, std::memory_order_release);
-			shutdown_thread_resources();
-			health_cv_.notify_all();
+		result_cv_.notify_all();
+	};
+
+	// Initialize PhysicsWorld with configs captured at Start()
+	try {
+		bool ok = world_.Initialize(
+			physics_config_, threading_config_, thresholds_config_, logger_, assets_path_);
+		if (!ok) {
+			fail_startup("world initialization failed");
 			return;
 		}
-		PHYSICS_LOG_INFO(logger_,
-						 "PhysicsThread: state restored during startup ([{}] bytes)",
-						 restore_state_on_start_.size());
-		restore_state_on_start_.clear();
-	}
-	if (startup_callback_ && !startup_callback_()) {
-		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: startup callback failed");
-		healthy_.store(false, std::memory_order_release);
-		running_.store(false, std::memory_order_release);
-		shutdown_thread_resources();
-		health_cv_.notify_all();
+		if (!restore_state_on_start_.empty()) {
+			if (!world_.RestoreState(restore_state_on_start_)) {
+				PHYSICS_LOG_ERROR(logger_,
+								  "PhysicsThread: state restoration failed during startup "
+								  "([{}] bytes)",
+								  restore_state_on_start_.size());
+				restore_state_on_start_.clear();
+				fail_startup("state restoration failed during startup");
+				return;
+			}
+			PHYSICS_LOG_INFO(logger_,
+							 "PhysicsThread: state restored during startup ([{}] bytes)",
+							 restore_state_on_start_.size());
+			restore_state_on_start_.clear();
+		}
+		if (startup_callback_ && !startup_callback_()) {
+			fail_startup("startup callback failed");
+			return;
+		}
+	} catch (const std::exception& e) {
+		PHYSICS_LOG_ERROR(logger_, "PhysicsThread: startup exception: {}", e.what());
+		fail_startup("startup exception");
+		return;
+	} catch (...) {
+		fail_startup("unknown startup exception");
 		return;
 	}
 	healthy_.store(true, std::memory_order_release);

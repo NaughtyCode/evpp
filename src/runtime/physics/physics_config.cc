@@ -3,6 +3,7 @@
 #include "runtime/physics/physics_config.h"
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -19,11 +20,20 @@ namespace engine {
 
 namespace {
 
+constexpr uint64_t kMaxPhysicsConfigFileBytes = 1024ULL * 1024ULL;
+
 // Read entire file to string, stripping BOM if present
 std::string ReadFile(const std::string& path) {
-	std::ifstream f(path, std::ios::binary);
+	std::ifstream f(path, std::ios::binary | std::ios::ate);
 	if (!f) return {};
-	std::string s{std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()};
+	std::streampos end = f.tellg();
+	if (end < 0 || static_cast<uint64_t>(end) > kMaxPhysicsConfigFileBytes) return {};
+	std::string s(static_cast<size_t>(end), '\0');
+	f.seekg(0, std::ios::beg);
+	if (!s.empty()) {
+		f.read(s.data(), static_cast<std::streamsize>(s.size()));
+		if (!f) return {};
+	}
 	// Strip UTF-8 BOM if present
 	if (s.size() >= 3 && static_cast<uint8_t>(s[0]) == 0xEF && static_cast<uint8_t>(s[1]) == 0xBB &&
 		static_cast<uint8_t>(s[2]) == 0xBF) {

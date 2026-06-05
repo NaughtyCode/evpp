@@ -20,6 +20,8 @@ namespace physics_bindings {
 
 namespace {
 
+constexpr size_t kMaxLuaStateBlobBytes = 64 * 1024 * 1024;
+
 const char* MotionTypeName(JPH::EMotionType type) {
 	switch (type) {
 		case JPH::EMotionType::Static:
@@ -488,6 +490,9 @@ int LuaRestoreState(lua_State* L) {
 
 	size_t len = 0;
 	const char* data = luaL_checklstring(L, 1, &len);
+	if (len > kMaxLuaStateBlobBytes) {
+		return PushNilError(L, "restore_state data exceeds maximum size");
+	}
 	bool ok = ctx.world && ctx.world->RestoreState(std::string(data, len));
 	if (!ok) {
 		return PushNilError(L, "restore_state failed");
@@ -507,6 +512,9 @@ int LuaRecover(lua_State* L) {
 	if (lua_gettop(L) >= 1 && lua_type(L, 1) == LUA_TSTRING) {
 		size_t len = 0;
 		const char* data = lua_tolstring(L, 1, &len);
+		if (len > kMaxLuaStateBlobBytes) {
+			return PushNilError(L, "recovery state data exceeds maximum size");
+		}
 		saved_state.assign(data, len);
 	}
 
