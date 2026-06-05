@@ -18,10 +18,12 @@ loop. `ExportRuntimeBindings()`, network/timer/profiler shutdown helpers, and
 the `profiler` Lua APIs must all run on that VM owner thread.
 
 Other Lua VMs may receive a smaller purpose-specific API set. For example,
-database and physics VMs can export selected serialization bindings, but they
-must not be treated as having the full main runtime API. The `profiler` module
-is intentionally exported only to `MainThreadScriptVM`, and every profiler API
-checks at call time that it is running on the owner thread.
+database, physics, space, and Redis worker VMs can export selected bindings, but
+they must not be treated as having the full main runtime API. The `redis` module
+is exported to owner-thread VMs when the Redis runtime is compiled, and Redis
+callbacks are dispatched through each VM's `AsyncResultDispatcher`. The
+`profiler` module is intentionally exported only to `MainThreadScriptVM`, and
+every profiler API checks at call time that it is running on the owner thread.
 
 | Lua global | Exported by | Notes |
 |------------|-------------|-------|
@@ -40,6 +42,7 @@ checks at call time that it is running on the owner thread.
 | `import` | `ExportImport` | Callable module importer. |
 | `mem` | `ExportMem` | Optional, when `ENGINE_MEM_STATS_ENABLED` is set. |
 | `orm`, `mongo`, `db_service` | database exports | Optional, when MongoDB and database support are enabled. |
+| `redis` | `ExportRedis` | Optional, when `ENGINE_REDIS_ENABLED` is set. |
 
 ## Error Conventions
 
@@ -51,6 +54,9 @@ checks at call time that it is running on the owner thread.
   when an operation can fail without invalid arguments.
 - Async callbacks that are queued from worker threads are drained on the Lua VM
   owner thread by the owning C++ subsystem.
+- Redis submission APIs return `false, err` synchronously when a request is not
+  accepted. Accepted requests later invoke the registered callback on the
+  submitting VM owner thread.
 
 ## Logging
 
@@ -162,6 +168,74 @@ config.unregister(id)
 
 `config.get_module()` returns a Lua array of rows and also indexes rows by an
 integer `id` field when present.
+
+## Redis
+
+When built with `ENGINE_REDIS_ENABLED`, `ExportRedis()` installs a global
+`redis` table and registers it as `package.loaded.redis`.
+
+```lua
+local ok, request_id = redis.command({ "GET", "player:1" }, function(result)
+    if result.ok then
+        local value = result.value
+        log_info("redis type=" .. value.type .. " value=" .. tostring(value.value))
+    else
+        log_warn("redis failed: " .. tostring(result.error))
+    end
+end, {
+    timeout_ms = 1000,
+    routing_key = "player:1",
+})
+
+local submitted, eval_id = redis.eval(
+    "return redis.call('GET', KEYS[1])",
+    { "player:1" },
+    {},
+    function(result) end)
+```
+
+| API | Return | Notes |
+|-----|--------|-------|
+| `redis.command(argv, callback[, options])` | `true, request_id` or `false, err` | `argv` must be an array of strings. The first item is normalized as the Redis command name. |
+| `redis.eval(script, keys, args, callback[, options])` | `true, request_id` or `false, err` | Builds an `EVAL` command. If no `routing_key` is set and `keys[1]` exists, that key is used for routing. |
+| `redis.is_running()` | boolean | True when `RedisClient` is initialized and worker threads are running. |
+| `redis.is_healthy()` | boolean | True when all Redis workers are healthy. |
+| `redis.dispatch([max])` | integer | Drains queued Redis callbacks for the current VM dispatcher. Most owner loops call this automatically through `ScriptVM::DispatchAsyncResults()`. |
+
+`options` supports:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `timeout_ms` | integer | `0` or omitted uses `redis.connection.command_timeout_ms`. |
+| `routing_key` | string | Routes related commands to the same worker for per-key ordering. |
+
+Accepted callbacks receive:
+
+```lua
+{
+    status = "ok",
+    ok = true,
+    request_id = 1,
+    error = nil,
+    value = {
+        type = "string",
+        value = "payload",
+    },
+}
+```
+
+`status` is one of `ok`, `command_error`, `connection_error`, `auth_error`,
+`protocol_error`, `timeout`, `shutdown`, or `dropped`. Redis values are nested
+tables with `type` set to `null`, `string`, `status`, `error`, `integer`,
+`double`, `bool`, `array`, `map`, `set`, `push`, `attribute`, `bignumber`,
+`verbatim_string`, or `unknown`. Array-like Redis values store child Redis value
+tables in `value`.
+
+The first Redis runtime rejects connection-state, blocking, Pub/Sub, and
+transaction commands from normal `redis.command()` calls, including `AUTH`,
+`HELLO`, `SELECT`, `QUIT`, `RESET`, `CLIENT`, `MONITOR`, `SUBSCRIBE`, `MULTI`,
+`EXEC`, `WATCH`, `UNWATCH`, `WAIT`, `WAITAOF`, the `B*` blocking commands, and
+`XREAD` / `XREADGROUP` when they include `BLOCK`.
 
 ## Profiler
 

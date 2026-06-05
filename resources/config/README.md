@@ -12,6 +12,7 @@ resources/config/
         client.json      Client config: entry scripts_dir
     server/
         server.json      Server config: entry scripts_dir, HTTP, MessagePack
+        redis.json       Optional Redis runtime config
 ```
 
 ## Config Files
@@ -49,12 +50,46 @@ resources/config/
 | `http.timeout_sec` | float | 10.0 | HTTP request timeout in seconds |
 | `msgpack.max_nesting_depth` | int | 16 | Maximum MessagePack nesting depth |
 | `scripts_dir` | string | `"resources/script/server"` | Server entry scripts directory |
+| `redis` | string | `""` | Redis config file path. Empty disables Redis workers |
+| `redis_required` | bool | `false` | Fail startup/readiness when Redis config or Redis health is unavailable |
+| `db_service` | string | `"resources/config/server/db_service.json"` | Database service config path |
+
+### server/redis.json
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `connection.host` | string | `"127.0.0.1"` | Redis server host |
+| `connection.port` | int | 6379 | Redis server port |
+| `connection.username` | string | `""` | Optional ACL username |
+| `connection.password` | string | `""` | Optional password; supports environment interpolation and is redacted in diffs/logs |
+| `connection.database` | int | 0 | Database selected by Redis worker handshake |
+| `connection.connect_timeout_ms` | int | 5000 | Worker startup and initial connection timeout |
+| `connection.command_timeout_ms` | int | 5000 | Default command timeout for `redis.command` / `redis.eval` |
+| `connection.keepalive` | bool | true | Enables TCP keepalive when supported |
+| `queue.request_queue_size` | size_t | 4096 | Accepted but unsent request capacity |
+| `queue.max_inflight` | size_t | 4096 | Max commands waiting for Redis replies |
+| `queue.dispatch_batch_size` | size_t | 256 | Default Lua callback dispatch batch size |
+| `thread.thread_count` | size_t | 4 | Number of `RedisClientThread` workers |
+| `thread.main_loop_fps` | int | 60 | Redis worker VM/update loop rate |
+| `script.redis_scripts_dir` | string | `"resources/script/redis"` | Redis worker private script directory |
+| `script.auto_load` | bool | true | Loads Redis private scripts during worker startup |
+| `log.enabled` | bool | true | Enables Redis module logging |
+| `log.slow_command_ms` | int | 100 | Slow Redis command log threshold |
+| `reconnect.enabled` | bool | true | Enables reconnect after disconnect |
+| `reconnect.initial_delay_ms` | int | 500 | Initial reconnect delay |
+| `reconnect.max_delay_ms` | int | 5000 | Max reconnect delay |
+| `reconnect.backoff_multiplier` | int | 2 | Reconnect backoff multiplier |
+| `reconnect.queue_while_disconnected` | bool | false | Allows accepted requests to queue while a worker is disconnected |
 
 ## Usage
 
 Config is loaded once at engine startup via `ConfigManager::Instance().Load("resources/config")`,
 which reads all three subdirectories (`runtime/`, `client/`, `server/`). Client and server
 configs are optional — only the runtime config is required.
+
+Redis is opt-in. Set `server.redis` to `resources/config/server/redis.json` to
+load the Redis config and start Redis workers in server builds compiled with
+`ENGINE_REDIS_ENABLED`. Leave it empty to disable Redis.
 
 Server CLI arguments (`--log_dir=`, `--log_prefix=`, `--scripts_dir=`) override the corresponding JSON values.
 Client executable arguments support `--log_prefix=` as well.

@@ -22,6 +22,7 @@
 | R10 | 调用 `script::ExportMongo(ScriptVM& vm)` 向 DBScriptVM 注册 MongoDB API（mongoc.* / bson.* 模块） | 需求 |
 | R11 | 请求处理路径中，CRUD 操作走 `DbOperation` 枚举 + C++ 直接调用；仅 `kExecuteScript` 通过 Lua 脚本执行 DB 操作。`kNoOp` 用于 wakeup 等内部控制 | 新增 |
 | R12 | DBScriptVM 加载 `resources/script/runtime` 公共脚本 + 数据服务专属脚本，路径入配置 | 需求 |
+| R13 | Redis runtime 编译启用时，DBScriptVM 也导出 `redis` 表，Redis 回调通过本 VM 的 `AsyncResultDispatcher` 回到 DBThread 主循环 dispatch | Redis 模块同步 |
 
 ---
 
@@ -392,11 +393,17 @@ EventLoop():
     // ── 3. 注册 API 绑定 ─────────────────────────────────────────
     ExportDbLog(script_vm_, logger_)    // R9
     script::ExportMongo(script_vm_)     // R10: mongoc.* / bson.* 全局模块表
+    script::ExportJson(script_vm_)      // JSON / json_safe
+#if defined(ENGINE_REDIS_ENABLED)
+    script::ExportRedis(script_vm_)     // R13: redis.command / redis.eval（可选）
+#endif
     // ExportMongo 创建全局表变量，注册到 package.loaded 使 require() 可用：
     script_vm_.DoString(
         "package.loaded.mongoc = mongoc; "
         "package.loaded.bson   = bson")
     ExportDbRuntime(script_vm_)         // db_get_client / db_get_pool 全局函数
+    script::ExportTimer(script_vm_, *timer_mgr_)
+    ExportImport(script_vm_)
 
     // ── 4. 设置脚本 import 路径（R12） ──────────────────────────
     script_vm_.SetImportPath(
@@ -418,8 +425,10 @@ EventLoop():
           if req.operation != DbOperation::kNoOp:
             ProcessRequest(req)
         else:
-          // 空闲时短暂休眠，避免忙等（50ms，参考 PhysicsThread）
-          std::this_thread::sleep_for(std::chrono::microseconds(50000))
+            script_vm_.DispatchAsyncResults(256)
+            script_vm_.CallFrameCallback(frame_count, delta)
+            timer_mgr_->update()
+          // 按 target_fps 控制 DBThread frame rate，空闲时短暂 sleep
       } catch (const std::exception& e) {
         ENGINE_LOG_ERROR(logger_, "DBThread[{}]: exception in event loop: {}",
                         index_, e.what())
@@ -700,6 +709,7 @@ private:
 - **继承 ScriptVM**：复用 Lua state 管理、脚本加载、模块导入（`ScriptImporter`）等基础设施。
 - **注册日志 API（R9）**：不使用全局 `script::ExportLog`（它绑定到 "root" logger），而是在 `db_script_vm.cc` 中实现 `ExportDbLog(ScriptVM& vm, quill::Logger* logger)`，将 `log_trace` / `log_debug` / `log_info` / `log_warn` / `log_error` / `log_fatal` 绑定到 **该 DBThread 的专属 logger**。Lua 脚本中调用这些函数时，日志输出到 `logs/db_service/db_vm_{N}.log`。
 - **注册 MongoDB API（R10）**：调用 `script::ExportMongo(script_vm_)` 创建 `mongoc` 和 `bson` 全局模块表；随后将全局表注册到 `package.loaded`（`package.loaded.mongoc = mongoc`），使 Lua 脚本既可通过全局变量也可通过 `require("mongoc")` 访问。
+- **注册 Redis API（R13，可选）**：当目标编译了 `ENGINE_REDIS_ENABLED` 时，调用 `script::ExportRedis(script_vm_)` 创建 `redis` 全局表并注册 `package.loaded.redis`。DBThread 中的 Redis Lua callback 不在 Redis worker 线程执行，而是在本 DBThread 循环调用 `script_vm_.DispatchAsyncResults()` 时执行。
 - **CustomPtr 注册**：将 DBThread、MongoClient、MongoClientPool 指针注册到 VM，Lua 侧通过 custom-ptr 索引访问 C++ 对象。在 EventLoop 中于 `ExportMongo` / `InitScript` 之前调用。
 - **脚本加载（R12）**：先加载 `runtime_scripts_dir`（`resources/script/runtime`）公共运行时脚本，再加载 `db_scripts_dir`（`resources/script/db_service`）数据服务专属脚本。后加载的脚本可覆盖前者的全局定义。`require` 搜索路径按 `db_scripts_dir;runtime_scripts_dir` 顺序。
 - **访问控制**：头文件受 `DATABASE_SERVICE_INTERNAL_ACCESS` 宏保护，外部编译报错。
@@ -761,6 +771,15 @@ doc:append("score", 100)
 local client_ptr = db_get_client()
 local coll = mongoc.collection.new(client_ptr, "game_db", "players")
 coll:insert_one(doc)
+
+-- R13: Redis runtime 编译并启用后，可异步访问 Redis
+redis.command({"GET", "player:001:cache"}, function(result)
+    if result.ok and result.value.type == "string" then
+        log_info("cache=" .. result.value.value)
+    else
+        log_warn("redis failed: " .. tostring(result.error))
+    end
+end, { routing_key = "player:001" })
 ```
 
 ### 7.4 ExportDbRuntime — 注册 DBScriptVM 专用运行时绑定
@@ -811,7 +830,7 @@ void ExportDbRuntime(ScriptVM& vm) {
 }
 ```
 
-在 EventLoop 初始化序列中，`ExportDbRuntime` 在 `ExportMongo` 之后、`InitScript` 之前调用，使 Lua 脚本可以通过 `db_get_client()` 获取 `MongoClient*` 指针，传递给 `mongoc.collection.new()` 等 API。
+在 EventLoop 初始化序列中，`ExportDbRuntime` 在 `ExportMongo` 之后、`InitScript` 之前调用，使 Lua 脚本可以通过 `db_get_client()` 获取 `MongoClient*` 指针，传递给 `mongoc.collection.new()` 等 API。`ExportRedis` 与 `ExportJson` 同样在 `InitScript` 前完成，确保 DB 服务脚本初始化阶段即可提交 Redis 请求；完成回调要等 DBThread 后续 frame dispatch。
 
 ---
 
@@ -1012,7 +1031,7 @@ bool DatabaseService::SendRequest(DbRequest&& request) {
 | 1 | `db_request.h` | DbOperation、DbRequest、DbResponse 数据结构 |
 | 2 | `db_service_config.h` | DbServiceConfig 及子结构体（含 DbLogConfig） |
 | 3 | `module_access.h` | DATABASE_SERVICE_INTERNAL_ACCESS 宏 |
-| 4 | `db_script_vm.h/.cc` | DBScriptVM（ScriptVM 子类，CustomPtr 注册，ExportDbLog + ExportDbRuntime + ExportMongo 调用） |
+| 4 | `db_script_vm.h/.cc` | DBScriptVM（ScriptVM 子类，CustomPtr 注册，ExportDbLog + ExportDbRuntime + ExportMongo/ExportRedis 调用） |
 | 5 | `db_thread.h/.cc` | DBThread（CreateDbLogger，Start/Stop/wakeup，EventLoop，SPSC 队列及容量控制，ProcessRequest 完整实现） |
 | 6 | `database_service.h/.cc` | DatabaseService 单例（pool 创建/销毁，Initialize/Shutdown，SendRequest round-robin，PollResponse 跨队列轮询） |
 | 7 | `resources/config/server/db_service.json` | 专用配置文件 |

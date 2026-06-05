@@ -11,7 +11,7 @@ Create new helper in `config.cc` (or `config_interpolation.cc`):
 
 Modify `config.cc`:
 - After `glz::read_json` succeeds, walk the config struct and interpolate all string members
-- This applies to: `resource_dir`, `scripts_dir`, `log.dir`, `mongodb_dev`, `mongodb_public`, `db_service`, connection URI
+- This applies to: `resource_dir`, `scripts_dir`, `log.dir`, `mongodb_dev`, `mongodb_public`, `db_service`, `redis`, MongoDB connection URI, and Redis password fields
 - Use glaze reflection to walk struct members automatically
 
 ## Step 3: Add admin_bind_address

@@ -57,7 +57,7 @@ Modify `config.cc`:
 
 Document in code and README:
 - Shared (`RuntimeConfig`): log, frame, resource_dir, sandbox_level, scripts_dir
-- Server-only (`ServerConfig`): admin, mongodb, db_service, msgpack, http
+- Server-only (`ServerConfig`): admin, mongodb, db_service, redis, msgpack, http
 - Client-only (`ClientConfig`): render, window, input, audio, network_client, assets, ui, platform
 
 ## Step 7: Update tests

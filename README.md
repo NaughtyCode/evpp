@@ -26,8 +26,9 @@ External Clients (Unity / Unreal / Custom C++)
 │  ┌───────────▼────────────┐  │
 │  │ LUA VM LAYER           │  │  ScriptVM, ScriptImporter
 │  │ Lua ↔ C++ bindings:    │  │  Modules: net (TCP/UDP/KCP/HTTP),
-│  │   net, timer, log,     │  │  timer, log, msgpack, import
-│  │   msgpack, import      │  │
+│  │   net, timer, log,     │  │  timer, log, msgpack, import,
+│  │   msgpack, import,     │  │  redis (server builds)
+│  │   redis                │  │
 │  └───────────┬────────────┘  │
 │              │               │
 │  ┌───────────▼────────────┐  │
@@ -37,7 +38,8 @@ External Clients (Unity / Unreal / Custom C++)
 │              │               │
 │  ┌───────────▼────────────┐  │
 │  │ OPTIONAL SUBSYSTEMS    │  │
-│  │ Physics (JoltPhysics)  │  │  Profiler (Perfetto tracing)
+│  │ Physics (JoltPhysics)  │  │  Redis (hiredis/libevent workers)
+│  │ Profiler (Perfetto)    │  │
 │  └────────────────────────┘  │
 └──────────────────────────────┘
 ```
@@ -55,6 +57,7 @@ main()
   │    ├─ ProfilerManager::Init()   → Perfetto tracing
   │    ├─ TimerManager init
   │    ├─ EventLoop creation        → libevent event_base
+  │    ├─ RedisClient::Initialize() → Redis workers if server.redis is set
   │    ├─ ScriptVM creation         → luaL_newstate() + luaL_openlibs()
   │    ├─ PhysicsEngineBridge::Init()
   │    ├─ ScriptVM::DoDirectory("resources/script")
@@ -84,6 +87,7 @@ frame_timer fires
 | Serialization | glaze | Compile-time JSON reflection |
 | Concurrency | concurrentqueue | Lock-free MPMC queue |
 | Physics | JoltPhysics v5.5.1 | Rigid body physics simulation |
+| Redis | hiredis | Async Redis client integration |
 | Reliability | KCP (ikcp.c) | Reliable UDP transport |
 | Profiling | Perfetto | System-wide tracing |
 
@@ -120,6 +124,7 @@ src/
 │   ├─ vm/          Lua VM wrapper, script importer
 │   ├─ script/      Lua ↔ C++ bindings (net, timer, log, msgpack, import)
 │   ├─ evpp/        Inline networking library (TCP, HTTP, UDP, KCP)
+│   ├─ database/    MongoDB, DatabaseService, ORM, Redis runtime
 │   ├─ physics/     JoltPhysics integration
 │   └─ profiler/    Perfetto tracing integration
 ├─ client/          GameClient.dll — C ABI for external game engines
@@ -127,7 +132,7 @@ src/
 ├─ thirdparty/      Third-party dependencies
 └─ tests/           Unit and smoke tests
 resources/
-├─ config/          engine.json, server.json
-├─ script/          Lua business logic scripts
+├─ config/          engine.json, server.json, server/redis.json
+├─ script/          Lua business logic scripts, redis worker scripts
 └─ physics/         Physics assets and material configs
 ```

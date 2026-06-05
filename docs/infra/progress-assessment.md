@@ -4,6 +4,11 @@
 **基准文档**: README.md（架构目标）、[deficiency-analysis.md](deficiency-analysis.md)（缺陷分析）
 **评估范围**: src/runtime/ 全部子系统 + src/tests/ + src/client/ + resources/
 
+**后续同步**: 2026-06-05 新增 server-only Redis runtime：
+`src/runtime/database/redis`、`src/runtime/config/redis_config.*`、
+`resources/config/server/redis.json`、`resources/script/redis/init.lua`、
+Lua `redis` API 和 Admin HTTP Redis health/stats。
+
 ---
 
 ## 一、总体评估

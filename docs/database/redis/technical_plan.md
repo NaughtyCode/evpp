@@ -2,6 +2,12 @@
 
 > 来源：基于 `docs/database/redis/draft.txt` 的要求，并结合当前工程中 `data_service`、`physics`、`vm`、`config`、`thirdparty`、`CMake` 的现状整理。
 
+> 实现同步：截至 2026-06-05，Redis runtime 已落地到
+> `src/runtime/database/redis`，配置结构位于 `src/runtime/config/redis_config.*`，
+> Lua 绑定位于 `src/runtime/database/redis/bind/redis_bind.*`，公共异步结果派发
+> 位于 `src/runtime/vm/async_result_dispatcher.*`。下文保留设计约束；接口片段已按
+> 当前头文件同步，具体行为以代码为准。
+
 ## 1. 目标
 
 在 server 端集成 hiredis，并在 `src/runtime/database/redis` 下实现一个线程安全的 Redis 访问模块。
@@ -32,7 +38,10 @@
 - `src/thirdparty/libevent`
 - `src/thirdparty/concurrentqueue/concurrentqueue`
 
-server 端 CMake 已经集成并链接 libevent，concurrentqueue 也已经在 include path 中。hiredis 目前存在源码，但还没有接入 server target。
+server 端 CMake 已经集成并链接 libevent，concurrentqueue 也已经在 include path 中。
+`src/server/CMakeLists.txt` 在 `ENGINE_REDIS_ENABLED=ON` 且非 mobile 平台时接入 hiredis，
+并通过 `ENGINE_REDIS_RUNTIME_ENABLED` 控制 runtime 源文件列表，通过
+`ENGINE_REDIS_ENABLED` compile definition 控制导出和生命周期代码。
 
 ### 2.2 可复用的工程模式
 
@@ -149,11 +158,10 @@ Redis 私有 VM 的内部 binding 可以访问 Redis 模块 public API，但这�
 struct RedisClientConfig;
 struct RedisResult;
 
-using RedisCompletion = std::function<void(RedisResult&&)>;
+using RedisCompletion = std::function<void(RedisResult)>;
 
 struct RedisCommandOptions {
   int timeout_ms = 0;       // 0 = use config.connection.command_timeout_ms
-  std::string trace_tag;    // optional, for logs/metrics only
   std::string routing_key;  // optional, stable within current worker generation
 };
 
@@ -164,26 +172,23 @@ enum class RedisSubmitStatus {
   kNotRunning,
   kDisconnected,
   kQueueFull,
-  kShuttingDown
+  kDisconnected,
+  kShutdown
 };
 
 struct RedisSubmitResult {
-  bool accepted = false;
-  uint64_t request_id = 0;
   RedisSubmitStatus status = RedisSubmitStatus::kNotRunning;
+  uint64_t request_id = 0;
   std::string error;
+
+  bool accepted() const { return status == RedisSubmitStatus::kAccepted; }
 };
 
 enum class RedisClientState {
-  kDisabled,
-  kStarting,
-  kConnecting,
-  kHealthy,
-  kDegraded,
-  kReconnecting,
-  kStopping,
   kStopped,
-  kError
+  kStarting,
+  kRunning,
+  kStopping
 };
 
 struct RedisClientStats {
@@ -198,7 +203,9 @@ struct RedisClientStats {
     uint64_t timed_out_requests = 0;
   };
 
-  RedisClientState state = RedisClientState::kDisabled;
+  RedisClientState state = RedisClientState::kStopped;
+  bool running = false;
+  bool healthy = false;
   size_t worker_count = 0;
   size_t healthy_worker_count = 0;
   size_t unhealthy_worker_count = 0;
@@ -213,6 +220,7 @@ struct RedisClientStats {
 };
 
 struct RedisClientStartOptions {
+  bool required = false;
   bool wait_for_initial_connect = false;
 };
 
@@ -245,7 +253,7 @@ class RedisClient {
 
 要求：
 
-- `Initialize` 在当前运行 generation 内只能成功执行一次；运行中或正在停止时再次调用必须失败并记录原因。`Initialize` 失败完整回滚后，或 `Shutdown` 完成并进入 `kStopped` / `kDisabled` 后，允许再次调用，用于修正配置后重试或 reload 从 disabled 重新启用 Redis。
+- `Initialize` 在当前运行 generation 内只能成功执行一次；运行中或正在停止时再次调用必须失败并记录原因。`Initialize` 失败完整回滚后，或 `Shutdown` 完成并进入 `kStopped` 后，允许再次调用，用于修正配置后重试或 reload 从 disabled 重新启用 Redis。
 - 如果 `Initialize` 失败，必须完整回滚线程、event_base、hiredis context、dispatcher 和统计状态，使调用方可以修正配置后重试初始化。
 - `Initialize` 不应从 `ConfigManager` 隐式读取 `redis_required`；Engine 读取 `ServerConfig.redis_required` 后，通过 `RedisClientStartOptions::wait_for_initial_connect` 显式传入启动策略。
 - `Shutdown` 可重复调用，必须幂等。
@@ -260,9 +268,9 @@ class RedisClient {
 - 参与实时负载路由的 worker 计数必须来自原子计数或 worker snapshot；评分允许短暂滞后，但不能绕过 `request_queue_size` / `max_inflight` 全局 hard cap。
 - 指定 `routing_key` 时不能因为目标 worker unhealthy 而自动改投其他 worker，否则会破坏同 key 顺序；目标 worker unhealthy 且 `queue_while_disconnected = false` 时同步拒绝为 `kDisconnected`。
 - `queue_while_disconnected = true` 时，目标 worker unhealthy 的请求可以进入该 worker 的队列，但入队仍受全局 queue、单请求 timeout 和 shutdown 状态限制；后续真正发送给 hiredis 时仍受 `max_inflight` 限制。
-- 返回 `RedisSubmitResult.accepted = true` 表示请求已被 RedisClient accepted，必须保证最终 completion 一次，并返回本次请求的 `request_id`。
-- 返回 `accepted = false` 表示请求未被接受，不触发 completion；`status` 和 `error` 描述同步拒绝原因。Lua binding 应把这种情况转换为同步错误返回。
-- 队列满、模块未启动、正在关闭、未连接且禁止断线排队、参数非法或 completion 为空时返回 `accepted = false`。
+- 返回 `RedisSubmitResult::accepted() == true` 表示请求已被 RedisClient accepted，必须保证最终 completion 一次，并返回本次请求的 `request_id`。
+- 返回 `accepted() == false` 表示请求未被接受，不触发 completion；`status` 和 `error` 描述同步拒绝原因。Lua binding 应把这种情况转换为同步错误返回。
+- 队列满、模块未启动、正在关闭、未连接且禁止断线排队、参数非法或 completion 为空时返回 `accepted() == false`。
 - `Command` 必须在入队前解析并规范化第一个 argv 作为命令名；空命令、空命令名或命令名包含二进制控制字符时返回 `kInvalidArgument`。
 - 第一版必须拒绝会改变连接状态、阻塞 worker、或把连接切入专用模式的命令，并返回 `kUnsupportedCommand`，不触发 completion。拒绝列表至少包含 `AUTH`、`HELLO`、`SELECT`、`QUIT`、`RESET`、`CLIENT`、`MONITOR`、`SUBSCRIBE`、`PSUBSCRIBE`、`SSUBSCRIBE`、`UNSUBSCRIBE`、`PUNSUBSCRIBE`、`SUNSUBSCRIBE`、`BLPOP`、`BRPOP`、`BRPOPLPUSH`、`BLMOVE`、`BLMPOP`、`BZPOPMIN`、`BZPOPMAX`、`BZMPOP`、`WAIT`、`WAITAOF`、带 `BLOCK` 选项的 `XREAD` / `XREADGROUP`、`MULTI`、`EXEC`、`DISCARD`、`WATCH`、`UNWATCH`。
 - 命令校验逻辑应集中在 RedisClient 内部 helper 中，Lua binding 和 C++ API 都调用同一条路径；命令名比较使用 ASCII case-insensitive 规则，`XREAD` / `XREADGROUP` 只在 `STREAMS` 之前的 option 区间扫描 `BLOCK` 选项，避免把 key 名误判为 blocking 选项。
@@ -309,12 +317,10 @@ enum class RedisResultStatus {
 };
 
 struct RedisResult {
-  uint64_t request_id = 0;
-  bool success = false;
   RedisResultStatus status = RedisResultStatus::kDropped;
-  std::string error;
   RedisValue value;
-  uint64_t elapsed_ms = 0;
+  std::string error;
+  uint64_t request_id = 0;
 };
 ```
 
@@ -341,12 +347,13 @@ Lua binding 中统一转换成 table：
 ```lua
 {
   request_id = 1,
-  success = true,
   status = "ok",
+  ok = true,
   error = nil,
-  value = "...",
-  value_type = "string",
-  elapsed_ms = 3
+  value = {
+    type = "string",
+    value = "payload"
+  }
 }
 ```
 
@@ -422,7 +429,7 @@ class RedisClientThread {
 - 如果 `wait_for_initial_connect = true`，`RedisClient::Initialize` 还应等待所有 worker 首次连接完成，等待时间由 `connect_timeout_ms` 控制；任一 worker 连接失败则返回 false，并清理整个 worker 集合。
 - 多 worker 的首次连接应并发发起；`connect_timeout_ms` 是本次 Initialize 的整体等待预算，不应按 worker 数串行累加。
 - 如果 `wait_for_initial_connect = false`，`Initialize` 可以在所有 worker 基础设施初始化成功后返回 true，即使首次连接失败，也通过后台重连和 health 状态反映。
-- `RedisClient::IsHealthy()` 默认要求所有 worker 都 healthy；如果只有部分 worker healthy，`RedisClientState` 应为 `kDegraded`，stats 中记录 unhealthy worker 数量。
+- `RedisClient::IsHealthy()` 默认要求客户端处于 `kRunning` 且所有 worker 都 healthy；部分 worker 异常时 `RedisClientState` 仍反映生命周期状态，`stats.healthy` 为 false，并记录 `healthy_worker_count` / `unhealthy_worker_count`。
 
 ### 6.2 请求流程
 
@@ -531,15 +538,14 @@ redis.is_running()
 redis.is_healthy()
 
 local ok, request_id_or_error = redis.command({"PING"}, function(result)
-  -- result.success
+  -- result.ok
   -- result.status
   -- result.error
-  -- result.value
+  -- result.value.type / result.value.value
 end)
 
 redis.command({"GET", "player:1"}, callback, {
   timeout_ms = 1000,
-  trace_tag = "load_player",
   routing_key = "player:1"
 })
 
@@ -1141,7 +1147,7 @@ Redis 命令错误，例如 `WRONGTYPE`，应作为 `kCommandError` 返回；已
 - 单个 worker 连接断开且 `queue_while_disconnected = false` 时，该 worker 已 accepted 但尚未发送的 `request_queue_` 和 `unsent_requests_` 请求也必须完成为 `kConnectionError`，并释放全局未发送计数；不能保留到重连后再发送。
 - 单个 worker 连接断开且 `queue_while_disconnected = true` 时，尚未发送的请求可以继续留在 `request_queue_` / `unsent_requests_`，但 deadline 仍从 accepted 时间计算，超时后完成为 `kTimeout`，shutdown 时完成为 `kShutdown`。
 - hiredis 可能在断线或 context free 路径中以 `reply == nullptr` 调用已注册命令 callback；这类 callback 必须走同一个 completion token 去重路径。如果 disconnect callback 已经完成了该 request，后续 `reply == nullptr` callback 只能记录并丢弃，不能二次完成。
-- 使用 5.1 中定义的 `RedisClientState`：所有 worker healthy 时为 `kHealthy`，部分 worker unhealthy 时为 `kDegraded`，全部 worker 不可用或启动失败时进入 `kError` / `kReconnecting` / `kStopped` 等对应状态。
+- 当前 `RedisClientState` 表示生命周期阶段：`kStopped`、`kStarting`、`kRunning`、`kStopping`。健康/降级状态由 `RedisClientStats.running`、`RedisClientStats.healthy`、`healthy_worker_count` 和 `unhealthy_worker_count` 表示。
 
 readiness 规则：
 
@@ -1174,7 +1180,7 @@ readiness 规则：
 - 该 worker 的所有 pending request 立即完成为 `kConnectionError`；未发送请求按 13.2 的 `queue_while_disconnected` 规则完成或保留。
 - 该 worker 定时重连。
 - 该 worker 重连成功后 healthy true，并更新 `RedisClient` 聚合 health/state。
-- 断线期间新请求默认不进入 unhealthy worker 队列，`RedisClient::Command` / `Eval` 返回 `accepted = false`，Lua binding 同步返回错误；未指定 `routing_key` 的请求可以继续路由到其他 healthy worker。
+- 断线期间新请求默认不进入 unhealthy worker 队列，`RedisClient::Command` / `Eval` 返回 `accepted() == false`，Lua binding 同步返回错误；未指定 `routing_key` 的请求可以继续路由到其他 healthy worker。
 - 只有 `queue_while_disconnected = true` 时，断线 worker 才允许接收新请求入队；入队仍必须受 request queue size、command timeout 和 shutdown 状态限制，后续真正发送给 hiredis 时仍受 max inflight 限制。
 - command timeout 从请求 accepted 时开始计算，包含断线排队等待重连的时间；超时后即使尚未发送到 Redis，也必须完成为 `kTimeout`。
 

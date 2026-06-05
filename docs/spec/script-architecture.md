@@ -18,6 +18,8 @@ resources/script/
         README.md
         init.lua      Server entry point
         *.lua         Server-only modules
+    redis/            Redis worker private scripts (loaded by RedisClientThread)
+        init.lua      Side-effect-free Redis worker bootstrap
     tests/            Test scripts (not auto-loaded)
 ```
 
@@ -31,6 +33,7 @@ resources/config/
         client.json      Client config: entry scripts_dir
     server/
         server.json      Server config: entry scripts_dir, HTTP, MessagePack
+        redis.json       Optional Redis runtime config
 ```
 
 ## Loading Mechanism
@@ -38,7 +41,8 @@ resources/config/
 ### Server (`src/server`)
 
 1. `server/main.cc` calls `ConfigManager::Instance().Load("resources/config")`, which
-   loads `runtime/runtime.json` (required) and `server/server.json` (optional).
+   loads `runtime/runtime.json` (required), `server/server.json` (optional), and
+   optional server-side referenced configs such as MongoDB, DB service, and Redis.
 2. `Engine::Init(runtime_cfg, server_cfg.scripts_dir)` is called:
    - `runtime_cfg.scripts_dir` = `resources/script/runtime`
    - `server_cfg.scripts_dir` = `resources/script/server`
@@ -48,6 +52,14 @@ resources/config/
    loading the runtime module entry point from `resources/script/runtime/init.lua`.
 5. The entry script then defines `InitScript()`, `UpdateScript()`, `DestroyScript()`.
 6. `Engine::Init()` calls `script_vm_->InitScript()` to fire the Lua `InitScript()` hook.
+
+When `server.redis` points at a Redis config and the target is built with
+`ENGINE_REDIS_ENABLED`, `Engine::Init()` starts `RedisClient` after the main
+`EventLoop` exists and before MongoDB/DB service initialization. Each
+`RedisClientThread` owns a private `RedisClientScriptVM` and loads
+`resources/script/redis` when `redis.script.auto_load` is true. Redis Lua
+callbacks for main, space, physics, DB, and Redis worker VMs are dispatched
+through the submitting VM's `AsyncResultDispatcher`.
 
 ### Client (`src/client`)
 
@@ -111,6 +123,9 @@ struct ServerConfig {
     HttpConfig http;
     MsgpackConfig msgpack;
     std::string scripts_dir = "resources/script/server";
+    std::string redis = "";
+    bool redis_required = false;
+    std::string db_service = "resources/config/server/db_service.json";
 };
 ```
 

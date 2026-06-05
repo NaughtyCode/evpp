@@ -39,11 +39,18 @@ Exposed paths:
 | Runtime frame | `frame.target_fps`, `frame.interval_ms`, `frame.slow_threshold_multiplier` |
 | Runtime hot-reload | `hot_reload.enabled`, `hot_reload.startup_delay_ms`, `hot_reload.poll_interval_ms`, `hot_reload.debounce_ms` |
 | Client | `client.scripts_dir`, `client.network.server_address`, `client.network.server_port`, `client.network.reconnect_max_retries`, `client.network.reconnect_base_delay_ms`, `client.network.reconnect_max_delay_ms`, `client.network.timeout_ms`, `client.network.client_prediction`, `client.network.interpolation_delay_ms` |
-| Server | `server.http.timeout_sec`, `server.scripts_dir`, `server.admin_port`, `server.admin_bind_address`, `server.admin_metrics_enabled`, `server.shutdown_timeout_sec`, `server.connection_drain_timeout_sec`, `server.max_connections`, `server.pid_file`, `server.active_mongodb`, `server.db_service`, `server.mongodb_dev`, `server.mongodb_public`, `server.db_required` |
+| Server | `server.http.timeout_sec`, `server.scripts_dir`, `server.admin_port`, `server.admin_bind_address`, `server.admin_metrics_enabled`, `server.shutdown_timeout_sec`, `server.connection_drain_timeout_sec`, `server.max_connections`, `server.pid_file`, `server.active_mongodb`, `server.db_service`, `server.mongodb_dev`, `server.mongodb_public`, `server.db_required`, `server.redis`, `server.redis_required` |
 | Server MessagePack | `server.msgpack.max_nesting_depth`, `server.msgpack.max_payload_size` |
 | Server resource limits | `server.resource_limits.max_message_size`, `server.resource_limits.max_buffer_capacity`, `server.resource_limits.max_http_body_size`, `server.resource_limits.max_msgpack_depth` |
 | Server TCP keepalive | `server.tcp_keepalive.idle_sec`, `server.tcp_keepalive.interval_sec`, `server.tcp_keepalive.count` |
 | Server instance | `server.instance.id`, `server.instance.region`, `server.instance.zone`, `server.instance.cluster` |
+| Redis loaded state | `redis.loaded` |
+| Redis connection | `redis.connection.host`, `redis.connection.port`, `redis.connection.username`, `redis.connection.database`, `redis.connection.connect_timeout_ms`, `redis.connection.command_timeout_ms`, `redis.connection.keepalive` |
+| Redis queue/thread | `redis.queue.request_queue_size`, `redis.queue.max_inflight`, `redis.queue.dispatch_batch_size`, `redis.thread.thread_count`, `redis.thread.main_loop_fps` |
+| Redis script/log/reconnect | `redis.script.redis_scripts_dir`, `redis.script.auto_load`, `redis.log.enabled`, `redis.log.slow_command_ms`, `redis.reconnect.enabled`, `redis.reconnect.initial_delay_ms`, `redis.reconnect.max_delay_ms`, `redis.reconnect.backoff_multiplier`, `redis.reconnect.queue_while_disconnected` |
+
+Redis password is intentionally not exposed. `redis.connection.username`
+returns `"set"` or `"unset"` instead of the raw username value.
 
 ### `config.get_module(name)`
 
@@ -113,6 +120,7 @@ config.flush_changes()
 | Client | `resources/config/client/client.json` | Client-specific settings |
 | Server | `resources/config/server/server.json` | Server-specific settings |
 | DB Service | `resources/config/server/db_service.json` | Database service configuration |
+| Redis | `resources/config/server/redis.json` | Redis worker and connection configuration, referenced by `server.redis` |
 | MongoDB Dev | Referenced by `server.json` → `mongodb_dev` | Development MongoDB cluster |
 | MongoDB Public | Referenced by `server.json` → `mongodb_public` | Production MongoDB cluster |
 
@@ -180,6 +188,8 @@ config.flush_changes()
 | `mongodb_public` | `string` | — | Production MongoDB config file path |
 | `db_service` | `string` | — | Database service config file path |
 | `db_required` | `bool` | `false` | Startup/readiness requires DB availability when true |
+| `redis` | `string` | `""` | Redis config file path. Empty disables Redis workers. |
+| `redis_required` | `bool` | `false` | Startup/readiness requires Redis availability when true |
 | `active_mongodb` | `string` | `""` | Explicit MongoDB selection override: `"dev"`, `"public"`, or auto |
 | `shutdown_timeout_sec` | `int` | `30` | Graceful shutdown timeout |
 | `connection_drain_timeout_sec` | `int` | `5` | Connection drain window during shutdown |
@@ -228,6 +238,33 @@ config.flush_changes()
 | `zone` | `string` | `""` | Zone |
 | `cluster` | `string` | `""` | Cluster name |
 
+### RedisClientConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `connection.host` | `string` | `"127.0.0.1"` | Redis server host |
+| `connection.port` | `int` | `6379` | Redis server port |
+| `connection.username` | `string` | `""` | Optional ACL username |
+| `connection.password` | `string` | `""` | Optional password; supports environment interpolation and is redacted from diffs/logs |
+| `connection.database` | `int` | `0` | Database selected by worker handshake |
+| `connection.connect_timeout_ms` | `int` | `5000` | Worker startup and initial connection timeout |
+| `connection.command_timeout_ms` | `int` | `5000` | Default Redis command timeout |
+| `connection.keepalive` | `bool` | `true` | Enables TCP keepalive when supported |
+| `queue.request_queue_size` | `size_t` | `4096` | Accepted but unsent request capacity |
+| `queue.max_inflight` | `size_t` | `4096` | Max commands waiting for Redis replies |
+| `queue.dispatch_batch_size` | `size_t` | `256` | Default Lua callback dispatch batch |
+| `thread.thread_count` | `size_t` | `4` | Number of Redis worker threads |
+| `thread.main_loop_fps` | `int` | `60` | Redis worker VM/update loop rate |
+| `script.redis_scripts_dir` | `string` | `"resources/script/redis"` | Redis worker private script directory |
+| `script.auto_load` | `bool` | `true` | Loads Redis private scripts during worker startup |
+| `log.enabled` | `bool` | `true` | Enables Redis module logging |
+| `log.slow_command_ms` | `int` | `100` | Slow Redis command log threshold |
+| `reconnect.enabled` | `bool` | `true` | Enables reconnect after disconnect |
+| `reconnect.initial_delay_ms` | `int` | `500` | Initial reconnect delay |
+| `reconnect.max_delay_ms` | `int` | `5000` | Max reconnect delay |
+| `reconnect.backoff_multiplier` | `int` | `2` | Reconnect backoff multiplier |
+| `reconnect.queue_while_disconnected` | `bool` | `false` | Allows accepted requests to queue while a worker is disconnected |
+
 ## ConfigManager (C++)
 
 ### Loading
@@ -259,9 +296,17 @@ GetMongoDbDevConfig()            → const MongoDbConfig&
 GetMongoDbPublicConfig()         → const MongoDbConfig&
 ```
 
+### Redis Config
+
+```
+LoadRedisClientConfigFromFile(path, out) → bool
+GetRedisClientConfig()                   → RedisClientConfig
+IsRedisConfigLoaded()                    → bool
+```
+
 ## Notes
 
 - ConfigManager is a singleton with a shared mutex for thread-safe reads
 - JSON keys match struct member names (snake_case for most, camelCase for MongoDB configs)
-- Lua `config.get()` exposes runtime, selected client network paths, and server scalar paths.
+- Lua `config.get()` exposes runtime, selected client network paths, server scalar paths, and Redis scalar paths when Redis config is loaded.
 - Reload preserves current values on failure

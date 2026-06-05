@@ -46,7 +46,7 @@ CloudEngine - 全景架构图
 │  │  │ Tick()  (lib)  │  │ engine/server/ │  │ AlarmTimer         │     │     │
 │  │  │ Shutdown()     │  │ client/runtime │  │ ClockManager       │     │     │
 │  │  │ Cleanup()      │  │ mongodb configs│  │                    │     │     │
-│  │  │ CleanupPhase   │  │ db_service cfg │  │ update() per tick  │     │     │
+│  │  │ CleanupPhase   │  │ db/redis cfg   │  │ update() per tick  │     │     │
 │  │  └──────┬─────────┘  └────────────────┘  └──────────┬─────────┘     │     │
 │  └─────────┼───────────────────────────────────────────┼───────────────┘     │
 │            │                                           │                      │
@@ -67,7 +67,7 @@ CloudEngine - 全景架构图
 │  │  │ RegisterCallback() │  │  import     entity     space         │   │     │
 │  │  │ Sandbox levels     │  │  aoi        auth      rpc           │   │     │
 │  │  │ CoroutineScheduler │  │  orm        mongodb   db_service    │   │     │
-│  │  │ ScriptReloader     │  │  mem        profiler               │   │     │
+│  │  │ ScriptReloader     │  │  redis     mem        profiler     │   │     │
 │  │  │ FileWatcher        │  └──────────────────────────────────────┘   │     │
 │  │  │ CustomPtrStore     │                                             │     │
 │  │  │ ScriptImporter     │                                             │     │
@@ -200,6 +200,12 @@ CloudEngine - 全景架构图
 │  │                                                                      │     │
 │  │  ORM Layer:                                                          │     │
 │  │    orm.h/.cc + orm_bind.cc - C++ and Lua ORM for MongoDB             │     │
+│  │                                                                      │     │
+│  │  Redis Runtime (server-only, ENGINE_REDIS_ENABLED):                  │     │
+│  │    RedisClient singleton -> RedisClientThreadGroup                   │     │
+│  │    RedisClientThread[n]: libevent event_base + hiredis async ctx     │     │
+│  │    RedisClientScriptVM per worker; callbacks return via              │     │
+│  │    AsyncResultDispatcher to each submitting VM owner thread          │     │
 │  └─────────────────────────────────────────────────────────────────────┘     │
 │                                  │                                           │
 │  ┌───────────────────────────────▼─────────────────────────────────────┐     │
@@ -245,10 +251,10 @@ CloudEngine - 全景架构图
 │  │  │ KCP    │ │ Perfetto     │ │ mongo-c-     │ │ BoringSSL  │       │     │
 │  │  │ikcp.c  │ │ tracing SDK  │ │ driver 1.29+ │ │ TLS/SSL    │       │     │
 │  │  └────────┘ └──────────────┘ └──────────────┘ └────────────┘       │     │
-│  │  ┌────────┐ ┌──────────────┐ ┌──────────────┐                      │     │
-│  │  │rapidjson││ gflags       │ │ Google Test  │                      │     │
-│  │  │JSON    ││ CLI flags    │ │ test framework│                      │     │
-│  │  └────────┘ └──────────────┘ └──────────────┘                      │     │
+│  │  ┌────────┐ ┌──────────────┐ ┌──────────────┐ ┌────────────┐       │     │
+│  │  │rapidjson││ gflags       │ │ Google Test  │ │ hiredis    │       │     │
+│  │  │JSON    ││ CLI flags    │ │ test framework││ Redis async│       │     │
+│  │  └────────┘ └──────────────┘ └──────────────┘ └────────────┘       │     │
 │  └─────────────────────────────────────────────────────────────────────┘     │
 └──────────────────────────────────────────────────────────────────────────────┘
 
@@ -261,16 +267,18 @@ CloudEngine - 全景架构图
     │
     +-[1] ConfigManager::Instance().Load("resources/config")
     │     + runtime/runtime.json -> RuntimeConfig { log, frame, scripts_dir, sandbox }
-    │     + server/server.json   -> ServerConfig { http, msgpack, admin_port, mongodb_*, db_service }
+    │     + server/server.json   -> ServerConfig { http, msgpack, admin_port, mongodb_*, db_service, redis }
     │     + client/client.json   -> ClientConfig { scripts_dir }
     │     + MongoDB cluster configs (auto-loaded from paths in server.json)
     │     + DbServiceConfig (from db_service.json)
+    │     + RedisClientConfig (from server.redis when enabled)
     │
     +-[2] Engine::Instance().Init(runtime_config, entry_scripts_dir, [external_loop])
     │     + InitLogger()              -> Quill async logger
     │     + ProfilerManager::Init()   -> Perfetto tracing
     │     + TimerManager::create()    -> non-singleton, owned by Engine
     │     + EventLoop creation        -> libevent event_base (if standalone mode)
+    │     + RedisClient::Initialize() -> Redis workers (if server.redis is set)
     │     + ScriptVM creation         -> luaL_newstate() + luaL_openlibs() + sandbox
     │     + PhysicsEngineBridge::Init() -> (no-op when ENGINE_PHYSICS_ENABLED=OFF)
     │     + ScriptVM::DoDirectory(resources/script/runtime)  -> common runtime scripts
@@ -363,6 +371,7 @@ CloudEngine - 全景架构图
   │    + RpcServer / RpcClient                                           │
   │    + SessionManager (auth)                                           │
   │    + AdminHttpServer                                                 │
+  │    + RedisClient submission API (if enabled)                         │
   └───────┬──────────────────┬───────────────────────────────┐          │
           │ SPSC             │ SPSC                          │ SPSC     │
           ▼                  ▼                               ▼          │
@@ -385,6 +394,7 @@ CloudEngine - 全景架构图
   └───────────────┘  └───────────────┘  └──────────────────────────────┘│
                                                                          │
   All cross-thread communication via SPSC lock-free queues.              │
+  RedisClientThread workers use MPMC request queues plus libevent wakeup.│
   No shared mutable state between threads.                              │
   Each thread has its own TimerManager (non-singleton, injectable).     │
   Each thread's timers are updated in its own EventLoop.                │
@@ -406,7 +416,7 @@ CloudEngine - 全景架构图
    + depends on -> EntityManager (singleton)
    + depends on -> SpaceManager (singleton)
 
-  ScriptVM (one per Space + one main VM)
+  ScriptVM (main VM + per Space/DB/Physics/Redis worker VMs)
    + owns -> lua_State* (Lua VM)
    + owns -> ScriptImporter (module loader)
    + owns -> CustomPtrStore (void* array)
@@ -434,6 +444,7 @@ CloudEngine - 全景架构图
    + owns -> DBScriptVM (per-thread Lua VM)
    + borrows -> MongoClient from MongoClientPool (exclusive pop/push)
    + SPSC queues -> moodycamel::ConcurrentQueue<DbRequest/Response>
+   + can export -> redis table when ENGINE_REDIS_ENABLED
 
   PhysicsThread (ENGINE_PHYSICS_ENABLED)
    + owns -> EventLoop (dedicated std::thread)
@@ -442,6 +453,20 @@ CloudEngine - 全景架构图
    + owns -> PhysicsVM (Lua VM for collision callbacks)
    + condition_variable wake on command enqueue
    + SPSC queues -> moodycamel::ConcurrentQueue<PhysicsCommand/FrameResult>
+   + can export -> redis table when ENGINE_REDIS_ENABLED
+
+  RedisClient (ENGINE_REDIS_ENABLED, server target only)
+   + singleton public API -> Command / Eval / IsRunning / IsHealthy / GetStats
+   + owns -> RedisClientThreadGroup
+   + routes -> RedisClientThread by routing_key or worker load
+   + stats -> worker, queue, inflight, accepted/rejected/completed/timeouts
+
+  RedisClientThread
+   + owns -> std::thread + libevent event_base
+   + owns -> hiredis redisAsyncContext
+   + owns -> RedisClientScriptVM (private Lua VM)
+   + queue -> moodycamel::ConcurrentQueue<RedisRequest>
+   + callback -> AsyncResultDispatcher for submitting VM owner thread
 
   EventLoop (libevent wrapper)
    + used by -> TcpServer, TcpClient, HttpServer, HttpcClient
@@ -507,6 +532,7 @@ CloudEngine - 全景架构图
   │   +- database/bind/             <- ORM Lua bindings
   │   +- database/mongo/bind/       <- Mongo Lua bindings
   │   +- database/data_service/bind/ <- database service Lua bindings
+  │   +- database/redis/bind/       <- Redis Lua bindings
   │   +- entity/
   │   │   +- entity.h / .cc         <- Entity (属性 + 组件 + 连接 + 物理 + 定时器)
   │   │   +- entity_id.h            <- EntityId + SequentialIdAllocator
@@ -554,6 +580,17 @@ CloudEngine - 全景架构图
   │   │   │   +- db_service_config.h       <- DbServiceConfig
   │   │   │   +- db_service_main_bind.h/.cc <- DB 服务 Lua 绑定
   │   │   │   +- module_access.h           <- 内部 header guard
+  │   │   +- redis/
+  │   │   │   +- redis_client.h/.cc         <- RedisClient 线程安全单例
+  │   │   │   +- redis_client_thread.h/.cc  <- Redis worker 线程
+  │   │   │   +- redis_client_thread_group.h/.cc <- worker 集合与路由
+  │   │   │   +- redis_client_script_vm.h/.cc <- Redis 私有 Lua VM
+  │   │   │   +- redis_request.h            <- RedisRequest / options
+  │   │   │   +- redis_result.h             <- RedisResult / status
+  │   │   │   +- redis_value.h/.cc          <- hiredis reply -> RedisValue
+  │   │   │   +- redis_connection.h/.cc     <- 连接错误工具
+  │   │   │   +- bind/redis_bind.h/.cc      <- redis Lua API
+  │   │   │   +- module_access.h            <- 内部 header guard
   │   │   +- service/               <- 服务层文档
   │   +- physics/
   │   │   +- physics_engine_bridge.h/.cc  <- 物理引擎桥接（外部 API）
@@ -597,6 +634,7 @@ CloudEngine - 全景架构图
   │   +- concurrentqueue/          <- 无锁 MPMC/SPSC 队列
   │   +- perfetto/                 <- 追踪 SDK
   │   +- boringssl/                <- TLS/SSL
+  │   +- hiredis/                  <- Redis C 客户端
   │   +- mongo-c-driver/           <- MongoDB C 驱动 1.29+
   │   +- rapidjson/                <- JSON 解析
   │   +- gflags/                   <- CLI 参数解析
@@ -642,6 +680,7 @@ CloudEngine - 全景架构图
   +- config/
   │   +- runtime/    runtime.json  <- 运行时配置
   │   +- server/     server.json   <- 服务器配置
+  │   │   +- redis.json            <- Redis worker/连接配置
   │   +- client/     client.json   <- 客户端配置
   +- script/
   │   +- runtime/common/           <- 通用运行时脚本
@@ -649,6 +688,7 @@ CloudEngine - 全景架构图
   │   +- server/                   <- 服务器入口脚本
   │   +- client/                   <- 客户端入口脚本
   │   +- db_service/               <- 数据库服务脚本
+  │   +- redis/                    <- Redis worker 私有脚本
   │   +- tests/harness/            <- 测试辅助脚本
   +- physics/
   │   +- data/                     <- 物理场景数据
@@ -656,7 +696,7 @@ CloudEngine - 全景架构图
   +- api/                          <- Lua API 文档 (20+ 模块)
       +- aoi, auth, config, db_service, engine, entity
       +- import, log, mem, mongodb, msgpack, net, orm
-      +- physics, profiler, rpc, script_vm, space, timer
+      +- physics, profiler, redis, rpc, script_vm, space, timer
       +- mongodb/bson, mongodb/mongoc
       +- net/http, net/kcp_client, net/kcp_server
       +- net/tcp_client, net/tcp_server, net/udp_client, net/udp_server
@@ -688,6 +728,7 @@ CloudEngine - 全景架构图
   orm             ExportOrm              orm                      ORM (MongoDB)
   mongodb         ExportMongo            mongodb                  MongoDB 原生 API
   db_service      ExportDbService        db_service               DB 服务控制
+  redis           ExportRedis            redis                    Redis 异步客户端
   mem             ExportMem              mem                      内存统计 (debug)
   physics         (physics_bindings)     physics                  物理系统 (optional)
   profiler         (builtin)             profiler                 Perfetto 追踪 (optional)
@@ -699,15 +740,17 @@ CloudEngine - 全景架构图
 
   resources/config/
   +- runtime/runtime.json     -> RuntimeConfig  { resource_dir, log, frame, scripts_dir, sandbox }
-  +- server/server.json       -> ServerConfig   { http, msgpack, admin_port, mongodb_dev, mongodb_public, db_service }
+  +- server/server.json       -> ServerConfig   { http, msgpack, admin_port, mongodb_dev, mongodb_public, db_service, redis }
   +- client/client.json       -> ClientConfig   { scripts_dir }
   +- server/db_service.json   -> DbServiceConfig { threads, pool, queue sizes, log, scripts }
+  +- server/redis.json        -> RedisClientConfig { connection, queue, thread, script, log, reconnect }
 
   ConfigManager features:
     - glaze auto-reflection (C++23) for JSON <-> struct mapping
     - Thread-safe config access (shared_mutex)
     - Hot-reload with registered callbacks (RegisterReloadCallback)
     - MongoDB cluster config auto-loading (from paths in server.json)
+    - Redis config auto-loading and password redaction (from server.redis)
     - Config validation on load (preserves old values on failure)
 
   Config struct hierarchy:
@@ -721,6 +764,15 @@ CloudEngine - 全景架构图
      + HttpConfig (timeout_sec)
      + MsgpackConfig (max_nesting_depth, max_payload_size)
      + admin_port, mongodb_dev, mongodb_public, db_service
+     + redis, redis_required
+
+    RedisClientConfig
+     + RedisConnectionConfig (host, port, username, password, database, timeouts)
+     + RedisQueueConfig (request_queue_size, max_inflight, dispatch_batch_size)
+     + RedisThreadConfig (thread_count, main_loop_fps)
+     + RedisScriptConfig (redis_scripts_dir, auto_load)
+     + RedisLogConfig (enabled, slow_command_ms)
+     + RedisReconnectConfig (enabled, delays, queue_while_disconnected)
 
     MongoDbConfig (full cluster topology)
      + MongoDbConnectionConfig (uri, hosts, replicaSet, directConnection, options)
