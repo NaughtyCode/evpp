@@ -33,7 +33,7 @@ inline const char* RedisResultStatusToString(RedisResultStatus status) {
 }
 
 struct RedisResult {
-	RedisResultStatus status = RedisResultStatus::kOk;
+	RedisResultStatus status = RedisResultStatus::kDropped;
 	RedisValue value;
 	std::string error;
 	uint64_t request_id = 0;
@@ -41,4 +41,3 @@ struct RedisResult {
 
 }  // namespace redis
 }  // namespace engine
-

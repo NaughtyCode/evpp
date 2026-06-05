@@ -331,6 +331,7 @@ source_group("database\\data_service" FILES ${DB_SERVICE_SOURCES})
 
 set(REDIS_SOURCES
     ${RUNTIME_DIR}/database/redis/redis_client.cc ${RUNTIME_DIR}/database/redis/redis_client.h
+    ${RUNTIME_DIR}/database/redis/redis_client_internal.h
     ${RUNTIME_DIR}/database/redis/redis_client_thread.cc ${RUNTIME_DIR}/database/redis/redis_client_thread.h
     ${RUNTIME_DIR}/database/redis/redis_client_thread_group.cc ${RUNTIME_DIR}/database/redis/redis_client_thread_group.h
     ${RUNTIME_DIR}/database/redis/redis_client_script_vm.cc ${RUNTIME_DIR}/database/redis/redis_client_script_vm.h

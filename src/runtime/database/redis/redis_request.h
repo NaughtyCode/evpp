@@ -17,7 +17,6 @@ using RedisCompletion = std::function<void(RedisResult)>;
 struct RedisCommandOptions {
 	int timeout_ms = 0;
 	std::string routing_key;
-	bool allow_blocking = false;
 };
 
 struct RedisRequest {
@@ -31,4 +30,3 @@ struct RedisRequest {
 
 }  // namespace redis
 }  // namespace engine
-

@@ -4,6 +4,7 @@
 #include <cstring>
 #include <exception>
 #include <filesystem>
+#include <stdexcept>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -49,6 +50,7 @@ bool IsReplyError(void* reply_ptr, std::string* error) {
 struct RedisClientThread::PendingRequest {
 	RedisRequest request;
 	RedisClientThread* owner = nullptr;
+	std::chrono::steady_clock::time_point sent_at;
 	std::atomic<bool> completed{false};
 };
 
@@ -71,6 +73,8 @@ bool RedisClientThread::Start(size_t index,
 	counters_ = std::move(counters);
 	stopping_.store(false, std::memory_order_release);
 	healthy_.store(false, std::memory_order_release);
+	startup_finished_ = false;
+	startup_ok_ = false;
 	initial_connect_finished_ = false;
 	initial_connect_ok_ = false;
 	reconnect_delay_ms_ = config_.reconnect.initial_delay_ms;
@@ -84,6 +88,24 @@ bool RedisClientThread::Start(size_t index,
 		return false;
 	}
 
+	const auto startup_timeout = std::chrono::milliseconds(config_.connection.connect_timeout_ms);
+	if (!WaitForStartup(startup_timeout)) {
+		ENGINE_LOG_ERROR(GetLogger(),
+						 "RedisClientThread[{}]: startup timed out after {}ms",
+						 index_,
+						 config_.connection.connect_timeout_ms);
+		Stop();
+		return false;
+	}
+	{
+		std::lock_guard<std::mutex> lock(startup_mutex_);
+		if (!startup_ok_) {
+			ENGINE_LOG_ERROR(GetLogger(), "RedisClientThread[{}]: startup failed", index_);
+			Stop();
+			return false;
+		}
+	}
+
 	if (wait_for_initial_connect) {
 		const auto timeout = std::chrono::milliseconds(config_.connection.connect_timeout_ms);
 		if (!WaitForInitialConnect(timeout)) {
@@ -94,7 +116,7 @@ bool RedisClientThread::Start(size_t index,
 			Stop();
 			return false;
 		}
-		if (!initial_connect_ok_) {
+		if (!InitialConnectSucceeded()) {
 			ENGINE_LOG_ERROR(GetLogger(), "RedisClientThread[{}]: initial connect failed", index_);
 			Stop();
 			return false;
@@ -156,6 +178,11 @@ RedisWorkerStats RedisClientThread::GetStats() const {
 	return stats;
 }
 
+bool RedisClientThread::WaitForStartup(std::chrono::milliseconds timeout) {
+	std::unique_lock<std::mutex> lock(startup_mutex_);
+	return startup_cv_.wait_for(lock, timeout, [this] { return startup_finished_; });
+}
+
 bool RedisClientThread::WaitForInitialConnect(std::chrono::milliseconds timeout) {
 	std::unique_lock<std::mutex> lock(initial_mutex_);
 	return initial_cv_.wait_for(lock, timeout, [this] { return initial_connect_finished_; });
@@ -167,7 +194,7 @@ bool RedisClientThread::InitialConnectSucceeded() const {
 }
 
 void RedisClientThread::EventLoop() {
-	SetCurrentThreadName("RedisClientThread-" + std::to_string(index_));
+	SetCurrentThreadName("RedisClientThread");
 	try {
 		SetupEventBase();
 		script_vm_ = std::make_unique<RedisClientScriptVM>();
@@ -183,6 +210,7 @@ void RedisClientThread::EventLoop() {
 		}
 		script_vm_->InitScript();
 
+		MarkStartupFinished(true);
 		Connect();
 		while (!stopping_.load(std::memory_order_acquire)) {
 			event_base_loop(event_base_, EVLOOP_ONCE);
@@ -193,6 +221,7 @@ void RedisClientThread::EventLoop() {
 		ENGINE_LOG_ERROR(GetLogger(), "RedisClientThread[{}]: unknown event loop error", index_);
 	}
 
+	MarkStartupFinished(false);
 	CleanupOnThread();
 	healthy_.store(false, std::memory_order_release);
 	running_.store(false, std::memory_order_release);
@@ -314,12 +343,25 @@ void RedisClientThread::ScheduleReconnect() {
 	if (!config_.reconnect.enabled || stopping_.load(std::memory_order_acquire)) {
 		return;
 	}
+	ENGINE_LOG_WARN(GetLogger(),
+					"RedisClientThread[{}]: scheduling reconnect in {}ms",
+					index_,
+					reconnect_delay_ms_);
 	reconnect_scheduled_ = true;
 	reconnect_due_ = std::chrono::steady_clock::now() +
 					 std::chrono::milliseconds(reconnect_delay_ms_);
 	reconnect_delay_ms_ = std::min(config_.reconnect.max_delay_ms,
 								   reconnect_delay_ms_ *
 									   std::max(1, config_.reconnect.backoff_multiplier));
+}
+
+void RedisClientThread::MarkStartupFinished(bool ok) {
+	std::lock_guard<std::mutex> lock(startup_mutex_);
+	if (!startup_finished_) {
+		startup_finished_ = true;
+		startup_ok_ = ok;
+		startup_cv_.notify_all();
+	}
 }
 
 void RedisClientThread::MarkInitialConnectFinished(bool ok) {
@@ -343,7 +385,11 @@ void RedisClientThread::OnConnect(int status) {
 		ENGINE_LOG_ERROR(GetLogger(), "RedisClientThread[{}]: connect failed", index_);
 		healthy_.store(false, std::memory_order_release);
 		MarkInitialConnectFinished(false);
-		ScheduleReconnect();
+		if (context_) {
+			redisAsyncDisconnect(context_);
+		} else {
+			ScheduleReconnect();
+		}
 		return;
 	}
 
@@ -459,9 +505,17 @@ void RedisClientThread::DrainRequests() {
 	RedisRequest request;
 	while (drained++ < kDrainBatch && request_queue_.try_dequeue(request)) {
 		queued_requests_.fetch_sub(1, std::memory_order_acq_rel);
+		const auto now = std::chrono::steady_clock::now();
 		if (stopping_.load(std::memory_order_acquire)) {
 			CompleteUnsentRequest(std::move(request), RedisResultStatus::kShutdown,
 								  "redis worker shutting down");
+			continue;
+		}
+		if (request.deadline <= now) {
+			CompleteUnsentRequest(std::move(request), RedisResultStatus::kTimeout,
+								  "redis command timed out before drain");
+			timed_out_requests_.fetch_add(1, std::memory_order_relaxed);
+			counters_->timed_out_requests.fetch_add(1, std::memory_order_relaxed);
 			continue;
 		}
 		if (!healthy_.load(std::memory_order_acquire) &&
@@ -526,6 +580,7 @@ void RedisClientThread::FlushUnsent() {
 		auto pending = std::make_shared<PendingRequest>();
 		pending->request = std::move(request);
 		pending->owner = this;
+		pending->sent_at = std::chrono::steady_clock::now();
 		auto* token = new std::shared_ptr<PendingRequest>(pending);
 		const uint64_t request_id = pending->request.request_id;
 		pending_[request_id] = pending;
@@ -558,6 +613,7 @@ void RedisClientThread::FlushUnsent() {
 
 void RedisClientThread::CheckTimeouts() {
 	const auto now = std::chrono::steady_clock::now();
+	bool released_inflight = false;
 
 	auto unsent_it = unsent_requests_.begin();
 	while (unsent_it != unsent_requests_.end()) {
@@ -586,8 +642,12 @@ void RedisClientThread::CheckTimeouts() {
 		result.error = "redis command timed out";
 		result.request_id = pending->request.request_id;
 		TryCompletePending(pending, std::move(result), true);
+		released_inflight = true;
 		timed_out_requests_.fetch_add(1, std::memory_order_relaxed);
 		counters_->timed_out_requests.fetch_add(1, std::memory_order_relaxed);
+	}
+	if (released_inflight) {
+		FlushUnsent();
 	}
 }
 
@@ -650,6 +710,17 @@ void RedisClientThread::TryCompletePending(const std::shared_ptr<PendingRequest>
 		ReleaseInflight();
 	}
 	result.request_id = pending->request.request_id;
+	if (config_.log.enabled) {
+		const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::steady_clock::now() - pending->sent_at).count();
+		if (elapsed_ms >= config_.log.slow_command_ms && !pending->request.argv.empty()) {
+			ENGINE_LOG_WARN(GetLogger(),
+							"RedisClientThread[{}]: slow redis command [{}] took {}ms",
+							index_,
+							pending->request.argv.front(),
+							elapsed_ms);
+		}
+	}
 	auto completion = std::move(pending->request.completion);
 	if (completion) {
 		try {
@@ -739,6 +810,7 @@ void RedisClientThread::CommandCallback(redisAsyncContext*, void* reply, void* p
 	if (self) {
 		self->pending_.erase(pending->request.request_id);
 		self->TryCompletePending(pending, std::move(result), true);
+		self->FlushUnsent();
 	}
 }
 

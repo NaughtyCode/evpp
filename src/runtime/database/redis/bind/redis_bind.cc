@@ -7,6 +7,7 @@
 
 #include "runtime/core/log/log.h"
 #include "runtime/database/redis/redis_client.h"
+#include "runtime/database/redis/redis_client_internal.h"
 #include "runtime/vm/vm.h"
 
 extern "C" {
@@ -87,12 +88,6 @@ RedisCommandOptions ReadOptions(lua_State* L, int index) {
 		size_t len = 0;
 		const char* value = lua_tolstring(L, -1, &len);
 		options.routing_key.assign(value, len);
-	}
-	lua_pop(L, 1);
-
-	lua_getfield(L, index, "allow_blocking");
-	if (lua_isboolean(L, -1)) {
-		options.allow_blocking = lua_toboolean(L, -1) != 0;
 	}
 	lua_pop(L, 1);
 
@@ -199,7 +194,7 @@ int l_redis_command(lua_State* L) {
 		return 2;
 	}
 
-	RedisSubmitResult result = RedisClient::Instance().Command(
+	RedisSubmitResult result = redis::internal::RedisClientAccess::Command(
 		std::move(argv),
 		BuildCompletion(context->dispatcher, callback_id),
 		std::move(options),
@@ -247,7 +242,7 @@ int l_redis_eval(lua_State* L) {
 		return 2;
 	}
 
-	RedisSubmitResult result = RedisClient::Instance().Eval(
+	RedisSubmitResult result = redis::internal::RedisClientAccess::Eval(
 		std::string(script, script_len),
 		std::move(keys),
 		std::move(args),
@@ -356,6 +351,16 @@ void ShutdownRedisBindings(ScriptVM& vm) {
 	if (!L) return;
 	lua_pushnil(L);
 	lua_setglobal(L, "redis");
+	lua_getglobal(L, "package");
+	if (lua_istable(L, -1)) {
+		lua_getfield(L, -1, "loaded");
+		if (lua_istable(L, -1)) {
+			lua_pushnil(L);
+			lua_setfield(L, -2, "redis");
+		}
+		lua_pop(L, 1);
+	}
+	lua_pop(L, 1);
 }
 
 }  // namespace script

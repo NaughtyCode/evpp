@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 #include "runtime/config/redis_config.h"
@@ -47,6 +48,8 @@ private:
 	std::shared_ptr<RedisSharedCounters> counters_;
 	std::vector<std::unique_ptr<RedisClientThread>> workers_;
 	std::atomic<size_t> round_robin_{0};
+	mutable std::mutex mutex_;
+	bool stopping_ = false;
 };
 
 }  // namespace redis

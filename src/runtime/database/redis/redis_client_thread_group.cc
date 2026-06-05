@@ -35,6 +35,7 @@ bool RedisClientThreadGroup::Start(const RedisClientConfig& config,
 	counters_ = std::make_shared<RedisSharedCounters>();
 	workers_.clear();
 	workers_.reserve(config.thread.thread_count);
+	stopping_ = false;
 
 	for (size_t i = 0; i < config.thread.thread_count; ++i) {
 		auto worker = std::make_unique<RedisClientThread>();
@@ -73,12 +74,17 @@ bool RedisClientThreadGroup::Start(const RedisClientConfig& config,
 }
 
 void RedisClientThreadGroup::Stop() {
-	for (auto& worker : workers_) {
+	std::vector<std::unique_ptr<RedisClientThread>> workers;
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		stopping_ = true;
+		workers.swap(workers_);
+	}
+	for (auto& worker : workers) {
 		if (worker) {
 			worker->Stop();
 		}
 	}
-	workers_.clear();
 }
 
 bool RedisClientThreadGroup::ReserveUnsentSlot() {
@@ -160,8 +166,16 @@ bool RedisClientThreadGroup::Submit(RedisRequest& request,
 									const std::string& routing_key,
 									RedisSubmitStatus& rejected_status,
 									std::string& error) {
+	std::lock_guard<std::mutex> lock(mutex_);
 	rejected_status = RedisSubmitStatus::kAccepted;
 	error.clear();
+
+	if (stopping_) {
+		rejected_status = RedisSubmitStatus::kShutdown;
+		error = "redis worker group is shutting down";
+		counters_->rejected_requests.fetch_add(1, std::memory_order_relaxed);
+		return false;
+	}
 
 	if (!ReserveUnsentSlot()) {
 		rejected_status = RedisSubmitStatus::kQueueFull;
@@ -206,12 +220,14 @@ bool RedisClientThreadGroup::Submit(RedisRequest& request,
 }
 
 bool RedisClientThreadGroup::IsRunning() const {
+	std::lock_guard<std::mutex> lock(mutex_);
 	return std::any_of(workers_.begin(), workers_.end(), [](const auto& worker) {
 		return worker && worker->IsRunning();
 	});
 }
 
 bool RedisClientThreadGroup::IsHealthy() const {
+	std::lock_guard<std::mutex> lock(mutex_);
 	return !workers_.empty() &&
 		   std::all_of(workers_.begin(), workers_.end(), [](const auto& worker) {
 			   return worker && worker->IsHealthy();
@@ -219,10 +235,16 @@ bool RedisClientThreadGroup::IsHealthy() const {
 }
 
 RedisClientStats RedisClientThreadGroup::GetStats(RedisClientState state) const {
+	std::lock_guard<std::mutex> lock(mutex_);
 	RedisClientStats stats;
 	stats.state = state;
-	stats.running = IsRunning();
-	stats.healthy = IsHealthy();
+	stats.running = std::any_of(workers_.begin(), workers_.end(), [](const auto& worker) {
+		return worker && worker->IsRunning();
+	});
+	stats.healthy = !workers_.empty() &&
+		std::all_of(workers_.begin(), workers_.end(), [](const auto& worker) {
+			return worker && worker->IsHealthy();
+		});
 	stats.worker_count = workers_.size();
 	stats.inflight_requests = counters_->inflight_global.load(std::memory_order_acquire);
 	stats.accepted_requests = counters_->accepted_requests.load(std::memory_order_relaxed);
@@ -235,8 +257,12 @@ RedisClientStats RedisClientThreadGroup::GetStats(RedisClientState state) const 
 		auto worker_stats = worker->GetStats();
 		stats.queued_requests += worker_stats.queued_requests;
 		stats.unsent_requests += worker_stats.unsent_requests;
+		if (worker_stats.healthy) {
+			++stats.healthy_worker_count;
+		}
 		stats.workers.push_back(worker_stats);
 	}
+	stats.unhealthy_worker_count = stats.worker_count - stats.healthy_worker_count;
 	return stats;
 }
 

@@ -15,19 +15,23 @@ namespace engine {
 namespace redis {
 
 class RedisClientThreadGroup;
+namespace internal {
+class RedisClientAccess;
+}
 
 enum class RedisSubmitStatus {
 	kAccepted,
 	kNotRunning,
 	kQueueFull,
 	kDisconnected,
-	kInvalidCommand,
+	kInvalidArgument,
+	kInvalidCommand = kInvalidArgument,
 	kUnsupportedCommand,
 	kShutdown
 };
 
 struct RedisSubmitResult {
-	RedisSubmitStatus status = RedisSubmitStatus::kAccepted;
+	RedisSubmitStatus status = RedisSubmitStatus::kNotRunning;
 	uint64_t request_id = 0;
 	std::string error;
 
@@ -57,6 +61,8 @@ struct RedisClientStats {
 	bool running = false;
 	bool healthy = false;
 	size_t worker_count = 0;
+	size_t healthy_worker_count = 0;
+	size_t unhealthy_worker_count = 0;
 	size_t queued_requests = 0;
 	size_t unsent_requests = 0;
 	size_t inflight_requests = 0;
@@ -86,18 +92,30 @@ public:
 
 	RedisSubmitResult Command(std::vector<std::string> argv,
 							  RedisCompletion completion,
-							  RedisCommandOptions options = {},
-							  std::optional<size_t> preferred_worker_index = std::nullopt);
+							  RedisCommandOptions options = {});
 	RedisSubmitResult Eval(std::string script,
 						   std::vector<std::string> keys,
 						   std::vector<std::string> args,
 						   RedisCompletion completion,
-						   RedisCommandOptions options = {},
-						   std::optional<size_t> preferred_worker_index = std::nullopt);
+						   RedisCommandOptions options = {});
 
 private:
+	friend class internal::RedisClientAccess;
+
 	RedisClient() = default;
 
+	RedisSubmitResult CommandInternal(
+		std::vector<std::string> argv,
+		RedisCompletion completion,
+		RedisCommandOptions options,
+		std::optional<size_t> preferred_worker_index);
+	RedisSubmitResult EvalInternal(
+		std::string script,
+		std::vector<std::string> keys,
+		std::vector<std::string> args,
+		RedisCompletion completion,
+		RedisCommandOptions options,
+		std::optional<size_t> preferred_worker_index);
 	RedisSubmitResult SubmitRequest(RedisRequest request);
 
 	mutable std::mutex mutex_;
@@ -105,6 +123,7 @@ private:
 	std::shared_ptr<RedisClientThreadGroup> group_;
 	int default_command_timeout_ms_ = 5000;
 	std::atomic<uint64_t> next_request_id_{1};
+	std::atomic<uint64_t> rejected_requests_{0};
 };
 
 }  // namespace redis

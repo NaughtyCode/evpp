@@ -60,6 +60,7 @@ public:
 	bool IsHealthy() const;
 	size_t LoadScore() const;
 	RedisWorkerStats GetStats() const;
+	bool WaitForStartup(std::chrono::milliseconds timeout);
 	bool WaitForInitialConnect(std::chrono::milliseconds timeout);
 	bool InitialConnectSucceeded() const;
 
@@ -74,6 +75,7 @@ private:
 	void CleanupOnThread();
 	void Connect();
 	void ScheduleReconnect();
+	void MarkStartupFinished(bool ok);
 	void MarkInitialConnectFinished(bool ok);
 	void MarkHealthy();
 
@@ -139,6 +141,11 @@ private:
 	std::unique_ptr<RedisClientScriptVM> script_vm_;
 	int64_t frame_count_ = 0;
 	std::chrono::steady_clock::time_point last_frame_time_;
+
+	std::mutex startup_mutex_;
+	std::condition_variable startup_cv_;
+	bool startup_finished_ = false;
+	bool startup_ok_ = false;
 
 	mutable std::mutex initial_mutex_;
 	std::condition_variable initial_cv_;
