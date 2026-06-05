@@ -427,7 +427,55 @@ class AsyncResultDispatcher {
 - 在对应 VM `UpdateScript` 前执行，这样脚本本帧可以看到异步结果。
 - 每帧设置 `dispatch_batch_size`，避免单帧处理过多回调导致卡顿。
 
-## 10. 配置设计
+## 10. 配置模块设计
+
+Redis 配置模块由三部分组成：
+
+- `server.json` 中的 Redis 配置入口和启动策略。
+- `resources/config/server/redis.json` 中的 Redis 详细配置。
+- C++ 侧 `RedisClientConfig`、`ConfigManager` 加载接口、校验逻辑和 Lua config binding。
+
+### 10.1 配置文件入口
+
+`resources/config/server/server.json` 增加：
+
+```json
+"redis": "resources/config/server/redis.json",
+"redis_required": false
+```
+
+含义：
+
+- `redis`：Redis 详细配置文件路径，路径规则与当前 `db_service`、`mongodb_dev`、`mongodb_public` 保持一致，使用相对工作目录路径。
+- `redis_required`：Redis 是否是 server 启动和 readiness 的强依赖。
+
+启动策略：
+
+- `redis` 为空时，不启动 Redis 模块。
+- `redis` 非空但加载失败：
+  - `redis_required = true`：server 初始化失败。
+  - `redis_required = false`：server 继续启动，Redis 状态为 disabled/error。
+- `redis` 加载成功但连接失败：
+  - `redis_required = true`：server 初始化失败或 readiness fail。
+  - `redis_required = false`：server 继续启动，Redis 请求返回 connection error，并按重连策略后台重连。
+
+`ServerConfig` 增加：
+
+```cpp
+// Redis client config file path (relative to working dir).
+std::string redis = "resources/config/server/redis.json";
+bool redis_required = false;
+```
+
+同时需要更新：
+
+- `src/runtime/config/config.h`
+- `src/runtime/config/config.cc`
+- `src/runtime/config/config_validator.cc`
+- `src/runtime/config/bind/config_bind.cc`
+- `resources/config/server/server.json`
+
+### 10.2 Redis 详细配置文件
 
 新增 `resources/config/server/redis.json`：
 
@@ -454,25 +502,175 @@ class AsyncResultDispatcher {
   "log": {
     "enabled": true,
     "slow_command_ms": 100
+  },
+  "reconnect": {
+    "enabled": true,
+    "initial_delay_ms": 500,
+    "max_delay_ms": 5000,
+    "backoff_multiplier": 2
   }
 }
 ```
 
-`resources/config/server/server.json` 增加：
+### 10.3 C++ 配置结构
 
-```json
-"redis": "resources/config/server/redis.json",
-"redis_required": false
-```
-
-`ServerConfig` 增加：
+新增 `src/runtime/database/redis/redis_client_config.h`：
 
 ```cpp
-std::string redis;
-bool redis_required = false;
+struct RedisConnectionConfig {
+  std::string host = "127.0.0.1";
+  int port = 6379;
+  std::string password;
+  int database = 0;
+  int connect_timeout_ms = 5000;
+  int command_timeout_ms = 5000;
+  bool keepalive = true;
+};
+
+struct RedisQueueConfig {
+  size_t request_queue_size = 4096;
+  size_t max_inflight = 4096;
+  size_t dispatch_batch_size = 256;
+};
+
+struct RedisScriptConfig {
+  std::string redis_scripts_dir = "resources/script/redis";
+  bool auto_load = true;
+};
+
+struct RedisLogConfig {
+  bool enabled = true;
+  int slow_command_ms = 100;
+};
+
+struct RedisReconnectConfig {
+  bool enabled = true;
+  int initial_delay_ms = 500;
+  int max_delay_ms = 5000;
+  int backoff_multiplier = 2;
+};
+
+struct RedisClientConfig {
+  RedisConnectionConfig connection;
+  RedisQueueConfig queue;
+  RedisScriptConfig script;
+  RedisLogConfig log;
+  RedisReconnectConfig reconnect;
+};
 ```
 
-配置校验：
+如果后续需要支持多 Redis 实例，可以扩展为：
+
+```cpp
+std::vector<RedisClientConfig> clients;
+```
+
+但第一版建议只支持单实例，避免扩大线程、连接和 Lua API 复杂度。
+
+### 10.4 ConfigManager 接口
+
+`ConfigManager` 增加静态加载接口：
+
+```cpp
+static bool LoadRedisClientConfigFromFile(
+    const std::string& path,
+    RedisClientConfig& out);
+```
+
+实例侧增加缓存和访问接口：
+
+```cpp
+bool LoadRedisClientConfig(RedisClientConfig& out) const;
+bool IsRedisConfigLoaded() const;
+RedisClientConfig GetRedisClientConfig() const;
+```
+
+`ConfigManager` 内部新增成员：
+
+```cpp
+RedisClientConfig redis_config_;
+bool redis_loaded_ = false;
+```
+
+加载流程建议：
+
+1. `LoadServerFromFile` 先解析 `server.json`。
+2. 如果 `server.redis` 非空，调用 `LoadRedisClientConfigFromFile(server.redis, new_redis)`。
+3. Redis 配置加载成功后，写入 `redis_config_` 和 `redis_loaded_`。
+4. Redis 配置加载失败时，根据 `server.redis_required` 决定 `LoadServerFromFile` 是否失败。
+5. 日志中禁止输出明文 password。
+
+建议在 `src/runtime/config/config_constants.h` 增加默认路径：
+
+```cpp
+inline constexpr const char* kRedisConfigFile = "/server/redis.json";
+```
+
+如果保持当前配置文件中的完整相对路径，也可以不依赖该常量；但新增常量有利于默认值、测试和文档统一。
+
+### 10.5 热重载策略
+
+当前 `ConfigManager` 已支持 reload callback。Redis 配置应接入同一套机制。
+
+server reload 时：
+
+- 比较 `server.redis` 路径变化。
+- 比较 `server.redis_required` 变化。
+- 如果 Redis 配置文件内容变化，生成 `ConfigChange`。
+
+建议新增 change keys：
+
+```text
+server.redis
+server.redis_required
+redis.connection.host
+redis.connection.port
+redis.connection.database
+redis.connection.connect_timeout_ms
+redis.connection.command_timeout_ms
+redis.queue.request_queue_size
+redis.queue.max_inflight
+redis.queue.dispatch_batch_size
+redis.script.redis_scripts_dir
+redis.script.auto_load
+redis.log.enabled
+redis.log.slow_command_ms
+redis.reconnect.enabled
+```
+
+RedisClient reload 行为：
+
+- host、port、password、database 变化：需要重连。
+- timeout、queue、dispatch batch 变化：可以运行时更新。
+- script dir 或 auto_load 变化：RedisClientScriptVM 需要重新加载脚本，或标记为下次重启生效。第一版建议“下次重启生效”，避免运行时卸载脚本的生命周期风险。
+- `redis_required` 变化：影响 health/readiness，不强制重启 Redis 线程。
+
+### 10.6 Lua 配置访问
+
+更新 `src/runtime/config/bind/config_bind.cc`，允许脚本读取 Redis 配置入口字段：
+
+```text
+config.get("server.redis")
+config.get("server.redis_required")
+```
+
+Redis 详细配置不建议默认全部暴露给普通业务脚本，尤其是 password。若确实需要暴露，只开放非敏感字段：
+
+```text
+config.get("redis.connection.host")
+config.get("redis.connection.port")
+config.get("redis.connection.database")
+config.get("redis.queue.dispatch_batch_size")
+config.get("redis.log.slow_command_ms")
+```
+
+禁止通过 Lua config binding 返回：
+
+```text
+redis.connection.password
+```
+
+### 10.7 配置校验
 
 - host 不能为空。
 - port 必须在 1 到 65535。
@@ -480,8 +678,40 @@ bool redis_required = false;
 - connect timeout 和 command timeout 必须大于 0。
 - request queue size 必须大于 0。
 - max inflight 必须大于 0。
+- max inflight 不应大于 request queue size，除非明确允许 pending 超出队列容量。
 - dispatch batch size 必须大于 0。
-- password 不建议在日志中输出。
+- reconnect delay 必须大于 0。
+- reconnect max delay 必须大于等于 initial delay。
+- slow command 阈值必须大于等于 0，0 表示记录所有命令。
+- password 不允许出现在日志、health、metrics 和 Lua config 输出中。
+
+校验位置：
+
+- `src/runtime/config/config_validator.cc`：校验 `ServerConfig.redis`、`redis_required` 和 Redis config 基础字段。
+- `RedisClientConfig::Validate` 或独立 `ValidateRedisClientConfig`：校验 Redis 详细配置。
+
+### 10.8 默认值和兼容性
+
+默认建议：
+
+- server 默认配置文件中写入 `redis` 路径，但 `redis_required = false`。
+- 如果项目环境没有 Redis，server 仍可启动。
+- `ENGINE_REDIS_ENABLED=OFF` 时，`server.redis` 字段可以保留，但不会启动 Redis 模块。
+- client/mobile 不解析 Redis 详细配置。
+
+这样可以保持现有配置文件兼容，同时便于 server 环境逐步启用 Redis。
+
+### 10.9 字段命名和序列化
+
+Redis 配置 JSON 建议全部使用 snake_case，与当前 `ServerConfig`、`db_service.json` 风格保持一致。
+
+如果 C++ 字段名与 JSON 字段名完全一致，可以依赖现有 glz 反射方式；如果后续出现 camelCase 或兼容旧字段，再为 `RedisClientConfig` 增加显式 `glz::meta` 映射。
+
+敏感字段处理：
+
+- `password` 只参与连接，不进入 `ConfigChange` 的明文 old/new 值。
+- reload 日志中只记录 password 是否变化，不记录变化前后的值。
+- metrics、health、admin API、Lua config binding 均不能返回 password。
 
 ## 11. CMake 集成方案
 
@@ -758,4 +988,3 @@ Redis 集成测试建议 opt-in：
 - blocking command。
 - 多连接池。
 - pipeline 聚合优化。
-
