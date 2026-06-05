@@ -19,6 +19,7 @@ before including this header."
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Math/Quat.h>
@@ -56,6 +57,11 @@ std::optional<DiffPacket> GenerateDiff(uint32_t body_id,
 
 class ObjectRegistry {
 	public:
+	struct Entry {
+		uint32_t body_id = 0;
+		std::string asset_name;
+	};
+
 	// Register a mapping. asset_name may be empty for dynamic spawns.
 	void Register(uint32_t body_id, const std::string& asset_name);
 
@@ -80,6 +86,9 @@ class ObjectRegistry {
 	size_t Size() const {
 		return id_to_name_.size();
 	}
+
+	// Return all registered mappings sorted by body_id for deterministic iteration.
+	std::vector<Entry> Entries() const;
 
 	private:
 	std::unordered_map<uint32_t, std::string> id_to_name_;

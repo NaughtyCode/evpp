@@ -3,9 +3,11 @@
 #define PHYSICS_INTERNAL_ACCESS
 #include "runtime/physics/bind/physics_bind_common.h"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <string>
+#include <vector>
 
 #include <Jolt/Physics/Body/MotionQuality.h>
 #include <Jolt/Physics/Body/MotionType.h>
@@ -177,6 +179,32 @@ void PushDiffPacket(lua_State* L, const DiffPacket& packet) {
 		lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
 	}
 	lua_setfield(L, -2, "values");
+}
+
+void PushRegistryEntry(lua_State* L, const ObjectRegistry::Entry& entry) {
+	lua_newtable(L);
+	SetField(L, "body_id", entry.body_id);
+	SetField(L, "bodyId", entry.body_id);
+	if (entry.asset_name.empty()) {
+		lua_pushnil(L);
+		lua_setfield(L, -2, "asset_name");
+		lua_pushnil(L);
+		lua_setfield(L, -2, "assetName");
+	} else {
+		SetField(L, "asset_name", entry.asset_name);
+		SetField(L, "assetName", entry.asset_name);
+	}
+}
+
+std::vector<std::string> SortedPrototypeIds(const PhysicsWorld& world) {
+	std::vector<std::string> ids;
+	const auto& prototypes = world.GetPrototypes();
+	ids.reserve(prototypes.size());
+	for (const auto& [proto_id, _] : prototypes) {
+		ids.push_back(proto_id);
+	}
+	std::sort(ids.begin(), ids.end());
+	return ids;
 }
 
 bool ReadVec3Like(lua_State* L, int index, double& x, double& y, double& z) {
@@ -514,10 +542,27 @@ int LuaListPrototypes(lua_State* L) {
 	if (!CheckWorldDirectRead(L, ctx)) return 2;
 
 	lua_newtable(L);
-	int index = 1;
-	for (const auto& [_, proto] : ctx.world->GetPrototypes()) {
-		PushPrototype(L, proto);
-		lua_rawseti(L, -2, index++);
+	auto ids = SortedPrototypeIds(*ctx.world);
+	const auto& prototypes = ctx.world->GetPrototypes();
+	for (size_t i = 0; i < ids.size(); ++i) {
+		auto it = prototypes.find(ids[i]);
+		if (it == prototypes.end()) continue;
+		PushPrototype(L, it->second);
+		lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+	}
+	return 1;
+}
+
+int LuaListPrototypeIds(lua_State* L) {
+	BindingContext ctx;
+	if (!CheckInit(L, ctx)) return 2;
+	if (!CheckWorldDirectRead(L, ctx)) return 2;
+
+	lua_newtable(L);
+	auto ids = SortedPrototypeIds(*ctx.world);
+	for (size_t i = 0; i < ids.size(); ++i) {
+		lua_pushlstring(L, ids[i].data(), ids[i].size());
+		lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
 	}
 	return 1;
 }
@@ -538,12 +583,67 @@ int LuaGetPrototype(lua_State* L) {
 	return 1;
 }
 
+int LuaHasPrototype(lua_State* L) {
+	BindingContext ctx;
+	if (!CheckInit(L, ctx)) return 2;
+	if (!CheckWorldDirectRead(L, ctx)) return 2;
+
+	const char* proto_id = luaL_checkstring(L, 1);
+	const auto& prototypes = ctx.world->GetPrototypes();
+	lua_pushboolean(L, prototypes.find(proto_id) != prototypes.end() ? 1 : 0);
+	return 1;
+}
+
 int LuaGetRegistrySize(lua_State* L) {
 	BindingContext ctx;
 	if (!CheckInit(L, ctx)) return 2;
 	if (!CheckWorldDirectRead(L, ctx)) return 2;
 
 	lua_pushinteger(L, static_cast<lua_Integer>(ctx.world->GetRegistry().Size()));
+	return 1;
+}
+
+int LuaListRegistry(lua_State* L) {
+	BindingContext ctx;
+	if (!CheckInit(L, ctx)) return 2;
+	if (!CheckWorldDirectRead(L, ctx)) return 2;
+
+	lua_newtable(L);
+	auto entries = ctx.world->GetRegistry().Entries();
+	for (size_t i = 0; i < entries.size(); ++i) {
+		PushRegistryEntry(L, entries[i]);
+		lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+	}
+	return 1;
+}
+
+int LuaListRegisteredBodyIds(lua_State* L) {
+	BindingContext ctx;
+	if (!CheckInit(L, ctx)) return 2;
+	if (!CheckWorldDirectRead(L, ctx)) return 2;
+
+	lua_newtable(L);
+	auto entries = ctx.world->GetRegistry().Entries();
+	for (size_t i = 0; i < entries.size(); ++i) {
+		lua_pushinteger(L, static_cast<lua_Integer>(entries[i].body_id));
+		lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+	}
+	return 1;
+}
+
+int LuaListRegisteredAssetNames(lua_State* L) {
+	BindingContext ctx;
+	if (!CheckInit(L, ctx)) return 2;
+	if (!CheckWorldDirectRead(L, ctx)) return 2;
+
+	lua_newtable(L);
+	auto entries = ctx.world->GetRegistry().Entries();
+	lua_Integer out_index = 1;
+	for (const auto& entry : entries) {
+		if (entry.asset_name.empty()) continue;
+		lua_pushlstring(L, entry.asset_name.data(), entry.asset_name.size());
+		lua_rawseti(L, -2, out_index++);
+	}
 	return 1;
 }
 
@@ -554,6 +654,16 @@ int LuaHasBodyId(lua_State* L) {
 
 	uint32_t body_id = CheckUInt32(L, 1, "body_id must be a uint32");
 	lua_pushboolean(L, ctx.world->GetRegistry().Has(body_id) ? 1 : 0);
+	return 1;
+}
+
+int LuaHasAssetName(lua_State* L) {
+	BindingContext ctx;
+	if (!CheckInit(L, ctx)) return 2;
+	if (!CheckWorldDirectRead(L, ctx)) return 2;
+
+	const char* asset_name = luaL_checkstring(L, 1);
+	lua_pushboolean(L, ctx.world->GetRegistry().GetBodyId(asset_name).has_value() ? 1 : 0);
 	return 1;
 }
 
@@ -626,9 +736,16 @@ const luaL_Reg kStateFunctions[] = {{"tick", LuaTick},
 									{"get_stats", LuaGetStats},
 									{"get_physics_stats", LuaGetStats},
 									{"list_prototypes", LuaListPrototypes},
+									{"list_prototype_ids", LuaListPrototypeIds},
 									{"get_prototype", LuaGetPrototype},
+									{"has_prototype", LuaHasPrototype},
 									{"get_registry_size", LuaGetRegistrySize},
+									{"list_registry", LuaListRegistry},
+									{"list_registered_body_ids", LuaListRegisteredBodyIds},
+									{"list_registered_asset_names",
+									 LuaListRegisteredAssetNames},
 									{"has_body_id", LuaHasBodyId},
+									{"has_asset_name", LuaHasAssetName},
 									{"get_asset_name", LuaGetAssetName},
 									{"get_body_id", LuaGetBodyId},
 									{"generate_diff", LuaGenerateDiff},

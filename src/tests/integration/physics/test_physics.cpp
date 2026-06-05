@@ -133,6 +133,10 @@ local prototypes = physics.list_prototypes()
 if type(prototypes) ~= "table" or #prototypes == 0 then
 	error("missing physics prototypes")
 end
+local prototype_ids = physics.list_prototype_ids()
+if type(prototype_ids) ~= "table" or #prototype_ids == 0 or not physics.has_prototype("crate") then
+	error("prototype id helpers failed")
+end
 local crate_proto = physics.get_prototype("crate")
 if type(crate_proto) ~= "table" or crate_proto.proto_id ~= "crate" then
 	error("missing crate prototype")
@@ -170,6 +174,18 @@ end
 
 if physics.get_registry_size() < 1 then
 	error("physics registry not populated")
+end
+local registry = physics.list_registry()
+if type(registry) ~= "table" or #registry < 1 then
+	error("physics.list_registry failed")
+end
+local body_ids = physics.list_registered_body_ids()
+if type(body_ids) ~= "table" or #body_ids < 1 then
+	error("physics.list_registered_body_ids failed")
+end
+local names = physics.list_registered_asset_names()
+if type(names) ~= "table" then
+	error("physics.list_registered_asset_names failed")
 end
 )lua";
 	REQUIRE(script.good());
@@ -309,6 +325,18 @@ assert(materials.count == 1)
 assert(materials.empty == false)
 assert(math.abs(materials.byName.script_mat.friction - 0.4) < 0.0001)
 assert(materials.entries[1].name == "script_mat")
+local registry = physics.list_registry()
+local body_ids = physics.list_registered_body_ids()
+local asset_names = physics.list_registered_asset_names()
+assert(type(registry) == "table" and #registry >= 1 and registry[1].bodyId ~= nil)
+assert(type(body_ids) == "table" and #body_ids == physics.get_registry_size())
+assert(type(asset_names) == "table" and #asset_names >= 1)
+assert(physics.has_asset_name(asset_names[1]) == true)
+assert(physics.get_body_id(asset_names[1]) ~= nil)
+local prototype_ids = physics.list_prototype_ids()
+assert(type(prototype_ids) == "table" and #prototype_ids >= 1)
+assert(physics.has_prototype(prototype_ids[1]) == true)
+assert(physics.has_prototype("__missing__") == false)
 assert(physics.has_material_in_json(materials_json, "script_mat") == true)
 assert(physics.has_material_in_json(materials_json, "missing") == false)
 local material = physics.get_material_in_json(materials_json, "script_mat")
