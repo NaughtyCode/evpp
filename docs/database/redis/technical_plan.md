@@ -138,9 +138,10 @@ resources/script/redis/
 
 ### 5.1 RedisClient
 
-`RedisClient` 是 Redis 模块唯一对外可见入口。
+`RedisClient` 是 Redis 模块面向普通外部 C++/业务模块的唯一可见入口。
 
 `RedisSubmitResult`、`RedisCommandOptions`、`RedisResult`、`RedisValue` 等只作为 `RedisClient` API 的数据传输类型公开；除 `RedisClient` 外，不再暴露其他可调用服务类或模块级实例。
+Redis 私有 VM 的内部 binding 可以访问 Redis 模块 public API，但这不改变普通外部模块只能通过 `RedisClient` 访问 Redis 的边界。
 
 建议接口：
 
@@ -242,17 +243,17 @@ class RedisClient {
 
 要求：
 
-- `Initialize` 只能成功执行一次。
+- `Initialize` 在当前运行 generation 内只能成功执行一次；运行中或正在停止时再次调用必须失败并记录原因。`Initialize` 失败完整回滚后，或 `Shutdown` 完成并进入 `kStopped` / `kDisabled` 后，允许再次调用，用于修正配置后重试或 reload 从 disabled 重新启用 Redis。
 - 如果 `Initialize` 失败，必须完整回滚线程、event_base、hiredis context、dispatcher 和统计状态，使调用方可以修正配置后重试初始化。
 - `Initialize` 不应从 `ConfigManager` 隐式读取 `redis_required`；Engine 读取 `ServerConfig.redis_required` 后，通过 `RedisClientStartOptions::wait_for_initial_connect` 显式传入启动策略。
 - `Shutdown` 可重复调用，必须幂等。
 - `Command` 和 `Eval` 可由任意线程调用。
 - `RedisClient` 内部统一管理一个或多个 `RedisClientThread`；外部调用方不能直接指定 worker id，也不能访问 worker 实例。
 - `Command` 默认按 round-robin 路由到 worker；如果 `RedisCommandOptions::routing_key` 非空，则使用稳定 hash 路由到同一个 worker，便于同一业务键保持同连接内顺序。
-- `Eval` / `redis.eval` 如果未显式设置 `routing_key` 且 `keys` 非空，应默认使用第一个 key 作为 routing key；无 key 的 eval 才走 round-robin。
+- 普通外部 `Eval` / `redis.eval` 如果未显式设置 `routing_key` 且 `keys` 非空，应默认使用第一个 key 作为 routing key；无 key 的 eval 才走 round-robin。Redis 私有 VM 或内部维护任务设置了 `preferred_worker_index` 时，该内部 preferred worker 优先于 Eval 默认 key。
 - `routing_key` 的稳定性只保证在当前 worker 集合 generation 和当前 `thread_count` 内成立；`thread_count` reload 后，同一个 key 可能映射到不同 worker。
 - 多个 worker 之间不保证全局命令顺序。需要严格顺序的调用方应使用同一个 `routing_key`，或在上一个请求 completion 后再提交下一个请求。
-- 未指定 `routing_key` 时，round-robin 应只选择当前 healthy 的 worker；没有 healthy worker 且 `queue_while_disconnected = false` 时同步拒绝为 `kDisconnected`。
+- 未指定 `routing_key` 时，round-robin 应优先只选择当前 healthy 的 worker；没有 healthy worker 且 `queue_while_disconnected = false` 时同步拒绝为 `kDisconnected`。没有 healthy worker 但 `queue_while_disconnected = true` 时，可以在仍 running 的 worker 中 round-robin 排队；如果 worker 集合不存在或没有 running worker，则同步拒绝为 `kNotRunning` / `kDisconnected`。
 - 指定 `routing_key` 时不能因为目标 worker unhealthy 而自动改投其他 worker，否则会破坏同 key 顺序；目标 worker unhealthy 且 `queue_while_disconnected = false` 时同步拒绝为 `kDisconnected`。
 - `queue_while_disconnected = true` 时，目标 worker unhealthy 的请求可以进入该 worker 的队列，但仍受全局 queue、全局 inflight、单请求 timeout 和 shutdown 状态限制。
 - 返回 `RedisSubmitResult.accepted = true` 表示请求已被 RedisClient accepted，必须保证最终 completion 一次，并返回本次请求的 `request_id`。
@@ -285,7 +286,7 @@ struct RedisRequest {
 
 不建议在 `RedisRequest` 中直接保存 Lua registry ref。Lua ref 应由调用方线程的 dispatcher/registry 管理，Redis 请求只保存一个线程安全 completion adapter。
 
-`preferred_worker_index` 只允许 Redis 模块内部设置，用于 Redis 私有 VM 或内部维护任务在没有显式 `routing_key` 时把请求固定回所属 worker；普通外部 API 不暴露 worker id。
+`preferred_worker_index` 只允许 Redis 模块内部通过 internal submit helper 或 request builder 设置，用于 Redis 私有 VM 或内部维护任务在没有显式 `routing_key` 时把请求固定回所属 worker；普通外部 API 不暴露 worker id。
 
 ### 5.3 RedisResult
 
@@ -420,7 +421,7 @@ class RedisClientThread {
 
 1. 调用方线程调用 `RedisClient::Command`。
 2. `RedisClient` 校验参数和 completion，并生成 `request_id`。
-3. `RedisClient` 根据 `routing_key` 稳定 hash、内部 `preferred_worker_index` 或 round-robin 选择目标 worker；优先级为 `routing_key` > `preferred_worker_index` > round-robin。
+3. `RedisClient` 根据显式 `routing_key`、内部 `preferred_worker_index`、`Eval` 默认 key 或 round-robin 选择目标 worker；优先级为显式 `routing_key` > `preferred_worker_index` > `Eval` 默认 key > round-robin。
 4. 请求入目标 worker 的 `request_queue_`。
 5. 唤醒目标 Redis 线程。
 6. Redis 线程 drain 队列。
@@ -487,17 +488,17 @@ VM 初始化时：
 3. `SetCustomPtr(kRedisPtrScriptVM, this)`。
 4. `SetCustomPtr(kRedisPtrClient, &RedisClient::Instance())`。
 5. 创建属于 Redis 线程的 `AsyncResultDispatcher`，并通过 `kRedisPtrDispatcher` 注册。
-6. 导出 Redis 模块公开接口到 Redis 私有 VM。
+6. 导出 Redis 私有 VM 专用 binding：包含访问 `RedisClient` 的 API，以及 `src/runtime/database/redis` 中允许脚本访问的 public API 包装。
 7. 加载 Redis 私有脚本。
 
 注意：
 
 - 外部不能获得 `RedisClientScriptVM*`。
-- Redis 私有 VM 可以访问 Redis 模块全部 public API。
+- Redis 私有 VM 可以访问 Redis 模块全部 public API；这些 API 只通过 Redis 私有 VM 专用 binding 暴露，不进入普通 VM 的 `redis` 表，也不暴露 hiredis context 或 `RedisClientThread` 实例。
 - 不要把 raw `redisAsyncContext*` 暴露到 Lua custom ptr store；hiredis context 只允许 `RedisClientThread` 内部 C++ 代码访问。
 - 如果需要内部调试 API，应通过内部 binding 单独导出，不暴露到普通 VM。
 - Redis 私有 VM 发起的 Redis 请求，其 completion 也必须进入 Redis 线程自己的 dispatcher，再由 Redis 线程主循环 dispatch，不能在 hiredis callback 栈上直接调用 Lua。
-- Redis 私有 VM 未指定 `routing_key` 时，请求应通过内部 `preferred_worker_index` 固定回所属 `RedisClientThread`，避免默认 round-robin 把私有脚本请求投递到其他 worker 造成不必要的跨 Redis 线程跳转。
+- Redis 私有 VM 未显式指定 `routing_key` 时，请求应通过内部 `preferred_worker_index` 固定回所属 `RedisClientThread`；即使 `redis.eval` 带有非空 keys，也不应先合成默认 key 路由覆盖 `preferred_worker_index`。这样可以避免私有脚本请求被默认 round-robin 或 Eval 默认 key 投递到其他 worker。
 - `RedisClientThread` 需要注册一个周期性 tick event，用于执行 timeout 检查、Redis 私有 dispatcher dispatch、`RedisClientScriptVM::UpdateScript()` 和脚本 frame callback；tick 频率由 `thread.main_loop_fps` 控制，默认 60 fps。
 
 ## 8. Lua Binding 设计
@@ -530,11 +531,12 @@ redis.eval(script, keys, args, callback, {
 
 binding 规则：
 
-- 只要编译启用了 Redis runtime，普通 VM 可以导出 `redis` 表；如果 server 配置未启用 Redis 或 `RedisClient` 未初始化，`redis.is_running()` 返回 false，`redis.command` / `redis.eval` 同步返回 `false, error`，不保存 callback。
+- 只有编译启用了 Redis runtime 时，普通 VM 才导出 `redis` 表。Redis runtime 未编译时，不导出 `redis.command` / `redis.eval` / `redis.is_running` / `redis.is_healthy`。
+- Redis runtime 已编译但 server 配置未启用 Redis 或 `RedisClient` 未初始化时，`redis.is_running()` 返回 false，`redis.command` / `redis.eval` 同步返回 `false, error`，不保存 callback。
 - `redis.is_running()` 只表示 `RedisClient` 已初始化且 worker 集合存在；`redis.is_healthy()` 表示所有 worker 都 healthy。Redis disabled 时二者都返回 false；部分 worker unhealthy 时 `is_running()` 返回 true、`is_healthy()` 返回 false。
 - `redis.command` / `redis.eval` 同步返回 `ok, request_id_or_error`。请求未被 RedisClient accepted 时，`ok = false`，不会产生异步回调；如果 binding 为了构造 completion 已经临时注册 Lua callback，必须在 owner thread 立即 `luaL_unref`。
 - Lua options 中的 `routing_key` 透传到 `RedisCommandOptions::routing_key`；`redis.command` 未指定时由 `RedisClient` round-robin 路由，不保证跨请求顺序。
-- `redis.eval` 未显式指定 `routing_key` 且 `keys` 非空时，binding 应使用 `keys[1]` 作为默认 routing key。
+- 普通 VM 的 `redis.eval` 未显式指定 `routing_key` 且 `keys` 非空时，binding 应使用 `keys[1]` 作为默认 routing key；Redis 私有 VM 的 binding 如果带有内部 `preferred_worker_index`，不得用该默认 key 覆盖 preferred worker。
 - Lua callback 存入当前 VM registry。
 - callback ref 由当前 VM 所属 `AsyncResultDispatcher` 管理。
 - Redis 线程回调只投递结果，不直接执行 Lua callback。
@@ -627,11 +629,12 @@ Redis 配置模块由三部分组成：
 
 启动策略：
 
+- Redis runtime 未编译时，如果 `redis_required = true`，配置校验失败，server 初始化失败；如果 `redis_required = false`，允许保留 `server.redis` 字段但不加载 Redis 详细配置文件，也不创建 `RedisClientThread` worker 集合。
 - `redis` 为空且 `redis_required = false` 时，不启动 Redis 模块。
 - `redis` 为空且 `redis_required = true` 时，配置校验失败，server 初始化失败。
 - `redis` 非空但加载失败：
   - `redis_required = true`：server 初始化失败。
-  - `redis_required = false`：server 继续启动，Redis 状态为 error，且不创建 `RedisClientThread` worker 集合。
+  - `redis_required = false`：server 继续启动，Redis 状态为 error，且不创建 `RedisClientThread` worker 集合；`RedisClient` 不进入 running 状态，提交请求同步返回 `kNotRunning`，Lua binding 同步返回 `false, error`。
 - `redis` 加载成功但连接失败：
   - `redis_required = true`：server 初始化失败或 readiness fail。
   - `redis_required = false`：server 继续启动，Redis 请求返回 connection error，并按重连策略后台重连。
@@ -792,11 +795,13 @@ bool redis_loaded_ = false;
 加载流程建议：
 
 1. `LoadServerFromFile` 先解析 `server.json`。
-2. 如果 `server.redis` 非空，调用 `LoadRedisClientConfigFromFile(server.redis, new_redis)`。
-3. `LoadRedisClientConfigFromFile` 内部执行 `InterpolateConfigStrings(out)`，允许 password 使用环境变量或配置插值。
-4. Redis 配置加载成功后，写入 `redis_config_` 和 `redis_loaded_`。
-5. Redis 配置加载失败时，根据 `server.redis_required` 决定 `LoadServerFromFile` 是否失败；如果 `redis_required = false`，`LoadServerFromFile` 可以成功，但必须记录错误并设置 `redis_loaded_ = false`。
-6. 日志中禁止输出明文 password；如 password 看起来是明文，应复用 Mongo 配置的 plaintext credential warning 思路。
+2. 通过编译宏或 server target 注入的 helper 判断 Redis runtime 是否已编译进当前 target。
+3. Redis runtime 未编译且 `server.redis_required = true` 时，`LoadServerFromFile` 必须失败；Redis runtime 未编译且 `server.redis_required = false` 时，跳过 Redis 详细配置加载，即使 `server.redis` 非空也不打开该文件，并设置 `redis_loaded_ = false`。
+4. Redis runtime 已编译且 `server.redis` 非空时，调用 `LoadRedisClientConfigFromFile(server.redis, new_redis)`。
+5. `LoadRedisClientConfigFromFile` 内部执行 `InterpolateConfigStrings(out)`，允许 password 使用环境变量或配置插值。
+6. Redis 配置加载成功后，写入 `redis_config_` 和 `redis_loaded_`。
+7. Redis 配置加载失败时，根据 `server.redis_required` 决定 `LoadServerFromFile` 是否失败；如果 `redis_required = false`，`LoadServerFromFile` 可以成功，但必须记录错误并设置 `redis_loaded_ = false`。
+8. 日志中禁止输出明文 password；如 password 看起来是明文，应复用 Mongo 配置的 plaintext credential warning 思路。
 
 建议在 `src/runtime/config/config_constants.h` 增加默认路径：
 
@@ -820,7 +825,7 @@ server reload 时：
 
 - 比较 `server.redis` 路径变化。
 - 比较 `server.redis_required` 变化。
-- 如果 Redis 配置文件内容变化，生成 `ConfigChange`。
+- Redis runtime 已编译且 Redis 配置文件内容变化时，生成 `ConfigChange`。
 
 建议新增 change keys：
 
@@ -852,7 +857,8 @@ redis.reconnect.queue_while_disconnected
 
 RedisClient reload 行为：
 
-- `server.redis` 从空变为非空：加载 Redis config 后启动 `RedisClient`；若加载或启动失败，按新的 `redis_required` 规则处理 readiness 和错误日志。
+- Redis runtime 未编译：`server.redis` 变化只更新配置字段，不加载 Redis 详细配置、不启动 `RedisClient`；如果新的 `redis_required = true`，reload 校验失败并保留旧配置。
+- Redis runtime 已编译且 `server.redis` 从空变为非空：加载 Redis config 后启动 `RedisClient`；若加载或启动失败，按新的 `redis_required` 规则处理 readiness 和错误日志。
 - `server.redis` 从非空变为空且 `redis_required = false`：调用 `RedisClient::Shutdown()`，Redis 状态变为 disabled；未完成请求按 `kShutdown` 完成。
 - `server.redis` 变为空且 `redis_required = true`：reload 校验失败，保留旧配置和旧 RedisClient 状态。
 - `server.redis` 路径变化且新配置加载成功：先按新配置启动新的 `RedisClientThread` worker 集合，成功后再原子替换旧集合并关闭旧集合；如果新集合启动失败，`redis_required = true` 时 reload 失败并保留旧集合和旧配置；`redis_required = false` 且旧集合存在时保留旧集合继续服务并记录 reload error，旧集合不存在时进入 error/disabled 状态。
@@ -896,6 +902,7 @@ redis.connection.password
 ### 10.7 配置校验
 
 - host 不能为空。
+- Redis runtime 未编译且 `server.redis_required = true` 时，配置无效；Redis runtime 未编译且 `server.redis_required = false` 时，不校验 Redis 详细配置文件是否存在。
 - `server.redis_required = true` 时，`server.redis` 必须非空。
 - port 必须在 1 到 65535。
 - username 可以为空；非空时必须随 AUTH username password 形式认证。
@@ -925,7 +932,7 @@ redis.connection.password
 
 - server 默认配置文件中保留 `redis` 为空，Redis 默认不启动。
 - 如果项目环境没有 Redis，server 仍可启动。
-- `ENGINE_REDIS_ENABLED=OFF` 且 `redis_required = false` 时，`server.redis` 字段可以保留，但不会启动 Redis 模块。
+- `ENGINE_REDIS_ENABLED=OFF` 且 `redis_required = false` 时，`server.redis` 字段可以保留；server 不启动 Redis 模块，也不加载该路径指向的 Redis 详细配置文件，避免旧配置中保留路径但目标文件缺失时影响启动。
 - `ENGINE_REDIS_ENABLED=OFF` 且 `redis_required = true` 时，server 启动必须失败或配置校验失败，因为强依赖无法满足。
 - client/mobile 不解析 Redis 详细配置。
 
@@ -1023,6 +1030,7 @@ include/link：
 - 当前工程 `cmake_minimum_required(VERSION 4.0)`，hiredis 的 `option()` 会遵守同名普通变量；优先在 `block(SCOPE_FOR VARIABLES)` 中设置普通变量，不要用 `CACHE FORCE` 污染父作用域。
 - `BUILD_SHARED_LIBS`、`DISABLE_TESTS`、`ENABLE_EXAMPLES`、`ENABLE_SSL`、`ENABLE_SSL_TESTS`、`ENABLE_ASYNC_TESTS`、`ENABLE_NUGET` 都是 hiredis 使用的选项名。如果后续必须使用 cache 变量，应保存/恢复这些变量，或把 hiredis 配置封装成 helper 函数。
 - `ENGINE_REDIS_ENABLED` compile definition 只应在 `ENGINE_REDIS_RUNTIME_ENABLED` 为 true 时加到 server target；client target 不应看到该宏。
+- 配置层可用 `#if defined(ENGINE_REDIS_ENABLED)` 或一个无 Redis 头依赖的 helper 判断当前 target 是否编译了 Redis runtime；不能通过 `server.redis` 字段是否非空来推断 Redis runtime 可用。
 
 ## 12. 引擎生命周期
 
@@ -1033,13 +1041,13 @@ include/link：
 1. 加载 server config。
 2. 初始化 logger。
 3. 初始化主 EventLoop。
-4. 如果 `server.redis` 非空，加载 Redis config。
-5. 如果 Redis config 加载成功，初始化 `RedisClient`；如果 `server.redis` 为空且 `redis_required = false`，保持 Redis 状态为 disabled，不创建 worker 集合。
+4. 如果 Redis runtime 已编译且 `server.redis` 非空，加载 Redis config；Redis runtime 未编译时不加载 Redis 详细配置。
+5. 如果 Redis config 加载成功，初始化 `RedisClient`；如果 `server.redis` 为空、Redis runtime 未编译且 `redis_required = false`，或 Redis config 加载失败但 `redis_required = false`，保持 Redis 状态为 disabled/error，不创建 worker 集合。
 6. 初始化 Mongo / DatabaseService。
 7. 创建主 `MainThreadScriptVM`。
 8. 导出 runtime bindings，其中包含访问 `RedisClient` 的 Redis Lua binding。
 
-Redis 启用时放在 Mongo / DatabaseService 之前初始化，是为了让后续 DB 线程、业务线程或脚本 VM 在创建时可以安全导出访问 `RedisClient` 的 Redis Lua binding。Engine 读取 `server.redis_required` 后，转成 `RedisClientStartOptions::wait_for_initial_connect` 传给 `RedisClient::Initialize`：`redis_required = true` 时必须等待所有 `RedisClientThread` worker 的首次连接结果；`redis_required = false` 时只要求所有 Redis worker 基础设施启动成功。`server.redis` 为空且 `redis_required = false` 时不调用 `RedisClient::Initialize`；`server.redis` 为空但 `redis_required = true` 必须在配置校验阶段失败。
+Redis 启用时放在 Mongo / DatabaseService 之前初始化，是为了让后续 DB 线程、业务线程或脚本 VM 在创建时可以安全导出访问 `RedisClient` 的 Redis Lua binding。Engine 读取 `server.redis_required` 后，转成 `RedisClientStartOptions::wait_for_initial_connect` 传给 `RedisClient::Initialize`：`redis_required = true` 时必须等待所有 `RedisClientThread` worker 的首次连接结果；`redis_required = false` 时只要求所有 Redis worker 基础设施启动成功。`server.redis` 为空且 `redis_required = false` 时不调用 `RedisClient::Initialize`；`server.redis` 为空但 `redis_required = true` 必须在配置校验阶段失败。Redis runtime 未编译且 `redis_required = false` 时也不调用 `RedisClient::Initialize`，即使 `server.redis` 保留了旧路径。
 
 ### 12.2 每帧更新
 
@@ -1093,15 +1101,18 @@ Redis 命令错误，例如 `WRONGTYPE`，应作为 `kCommandError` 返回；已
 
 - `RedisClient::IsHealthy()` 返回 false。
 - 如果 `redis_required = true`，server 初始化可以失败，readiness 必须失败。
-- 如果 `redis_required = false`，server 可以继续启动；全部 worker 不可用时 Redis 请求返回 connection error，部分 worker 不可用时按路由规则处理。
+- 如果 `redis_required = false`，server 可以继续启动；在 `RedisClient` 已初始化且 worker 集合存在的前提下，全部 worker 不可用时 Redis 请求返回 connection error，部分 worker 不可用时按路由规则处理。Redis runtime 未编译、`server.redis` 为空或 Redis config 加载失败导致没有 worker 集合时，提交请求同步返回 `kNotRunning`。
 - 单个 worker 连接断开时，该 worker 所有已发送但未完成的 pending request 应立即完成为 `kConnectionError`，不要静默等待重连，避免非幂等命令在不确定状态下重复执行。
 - 使用 5.1 中定义的 `RedisClientState`：所有 worker healthy 时为 `kHealthy`，部分 worker unhealthy 时为 `kDegraded`，全部 worker 不可用或启动失败时进入 `kError` / `kReconnecting` / `kStopped` 等对应状态。
 
 readiness 规则：
 
+- Redis runtime 未编译且 `redis_required = false`：Redis 状态为 disabled，即使 `server.redis` 非空也不影响 readiness。
+- Redis runtime 未编译且 `redis_required = true`：配置无效，server 不应进入 ready 流程。
 - `server.redis` 为空且 `redis_required = false`：Redis 状态为 disabled，不影响 readiness。
 - `server.redis` 为空且 `redis_required = true`：配置无效，server 不应进入 ready 流程。
-- `server.redis` 非空且 `redis_required = false`：Redis unhealthy 只标记 degraded，不导致整体 readiness fail。
+- `server.redis` 非空、Redis config 加载失败且 `redis_required = false`：Redis 状态为 error，不创建 worker，不导致整体 readiness fail。
+- `server.redis` 非空、RedisClient 已初始化且 `redis_required = false`：Redis unhealthy 只标记 degraded，不导致整体 readiness fail。
 - `server.redis` 非空且 `redis_required = true`：Redis 未 healthy 时整体 readiness fail。
 
 ### 13.3 超时
@@ -1175,17 +1186,20 @@ src/tests/unit/database/test_redis_bind.cpp
 - `AUTH`、`SELECT`、Pub/Sub、blocking command、transaction command 等 unsupported command 返回 `kUnsupportedCommand`，不入队、不触发 completion。
 - Lua `redis.command` 调用 unsupported command 时同步返回 `false, error`，且不保存 callback ref。
 - `Initialize` 失败后清理完整，允许后续重试初始化。
+- `Initialize` 运行中重复调用会失败；`Shutdown` 完成后允许重新 `Initialize`，用于 reload 从 disabled 重新启用 Redis。
 - `server.redis_required = true` 但 `server.redis` 为空时，配置校验失败并阻止 server 初始化。
+- Redis runtime 未编译、`redis_required = false` 且 `server.redis` 保留非空路径时，不加载 Redis 详细配置、不创建 worker，普通 VM 不导出 `redis` 表。
 - `thread_count > 1` 时 `RedisClient` 能启动多个 `RedisClientThread`，任一 worker 启动失败会清理已启动 worker。
 - `wait_for_initial_connect = true` 且多 worker 时，首次连接等待使用整体 `connect_timeout_ms` 预算，不按 worker 数串行累加。
 - 多个 worker 的 OS thread name 仍设置为 `RedisClientThread`，worker index 通过 stats/log/profiler context 暴露。
 - `main_loop_fps` 默认值为 60，tick interval 使用微秒或更高精度计算；配置变化能正确更新 tick interval 或触发 worker 集合重启。
 - `routing_key` 相同的请求稳定进入同一个 worker；`Command` 未指定 `routing_key` 时按 round-robin 分配。
-- `Eval` / Lua `redis.eval` 未显式设置 `routing_key` 且 keys 非空时，默认用第一个 key 路由。
+- 普通外部 `Eval` / Lua `redis.eval` 未显式设置 `routing_key` 且 keys 非空时，默认用第一个 key 路由。
 - `thread_count` reload 后，新的 worker generation 可以改变 `routing_key` 映射，但旧 generation 已 accepted 请求仍必须完成一次。
 - 部分 worker unhealthy 时，未指定 `routing_key` 的请求只路由到 healthy worker；指定 `routing_key` 命中 unhealthy worker 时不改投其他 worker。
-- Redis 私有 VM 未指定 `routing_key` 发起请求时，使用内部 `preferred_worker_index` 固定回所属 worker。
-- Redis 未在 server 配置中启用时，不创建 worker 集合；Lua `redis.is_running()` / `redis.is_healthy()` 返回 false，`redis.command` 同步失败且不保存 callback ref。
+- 全部 worker unhealthy 且 `queue_while_disconnected = true` 时，未指定 `routing_key` 的请求可以在 running worker 中 round-robin 排队；没有 running worker 时同步失败。
+- Redis 私有 VM 未显式指定 `routing_key` 发起请求时，使用内部 `preferred_worker_index` 固定回所属 worker；Lua `redis.eval` 带 keys 但未显式指定 `routing_key` 时，也不能用默认首 key 覆盖 `preferred_worker_index`。
+- Redis runtime 已编译但未在 server 配置中启用时，不创建 worker 集合；Lua `redis.is_running()` / `redis.is_healthy()` 返回 false，`redis.command` 同步失败且不保存 callback ref。
 - 部分 worker unhealthy 时，Lua `redis.is_running()` 返回 true、`redis.is_healthy()` 返回 false。
 - request id 由 `Command` / `Eval` 返回，异步 `RedisResult.request_id` 与提交结果一致。
 - request queue 和 max inflight 由显式计数器强制限制，不依赖 `ConcurrentQueue` 自身容量，并且二者大小关系互不限制。
@@ -1220,6 +1234,7 @@ Redis 集成测试建议 opt-in：
 - `ENGINE_REDIS_ENABLED=OFF` 时 server 可正常编译。
 - 同一构建树先配置 server 再配置 client 时，client 仍不继承 `ENGINE_REDIS_RUNTIME_ENABLED`。
 - `ENGINE_REDIS_ENABLED=ON`、`server.redis` 为空且 `redis_required = false` 时，server 编译和启动均不强制连接 Redis。
+- `ENGINE_REDIS_ENABLED=OFF`、`server.redis` 非空且 `redis_required = false` 时，server 启动不尝试加载 Redis 详细配置文件。
 - `ENGINE_REDIS_ENABLED=OFF` 且 `redis_required = true` 时，server 启动或配置校验失败。
 
 ## 16. 实施步骤
@@ -1258,7 +1273,7 @@ Redis 集成测试建议 opt-in：
 2. 通过 `custom_ptr_store` 绑定 Redis 模块对象。
 3. 为每个 Redis 私有 VM 注册自己的 dispatcher 和 tick event。
 4. 实现 `bind/redis_bind.cc`。
-5. 外部 VM 导出访问 `RedisClient` 的 `redis.command`、`redis.eval`、`redis.is_running`、`redis.is_healthy`。
+5. Redis runtime 编译启用时，外部 VM 导出访问 `RedisClient` 的 `redis.command`、`redis.eval`、`redis.is_running`、`redis.is_healthy`。
 6. Lua callback 结果通过 dispatcher 回到所属线程。
 
 ### 阶段五：生命周期和可观测性
@@ -1331,7 +1346,7 @@ Redis 集成测试建议 opt-in：
 - 每个 `RedisClientThread` 主循环默认 60 fps。
 - hiredis async + libevent。
 - RedisClientScriptVM。
-- Lua `redis.command`、`redis.eval`、`redis.is_running`、`redis.is_healthy`。
+- Redis runtime 编译启用时的 Lua `redis.command`、`redis.eval`、`redis.is_running`、`redis.is_healthy`。
 - 跨线程 dispatcher。
 - 请求成功、命令失败、连接失败、超时、关闭失败 completion。
 - Lua/业务回调按 owner thread dispatcher 派发。
