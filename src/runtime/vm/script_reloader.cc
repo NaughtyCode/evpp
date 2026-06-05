@@ -12,6 +12,7 @@
 #include "runtime/vm/file_watcher.h"
 #include "runtime/vm/sandbox.h"
 #include "runtime/vm/lua_error_handler.h"
+#include "runtime/vm/script_file.h"
 #include "runtime/vm/vm.h"
 
 extern "C" {
@@ -452,7 +453,17 @@ bool ScriptReloader::ReloadFileCore(lua_State* L, const std::string& filepath,
 	lua_pop(L, 1);
 
 	// Load and execute the file.
-	int ret = luaL_loadfile(L, filepath.c_str());
+	std::string validation_error;
+	if (!ValidateLuaScriptFileForLoad(filepath, validation_error)) {
+		ENGINE_LOG_ERROR(logger,
+						 "ScriptReloader: rejected [{}]: {}",
+						 filepath,
+						 validation_error);
+		lua_settop(L, base_top);
+		return false;
+	}
+
+	int ret = luaL_loadfilex(L, filepath.c_str(), kLuaTextChunkMode);
 	if (ret != LUA_OK) {
 		const char* msg = lua_tostring(L, -1);
 		ENGINE_LOG_ERROR(logger,
@@ -572,23 +583,39 @@ bool ScriptReloader::ReloadAll() {
 	std::vector<FileEntry> files;
 	for (const auto& dir : script_dirs_) {
 		std::error_code ec;
-		for (auto it = std::filesystem::recursive_directory_iterator(dir, ec);
-		     it != std::filesystem::recursive_directory_iterator(); ++it) {
+		for (auto it = std::filesystem::recursive_directory_iterator(
+				 dir,
+				 std::filesystem::directory_options::skip_permission_denied,
+				 ec),
+				  end = std::filesystem::recursive_directory_iterator();
+			 it != end;) {
 			if (ec) {
 				ENGINE_LOG_WARN(logger,
 					"ScriptReloader: iteration error in [{}]: {}",
 					dir, ec.message());
 				ec.clear();
-				continue;
+				break;
 			}
 			const auto& entry = *it;
 			std::error_code fec;
+			const bool regular = entry.is_regular_file(fec);
+			if (fec) {
+				fec.clear();
+				it.increment(ec);
+				continue;
+			}
 			const auto ext = entry.path().extension().string();
-			if (entry.is_regular_file(fec) && (ext == ".lua" || ext == ".LUA")) {
+			if (regular && (ext == ".lua" || ext == ".LUA")) {
 				std::string fp = entry.path().string();
 				files.push_back({fp, ResolveModuleNames(fp)});
 			}
-			if (fec) fec.clear();
+			it.increment(ec);
+		}
+		if (ec) {
+			ENGINE_LOG_WARN(logger,
+				"ScriptReloader: iteration error in [{}]: {}",
+				dir, ec.message());
+			ec.clear();
 		}
 	}
 

@@ -10,6 +10,7 @@
 #include "runtime/profiler/profiler_events.h"
 #include "runtime/vm/async_result_dispatcher.h"
 #include "runtime/vm/lua_error_handler.h"
+#include "runtime/vm/script_file.h"
 
 namespace engine {
 
@@ -182,6 +183,10 @@ bool ScriptVM::IsMainThreadVM() const noexcept {
 }
 
 void ScriptVM::AdoptCurrentThread() {
+	if (async_dispatcher_ && !async_dispatcher_->IsShutdown()) {
+		async_dispatcher_->AdoptOwnerThread();
+		async_dispatcher_->ShutdownOnOwnerThread();
+	}
 	owner_thread_id_ = std::this_thread::get_id();
 	async_dispatcher_ = std::make_shared<AsyncResultDispatcher>(L_);
 }
@@ -342,7 +347,18 @@ bool ScriptVM::DoFile(const std::string& filename, std::string* error_out) {
 					filename,
 					module_name);
 
-	int rc = luaL_loadfilex(L_, filename.c_str(), nullptr);
+	std::string validation_error;
+	if (!ValidateLuaScriptFileForLoad(filename, validation_error)) {
+		ENGINE_LOG_ERROR(logger,
+						 "ScriptVM::DoFile rejected [{}]: [{}]",
+						 filename,
+						 validation_error);
+		if (error_out) *error_out = validation_error;
+		lua_settop(L_, base_top);
+		return false;
+	}
+
+	int rc = luaL_loadfilex(L_, filename.c_str(), kLuaTextChunkMode);
 	if (rc != LUA_OK) {
 		const char* msg = lua_tostring(L_, -1);
 		ENGINE_LOG_ERROR(logger, "ScriptVM::DoFile load error [{}]: [{}]", filename, msg);
@@ -387,15 +403,41 @@ size_t ScriptVM::DoDirectory(const std::string& dir_path) {
 	}
 
 	std::vector<std::string> files;
-	for (const auto& entry : std::filesystem::directory_iterator(dir_path, ec)) {
-		if (ec) break;
+	for (auto it = std::filesystem::directory_iterator(dir_path, ec),
+			  end = std::filesystem::directory_iterator();
+		 it != end;) {
+		if (ec) {
+			ENGINE_LOG_ERROR(logger,
+							 "ScriptVM::DoDirectory iteration error in [{}]: [{}]",
+							 dir_path,
+							 ec.message());
+			++failures;
+			ec.clear();
+			break;
+		}
 
-		if (!entry.is_regular_file()) continue;
+		const auto& entry = *it;
+		std::error_code fec;
+		if (!entry.is_regular_file(fec) || fec) {
+			if (fec) fec.clear();
+			it.increment(ec);
+			continue;
+		}
 
 		auto ext = entry.path().extension().string();
-		if (ext != ".lua" && ext != ".LUA") continue;
+		if (ext == ".lua" || ext == ".LUA") {
+			files.push_back(entry.path().string());
+		}
 
-		files.push_back(entry.path().string());
+		it.increment(ec);
+	}
+	if (ec) {
+		ENGINE_LOG_ERROR(logger,
+						 "ScriptVM::DoDirectory iteration error in [{}]: [{}]",
+						 dir_path,
+						 ec.message());
+		++failures;
+		ec.clear();
 	}
 	std::sort(files.begin(), files.end());
 
@@ -407,12 +449,6 @@ size_t ScriptVM::DoDirectory(const std::string& dir_path) {
 		} else {
 			++failures;
 		}
-	}
-
-	if (ec) {
-		ENGINE_LOG_ERROR(
-			logger, "ScriptVM::DoDirectory iteration error in [{}]: [{}]", dir_path, ec.message());
-		++failures;
 	}
 
 	ENGINE_LOG_INFO(logger,

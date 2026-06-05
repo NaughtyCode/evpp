@@ -76,16 +76,31 @@ void FileWatcher::PrimeKnownFiles() {
 			continue;
 		}
 		for (auto it = std::filesystem::recursive_directory_iterator(
-		         entry.path, ec);
-		     it != std::filesystem::recursive_directory_iterator();
-		     ++it) {
-			if (ec) { ec.clear(); continue; }
+				 entry.path,
+				 std::filesystem::directory_options::skip_permission_denied,
+				 ec),
+				  end = std::filesystem::recursive_directory_iterator();
+			 it != end;) {
+			if (ec) {
+				ec.clear();
+				break;
+			}
 			const auto& de = *it;
 			const bool regular_file = de.is_regular_file(ec);
-			if (ec) { ec.clear(); continue; }
-			if (!regular_file) continue;
+			if (ec) {
+				ec.clear();
+				it.increment(ec);
+				continue;
+			}
+			if (!regular_file) {
+				it.increment(ec);
+				continue;
+			}
 			auto ext = de.path().extension().string();
-			if (!ExtensionMatches(ext, entry.extension)) continue;
+			if (!ExtensionMatches(ext, entry.extension)) {
+				it.increment(ec);
+				continue;
+			}
 			auto path_str = de.path().string();
 			known_files_.insert(path_str);
 			auto ftime = std::filesystem::last_write_time(de, ec);
@@ -94,6 +109,7 @@ void FileWatcher::PrimeKnownFiles() {
 			} else {
 				ec.clear();
 			}
+			it.increment(ec);
 		}
 	}
 }
@@ -160,21 +176,31 @@ std::vector<std::string> FileWatcher::ScanChanges() {
 		}
 
 		for (auto it = std::filesystem::recursive_directory_iterator(
-		         entry.path, ec);
-		     it != std::filesystem::recursive_directory_iterator();
-		     ++it) {
+				 entry.path,
+				 std::filesystem::directory_options::skip_permission_denied,
+				 ec),
+				  end = std::filesystem::recursive_directory_iterator();
+			 it != end;) {
 			if (ec) {
 				ec.clear();
-				continue;
+				break;
 			}
 
 			const auto& dir_entry = *it;
 			const bool regular_file = dir_entry.is_regular_file(ec);
-			if (ec) { ec.clear(); continue; }
-			if (!regular_file) continue;
+			if (ec) {
+				ec.clear();
+				it.increment(ec);
+				continue;
+			}
+			if (!regular_file) {
+				it.increment(ec);
+				continue;
+			}
 
 			auto ext = dir_entry.path().extension().string();
 			if (!ExtensionMatches(ext, entry.extension)) {
+				it.increment(ec);
 				continue;
 			}
 
@@ -182,13 +208,18 @@ std::vector<std::string> FileWatcher::ScanChanges() {
 			seen.insert(path_str);
 
 			auto ftime = std::filesystem::last_write_time(dir_entry, ec);
-			if (ec) { ec.clear(); continue; }
+			if (ec) {
+				ec.clear();
+				it.increment(ec);
+				continue;
+			}
 
 			// New file detection: report files not previously known.
 			if (known_files_.find(path_str) == known_files_.end()) {
 				known_files_.insert(path_str);
 				file_times_[path_str] = ftime;
 				changed.push_back(path_str);
+				it.increment(ec);
 				continue;
 			}
 
@@ -199,6 +230,7 @@ std::vector<std::string> FileWatcher::ScanChanges() {
 				it_mtime->second = ftime;
 				changed.push_back(path_str);
 			}
+			it.increment(ec);
 		}
 	}
 

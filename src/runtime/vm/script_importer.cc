@@ -6,6 +6,8 @@
 #include <utility>
 
 #include "runtime/core/log/log.h"
+#include "runtime/vm/lua_error_handler.h"
+#include "runtime/vm/script_file.h"
 #include "runtime/vm/vm.h"
 
 extern "C" {
@@ -108,6 +110,20 @@ std::vector<std::string> DeriveModuleRoots(const std::vector<std::string>& searc
 	return explicit_paths;
 }
 
+bool PushPackageLoadedTable(lua_State* L) {
+	lua_getglobal(L, "package");
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 1);
+		return false;
+	}
+	lua_getfield(L, -1, "loaded");
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 2);
+		return false;
+	}
+	return true;
+}
+
 }  // namespace
 
 void ScriptImporter::Init(std::string scripts_dir) {
@@ -169,8 +185,10 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
 	};
 
 	// ── Check package.loaded cache ──────────────────────────────────
-	lua_getglobal(L, "package");  // ..., pkg
-	lua_getfield(L, -1, "loaded");	// ..., pkg, loaded
+	if (!PushPackageLoadedTable(L)) {
+		cleanup_importing();
+		return luaL_error(L, "import: package.loaded is not available");
+	}
 	lua_getfield(L, -1, name_str.c_str());	// ..., pkg, loaded, cached
 
 	if (!lua_isnil(L, -1)) {
@@ -210,7 +228,17 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
 	ENGINE_LOG_INFO(logger, "import: loading module [{}] from [{}]", name_str, filepath);
 
 	// ── Load the Lua chunk ─────────────────────────────────────────
-	int rc = luaL_loadfilex(L, filepath.c_str(), nullptr);
+	std::string validation_error;
+	if (!ValidateLuaScriptFileForLoad(filepath, validation_error)) {
+		lua_pop(L, 2);	// pop loaded, package
+		cleanup_importing();
+		return luaL_error(L,
+						  "error loading module '%s': %s",
+						  name_str.c_str(),
+						  validation_error.c_str());
+	}
+
+	int rc = luaL_loadfilex(L, filepath.c_str(), kLuaTextChunkMode);
 	if (rc != LUA_OK) {
 		const char* msg = lua_tostring(L, -1);
 		std::string err_msg = msg ? msg : "unknown Lua load error";
@@ -222,15 +250,18 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
 
 	// ── Execute the chunk ──────────────────────────────────────────
 	auto before_keys = SnapshotGlobalKeys(L);
-	rc = lua_pcall(L, 0, 1, 0);
+	const int exec_base = lua_gettop(L) - 1;
+	const int msgh = PushLuaErrorHandlerForCall(L, 0);
+	rc = lua_pcall(L, 0, 1, msgh);
 	if (rc != LUA_OK) {
 		const char* msg = lua_tostring(L, -1);
 		std::string err_msg = msg ? msg : "unknown Lua runtime error";
-		lua_pop(L, 1);	// pop error message
+		lua_settop(L, exec_base);
 		lua_pop(L, 2);	// pop loaded, package
 		cleanup_importing();
 		return luaL_error(L, "error running module '%s': %s", name_str.c_str(), err_msg.c_str());
 	}
+	lua_remove(L, msgh);
 
 	// Track new globals set by this module
 	TrackNewGlobals(L, default_module_name, before_keys);
@@ -284,13 +315,31 @@ int ScriptImporter::ImportAll(lua_State* L, std::string_view name) {
 	lua_newtable(L);
 	int table_idx = lua_gettop(L);
 
-	for (const auto& entry : std::filesystem::directory_iterator(full_dir, ec)) {
-		if (ec) break;
-		if (!entry.is_regular_file()) continue;
+	for (auto it = std::filesystem::directory_iterator(full_dir, ec),
+			  end = std::filesystem::directory_iterator();
+		 it != end;) {
+		if (ec) {
+			ENGINE_LOG_WARN(logger, "import:   iteration error in [{}]: {}", full_dir, ec.message());
+			ec.clear();
+			break;
+		}
+		const auto& entry = *it;
+		std::error_code fec;
+		if (!entry.is_regular_file(fec) || fec) {
+			if (fec) fec.clear();
+			it.increment(ec);
+			continue;
+		}
 
 		auto ext = entry.path().extension().string();
-		if (ext != ".lua" && ext != ".LUA") continue;
-		files.push_back(entry.path());
+		if (ext == ".lua" || ext == ".LUA") {
+			files.push_back(entry.path());
+		}
+		it.increment(ec);
+	}
+	if (ec) {
+		ENGINE_LOG_WARN(logger, "import:   iteration error in [{}]: {}", full_dir, ec.message());
+		ec.clear();
 	}
 	std::sort(files.begin(), files.end());
 
@@ -300,8 +349,17 @@ int ScriptImporter::ImportAll(lua_State* L, std::string_view name) {
 
 		ENGINE_LOG_INFO(logger, "import:   loading [{}]", filepath);
 
+		std::string validation_error;
+		if (!ValidateLuaScriptFileForLoad(filepath, validation_error)) {
+			ENGINE_LOG_WARN(logger,
+							"import:   rejected [{}]: {}",
+							filepath,
+							validation_error);
+			continue;
+		}
+
 		// Load
-		int rc = luaL_loadfilex(L, filepath.c_str(), nullptr);
+		int rc = luaL_loadfilex(L, filepath.c_str(), kLuaTextChunkMode);
 		if (rc != LUA_OK) {
 			const char* msg = lua_tostring(L, -1);
 			ENGINE_LOG_WARN(logger, "import:   error loading [{}]: {}", filepath, msg);
@@ -311,13 +369,16 @@ int ScriptImporter::ImportAll(lua_State* L, std::string_view name) {
 
 		// Execute
 		auto before_keys = SnapshotGlobalKeys(L);
-		rc = lua_pcall(L, 0, 1, 0);
+		const int exec_base = lua_gettop(L) - 1;
+		const int msgh = PushLuaErrorHandlerForCall(L, 0);
+		rc = lua_pcall(L, 0, 1, msgh);
 		if (rc != LUA_OK) {
 			const char* msg = lua_tostring(L, -1);
 			ENGINE_LOG_WARN(logger, "import:   error running [{}]: {}", filepath, msg);
-			lua_pop(L, 1);
+			lua_settop(L, exec_base);
 			continue;
 		}
+		lua_remove(L, msgh);
 
 		std::string cache_name = dir_name.empty() ? stem : dir_name + "." + stem;
 		std::string default_module_name =
@@ -329,18 +390,21 @@ int ScriptImporter::ImportAll(lua_State* L, std::string_view name) {
 		lua_setfield(L, table_idx, stem.c_str());
 
 		// Cache in package.loaded as "dir.stem"
-		lua_getglobal(L, "package");
-		lua_getfield(L, -1, "loaded");
-		lua_pushvalue(L, table_idx);  // push result table
-		lua_getfield(L, -1, stem.c_str());	// get result[stem]
-		lua_setfield(L, -3, cache_name.c_str());  // package.loaded[cache_name] = result
-		loaded_modules_.insert(cache_name);
-		if (default_module_name != cache_name) {
-			lua_getfield(L, -1, stem.c_str());
-			lua_setfield(L, -3, default_module_name.c_str());
-			loaded_modules_.insert(default_module_name);
+		if (PushPackageLoadedTable(L)) {
+			lua_getfield(L, table_idx, stem.c_str());
+			lua_setfield(L, -2, cache_name.c_str());
+			loaded_modules_.insert(cache_name);
+			if (default_module_name != cache_name) {
+				lua_getfield(L, table_idx, stem.c_str());
+				lua_setfield(L, -2, default_module_name.c_str());
+				loaded_modules_.insert(default_module_name);
+			}
+			lua_pop(L, 2);	// loaded, package
+		} else {
+			ENGINE_LOG_WARN(logger,
+							"import:   package.loaded unavailable while caching [{}]",
+							filepath);
 		}
-		lua_pop(L, 3);	// pop result_table_copy, loaded, package
 
 		++count;
 	}

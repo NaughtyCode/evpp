@@ -33,11 +33,14 @@ class CLOUD_ENGINE_API AsyncResultDispatcher {
 	bool Enqueue(AsyncTask task);
 	bool EnqueueLuaCallback(AsyncCallbackId callback_id, LuaArgPusher push_args);
 	size_t Dispatch(size_t max_count);
+	void AdoptOwnerThread();
 	void ShutdownOnOwnerThread();
 	bool IsShutdown() const;
-	bool IsOwnerThread() const noexcept;
+	bool IsOwnerThread() const;
 
 	private:
+	bool IsOwnerThreadLocked() const noexcept;
+
 	std::thread::id owner_thread_id_;
 	lua_State* L_ = nullptr;
 

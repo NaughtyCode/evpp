@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <limits>
 
 #include "runtime/core/log/log.h"
 
@@ -65,7 +66,17 @@ int CoroutineScheduler::CreateCoroutine(lua_State* L) {
 	lua_xmove(L, thread, 1);  // func moved to thread; thread_ref stays on L
 	int thread_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-	int handle = next_handle_++;
+	if (next_handle_ <= 0) next_handle_ = 1;
+	const int start_handle = next_handle_;
+	int handle = start_handle;
+	while (coroutines_.find(handle) != coroutines_.end()) {
+		handle = (handle == std::numeric_limits<int>::max()) ? 1 : handle + 1;
+		if (handle == start_handle) {
+			luaL_unref(L, LUA_REGISTRYINDEX, thread_ref);
+			return 0;
+		}
+	}
+	next_handle_ = (handle == std::numeric_limits<int>::max()) ? 1 : handle + 1;
 
 	CoroState cs;
 	cs.thread = thread;
@@ -133,10 +144,11 @@ void CoroutineScheduler::Update(int max_yield_ms) {
 		} else {
 			// Error
 			auto* logger = GetLogger();
+			const char* err = lua_tostring(cs.thread, -1);
 			ENGINE_LOG_ERROR(logger,
 							 "CoroutineScheduler: coroutine [{}] error: {}",
 							 handle,
-							 lua_tostring(cs.thread, -1));
+							 err ? err : "unknown Lua coroutine error");
 			lua_settop(cs.thread, 0);
 			cs.state = State::Dead;
 		}

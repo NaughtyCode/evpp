@@ -9,6 +9,7 @@
 
 #include "runtime/script/bind/import_bind.h"
 #include "runtime/vm/lua_error_handler.h"
+#include "runtime/vm/script_file.h"
 #include "runtime/vm/script_importer.h"
 #include "runtime/vm/vm.h"
 
@@ -111,6 +112,12 @@ LuaScriptValidationResult LuaScriptValidator::ValidateFile(
 		result.error = ec ? ec.message() : "file not found";
 		return result;
 	}
+	std::string validation_error;
+	if (!ValidateLuaScriptFileForLoad(filepath, validation_error)) {
+		result.status = LuaScriptValidationResult::Status::CompileError;
+		result.error = validation_error;
+		return result;
+	}
 
 	std::unique_ptr<ScriptVM> validation_vm;
 	try {
@@ -137,7 +144,7 @@ LuaScriptValidationResult LuaScriptValidator::ValidateFile(
 	ConfigureImport(*validation_vm, script_dirs_);
 
 	const int base_top = lua_gettop(L);
-	int rc = luaL_loadfilex(L, filepath.c_str(), "t");
+	int rc = luaL_loadfilex(L, filepath.c_str(), kLuaTextChunkMode);
 	if (rc != LUA_OK) {
 		result.status = LuaScriptValidationResult::Status::CompileError;
 		result.error = LuaStackMessage(L, "unknown Lua compile error");

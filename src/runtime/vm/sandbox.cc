@@ -11,6 +11,32 @@ extern "C" {
 
 namespace engine {
 
+namespace {
+
+void DisableNativePackageLoading(lua_State* L) {
+	lua_getglobal(L, "package");
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 1);
+		return;
+	}
+
+	lua_pushnil(L);
+	lua_setfield(L, -2, "loadlib");
+	lua_pushliteral(L, "");
+	lua_setfield(L, -2, "cpath");
+
+	lua_getfield(L, -1, "searchers");
+	if (lua_istable(L, -1)) {
+		lua_pushnil(L);
+		lua_rawseti(L, -2, 3);
+		lua_pushnil(L);
+		lua_rawseti(L, -2, 4);
+	}
+	lua_pop(L, 2);
+}
+
+}  // namespace
+
 void luaL_openlibs_sandboxed(lua_State* L, LuaSandboxLevel level) {
 	ENGINE_PROFILE_SCOPE("engine.vm", "OpenLibsSandboxed");
 	auto* logger = GetLogger();
@@ -27,13 +53,10 @@ void luaL_openlibs_sandboxed(lua_State* L, LuaSandboxLevel level) {
 	luaL_requiref(L, LUA_COLIBNAME, luaopen_coroutine, 1);
 	lua_pop(L, 1);
 
-	/* ── package — needed for require/import, but remove loadlib ──── */
+	/* package is needed for require/import; native C loading is disabled below. */
 	luaL_requiref(L, LUA_LOADLIBNAME, luaopen_package, 1);
-	/* Remove dangerous package.loadlib to prevent loading native C libraries */
-	lua_getglobal(L, "package");
-	lua_pushnil(L);
-	lua_setfield(L, -2, "loadlib");
 	lua_pop(L, 1);
+	DisableNativePackageLoading(L);
 
 	/* ── Level-specific libraries ─────────────────────────────────── */
 	switch (level) {
@@ -48,6 +71,7 @@ void luaL_openlibs_sandboxed(lua_State* L, LuaSandboxLevel level) {
 		lua_pushnil(L); lua_setfield(L, -2, "remove");
 		lua_pushnil(L); lua_setfield(L, -2, "rename");
 		lua_pushnil(L); lua_setfield(L, -2, "getenv");
+		lua_pushnil(L); lua_setfield(L, -2, "tmpname");
 		lua_pop(L, 1);
 		/* No debug library */
 		break;
@@ -59,7 +83,7 @@ void luaL_openlibs_sandboxed(lua_State* L, LuaSandboxLevel level) {
 		luaL_requiref(L, LUA_OSLIBNAME, luaopen_os, 1);
 		lua_pop(L, 1);
 		/* debug is not loaded — still too dangerous */
-		/* package.loadlib already removed above */
+		/* native package loading already disabled above */
 		break;
 	}
 	case LuaSandboxLevel::Full: {
@@ -70,7 +94,7 @@ void luaL_openlibs_sandboxed(lua_State* L, LuaSandboxLevel level) {
 		lua_pop(L, 1);
 		luaL_requiref(L, LUA_DBLIBNAME, luaopen_debug, 1);
 		lua_pop(L, 1);
-		/* package.loadlib already removed above */
+		/* native package loading already disabled above */
 		break;
 	}
 	}

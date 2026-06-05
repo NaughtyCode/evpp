@@ -85,10 +85,13 @@ inline bool ShouldLogError(const std::string& key) {
 // On error, the error message is at func_idx.  The caller may pop
 // or leave it as needed.
 inline LuaCallResult SafeCallLua(lua_State* L, LuaCallOptions opts) {
+	if (!L) return LuaCallResult::Disposed;
+	if (opts.nargs < 0) return LuaCallResult::NotFound;
+
 	int func_idx = lua_gettop(L) - opts.nargs;
 
 	// func_idx <= 0 means the stack is too shallow for the claimed
-	// nargs — the "function" position doesn't exist.
+	// nargs, so the "function" position doesn't exist.
 	if (func_idx <= 0 || !lua_isfunction(L, func_idx)) {
 		if (func_idx > 0) {
 			lua_settop(L, func_idx - 1);
