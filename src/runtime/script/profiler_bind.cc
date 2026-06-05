@@ -14,6 +14,7 @@
 #include "runtime/core/mem/mem.h"
 #include "runtime/profiler/profiler_core.h"
 #include "runtime/profiler/profiler_switches.h"
+#include "runtime/vm/main_thread_vm.h"
 #include "runtime/vm/vm.h"
 
 namespace engine {
@@ -579,7 +580,7 @@ void SetProfilerConstants(lua_State* L) {
 
 }  // namespace
 
-bool ExportProfiler(ScriptVM& vm) {
+bool ExportProfiler(MainThreadScriptVM& vm) {
 	lua_State* L = vm.GetState();
 	if (!L) return false;
 
@@ -587,13 +588,13 @@ bool ExportProfiler(ScriptVM& vm) {
 		ShutdownProfilerBindings(vm);
 	}
 
-	if (!vm.IsMainThreadVM() || !vm.IsOwnerThread()) {
+	if (!vm.IsOwnerThread()) {
 		lua_pushnil(L);
 		lua_setglobal(L, "profiler");
 		auto* logger = GetLogger();
 		ENGINE_LOG_WARN(logger,
 						"ScriptBind: profiler module export rejected; "
-						"target VM is not the main-thread Lua VM");
+						"main-thread Lua VM is not on its owner thread");
 		return false;
 	}
 
@@ -613,7 +614,7 @@ bool ExportProfiler(ScriptVM& vm) {
 	return true;
 }
 
-void ShutdownProfilerBindings(ScriptVM& vm) {
+void ShutdownProfilerBindings(MainThreadScriptVM& vm) {
 	lua_State* L = vm.GetState();
 	if (!L) return;
 

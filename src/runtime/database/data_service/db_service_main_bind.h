@@ -109,7 +109,8 @@ namespace script {
 //
 // ── Usage in engine initialisation ───────────────────────────────────────
 //
-//   Called via script::ExportAll(vm) after Engine creates its main VM.
+//   Called via MainThreadScriptVM::ExportRuntimeBindings() after Engine creates
+//   its main VM.
 //   Guarded by ENGINE_MONGODB_ENABLED so it compiles out when MongoDB
 //   support is disabled.
 //

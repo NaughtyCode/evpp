@@ -7,6 +7,7 @@ struct lua_State;
 namespace engine {
 
 class ScriptVM;
+class MainThreadScriptVM;
 class TimerManager;
 
 namespace space {
@@ -15,12 +16,7 @@ class Space;
 
 namespace script {
 
-// Main entry point — call once after VM is created to export all C++ APIs
-// to the Lua environment. Each sub-module registers its own set of
-// functions / modules.
-CLOUD_ENGINE_API void ExportAll(ScriptVM& vm, TimerManager& tm);
-
-// Per-module entry points (also callable individually)
+// Per-module entry points (also callable individually).
 CLOUD_ENGINE_API void ExportLog(ScriptVM& vm);
 CLOUD_ENGINE_API void ExportTimer(ScriptVM& vm, TimerManager& tm);
 CLOUD_ENGINE_API void ExportNet(ScriptVM& vm);
@@ -31,8 +27,7 @@ CLOUD_ENGINE_API void ExportMongo(ScriptVM& vm);
 CLOUD_ENGINE_API void ExportDbService(ScriptVM& vm);
 #endif
 
-// Shutdown: cancel all Lua-owned objects, release Lua references.
-// Call before destroying the ScriptVM.
+// Shutdown: cancel all Lua-owned objects and release Lua references.
 CLOUD_ENGINE_API void ShutdownTimerBindings(ScriptVM& vm);
 CLOUD_ENGINE_API void ShutdownNetBindings();
 CLOUD_ENGINE_API void ShutdownConfigBindings(ScriptVM& vm);
@@ -54,8 +49,8 @@ CLOUD_ENGINE_API void ShutdownRpcBindings(ScriptVM& vm);
 CLOUD_ENGINE_API void ExportAuth(ScriptVM& vm);
 CLOUD_ENGINE_API void ExportMem(ScriptVM& vm);
 CLOUD_ENGINE_API void ExportConfigBindings(ScriptVM& vm);
-CLOUD_ENGINE_API bool ExportProfiler(ScriptVM& vm);
-CLOUD_ENGINE_API void ShutdownProfilerBindings(ScriptVM& vm);
+CLOUD_ENGINE_API bool ExportProfiler(MainThreadScriptVM& vm);
+CLOUD_ENGINE_API void ShutdownProfilerBindings(MainThreadScriptVM& vm);
 
 }  // namespace script
 }  // namespace engine

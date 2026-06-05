@@ -77,6 +77,7 @@ source_group("engine" FILES ${ENGINE_SOURCES})
 # ── Script VM ─────────────────────────────────────────────────────
 set(VM_SOURCES
     ${RUNTIME_DIR}/vm/vm.cc ${RUNTIME_DIR}/vm/vm.h
+    ${RUNTIME_DIR}/vm/main_thread_vm.cc ${RUNTIME_DIR}/vm/main_thread_vm.h
     ${RUNTIME_DIR}/vm/sandbox.cc ${RUNTIME_DIR}/vm/sandbox.h
     ${RUNTIME_DIR}/vm/script_importer.cc ${RUNTIME_DIR}/vm/script_importer.h
     ${RUNTIME_DIR}/vm/custom_ptr_store.cc ${RUNTIME_DIR}/vm/custom_ptr_store.h

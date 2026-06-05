@@ -5,28 +5,25 @@
 #include "log_init.h"
 #include "runtime/core/timer/timer_manager.h"
 #include "runtime/script/script_bind.h"
-#include "runtime/vm/vm.h"
+#include "runtime/vm/main_thread_vm.h"
 
 using namespace engine;
 
 namespace {
 
 struct ExportAllFixture {
-	ScriptVM vm;
+	MainThreadScriptVM vm;
 	TimerManager timer_mgr;
 
 	ExportAllFixture() {
 		timer_mgr.initialize();
-		script::ExportAll(vm, timer_mgr);
+		vm.ExportRuntimeBindings(timer_mgr);
 	}
 
 	~ExportAllFixture() {
-		script::ShutdownRpcBindings(vm);
-		script::ShutdownConfigBindings(vm);
-		script::ShutdownNetBindings();
-		script::ShutdownEntityBindings();
-		script::ShutdownTimerBindings(vm);
-		script::ShutdownProfilerBindings(vm);
+		vm.ShutdownNetworkBindings();
+		vm.ShutdownTimerBindings();
+		vm.ShutdownProfilerBindings();
 		timer_mgr.shutdown();
 	}
 

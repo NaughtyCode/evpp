@@ -20,13 +20,6 @@ extern "C" {
 
 namespace engine {
 
-class ScriptVM;
-class TimerManager;
-
-namespace script {
-CLOUD_ENGINE_API void ExportAll(ScriptVM& vm, TimerManager& tm);
-}  // namespace script
-
 // ScriptVM — RAII wrapper around a Lua lua_State.
 //
 // Exposes the raw lua_State* via GetState() so callers have full access to
@@ -46,7 +39,7 @@ class CLOUD_ENGINE_API ScriptVM {
 	ScriptVM& operator=(ScriptVM&& other) noexcept;
 
 	bool IsOwnerThread() const noexcept;
-	bool IsMainThreadVM() const noexcept;
+	virtual bool IsMainThreadVM() const noexcept;
 
 	// Raw state access — use this for any Lua C API call not directly
 	// wrapped by this class.
@@ -202,10 +195,6 @@ class CLOUD_ENGINE_API ScriptVM {
 	private:
 	// Shared trampoline storage for RegisterCallback.
 	static int CallbackTrampoline(lua_State* L);
-	friend void script::ExportAll(ScriptVM& vm, TimerManager& tm);
-
-	void MarkAsMainThreadVM() noexcept;
-
 	// Call a global Lua function by name (0 args, 0 results).
 	// Logs a warning if the function exists but errors at runtime.
 	void CallGlobalFunction(std::string_view name);
@@ -220,7 +209,6 @@ class CLOUD_ENGINE_API ScriptVM {
 	std::unique_ptr<ScriptImporter> importer_;
 	std::vector<std::string> script_roots_;
 	std::thread::id owner_thread_id_{};
-	bool is_main_thread_vm_ = false;
 };
 
 // Template implementations

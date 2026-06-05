@@ -36,6 +36,7 @@
 #include "runtime/physics/physics_engine_bridge.h"
 #include "runtime/profiler/profiler_core.h"
 #include "runtime/vm/coroutine_scheduler.h"
+#include "runtime/vm/main_thread_vm.h"
 #include "runtime/vm/script_reloader.h"
 #include "runtime/profiler/profiler_events.h"
 #include "runtime/script/script_bind.h"
@@ -262,7 +263,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 	default:                    vm_sl = LuaSandboxLevel::Strict; break;
 	}
 
-	script_vm_ = std::make_unique<ScriptVM>(vm_sl);
+	script_vm_ = std::make_unique<MainThreadScriptVM>(vm_sl);
 	ENGINE_LOG_INFO(logger, "lua vm initialized, version=[{}], sandbox=[{}]",
 		ScriptVM::LuaVersion(), SandboxLevelToString(config_sl));
 
@@ -293,7 +294,7 @@ void Engine::Init(const RuntimeConfig& runtime_cfg,
 		}
 		script_vm_->SetImportPath(scripts_root);
 	}
-	script::ExportAll(*script_vm_, *timer_mgr_);
+	script_vm_->ExportRuntimeBindings(*timer_mgr_);
 
 	// Initialize coroutine scheduler (async.lua support)
 	CoroutineScheduler::Instance().Init(script_vm_->GetState());
@@ -720,25 +721,20 @@ void Engine::Cleanup() {
 
 	cleanup_phase_.store(CleanupPhase::NetworkShutdown, std::memory_order_release);
 	if (script_vm_) {
-		script::ShutdownRpcBindings(*script_vm_);
-		script::ShutdownConfigBindings(*script_vm_);
-		script::ShutdownNetBindings();
+		script_vm_->ShutdownNetworkBindings();
 	}
 	check_timeout("NetworkShutdown");
 
 	cleanup_phase_.store(CleanupPhase::TimerShutdown, std::memory_order_release);
 	if (script_vm_) {
-		script::ShutdownEntityBindings();
-	}
-	if (script_vm_) {
-		script::ShutdownTimerBindings(*script_vm_);
+		script_vm_->ShutdownTimerBindings();
 	}
 	check_timeout("TimerShutdown");
 
 	cleanup_phase_.store(CleanupPhase::ScriptDestroyed, std::memory_order_release);
 	if (script_vm_) {
 		script_vm_->DestroyScript();
-		script::ShutdownProfilerBindings(*script_vm_);
+		script_vm_->ShutdownProfilerBindings();
 		int mem_kb = lua_gc(script_vm_->GetState(), LUA_GCCOUNT, 0);
 		ENGINE_LOG_INFO(logger, "ScriptVM: final memory [{} KB], exiting", mem_kb);
 	}

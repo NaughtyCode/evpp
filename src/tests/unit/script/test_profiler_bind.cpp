@@ -9,6 +9,7 @@
 #include "runtime/profiler/profiler_switches.h"
 #include "runtime/script/profiler_bind.h"
 #include "runtime/script/script_bind.h"
+#include "runtime/vm/main_thread_vm.h"
 #include "runtime/vm/vm.h"
 
 using namespace engine;
@@ -16,23 +17,20 @@ using namespace engine;
 namespace {
 
 struct ProfilerBindFixture {
-	ScriptVM vm;
+	MainThreadScriptVM vm;
 	TimerManager timer_mgr;
 
 	ProfilerBindFixture() {
 		ProfilerManager::Get().SetRuntimeEnabled(true);
 		ProfilerManager::Get().SetEnabledEventGroups(kProfilerAllEventGroups);
 		timer_mgr.initialize();
-		script::ExportAll(vm, timer_mgr);
+		vm.ExportRuntimeBindings(timer_mgr);
 	}
 
 	~ProfilerBindFixture() {
-		script::ShutdownRpcBindings(vm);
-		script::ShutdownConfigBindings(vm);
-		script::ShutdownNetBindings();
-		script::ShutdownEntityBindings();
-		script::ShutdownTimerBindings(vm);
-		script::ShutdownProfilerBindings(vm);
+		vm.ShutdownNetworkBindings();
+		vm.ShutdownTimerBindings();
+		vm.ShutdownProfilerBindings();
 		timer_mgr.shutdown();
 		ProfilerManager::Get().SetRuntimeEnabled(true);
 		ProfilerManager::Get().SetEnabledEventGroups(kProfilerAllEventGroups);
@@ -83,12 +81,14 @@ return table.concat({
 	REQUIRE(result == "false|physics,script|true|false|false|timer|true|true");
 }
 
-TEST_CASE("profiler Lua module is rejected outside ExportAll main VM path",
-		  "[script][profiler_bind]") {
+TEST_CASE("main-thread Lua VM has explicit type semantics", "[script][profiler_bind]") {
 	ScriptVM vm;
+	MainThreadScriptVM main_vm;
 	std::string result;
 
-	REQUIRE_FALSE(script::ExportProfiler(vm));
+	REQUIRE_FALSE(vm.IsMainThreadVM());
+	REQUIRE(main_vm.IsMainThreadVM());
+	REQUIRE(main_vm.IsOwnerThread());
 	REQUIRE(vm.DoString("return tostring(profiler == nil)", "test_profiler_bind", nullptr, &result));
 	REQUIRE(result == "true");
 }

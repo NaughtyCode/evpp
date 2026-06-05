@@ -127,11 +127,9 @@ ScriptVM::~ScriptVM() {
 
 ScriptVM::ScriptVM(ScriptVM&& other) noexcept
 	: L_(other.L_),
-	  owner_thread_id_(other.owner_thread_id_),
-	  is_main_thread_vm_(other.is_main_thread_vm_) {
+	  owner_thread_id_(other.owner_thread_id_) {
 	other.L_ = nullptr;
 	other.owner_thread_id_ = {};
-	other.is_main_thread_vm_ = false;
 	callbacks_ = std::move(other.callbacks_);
 	importer_ = std::move(other.importer_);
 	script_roots_ = std::move(other.script_roots_);
@@ -145,9 +143,7 @@ ScriptVM& ScriptVM::operator=(ScriptVM&& other) noexcept {
 		L_ = other.L_;
 		other.L_ = nullptr;
 		owner_thread_id_ = other.owner_thread_id_;
-		is_main_thread_vm_ = other.is_main_thread_vm_;
 		other.owner_thread_id_ = {};
-		other.is_main_thread_vm_ = false;
 		callbacks_ = std::move(other.callbacks_);
 		importer_ = std::move(other.importer_);
 		script_roots_ = std::move(other.script_roots_);
@@ -161,13 +157,7 @@ bool ScriptVM::IsOwnerThread() const noexcept {
 }
 
 bool ScriptVM::IsMainThreadVM() const noexcept {
-	return is_main_thread_vm_;
-}
-
-void ScriptVM::MarkAsMainThreadVM() noexcept {
-	if (IsOwnerThread()) {
-		is_main_thread_vm_ = true;
-	}
+	return false;
 }
 
 // Script lifecycle helpers

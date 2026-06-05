@@ -24,6 +24,7 @@ class SignalEventWatcher;
 namespace engine {
 
 class ScriptVM;
+class MainThreadScriptVM;
 class ScriptReloader;
 struct PhysicsFrameResult;
 
@@ -174,7 +175,7 @@ class CLOUD_ENGINE_API Engine {
 	PhysicsResultHandler physics_result_handler_;
 
 	std::unique_ptr<TimerManager> timer_mgr_;
-	std::unique_ptr<ScriptVM> script_vm_;
+	std::unique_ptr<MainThreadScriptVM> script_vm_;
 	std::unique_ptr<ScriptReloader> script_reloader_;
 	bool hot_reload_enabled_ = true;
 	bool hot_reload_start_scheduled_ = false;
