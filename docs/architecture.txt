@@ -56,7 +56,7 @@ CloudEngine - 全景架构图
 │  │  ┌────────────────────┐  ┌──────────────────────────────────────┐   │     │
 │  │  │ ScriptVM           │  │ Script Bindings (Lua <-> C++)        │   │     │
 │  │  │                    │  │                                      │   │     │
-│  │  │ lua_State* wrapper │  │ script_bind.cc: ExportAll(vm,tm)    │   │     │
+│  │  │ lua_State* wrapper │  │ MainThreadScriptVM runtime exports │   │     │
 │  │  │ InitScript()       │  │ (injectable TimerManager)           │   │     │
 │  │  │ UpdateScript()     │  │                                      │   │     │
 │  │  │ DestroyScript()    │  │ Modules:                             │   │     │
@@ -412,7 +412,7 @@ CloudEngine - 全景架构图
    + owns -> CustomPtrStore (void* array)
    + owns -> CoroutineScheduler
    + owns -> LuaSandbox
-   + registers -> 20+ Lua modules via script::ExportAll()
+   + registers -> main Lua runtime modules via MainThreadScriptVM::ExportRuntimeBindings()
 
   Space (isolated game world)
    + owns -> ScriptVM (per-space Lua VM)
@@ -499,28 +499,14 @@ CloudEngine - 全景架构图
   │   │   +- custom_ptr_store.h/.cc  <- C++指针 -> Lua 映射存储
   │   │   +- lua_error_handler.h     <- 统一 Lua 错误处理 + traceback
   │   +- script/
-  │   │   +- script_bind.h/.cc       <- 统一注册入口 ExportAll(vm, tm)
-  │   │   +- net_bind.h/.cc          <- 网络基础模块
-  │   │   +- net_http_bind.h/.cc     <- HTTP 客户端
-  │   │   +- net_tcp_client_bind.h/.cc  <- TCP 客户端
-  │   │   +- net_tcp_server_bind.h/.cc  <- TCP 服务器
-  │   │   +- net_udp_client_bind.h/.cc
-  │   │   +- net_udp_server_bind.h/.cc
-  │   │   +- net_kcp_client_bind.h/.cc
-  │   │   +- net_kcp_server_bind.h/.cc
-  │   │   +- net_lifetime.h/.cc     <- 网络对象生命周期管理
-  │   │   +- timer_bind.h/.cc       <- 定时器绑定
-  │   │   +- log_bind.h/.cc         <- 日志绑定
-  │   │   +- msgpack_bind.h/.cc     <- MessagePack 绑定
-  │   │   +- import_bind.h/.cc      <- import 模块绑定
-  │   │   +- entity_bind.h/.cc      <- Entity API 绑定
-  │   │   +- space_bind.h/.cc       <- Space API 绑定
-  │   │   +- aoi_bind.h/.cc         <- AOI 绑定
-  │   │   +- auth_bind.h/.cc        <- 认证绑定
-  │   │   +- rpc_bind.h/.cc         <- RPC 绑定
-  │   │   +- orm_bind.h/.cc         <- ORM 绑定
-  │   │   +- mem_bind.h/.cc         <- 内存统计绑定
-  │   │   +- bind_util.h/.cc        <- 绑定工具函数
+  │   │   +- script_bind.h/.cc       <- Lua binding declarations and shared shutdown wrappers
+  │   │   +- bind/                  <- shared Lua binding helpers and script codecs
+  │   +- core/{log,mem,timer}/bind/ <- core module Lua bindings
+  │   +- network/bind/              <- TCP/UDP/KCP/HTTP Lua bindings
+  │   +- {entity,space,aoi,auth,rpc,config,profiler}/bind/
+  │   +- database/bind/             <- ORM Lua bindings
+  │   +- database/mongo/bind/       <- Mongo Lua bindings
+  │   +- database/data_service/bind/ <- database service Lua bindings
   │   +- entity/
   │   │   +- entity.h / .cc         <- Entity (属性 + 组件 + 连接 + 物理 + 定时器)
   │   │   +- entity_id.h            <- EntityId + SequentialIdAllocator

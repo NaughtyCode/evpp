@@ -264,9 +264,9 @@
   <text x="999" y="560" text-anchor="middle" fill="#495057" font-size="9" font-weight="bold">profiler (内置)</text>
   <text x="999" y="573" text-anchor="middle" fill="#495057" font-size="8">trace markers</text>
 
-  <!-- ExportAll entry -->
+  <!-- Main-thread runtime binding entry -->
   <rect x="725" y="590" width="410" height="28" rx="4" fill="#fff" stroke="#f59f00" stroke-width="1"/>
-  <text x="930" y="609" text-anchor="middle" fill="#e67700" font-size="10" font-weight="bold">script::ExportAll(vm, timer_mgr) — 统一注册入口，TimerManager 可注入</text>
+  <text x="930" y="609" text-anchor="middle" fill="#e67700" font-size="10" font-weight="bold">MainThreadScriptVM::ExportRuntimeBindings(timer_mgr) — 主线程 Lua 运行时绑定入口</text>
 
   <!-- Shutdown -->
   <rect x="725" y="625" width="200" height="28" rx="4" fill="#fff" stroke="#f59f00" stroke-width="0.5"/>

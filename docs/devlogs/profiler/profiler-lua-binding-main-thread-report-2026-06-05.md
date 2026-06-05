@@ -18,8 +18,8 @@ This complements the profiler runtime switch work in
 
 New files:
 
-- `src/runtime/script/profiler_bind.h`
-- `src/runtime/script/profiler_bind.cc`
+- `src/runtime/profiler/bind/profiler_bind.h`
+- `src/runtime/profiler/bind/profiler_bind.cc`
 
 The public entry points are:
 
