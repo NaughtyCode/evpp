@@ -109,6 +109,11 @@ Group helpers:
 - `profiler.group_category(group) -> category`
 - `profiler.list_groups() -> table`
 
+Group masks passed from Lua are validated strictly: unknown group names,
+negative masks, masks with unsupported bits, and combined masks passed to
+single-group APIs are rejected with Lua errors instead of being silently
+clamped.
+
 Profiler manager/session/trace operations:
 
 - `profiler.initialize([config_table]) -> bool`
@@ -196,31 +201,34 @@ Covered scenarios:
 
 - `ExportAll()` exposes `profiler` on the main VM.
 - Lua can update runtime enabled state and group masks.
+- Invalid Lua runtime/group/config arguments are rejected with Lua errors.
 - Direct `ExportProfiler()` on an unmarked VM is rejected.
 - Calling `profiler` APIs from a non-owner thread raises a Lua error.
 
 Verification run:
 
 ```powershell
-cmake --build artifacts/build-profiler-switch --target test_profiler_bind test_script_bind --config Debug -- /m /nodeReuse:false
+cmake --build artifacts/build-profiler-switch --target test_profiler_bind test_profiler test_script_bind --config Debug -- /m /nodeReuse:false
 artifacts/bin/Debug/test_profiler_bind.exe
+artifacts/bin/Debug/test_profiler.exe
 artifacts/bin/Debug/test_script_bind.exe
 
-cmake --build artifacts/build-profiler-switch-off --target test_profiler_bind --config Debug -- /m /nodeReuse:false
+cmake --build artifacts/build-profiler-switch-off --target test_profiler_bind test_profiler test_script_bind --config Debug -- /m /nodeReuse:false
 artifacts/bin/Debug/test_profiler_bind.exe
-
-cmake --build artifacts/build-profiler-switch --target test_profiler --config Debug -- /m /nodeReuse:false
 artifacts/bin/Debug/test_profiler.exe
+artifacts/bin/Debug/test_script_bind.exe
 
 git diff --check
 ```
 
 Results:
 
-- Profiler ON `test_profiler_bind`: all tests passed, 7 assertions in 3 cases.
+- Profiler ON `test_profiler_bind`: all tests passed, 9 assertions in 4 cases.
 - Profiler ON `test_script_bind`: all tests passed, 16 assertions in 7 cases.
-- Profiler OFF `test_profiler_bind`: all tests passed, 7 assertions in 3 cases.
-- Profiler ON `test_profiler`: all tests passed, 29 assertions in 3 cases.
+- Profiler OFF `test_profiler_bind`: all tests passed, 9 assertions in 4 cases.
+- Profiler OFF `test_profiler`: all tests passed, 20 assertions in 3 cases.
+- Profiler OFF `test_script_bind`: all tests passed, 16 assertions in 7 cases.
+- Profiler ON `test_profiler`: all tests passed, 33 assertions in 3 cases.
 - `git diff --check`: no whitespace errors; only CRLF conversion warnings.
 
 MSVC emitted the existing `LNK4098` default-library warning during test links.

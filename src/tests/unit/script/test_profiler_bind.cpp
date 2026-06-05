@@ -93,6 +93,33 @@ TEST_CASE("profiler Lua module is rejected outside ExportAll main VM path",
 	REQUIRE(result == "true");
 }
 
+TEST_CASE("profiler Lua module rejects invalid runtime control arguments",
+		  "[script][profiler_bind]") {
+	ProfilerBindFixture f;
+	std::string result;
+
+	REQUIRE(f.RunLuaResult(
+		R"lua(
+local checks = {}
+
+checks[#checks + 1] = tostring(pcall(profiler.set_runtime_enabled) == false)
+checks[#checks + 1] = tostring(pcall(profiler.set_runtime_enabled, 'yes') == false)
+checks[#checks + 1] = tostring(pcall(profiler.set_enabled_groups, 'physics,missing') == false)
+checks[#checks + 1] = tostring(pcall(profiler.set_enabled_groups, -1) == false)
+checks[#checks + 1] = tostring(pcall(profiler.set_enabled_groups, profiler.GROUP_ALL + 1) == false)
+local combined_group = profiler.GROUP_PHYSICS + profiler.GROUP_SCRIPT
+checks[#checks + 1] = tostring(pcall(profiler.set_group_enabled, combined_group, false) == false)
+checks[#checks + 1] = tostring(pcall(profiler.set_group_enabled, 'physics') == false)
+checks[#checks + 1] = tostring(pcall(profiler.initialize, { runtime_enabled = 'yes' }) == false)
+checks[#checks + 1] = tostring(pcall(profiler.initialize, { buffer_size_kb = -1 }) == false)
+
+return table.concat(checks, ',')
+)lua",
+		result));
+
+	REQUIRE(result == "true,true,true,true,true,true,true,true,true");
+}
+
 TEST_CASE("profiler Lua APIs reject calls from non-owner thread", "[script][profiler_bind]") {
 	ProfilerBindFixture f;
 	std::string error;

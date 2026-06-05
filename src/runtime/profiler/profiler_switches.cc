@@ -160,10 +160,14 @@ void ProfilerRuntimeSetGroupEnabled(ProfilerEventGroup group, bool enabled) noex
 }
 
 bool ProfilerRuntimeIsGroupEnabled(ProfilerEventGroup group) noexcept {
-	auto bit = ProfilerEventGroupBit(group);
+	auto bit = ClampGroupMask(ProfilerEventGroupBit(group));
 	if (bit == 0) return false;
+	if (bit == kProfilerAllEventGroups) {
+		return ProfilerRuntimeIsEnabled() &&
+			   g_profiler_enabled_groups.load(std::memory_order_relaxed) == kProfilerAllEventGroups;
+	}
 	return ProfilerRuntimeIsEnabled() &&
-		   ((g_profiler_enabled_groups.load(std::memory_order_relaxed) & bit) != 0);
+		   ((g_profiler_enabled_groups.load(std::memory_order_relaxed) & bit) == bit);
 }
 
 }  // namespace engine

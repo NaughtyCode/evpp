@@ -4,6 +4,7 @@
 #include <array>
 #include <cctype>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -86,17 +87,59 @@ ProfilerEventGroupMask ClampGroupMask(ProfilerEventGroupMask mask) {
 	return mask & kProfilerAllEventGroups;
 }
 
+ProfilerEventGroupMask CheckGroupMaskInteger(lua_State* L, int index) {
+	lua_Integer value = luaL_checkinteger(L, index);
+	if (value < 0) {
+		luaL_error(L, "profiler: group mask must be non-negative");
+		return 0;
+	}
+
+	auto mask = static_cast<ProfilerEventGroupMask>(value);
+	if ((mask & ~kProfilerAllEventGroups) != 0) {
+		luaL_error(L, "profiler: group mask contains unsupported bits");
+		return 0;
+	}
+	return mask;
+}
+
+ProfilerEventGroupMask CheckGroupMaskString(lua_State* L, int index) {
+	size_t len = 0;
+	const char* value = lua_tolstring(L, index, &len);
+	std::string_view names(value, len);
+
+	ProfilerEventGroupMask mask = 0;
+	size_t offset = 0;
+	while (offset <= names.size()) {
+		auto next = names.find_first_of(",;|", offset);
+		auto token = next == std::string_view::npos
+						 ? names.substr(offset)
+						 : names.substr(offset, next - offset);
+		auto group = ProfilerEventGroupFromName(token);
+		if (group == ProfilerEventGroup::All) return kProfilerAllEventGroups;
+		if (group == ProfilerEventGroup::None && !IsNoneGroupToken(token)) {
+			auto normalized = NormalizeToken(token);
+			luaL_error(L, "profiler: unknown event group '%s'", normalized.c_str());
+			return 0;
+		}
+		mask |= ProfilerEventGroupBit(group);
+		if (next == std::string_view::npos) break;
+		offset = next + 1;
+	}
+	return ClampGroupMask(mask);
+}
+
 ProfilerEventGroupMask CheckGroupMaskArg(lua_State* L, int index);
 
 ProfilerEventGroup CheckGroupArg(lua_State* L, int index) {
 	if (lua_isnumber(L, index)) {
-		auto mask = ClampGroupMask(static_cast<ProfilerEventGroupMask>(luaL_checkinteger(L, index)));
+		auto mask = CheckGroupMaskInteger(L, index);
 		if (mask == kProfilerAllEventGroups) return ProfilerEventGroup::All;
 		for (auto group : kProfilerBindableGroups) {
 			if (mask == ProfilerEventGroupBit(group)) return group;
 		}
 		if (mask == 0) return ProfilerEventGroup::None;
-		return static_cast<ProfilerEventGroup>(mask);
+		luaL_error(L, "profiler: expected a single event group");
+		return ProfilerEventGroup::None;
 	}
 
 	if (lua_isstring(L, index)) {
@@ -128,12 +171,10 @@ ProfilerEventGroupMask CheckGroupMaskTable(lua_State* L, int index) {
 
 ProfilerEventGroupMask CheckGroupMaskArg(lua_State* L, int index) {
 	if (lua_isnumber(L, index)) {
-		return ClampGroupMask(static_cast<ProfilerEventGroupMask>(luaL_checkinteger(L, index)));
+		return CheckGroupMaskInteger(L, index);
 	}
 	if (lua_isstring(L, index)) {
-		size_t len = 0;
-		const char* value = lua_tolstring(L, index, &len);
-		return ParseProfilerEventGroupMask(std::string_view(value, len));
+		return CheckGroupMaskString(L, index);
 	}
 	if (lua_istable(L, index)) {
 		return CheckGroupMaskTable(L, index);
@@ -158,6 +199,7 @@ bool OptionalBoolField(lua_State* L, int table_index, const char* name, bool fal
 	lua_getfield(L, table_index, name);
 	bool result = fallback;
 	if (!lua_isnil(L, -1)) {
+		luaL_checktype(L, -1, LUA_TBOOLEAN);
 		result = lua_toboolean(L, -1) != 0;
 	}
 	lua_pop(L, 1);
@@ -169,9 +211,9 @@ uint32_t OptionalU32Field(lua_State* L, int table_index, const char* name, uint3
 	uint32_t result = fallback;
 	if (!lua_isnil(L, -1)) {
 		lua_Integer value = luaL_checkinteger(L, -1);
-		if (value < 0) {
-			luaL_error(L, "profiler: config.%s must be non-negative", name);
-			lua_pop(L, 1);
+		if (value < 0 ||
+			value > static_cast<lua_Integer>(std::numeric_limits<uint32_t>::max())) {
+			luaL_error(L, "profiler: config.%s must be in uint32 range", name);
 			return fallback;
 		}
 		result = static_cast<uint32_t>(value);
@@ -241,6 +283,14 @@ void SetStringField(lua_State* L, const char* name, const std::string& value) {
 	lua_setfield(L, -2, name);
 }
 
+bool CheckBoolArg(lua_State* L, int index, const char* name) {
+	if (!lua_isboolean(L, index)) {
+		luaL_error(L, "profiler: %s must be boolean", name);
+		return false;
+	}
+	return lua_toboolean(L, index) != 0;
+}
+
 int l_profiler_initialize(lua_State* L) {
 	CheckMainThread(L);
 	auto cfg = CheckProfilerConfig(L, 1);
@@ -286,7 +336,7 @@ int l_profiler_is_active(lua_State* L) {
 
 int l_profiler_set_runtime_enabled(lua_State* L) {
 	CheckMainThread(L);
-	ProfilerManager::Get().SetRuntimeEnabled(lua_toboolean(L, 1) != 0);
+	ProfilerManager::Get().SetRuntimeEnabled(CheckBoolArg(L, 1, "enabled"));
 	return 0;
 }
 
@@ -326,7 +376,7 @@ int l_profiler_disable_groups(lua_State* L) {
 int l_profiler_set_group_enabled(lua_State* L) {
 	CheckMainThread(L);
 	auto group = CheckGroupArg(L, 1);
-	ProfilerManager::Get().SetEventGroupEnabled(group, lua_toboolean(L, 2) != 0);
+	ProfilerManager::Get().SetEventGroupEnabled(group, CheckBoolArg(L, 2, "enabled"));
 	PushGroupMask(L, ProfilerManager::Get().EnabledEventGroups());
 	return 2;
 }

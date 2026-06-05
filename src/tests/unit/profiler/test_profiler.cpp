@@ -7,6 +7,7 @@
 #include <thread>
 
 #include "runtime/profiler/profiler_core.h"
+#include "runtime/profiler/profiler_events.h"
 #include "runtime/profiler/profiler_macros.h"
 #include "runtime/profiler/profiler_switches.h"
 
@@ -133,11 +134,13 @@ TEST_CASE("Profiler runtime switches parse and gate event arguments", "[profiler
 										 ProfilerEventGroupBit(ProfilerEventGroup::Script)) ==
 			"physics,script");
 	REQUIRE(ProfilerEventGroupFromCategory("engine.physics") == ProfilerEventGroup::Physics);
+	REQUIRE(ProfilerEventGroupFromCategory("engine.frame") == ProfilerEventGroup::Frame);
 	REQUIRE(ProfilerEventGroupFromCategory("engine") == ProfilerEventGroup::Engine);
 
 	profiler.SetEventGroupEnabled(ProfilerEventGroup::Physics, false);
 	REQUIRE_FALSE(profiler.IsEventGroupEnabled(ProfilerEventGroup::Physics));
 	REQUIRE(profiler.IsEventGroupEnabled(ProfilerEventGroup::Script));
+	REQUIRE_FALSE(profiler.IsEventGroupEnabled(ProfilerEventGroup::All));
 
 	int evaluated = 0;
 	ENGINE_PROFILE_INSTANT("engine.physics", "DisabledPhysics", "value", ++evaluated);
@@ -152,6 +155,11 @@ TEST_CASE("Profiler runtime switches parse and gate event arguments", "[profiler
 	REQUIRE(evaluated == 0);
 
 	profiler.SetRuntimeEnabled(true);
+	profiler.SetEnabledEventGroups(0);
+	ENGINE_PROFILE_SLOW_FRAME(++evaluated, 0);
+	REQUIRE(evaluated == 0);
+
 	profiler.SetEnabledEventGroups(kProfilerAllEventGroups);
+	REQUIRE(profiler.IsEventGroupEnabled(ProfilerEventGroup::All));
 	REQUIRE(profiler.EnabledEventGroups() == kProfilerAllEventGroups);
 }

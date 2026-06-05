@@ -51,6 +51,7 @@ inline ProfilerEventGroup ProfilerEventGroupFromCategory(std::string_view catego
 	if (ProfilerCategoryStartsWith(category, "engine.physics")) return ProfilerEventGroup::Physics;
 	if (ProfilerCategoryStartsWith(category, "engine.timer")) return ProfilerEventGroup::Timer;
 	if (ProfilerCategoryStartsWith(category, "engine.vm")) return ProfilerEventGroup::Vm;
+	if (ProfilerCategoryStartsWith(category, "engine.frame")) return ProfilerEventGroup::Frame;
 	if (ProfilerCategoryStartsWith(category, "engine.net")) return ProfilerEventGroup::Network;
 	if (ProfilerCategoryStartsWith(category, "engine.rpc")) return ProfilerEventGroup::Rpc;
 	if (ProfilerCategoryStartsWith(category, "engine.db")) return ProfilerEventGroup::Database;
