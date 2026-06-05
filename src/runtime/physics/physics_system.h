@@ -230,6 +230,21 @@ class PhysicsSystem {
 		return config_manager_ ? config_manager_->GetPhysicsConfig().fixed_delta_time : 0.01667f;
 	}
 
+	std::optional<PhysicsConfig> GetPhysicsConfigSnapshot() const;
+	std::optional<ThreadingConfig> GetThreadingConfigSnapshot() const;
+	std::optional<PhysicsLogConfig> GetLogConfigSnapshot() const;
+	std::optional<ThresholdsConfig> GetThresholdsConfigSnapshot() const;
+	std::string DumpConfig() const;
+	const std::string& GetConfigDirSnapshot() const {
+		return config_dir_;
+	}
+	const std::string& GetAssetsPathSnapshot() const {
+		return assets_path_;
+	}
+	const std::string& GetScriptsDirSnapshot() const {
+		return scripts_dir_;
+	}
+
 	private:
 	// Constructor private — accessible only via Instance() singleton
 	PhysicsSystem() = default;

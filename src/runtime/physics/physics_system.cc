@@ -488,6 +488,31 @@ PhysicsSystem::PhysicsStats PhysicsSystem::GetPhysicsStats() const {
 	return {s.active_bodies, s.total_bodies, s.body_pairs, s.contact_constraints};
 }
 
+std::optional<PhysicsConfig> PhysicsSystem::GetPhysicsConfigSnapshot() const {
+	if (!config_manager_) return std::nullopt;
+	return config_manager_->GetPhysicsConfig();
+}
+
+std::optional<ThreadingConfig> PhysicsSystem::GetThreadingConfigSnapshot() const {
+	if (!config_manager_) return std::nullopt;
+	return config_manager_->GetThreadingConfig();
+}
+
+std::optional<PhysicsLogConfig> PhysicsSystem::GetLogConfigSnapshot() const {
+	if (!config_manager_) return std::nullopt;
+	return config_manager_->GetLogConfig();
+}
+
+std::optional<ThresholdsConfig> PhysicsSystem::GetThresholdsConfigSnapshot() const {
+	if (!config_manager_) return std::nullopt;
+	return config_manager_->GetThresholdsConfig();
+}
+
+std::string PhysicsSystem::DumpConfig() const {
+	if (!config_manager_) return {};
+	return config_manager_->Dump();
+}
+
 // SaveState / RestoreState
 
 std::string PhysicsSystem::SaveState() const {

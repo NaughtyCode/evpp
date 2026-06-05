@@ -12,6 +12,7 @@
 
 #ifdef ENGINE_PHYSICS_ENABLED
 #include <runtime/physics/physics_engine_bridge.h>
+#include <runtime/vm/vm.h>
 #endif
 
 namespace {
@@ -86,16 +87,74 @@ std::string PrepareFullPhysicsConfig() {
 	return full_config_dir.string();
 }
 
-engine::PhysicsEngineBridge& StartFreshPhysics(const std::string& config_dir = kPhysicsConfigDir) {
+engine::PhysicsEngineBridge& InitializeFreshPhysics(
+	const std::string& config_dir = kPhysicsConfigDir,
+	const std::string& scripts_dir = kPhysicsScriptsDir) {
 	auto& bridge = engine::PhysicsEngineBridge::Instance();
 	if (bridge.IsInitialized()) {
 		bridge.Shutdown();
 	}
-	REQUIRE(bridge.Initialize(config_dir, kPhysicsScriptsDir));
+	REQUIRE(bridge.Initialize(config_dir, scripts_dir));
+	return bridge;
+}
+
+engine::PhysicsEngineBridge& StartFreshPhysics(
+	const std::string& config_dir = kPhysicsConfigDir,
+	const std::string& scripts_dir = kPhysicsScriptsDir) {
+	auto& bridge = InitializeFreshPhysics(config_dir, scripts_dir);
 	REQUIRE(bridge.Start());
 	REQUIRE(bridge.IsRunning());
 	REQUIRE(bridge.IsHealthy());
 	return bridge;
+}
+
+std::string PreparePhysicsBindingScriptDir() {
+	const auto script_dir = std::filesystem::temp_directory_path() / "evpp2_physics_bind_scripts";
+	std::error_code ec;
+	std::filesystem::remove_all(script_dir, ec);
+	ec.clear();
+	std::filesystem::create_directories(script_dir, ec);
+	REQUIRE_FALSE(ec);
+
+	std::ofstream script(script_dir / "spawn.lua", std::ios::binary | std::ios::trunc);
+	REQUIRE(script.good());
+	script << R"lua(
+local slots = physics.get_core_slots()
+if not (slots.system and slots.thread and slots.world and slots.script_vm and slots.all) then
+	error("missing physics custom ptr slots")
+end
+
+local thread = physics.get_thread_info()
+if not thread.is_physics_thread then
+	error("script did not execute on physics thread")
+end
+
+local prototypes = physics.list_prototypes()
+if type(prototypes) ~= "table" or #prototypes == 0 then
+	error("missing physics prototypes")
+end
+
+local body_id, err = physics.spawn("crate", 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 1.0, 123)
+if not body_id or body_id <= 0 then
+	error(err or "physics.spawn failed")
+end
+
+local x, y, z = physics.get_transform(body_id)
+if type(x) ~= "number" or type(y) ~= "number" or type(z) ~= "number" then
+	error("physics.get_transform failed")
+end
+
+local stats = physics.get_stats()
+if type(stats) ~= "table" or stats.bodies < 1 then
+	error("physics.get_stats failed")
+end
+
+if physics.get_registry_size() < 1 then
+	error("physics registry not populated")
+end
+)lua";
+	REQUIRE(script.good());
+	return script_dir.string();
 }
 #endif
 }
@@ -113,6 +172,109 @@ TEST_CASE("Physics bridge initialize and shutdown", "[integration][physics]") {
     // Shutdown
     bridge.Shutdown();
     REQUIRE_FALSE(bridge.IsRunning());
+}
+
+TEST_CASE("PhysicsScriptVM exposes config and status bindings",
+		  "[integration][physics][script]") {
+	auto& bridge = InitializeFreshPhysics();
+	auto* vm = bridge.GetScriptVM();
+	REQUIRE(vm != nullptr);
+
+	std::string error;
+	std::string result;
+	constexpr const char* script = R"lua(
+local cfg = physics.get_config()
+local phys = physics.get_physics_config()
+local threading = physics.get_threading_config()
+local log = physics.get_log_config()
+local thresholds = physics.get_thresholds_config()
+local status = physics.status()
+local slots = physics.get_core_slots()
+local thread = physics.get_thread_info()
+local paths = physics.get_paths()
+local dump = physics.dump_config()
+local scene = physics.load_configured_scene_asset()
+local scene_by_path = physics.load_scene_asset(phys.scenePath)
+local parsed_scene = physics.parse_scene_asset_json([[
+{
+  "materials": [
+    {"name": "script_mat", "friction": 0.4, "restitution": 0.1}
+  ],
+  "staticBodies": [],
+  "dynamicPrototypes": [],
+  "dynamicBodies": [],
+  "constraints": []
+}
+]], "inline_scene.json")
+local materials = physics.parse_materials_json([[
+[
+  {"name": "script_mat", "friction": 0.4, "restitution": 0.1}
+]
+]])
+
+assert(type(cfg.physics) == "table")
+assert(type(cfg.threading) == "table")
+assert(type(cfg.log) == "table")
+assert(type(cfg.thresholds) == "table")
+assert(type(dump) == "string" and #dump > 0)
+assert(status.initialized == true)
+assert(status.running == false)
+assert(slots.system and slots.thread and slots.world and slots.script_vm and slots.all)
+assert(thread.running == false)
+assert(thread.is_physics_thread == false)
+assert(phys.fixed_delta_time > 0)
+assert(phys.fixedDeltaTime == phys.fixed_delta_time)
+assert(phys.layerConfig.objectLayers.dynamic == phys.layer_config.object_layers.dynamic)
+assert(threading.command_queue_size > 0)
+assert(threading.commandQueueSize == threading.command_queue_size)
+assert(log.level ~= nil)
+assert(thresholds.position_epsilon > 0)
+assert(thresholds.positionEpsilon == thresholds.position_epsilon)
+assert(type(paths.assetsPath) == "string" and #paths.assetsPath > 0)
+assert(scene.counts.dynamicPrototypes >= 1)
+assert(scene_by_path.counts.staticBodies >= 1)
+assert(parsed_scene.counts.materials == 1)
+assert(parsed_scene.materials[1].name == "script_mat")
+assert(materials.count == 1)
+assert(physics.is_motion_type_name("dynamic") == true)
+assert(physics.is_motion_quality_name("discrete") == true)
+assert(physics.build_allowed_dofs({0, 1, 2}) > 0)
+assert(physics.resolve_object_layer("dynamic") == phys.layerConfig.objectLayers.dynamic)
+assert(physics.get_asset_directory(paths.assetsPath) ~= "")
+assert(physics.resolve_asset_path(scene.assetsDir, "scene.json") ~= "")
+assert(physics.COMMAND_SPAWN == "spawn")
+assert(physics.COLLISION_START == "start")
+assert(type(physics.log_info) == "function")
+assert(type(physics.enqueue_spawn) == "function")
+assert(type(physics.tick) == "function")
+assert(type(physics.fetch_result) == "function")
+
+return table.concat({
+	tostring(status.initialized),
+	tostring(status.running),
+	tostring(slots.all),
+	tostring(phys.fixed_delta_time > 0),
+	tostring(cfg.physics.max_bodies >= 1)
+}, "|")
+)lua";
+
+	bool ok = vm->DoString(script, "physics_bind_config_test", &error, &result);
+	INFO(error);
+	REQUIRE(ok);
+	REQUIRE(result == "true|false|true|true|true");
+
+	bridge.Shutdown();
+}
+
+TEST_CASE("PhysicsScriptVM physics thread bindings use custom ptr world",
+		  "[integration][physics][script]") {
+	const std::string script_dir = PreparePhysicsBindingScriptDir();
+	auto& bridge = StartFreshPhysics(kPhysicsConfigDir, script_dir);
+
+	auto stats = bridge.GetPhysicsStats();
+	REQUIRE(stats.total_bodies >= 1);
+
+	bridge.Shutdown();
 }
 
 TEST_CASE("Physics bridge Tick completes without error", "[integration][physics]") {

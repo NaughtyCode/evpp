@@ -181,6 +181,7 @@ set(PHYSICS_HEADERS
     ${RUNTIME_DIR}/physics/physics_scene_asset.h ${RUNTIME_DIR}/physics/physics_assets.h
     ${RUNTIME_DIR}/physics/physics_world.h ${RUNTIME_DIR}/physics/physics_thread.h ${RUNTIME_DIR}/physics/physics_system.h
     ${RUNTIME_DIR}/physics/physics_engine_bridge.h ${RUNTIME_DIR}/physics/bind/physics_bindings.h
+    ${RUNTIME_DIR}/physics/bind/physics_bind_common.h
     ${RUNTIME_DIR}/physics/physics_vm.h ${RUNTIME_DIR}/physics/physics_log.h
 )
 source_group("physics" FILES ${PHYSICS_HEADERS})
@@ -194,7 +195,13 @@ set(PHYSICS_CC
     ${RUNTIME_DIR}/physics/physics_assets.cc
     ${RUNTIME_DIR}/physics/physics_world.cc ${RUNTIME_DIR}/physics/physics_thread.cc
     ${RUNTIME_DIR}/physics/physics_system.cc ${RUNTIME_DIR}/physics/physics_engine_bridge.cc
-    ${RUNTIME_DIR}/physics/bind/physics_bindings.cc ${RUNTIME_DIR}/physics/physics_vm.cc
+    ${RUNTIME_DIR}/physics/bind/physics_bindings.cc
+    ${RUNTIME_DIR}/physics/bind/physics_bind_assets.cc
+    ${RUNTIME_DIR}/physics/bind/physics_bind_body.cc
+    ${RUNTIME_DIR}/physics/bind/physics_bind_config.cc
+    ${RUNTIME_DIR}/physics/bind/physics_bind_log.cc
+    ${RUNTIME_DIR}/physics/bind/physics_bind_state.cc
+    ${RUNTIME_DIR}/physics/physics_vm.cc
 )
 source_group("physics" FILES ${PHYSICS_CC})
 
