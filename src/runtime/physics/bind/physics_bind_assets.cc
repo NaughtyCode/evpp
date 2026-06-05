@@ -449,6 +449,19 @@ bool IsReservedConstraintBodyName(const std::string& name) {
 	return name == "world" || name == "fixed" || name == "__world__";
 }
 
+bool IsFiniteFloatRangeVec(const std::vector<double>& values, size_t expected) {
+	if (values.size() != expected) {
+		return false;
+	}
+	constexpr double kMaxFloat = static_cast<double>((std::numeric_limits<float>::max)());
+	for (double value : values) {
+		if (!std::isfinite(value) || std::abs(value) > kMaxFloat) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool ValidateShapeDefBasic(const JsonShapeDef& shape,
 						   const std::unordered_set<std::string>& material_names,
 						   std::string& error,
@@ -462,8 +475,8 @@ bool ValidateShapeDefBasic(const JsonShapeDef& shape,
 		error = path + ": shape references unknown material: " + *shape.material;
 		return false;
 	}
-	if (shape.position.has_value() && !IsFiniteDoubleVec(*shape.position, 3)) {
-		error = path + ": shape position must be finite vec3";
+	if (shape.position.has_value() && !IsFiniteFloatRangeVec(*shape.position, 3)) {
+		error = path + ": shape position must be finite float-range vec3";
 		return false;
 	}
 	if (shape.rotation.has_value() && !IsFiniteFloatVec(*shape.rotation, 4)) {
@@ -648,7 +661,7 @@ bool ValidateSceneAssetData(const PhysicsSceneAsset& scene,
 			return false;
 		}
 		if (!IsFiniteDoubleVec(constraint.pivot, 3) ||
-			!IsFiniteDoubleVec(constraint.axis, 3) ||
+			!IsFiniteFloatRangeVec(constraint.axis, 3) ||
 			(constraint.axis[0] * constraint.axis[0] + constraint.axis[1] * constraint.axis[1] +
 			 constraint.axis[2] * constraint.axis[2]) <= 1.0e-12 ||
 			!std::isfinite(constraint.limits.min) || !std::isfinite(constraint.limits.max) ||
@@ -660,7 +673,7 @@ bool ValidateSceneAssetData(const PhysicsSceneAsset& scene,
 			return false;
 		}
 		if (constraint.axis2.has_value() &&
-			(!IsFiniteDoubleVec(*constraint.axis2, 3) ||
+			(!IsFiniteFloatRangeVec(*constraint.axis2, 3) ||
 			 ((*constraint.axis2)[0] * (*constraint.axis2)[0] +
 			  (*constraint.axis2)[1] * (*constraint.axis2)[1] +
 			  (*constraint.axis2)[2] * (*constraint.axis2)[2]) <= 1.0e-12)) {

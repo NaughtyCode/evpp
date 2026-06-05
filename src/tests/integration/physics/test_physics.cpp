@@ -187,6 +187,15 @@ local names = physics.list_registered_asset_names()
 if type(names) ~= "table" then
 	error("physics.list_registered_asset_names failed")
 end
+
+local state_blob, state_err = physics.save_state()
+if type(state_blob) ~= "string" or #state_blob == 0 then
+	error(state_err or "physics.save_state failed")
+end
+local restored, restore_err = physics.restore_state(state_blob)
+if restored ~= true then
+	error(restore_err or "physics.restore_state failed")
+end
 )lua";
 	REQUIRE(script.good());
 	return script_dir.string();
@@ -389,6 +398,8 @@ assert(type(physics.log_info) == "function")
 assert(type(physics.enqueue_spawn) == "function")
 assert(type(physics.tick) == "function")
 assert(type(physics.fetch_result) == "function")
+local unavailable_state, unavailable_state_err = physics.save_state()
+assert(unavailable_state == nil and type(unavailable_state_err) == "string")
 local spawn_args = physics.make_spawn_args("crate", 1, 2, 3, 0, 0, 0, 1, 99)
 assert(spawn_args.type == physics.COMMAND_SPAWN)
 assert(spawn_args.protoId == "crate")

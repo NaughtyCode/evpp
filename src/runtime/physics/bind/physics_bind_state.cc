@@ -466,14 +466,12 @@ int LuaFetchResult(lua_State* L) {
 int LuaSaveState(lua_State* L) {
 	BindingContext ctx;
 	if (!CheckInit(L, ctx)) return 2;
-
-	std::string data;
-	if (ctx.IsPhysicsThread()) {
-		if (!CheckWorld(L, ctx)) return 2;
-		data = ctx.world->SaveState();
-	} else {
-		data = ctx.system->SaveState();
+	if (!ctx.IsPhysicsThread()) {
+		return PushNilError(L, "save_state is only available on the physics thread");
 	}
+	if (!CheckWorld(L, ctx)) return 2;
+
+	std::string data = ctx.world->SaveState();
 	if (data.empty()) {
 		return PushNilError(L, "save_state failed");
 	}
@@ -484,15 +482,13 @@ int LuaSaveState(lua_State* L) {
 int LuaRestoreState(lua_State* L) {
 	BindingContext ctx;
 	if (!CheckInit(L, ctx)) return 2;
+	if (!ctx.IsPhysicsThread()) {
+		return PushNilError(L, "restore_state is only available on the physics thread");
+	}
 
 	size_t len = 0;
 	const char* data = luaL_checklstring(L, 1, &len);
-	bool ok = false;
-	if (ctx.IsPhysicsThread()) {
-		ok = ctx.world && ctx.world->RestoreState(std::string(data, len));
-	} else {
-		ok = ctx.system->RestoreState(std::string(data, len));
-	}
+	bool ok = ctx.world && ctx.world->RestoreState(std::string(data, len));
 	if (!ok) {
 		return PushNilError(L, "restore_state failed");
 	}

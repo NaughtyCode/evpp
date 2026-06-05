@@ -22,6 +22,14 @@ struct JsonAssetFile {
 
 namespace {
 
+void StripUtf8Bom(std::string& text) {
+	if (text.size() >= 3 && static_cast<unsigned char>(text[0]) == 0xEF &&
+		static_cast<unsigned char>(text[1]) == 0xBB &&
+		static_cast<unsigned char>(text[2]) == 0xBF) {
+		text.erase(0, 3);
+	}
+}
+
 bool RegisterSceneBodyName(const std::string& name,
 						   JPH::BodyID body_id,
 						   std::unordered_set<std::string>& names,
@@ -237,6 +245,7 @@ PhysicsSceneAssetLoadResult PhysicsSceneAsset::LoadFromFile(const std::string& j
 		return result;
 	}
 	std::string json((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+	StripUtf8Bom(json);
 	return LoadFromJson(json, json_path);
 }
 

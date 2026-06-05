@@ -39,6 +39,19 @@ bool IsFiniteVec3(const glz::generic& value) {
 		   std::abs(value[2u].template get<double>()) <= kMaxFloat;
 }
 
+bool IsFiniteFloatRangeVec(const std::vector<double>& values, size_t expected) {
+	if (values.size() != expected) {
+		return false;
+	}
+	constexpr double kMaxFloat = static_cast<double>(std::numeric_limits<float>::max());
+	for (double value : values) {
+		if (!std::isfinite(value) || std::abs(value) > kMaxFloat) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool ReadUint32(const glz::generic& value, uint32_t& out_value) {
 	if (!value.is_number()) {
 		return false;
@@ -108,7 +121,7 @@ ShapeCreateResult PhysicsShapeAssetFactory::CreateShape(const JsonShapeDef& def,
 			JPH::RVec3 offset = JPH::RVec3::sZero();
 			JPH::Quat rotation = JPH::Quat::sIdentity();
 			if (sub_def.position) {
-				if (!IsFiniteDoubleVec(*sub_def.position, 3)) {
+				if (!IsFiniteFloatRangeVec(*sub_def.position, 3)) {
 					result.error = "compound sub-shape position must be [x, y, z]";
 					return result;
 				}

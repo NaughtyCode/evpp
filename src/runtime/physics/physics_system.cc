@@ -516,12 +516,16 @@ std::string PhysicsSystem::DumpConfig() const {
 // SaveState / RestoreState
 
 std::string PhysicsSystem::SaveState() const {
-	if (!is_initialized_ || !physics_thread_.IsRunning()) return {};
+	if (!is_initialized_ || !physics_thread_.IsRunning() || !physics_thread_.IsPhysicsThread()) {
+		return {};
+	}
 	return physics_thread_.SaveState();
 }
 
 bool PhysicsSystem::RestoreState(const std::string& data) {
-	if (!is_initialized_ || !physics_thread_.IsRunning()) return false;
+	if (!is_initialized_ || !physics_thread_.IsRunning() || !physics_thread_.IsPhysicsThread()) {
+		return false;
+	}
 	return physics_thread_.RestoreState(data);
 }
 

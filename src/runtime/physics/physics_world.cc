@@ -52,6 +52,24 @@ bool IsFiniteQuat(JPH::QuatArg q) {
 		   std::isfinite(q.GetZ()) && std::isfinite(q.GetW());
 }
 
+int CollisionEventPriority(CollisionEvent::Type type) {
+	switch (type) {
+		case CollisionEvent::Type::Start:
+			return 0;
+		case CollisionEvent::Type::Persist:
+			return 1;
+		case CollisionEvent::Type::End:
+			return 2;
+	}
+	return 0;
+}
+
+bool RVec3Less(JPH::RVec3Arg lhs, JPH::RVec3Arg rhs) {
+	if (lhs.GetX() != rhs.GetX()) return lhs.GetX() < rhs.GetX();
+	if (lhs.GetY() != rhs.GetY()) return lhs.GetY() < rhs.GetY();
+	return lhs.GetZ() < rhs.GetZ();
+}
+
 JPH::Quat NormalizeOrIdentity(JPH::QuatArg q) {
 	return q.LengthSq() > 1.0e-12f ? q.Normalized() : JPH::Quat::sIdentity();
 }
@@ -84,7 +102,7 @@ bool JoltAssertFailedHandler(const char* expression,
 
 // Static guard for one-time Jolt registration (steps 1-3)
 
-std::atomic<bool> PhysicsWorld::s_jolt_registered_{false};
+std::once_flag PhysicsWorld::s_jolt_registration_once_;
 
 // ContactListenerImpl
 
@@ -179,6 +197,11 @@ std::vector<ContactListenerImpl::ContactRecord> ContactListenerImpl::Drain() {
 	return drained;
 }
 
+void ContactListenerImpl::Clear() {
+	std::lock_guard<std::mutex> lock(mutex_);
+	records_.clear();
+}
+
 // BodyActivationListenerImpl
 
 void BodyActivationListenerImpl::OnBodyActivated(const JPH::BodyID& inBodyID,
@@ -194,7 +217,7 @@ void BodyActivationListenerImpl::OnBodyDeactivated(const JPH::BodyID& inBodyID,
 												   JPH::uint64 inBodyUserData) {
 	// Lock: same reasoning as OnBodyActivated - JT writes vs MT reads.
 	std::lock_guard<std::mutex> lock(mutex_);
-	active_bodies_[inBodyID.GetIndexAndSequenceNumber()] = false;
+	active_bodies_.erase(inBodyID.GetIndexAndSequenceNumber());
 }
 
 bool BodyActivationListenerImpl::IsActive(const JPH::BodyID& id) const {
@@ -206,6 +229,11 @@ bool BodyActivationListenerImpl::IsActive(const JPH::BodyID& id) const {
 	std::lock_guard<std::mutex> lock(mutex_);
 	auto it = active_bodies_.find(id.GetIndexAndSequenceNumber());
 	return it != active_bodies_.end() && it->second;
+}
+
+void BodyActivationListenerImpl::Remove(const JPH::BodyID& id) {
+	std::lock_guard<std::mutex> lock(mutex_);
+	active_bodies_.erase(id.GetIndexAndSequenceNumber());
 }
 
 void BodyActivationListenerImpl::Clear() {
@@ -228,6 +256,7 @@ PhysicsWorld::~PhysicsWorld() {
 void PhysicsWorld::ResetRuntimeState(bool recreate_system) {
 	// Destroy in reverse order of creation
 	system_.reset();
+	contact_listener_.Clear();
 	activation_listener_.Clear();
 	state_snapshots_.clear();
 	prototype_pool_.clear();
@@ -270,16 +299,18 @@ bool PhysicsWorld::Initialize(const PhysicsConfig& config,
 	}
 
 	// Step 1-3: One-time Jolt registration (program-global)
-	if (!s_jolt_registered_.exchange(true)) {
+	std::call_once(s_jolt_registration_once_, [logger]() {
 		JPH::Trace = JoltTraceHandler;
 #ifdef JPH_ENABLE_ASSERTS
 		JPH::AssertFailed = JoltAssertFailedHandler;
 #endif
 		JPH::RegisterDefaultAllocator();  // Step 1
-		JPH::Factory::sInstance = CLOUDENGINE_MEM_NEW(JPH::Factory);  // Step 2
+		if (JPH::Factory::sInstance == nullptr) {
+			JPH::Factory::sInstance = CLOUDENGINE_MEM_NEW(JPH::Factory);  // Step 2
+		}
 		JPH::RegisterTypes();  // Step 3
-		PHYSICS_LOG_INFO(logger_, "JoltPhysics registered (allocator, factory, types)");
-	}
+		PHYSICS_LOG_INFO(logger, "JoltPhysics registered (allocator, factory, types)");
+	});
 
 	// Step 4: Create JobSystem
 	if (threading.job_system_thread_count == 0 || threading.job_system_max_jobs <= 0) {
@@ -484,6 +515,7 @@ bool PhysicsWorld::DestroyBody(uint32_t body_id) {
 
 	object_registry_.Unregister(body_id);
 	state_snapshots_.erase(body_id);
+	activation_listener_.Remove(jid);
 
 	return true;
 }
@@ -601,7 +633,14 @@ PhysicsFrameResult PhysicsWorld::Step(float delta_time, uint64_t frame_id) {
 void PhysicsWorld::CollectTransforms(PhysicsFrameResult& result) {
 	JPH::BodyInterface& bi = system_->GetBodyInterfaceNoLock();
 
-	for (auto& [body_id, snap] : state_snapshots_) {
+	std::vector<uint32_t> body_ids;
+	body_ids.reserve(state_snapshots_.size());
+	for (const auto& [body_id, _] : state_snapshots_) {
+		body_ids.push_back(body_id);
+	}
+	std::sort(body_ids.begin(), body_ids.end());
+
+	for (uint32_t body_id : body_ids) {
 		JPH::BodyID jid(body_id);
 		if (!bi.IsAdded(jid) || !bi.IsActive(jid)) {
 			continue;
@@ -636,13 +675,15 @@ void PhysicsWorld::CollectCollisionEvents(PhysicsFrameResult& result) {
 		uint32_t hi = (rec.body_a < rec.body_b) ? rec.body_b : rec.body_a;
 		uint64_t key = (static_cast<uint64_t>(lo) << 32) | hi;
 
-		auto& evt = event_map[key];
-		if (evt.body_a == 0 && evt.body_b == 0) {
+		auto [it, inserted] = event_map.try_emplace(key);
+		auto& evt = it->second;
+		if (inserted) {
 			evt.body_a = rec.body_a;
 			evt.body_b = rec.body_b;
 			evt.type = rec.type;
-		} else if (rec.type != evt.type) {
-			// Update type if a later event is more significant (e.g. Persist after Start)
+		} else if (CollisionEventPriority(rec.type) > CollisionEventPriority(evt.type)) {
+			// Concurrent Jolt callbacks can arrive in nondeterministic order.
+			// Use a stable significance rule instead of append order.
 			evt.type = rec.type;
 		}
 		// Collect both contact points. A real contact can be exactly at the
@@ -654,8 +695,20 @@ void PhysicsWorld::CollectCollisionEvents(PhysicsFrameResult& result) {
 	}
 
 	for (auto& [_, evt] : event_map) {
+		std::sort(evt.contact_points.begin(), evt.contact_points.end(), RVec3Less);
 		result.collision_events.push_back(std::move(evt));
 	}
+	std::sort(result.collision_events.begin(),
+			  result.collision_events.end(),
+			  [](const CollisionEvent& lhs, const CollisionEvent& rhs) {
+				  const uint32_t lhs_lo = (std::min)(lhs.body_a, lhs.body_b);
+				  const uint32_t lhs_hi = (std::max)(lhs.body_a, lhs.body_b);
+				  const uint32_t rhs_lo = (std::min)(rhs.body_a, rhs.body_b);
+				  const uint32_t rhs_hi = (std::max)(rhs.body_a, rhs.body_b);
+				  if (lhs_lo != rhs_lo) return lhs_lo < rhs_lo;
+				  if (lhs_hi != rhs_hi) return lhs_hi < rhs_hi;
+				  return CollisionEventPriority(lhs.type) < CollisionEventPriority(rhs.type);
+			  });
 }
 
 // GenerateDiffs - produce DiffPackets for changed bodies
@@ -668,7 +721,19 @@ void PhysicsWorld::GenerateDiffs(PhysicsFrameResult& result) {
 		thresholds = thresholds_;
 	}
 
-	for (auto& [body_id, previous] : state_snapshots_) {
+	std::vector<uint32_t> body_ids;
+	body_ids.reserve(state_snapshots_.size());
+	for (const auto& [body_id, _] : state_snapshots_) {
+		body_ids.push_back(body_id);
+	}
+	std::sort(body_ids.begin(), body_ids.end());
+
+	for (uint32_t body_id : body_ids) {
+		auto snapshot_it = state_snapshots_.find(body_id);
+		if (snapshot_it == state_snapshots_.end()) {
+			continue;
+		}
+		auto& previous = snapshot_it->second;
 		JPH::BodyID jid(body_id);
 		if (!bi.IsAdded(jid)) {
 			continue;
@@ -793,6 +858,7 @@ bool PhysicsWorld::RestoreState(const std::string& data) {
 	recorder.Rewind();
 	bool ok = system_->RestoreState(recorder);
 	if (ok) {
+		contact_listener_.Clear();
 		RebuildStateSnapshots();
 	}
 	return ok;

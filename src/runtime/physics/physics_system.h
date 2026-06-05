@@ -59,7 +59,7 @@ namespace engine {
 //   │ GetTransform() etc.  │ MT                   │ Jolt BodyLockInterface   │
 //   │ ReloadThresholds()   │ MT                   │ Via SetThresholds        │
 //   │ UpdateScript()       │ PT (physics thread)  │ PT-exclusive, no lock    │
-//   │ SaveState/Restore    │ MT                   │ Delegate to PhysicsThread│
+//   │ SaveState/Restore    │ PT                   │ Direct world access      │
 //   └──────────────────────┴──────────────────────┴──────────────────────────┘
 //
 //   Key design rules:
@@ -131,6 +131,8 @@ class PhysicsSystem {
 	bool IsHealthy() const;
 
 	// ── Save / Restore / Recovery ────────────────────────────────────
+	// SaveState/RestoreState are synchronous world operations and are
+	// available only on the physics thread. Recovery remains an MT operation.
 	std::string SaveState() const;
 	bool RestoreState(const std::string& data);
 	bool Recover(const std::string& saved_state = {});

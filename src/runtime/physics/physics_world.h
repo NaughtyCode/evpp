@@ -94,6 +94,7 @@ class ContactListenerImpl final : public JPH::ContactListener {
 
 	// Called by PhysicsWorld after Step() to drain the event buffer.
 	std::vector<ContactRecord> Drain();
+	void Clear();
 
 	private:
 	void PushRecord(uint32_t body_a,
@@ -110,7 +111,7 @@ class ContactListenerImpl final : public JPH::ContactListener {
 // BodyActivationListenerImpl — active body tracker with JT/MT synchronization
 //
 // Tracks which bodies are currently active (awake) in the physics simulation.
-// The active set is populated by Jolt callbacks during system_.Update() and
+// The active set is populated/pruned by Jolt callbacks during system_.Update() and
 // queried from two independent call paths, creating a genuine cross-thread
 // race that the mutex protects against.
 //
@@ -141,6 +142,7 @@ class BodyActivationListenerImpl final : public JPH::BodyActivationListener {
 	// Returns true if the body is in the active (awake) set.
 	// Thread-safe: locked internally (called from PT and MT).
 	bool IsActive(const JPH::BodyID& id) const;
+	void Remove(const JPH::BodyID& id);
 	// Clear all tracked bodies. Called only from ~PhysicsWorld (after PT join).
 	void Clear();
 
@@ -314,7 +316,7 @@ class PhysicsWorld {
 	std::atomic<int> last_contact_constraints_{0};
 
 	// Static guard for one-time Jolt init steps 1-3
-	static std::atomic<bool> s_jolt_registered_;
+	static std::once_flag s_jolt_registration_once_;
 };
 
 }  // namespace engine
