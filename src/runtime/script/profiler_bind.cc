@@ -164,6 +164,10 @@ ProfilerEventGroupMask CheckGroupMaskTable(lua_State* L, int index) {
 	const int abs_index = lua_absindex(L, index);
 	lua_pushnil(L);
 	while (lua_next(L, abs_index) != 0) {
+		if (lua_istable(L, -1)) {
+			luaL_error(L, "profiler: nested group tables are not supported");
+			return 0;
+		}
 		mask |= CheckGroupMaskArg(L, -1);
 		lua_pop(L, 1);
 	}
@@ -581,21 +585,19 @@ void SetProfilerConstants(lua_State* L) {
 }  // namespace
 
 bool ExportProfiler(MainThreadScriptVM& vm) {
-	lua_State* L = vm.GetState();
-	if (!L) return false;
-
-	if (GetProfilerState(L)) {
-		ShutdownProfilerBindings(vm);
-	}
-
 	if (!vm.IsOwnerThread()) {
-		lua_pushnil(L);
-		lua_setglobal(L, "profiler");
 		auto* logger = GetLogger();
 		ENGINE_LOG_WARN(logger,
 						"ScriptBind: profiler module export rejected; "
 						"main-thread Lua VM is not on its owner thread");
 		return false;
+	}
+
+	lua_State* L = vm.GetState();
+	if (!L) return false;
+
+	if (GetProfilerState(L)) {
+		ShutdownProfilerBindings(vm);
 	}
 
 	auto* state = CLOUDENGINE_MEM_NEW(ProfilerBindState);
@@ -615,6 +617,14 @@ bool ExportProfiler(MainThreadScriptVM& vm) {
 }
 
 void ShutdownProfilerBindings(MainThreadScriptVM& vm) {
+	if (!vm.IsOwnerThread()) {
+		auto* logger = GetLogger();
+		ENGINE_LOG_WARN(logger,
+						"ScriptBind: profiler module shutdown ignored; "
+						"main-thread Lua VM is not on its owner thread");
+		return;
+	}
+
 	lua_State* L = vm.GetState();
 	if (!L) return;
 

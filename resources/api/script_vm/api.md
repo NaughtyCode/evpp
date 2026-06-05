@@ -1,152 +1,194 @@
 # ScriptVM API
 
-## 执行环境
+Last synced: 2026-06-05.
 
-| 属性 | 值 |
-|------|-----|
-| **调用线程** | 主线程（EventLoop 线程）。lua_State 非线程安全——所有 ScriptVM 方法必须在拥有该 VM 的线程上调用，且不能与回调并发调用。 |
-| **线程安全** | 否。lua_State 本身不提供内部锁或线程安全保护。`CustomPtrStore` 也不提供同步机制。每个 VM 实例与单个线程绑定，不可跨线程共享。 |
-| **回调线程** | 无回调。ScriptVM 自身不触发回调——它提供 C 函数注册机制，这些 C 函数在 Lua 调用它们时在调用者线程上执行。`InitScript()` / `UpdateScript()` / `DestroyScript()` 在调用者线程上同步调用 Lua 全局函数。 |
+`ScriptVM` is the RAII wrapper around one Lua `lua_State`. It owns the Lua
+state, import system, callback storage, script roots, and custom pointer store.
+`MainThreadScriptVM` derives from `ScriptVM` and is the only VM type that
+receives the full main runtime binding set.
 
-## Overview
+## Threading Model
 
-ScriptVM is the RAII wrapper around a Lua `lua_State`. It provides the foundation for all Lua scripting in the engine, including script execution, C function registration, and a custom pointer store.
+| Property | Value |
+|----------|-------|
+| Owner thread | The C++ thread that constructs the VM. |
+| Lua state thread safety | Not thread-safe. A `lua_State` must be accessed only from its owner thread unless a subsystem explicitly marshals work back to that thread. |
+| `ScriptVM::IsOwnerThread()` | Returns whether the current C++ thread owns the VM. |
+| `ScriptVM::IsMainThreadVM()` | Returns `false` for plain `ScriptVM`. |
+| `MainThreadScriptVM::IsMainThreadVM()` | Returns `true`. |
 
-## Module
+All direct Lua C API use through `GetState()` must follow the owner-thread
+rule. The main runtime binding export and shutdown helpers enforce this rule.
 
-C++ API via `ScriptVM` class. The Lua-facing APIs are registered through this class (see individual API modules for Lua-level documentation).
+## VM Types
 
-## ScriptVM Methods (C++)
+### `ScriptVM`
 
-### Construction
+Base VM used for generic Lua execution and purpose-specific VM contexts. It
+does not imply that the full engine Lua API is present.
 
+### `MainThreadScriptVM`
+
+Main engine script VM. It centralizes the runtime binding export and shutdown
+logic that belongs only to the main thread:
+
+```cpp
+void ExportRuntimeBindings(TimerManager& timer_mgr);
+void ShutdownNetworkBindings();
+void ShutdownTimerBindings();
+void ShutdownProfilerBindings();
 ```
-ScriptVM()              — Creates a new Lua state with standard libraries
-~ScriptVM()             — Closes the Lua state
+
+`ExportRuntimeBindings()` currently exports logging, timer, network, entity,
+MessagePack, JSON, space, AOI, RPC, auth, config, profiler, import, and
+optional memory/database modules. See `docs/spec/lua-runtime-api.md` for the
+Lua-facing API list.
+
+The `profiler` Lua module is exported only through `MainThreadScriptVM` and
+each `profiler.*` API checks that it is called on the VM owner thread.
+
+## Construction
+
+```cpp
+ScriptVM vm(LuaSandboxLevel::Full);
+MainThreadScriptVM main_vm(LuaSandboxLevel::Full);
 ```
 
-Move-only (non-copyable).
+Both VM classes are move-only and non-copyable.
 
-### Script Lifecycle
+## Script Lifecycle
 
-#### `InitScript()`
+The C++ methods below call global Lua functions with matching names. Missing
+Lua functions are silently ignored.
 
-Calls the global Lua function `init()` if it exists. Called once after all C APIs are exported.
+| C++ method | Lua global called | When used |
+|------------|-------------------|-----------|
+| `InitScript()` | `InitScript()` | Once after scripts and C APIs are loaded. |
+| `UpdateScript()` | `UpdateScript()` | Once per frame. |
+| `DestroyScript()` | `DestroyScript()` | During engine cleanup. |
 
-#### `UpdateScript()`
-
-Calls the global Lua function `update()` if it exists. Called once per frame.
-
-#### `DestroyScript()`
-
-Calls the global Lua function `destroy()` if it exists. Called during engine shutdown.
-
-### Script Execution
-
-#### `DoString(script [, chunk_name [, error_out [, result_out]]])`
-
-Executes a Lua string.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `script` | `string_view` | Lua source code |
-| `chunk_name` | `string_view` | Name for error messages (default: "string") |
-| `error_out` | `string*` | Receives error message on failure (optional) |
-| `result_out` | `string*` | Receives result string via `lua_tostring` (optional) |
-
-| Returns | Type | Description |
-|---------|------|-------------|
-| `ok` | `bool` | `true` on success |
-
-#### `DoFile(filename [, error_out])`
-
-Executes a Lua file.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `filename` | `string` | Path to .lua file |
-| `error_out` | `string*` | Receives error message on failure (optional) |
-
-| Returns | Type | Description |
-|---------|------|-------------|
-| `ok` | `bool` | `true` on success |
-
-#### `DoDirectory(dir_path)`
-
-Executes all `.lua` files found directly in a directory (non-recursive).
-
-| Returns | Type | Description |
-|---------|------|-------------|
-| `failed` | `size_t` | Number of files that failed |
-
-### C Function / Module Registration
-
-#### `RegisterFunction(name, func)`
-
-Registers a single C function as a Lua global.
-
-#### `RegisterFunctions(functions)`
-
-Registers a `luaL_Reg` array (terminated by `{NULL, NULL}`) as individual globals.
-
-#### `RegisterModule(name, functions)`
-
-Registers a `luaL_Reg` array as a named module table (global).
-
-#### `RegisterModuleOpen(name, openf [, make_global])`
-
-Registers a module via `luaL_requiref` style open function. The module is stored in `package.preload[name]` for on-demand loading via `require()`. If `make_global` is true (default), it is also set as a global.
-
-#### `RegisterCallback(name, callback)`
-
-Registers a `std::function<int(lua_State*)>` as a global Lua function. The callback follows Lua C calling convention.
-
-### Custom Pointer Store
-
-A per-VM void* array for associating C++ pointers with Lua state.
-
-| Method | Description |
-|--------|-------------|
-| `ReserveCustomPtrSlots(n)` | Pre-allocate capacity for N pointers |
-| `SetCustomPtr(index, ptr)` | Store pointer at 1-based index |
-| `GetCustomPtr(index)` | Get pointer at 1-based index |
-| `GetCustomPtrAs<T>(index)` | Typed variant of GetCustomPtr |
-| `PushCustomPtr(ptr)` | Append pointer, returns new index |
-| `SetNullCustomPtr(index)` | Set slot to nullptr |
-| `ClearCustomPtrs()` | Drop all stored pointers |
-| `CustomPtrCount()` | Number of stored pointers |
-| `CustomPtrCapacity()` | Current allocated capacity |
-| `HasCustomPtr(index)` | Check if slot has non-null pointer |
-| `FindCustomPtr(ptr)` | Find 1-based index of a pointer (-1 if not found) |
-| `ContainsCustomPtr(ptr)` | Check if pointer exists in array |
-| `CopyCustomPtrsTo(dst, max)` | Copy pointers to external array |
-| `CopyCustomPtrsFrom(src, count)` | Replace entire array |
-
-### Utilities
-
-| Method | Description |
-|--------|-------------|
-| `GetState()` | Returns the raw `lua_State*` |
-| `ToString([index])` | Pop stack top and return as string |
-| `LuaVersion()` | Returns Lua version string (static) |
-| `SetGlobal<T>(name, value)` | Template setter for globals (int, double, string, bool) |
-| `GetImporter()` | Returns the ScriptImporter reference |
-| `SetImportPath(dir)` | Sets the Lua script search path |
-
-## Lua Lifecycle Functions
-
-Lua scripts can optionally define these global functions:
+Lua entry scripts should define these names:
 
 ```lua
-function init()
-    -- Called once after all C APIs are exported
+function InitScript()
+    -- Called once after runtime bindings and scripts are loaded.
 end
 
-function update()
-    -- Called once per frame
+function UpdateScript()
+    -- Called once per engine frame.
 end
 
-function destroy()
-    -- Called during engine shutdown
+function DestroyScript()
+    -- Called during shutdown.
 end
 ```
+
+Shared runtime modules under `resources/script/runtime` should not define these
+global lifecycle hooks. They belong to the role entry script.
+
+## Script Execution
+
+### `DoString(script [, chunk_name [, error_out [, result_out]]])`
+
+Executes a Lua source string.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `script` | `std::string_view` | Lua source code. |
+| `chunk_name` | `std::string_view` | Name used in Lua error messages. Defaults to `"string"`. |
+| `error_out` | `std::string*` | Optional destination for error text. |
+| `result_out` | `std::string*` | Optional destination for a string result from the stack top. |
+
+Returns `true` on success.
+
+### `DoFile(filename [, error_out])`
+
+Executes one Lua file and returns `true` on success.
+
+### `DoDirectory(dir_path)`
+
+Executes all `.lua` files found directly in a directory. The scan is
+non-recursive and returns the number of failed files.
+
+## C Function And Module Registration
+
+| C++ method | Description |
+|------------|-------------|
+| `RegisterFunction(name, func)` | Registers one Lua C function as a global. |
+| `RegisterFunctions(functions)` | Registers every function in a `luaL_Reg` array as a global. |
+| `RegisterModule(name, functions)` | Registers a `luaL_Reg` array as a global module table. |
+| `RegisterModuleOpen(name, openf, make_global)` | Registers a module with a `luaL_requiref` style open function and stores it in `package.preload`. |
+| `RegisterCallback(name, callback)` | Registers a stored `std::function<int(lua_State*)>` as a global. |
+
+The callback registered by `RegisterCallback()` follows the Lua C calling
+convention: it receives `lua_State*`, pushes return values, and returns the
+number of values pushed.
+
+## Import And Script Roots
+
+| C++ method | Description |
+|------------|-------------|
+| `GetImporter()` | Returns the per-VM `ScriptImporter`. |
+| `SetImportPath(scripts_dir)` | Sets the importer search path. |
+| `SetScriptRoot(root_dir)` | Replaces script roots with one root. |
+| `SetScriptRoots(root_dirs)` | Replaces script roots with multiple roots. |
+| `GetScriptRoots()` | Returns configured script roots. |
+| `GetDefaultModuleNameForFile(filename)` | Derives a default module name for one file. |
+| `BuildDefaultModuleNameForFile(filename)` | Static default module-name derivation. |
+| `BuildModuleNameForFile(filename, roots, separator)` | Static module-name derivation with explicit roots and separator. |
+
+File-backed script loads derive default module names from the script path
+relative to one configured root. Path separators are converted to underscores.
+For example, `<root>/runtime/net/init.lua` becomes `runtime_net_init`.
+
+## Custom Pointer Store
+
+The custom pointer store is a per-VM void-pointer array backed by Lua global
+state. It is useful for associating C++ objects with a Lua state without adding
+more registry keys.
+
+| C++ method | Description |
+|------------|-------------|
+| `ReserveCustomPtrSlots(n)` | Pre-allocates pointer slots. |
+| `SetCustomPtr(index, ptr)` | Stores a pointer at a 1-based index. |
+| `GetCustomPtr(index)` | Returns the pointer at a 1-based index or `nullptr`. |
+| `GetCustomPtrAs<T>(index)` | Typed wrapper around `GetCustomPtr`. |
+| `PushCustomPtr(ptr)` | Appends a pointer and returns its new 1-based index. |
+| `SetNullCustomPtr(index)` | Sets an existing slot to `nullptr`. |
+| `ClearCustomPtrs()` | Clears all stored pointers. |
+| `CustomPtrCount()` | Returns the number of stored slots. |
+| `CustomPtrCapacity()` | Returns current store capacity. |
+| `HasCustomPtr(index)` | Checks whether a slot exists and is non-null. |
+| `FindCustomPtr(ptr)` | Returns the 1-based index for a pointer, or `-1`. |
+| `ContainsCustomPtr(ptr)` | Checks whether a pointer is stored. |
+| `CopyCustomPtrsTo(dst, max)` | Copies up to `max` pointers out. |
+| `CopyCustomPtrsFrom(src, count)` | Replaces the store from an external array. |
+
+## Utilities
+
+| C++ method | Description |
+|------------|-------------|
+| `GetState()` | Returns the raw `lua_State*`. |
+| `SetGlobal<T>(name, value)` | Sets a global scalar value. Supported specializations include int, double, string, string view, C string, and bool. |
+| `ToString([index])` | Converts a stack value to string and pops the stack top. |
+| `LuaVersion()` | Returns the Lua version string. |
+
+## Engine Integration
+
+The engine owns a `std::unique_ptr<MainThreadScriptVM>`, but
+`Engine::GetScriptVM()` returns it as a `ScriptVM&` for compatibility with code
+that only needs the base API.
+
+During initialization:
+
+1. `Engine::Init()` creates `MainThreadScriptVM`.
+2. It configures import path and script roots.
+3. It calls `MainThreadScriptVM::ExportRuntimeBindings(timer_mgr)`.
+4. It loads entry scripts.
+5. It calls `InitScript()`.
+
+During each frame, `Engine::FrameLoop()` flushes config callbacks, calls
+`UpdateScript()`, then drains deferred RPC callbacks.
+
+During cleanup, the main VM is kept alive while network, timer, Lua lifecycle,
+and profiler shutdown helpers release registry references and callback state.

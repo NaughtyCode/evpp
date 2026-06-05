@@ -1,11 +1,29 @@
 #include "runtime/vm/main_thread_vm.h"
 
+#include <stdexcept>
+#include <string>
+
 #include "runtime/core/log/log.h"
 #include "runtime/profiler/profiler_events.h"
 #include "runtime/script/import_bind.h"
 #include "runtime/script/script_bind.h"
 
 namespace engine {
+
+namespace {
+
+void RequireOwnerThread(const MainThreadScriptVM& vm, const char* operation) {
+	if (vm.IsOwnerThread()) return;
+
+	auto* logger = GetLogger();
+	ENGINE_LOG_ERROR(logger,
+					 "MainThreadScriptVM::{} rejected: must be called from owner thread",
+					 operation);
+	throw std::runtime_error(std::string("MainThreadScriptVM::") + operation +
+							 " must be called from the owner thread");
+}
+
+}  // namespace
 
 MainThreadScriptVM::MainThreadScriptVM(LuaSandboxLevel level) : ScriptVM(level) {}
 
@@ -16,6 +34,8 @@ bool MainThreadScriptVM::IsMainThreadVM() const noexcept {
 }
 
 void MainThreadScriptVM::ExportRuntimeBindings(TimerManager& timer_mgr) {
+	RequireOwnerThread(*this, "ExportRuntimeBindings");
+
 	auto* logger = GetLogger();
 	ENGINE_LOG_INFO(logger, "ScriptBind: exporting all APIs to Lua...");
 
@@ -98,17 +118,23 @@ void MainThreadScriptVM::ExportRuntimeBindings(TimerManager& timer_mgr) {
 }
 
 void MainThreadScriptVM::ShutdownNetworkBindings() {
+	RequireOwnerThread(*this, "ShutdownNetworkBindings");
+
 	script::ShutdownRpcBindings(*this);
 	script::ShutdownConfigBindings(*this);
 	script::ShutdownNetBindings();
 }
 
 void MainThreadScriptVM::ShutdownTimerBindings() {
+	RequireOwnerThread(*this, "ShutdownTimerBindings");
+
 	script::ShutdownEntityBindings();
 	script::ShutdownTimerBindings(*this);
 }
 
 void MainThreadScriptVM::ShutdownProfilerBindings() {
+	RequireOwnerThread(*this, "ShutdownProfilerBindings");
+
 	script::ShutdownProfilerBindings(*this);
 }
 

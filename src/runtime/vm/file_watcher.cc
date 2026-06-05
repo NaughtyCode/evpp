@@ -81,8 +81,9 @@ void FileWatcher::PrimeKnownFiles() {
 		     ++it) {
 			if (ec) { ec.clear(); continue; }
 			const auto& de = *it;
-			if (!de.is_regular_file(ec)) continue;
+			const bool regular_file = de.is_regular_file(ec);
 			if (ec) { ec.clear(); continue; }
+			if (!regular_file) continue;
 			auto ext = de.path().extension().string();
 			if (!ExtensionMatches(ext, entry.extension)) continue;
 			auto path_str = de.path().string();
@@ -168,8 +169,9 @@ std::vector<std::string> FileWatcher::ScanChanges() {
 			}
 
 			const auto& dir_entry = *it;
-			if (!dir_entry.is_regular_file(ec)) continue;
+			const bool regular_file = dir_entry.is_regular_file(ec);
 			if (ec) { ec.clear(); continue; }
+			if (!regular_file) continue;
 
 			auto ext = dir_entry.path().extension().string();
 			if (!ExtensionMatches(ext, entry.extension)) {

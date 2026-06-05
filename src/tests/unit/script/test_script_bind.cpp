@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <exception>
 #include <string>
+#include <thread>
 
 #include "log_init.h"
 #include "runtime/core/timer/timer_manager.h"
@@ -11,16 +13,16 @@ using namespace engine;
 
 namespace {
 
-struct ExportAllFixture {
+struct RuntimeBindingsFixture {
 	MainThreadScriptVM vm;
 	TimerManager timer_mgr;
 
-	ExportAllFixture() {
+	RuntimeBindingsFixture() {
 		timer_mgr.initialize();
 		vm.ExportRuntimeBindings(timer_mgr);
 	}
 
-	~ExportAllFixture() {
+	~RuntimeBindingsFixture() {
 		vm.ShutdownNetworkBindings();
 		vm.ShutdownTimerBindings();
 		vm.ShutdownProfilerBindings();
@@ -34,8 +36,9 @@ struct ExportAllFixture {
 
 }  // namespace
 
-TEST_CASE("ExportAll exports the complete core Lua API surface", "[script_bind][export_all]") {
-	ExportAllFixture f;
+TEST_CASE("MainThreadScriptVM exports the complete core Lua API surface",
+		  "[script_bind][runtime_bindings]") {
+	RuntimeBindingsFixture f;
 	std::string result;
 
 	REQUIRE(f.RunLuaResult(
@@ -81,9 +84,9 @@ return 'ok'
 	REQUIRE(result == "ok");
 }
 
-TEST_CASE("ExportAll exposes optional Lua modules when their features are enabled",
-		  "[script_bind][export_all]") {
-	ExportAllFixture f;
+TEST_CASE("MainThreadScriptVM exposes optional Lua modules when their features are enabled",
+		  "[script_bind][runtime_bindings]") {
+	RuntimeBindingsFixture f;
 	std::string result;
 
 #if defined(ENGINE_MONGODB_ENABLED) && ENGINE_DATABASE_ENABLED
@@ -124,8 +127,27 @@ return 'ok'
 #endif
 }
 
+TEST_CASE("MainThreadScriptVM rejects runtime binding export from non-owner thread",
+		  "[script_bind][runtime_bindings]") {
+	MainThreadScriptVM vm;
+	TimerManager timer_mgr;
+	std::string error;
+
+	std::thread worker([&] {
+		try {
+			vm.ExportRuntimeBindings(timer_mgr);
+		} catch (const std::exception& e) {
+			error = e.what();
+		}
+	});
+	worker.join();
+
+	REQUIRE(error.find("MainThreadScriptVM::ExportRuntimeBindings") != std::string::npos);
+	REQUIRE(error.find("owner thread") != std::string::npos);
+}
+
 TEST_CASE("Lua auth binding exposes permission and manual session APIs", "[script_bind][auth]") {
-	ExportAllFixture f;
+	RuntimeBindingsFixture f;
 	std::string result;
 
 	REQUIRE(f.RunLuaResult(
@@ -158,7 +180,7 @@ return table.concat({
 
 TEST_CASE("Lua auth binding ignores non-string parameter keys during authenticate",
 		  "[script_bind][auth]") {
-	ExportAllFixture f;
+	RuntimeBindingsFixture f;
 	std::string result;
 
 	REQUIRE(f.RunLuaResult(
@@ -183,7 +205,7 @@ return table.concat({
 
 TEST_CASE("import.loaded reports corrupted package state without crashing",
 		  "[script_bind][import]") {
-	ExportAllFixture f;
+	RuntimeBindingsFixture f;
 	std::string result;
 
 	REQUIRE(f.RunLuaResult(
@@ -215,7 +237,7 @@ return table.concat({
 
 TEST_CASE("cmsgpack rejects cyclic tables and oversized unpack arguments",
 		  "[script_bind][msgpack]") {
-	ExportAllFixture f;
+	RuntimeBindingsFixture f;
 	std::string result;
 
 	REQUIRE(f.RunLuaResult(
@@ -246,7 +268,7 @@ return table.concat({
 
 TEST_CASE("space binding rejects negative identifiers before unsigned conversion",
 		  "[script_bind][space]") {
-	ExportAllFixture f;
+	RuntimeBindingsFixture f;
 	std::string result;
 
 	REQUIRE(f.RunLuaResult(

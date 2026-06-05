@@ -24,48 +24,54 @@ New files:
 The public entry points are:
 
 ```cpp
-bool ExportProfiler(ScriptVM& vm);
-void ShutdownProfilerBindings(ScriptVM& vm);
+bool ExportProfiler(MainThreadScriptVM& vm);
+void ShutdownProfilerBindings(MainThreadScriptVM& vm);
 ```
 
-`script::ExportAll()` now marks the VM as the main-thread VM and then exports
-the module:
+`MainThreadScriptVM` is the only VM type that can receive this module. Its
+runtime binding export owns the main-thread Lua surface and exports the module:
 
 ```cpp
-vm.MarkAsMainThreadVM();
-...
-ExportProfiler(vm);
+void MainThreadScriptVM::ExportRuntimeBindings(TimerManager& timer_mgr) {
+    ...
+    script::ExportProfiler(*this);
+    ...
+}
 ```
 
 Database, physics, validation, and other dedicated VMs do not call
-`ExportAll()`, so they do not receive the `profiler` module by default.
-Calling `ExportProfiler()` directly on an unmarked VM is rejected and clears
-the global `profiler` table to `nil`.
+`MainThreadScriptVM::ExportRuntimeBindings()`, so they do not receive the
+`profiler` module by default. The C++ type signature also prevents exporting
+the profiler module to a plain `ScriptVM`.
 
 ## 3. Main-Thread Enforcement
 
-`ScriptVM` now records the thread that constructs the VM:
+`ScriptVM` records the thread that constructs the VM:
 
 ```cpp
 std::thread::id owner_thread_id_{};
-bool is_main_thread_vm_ = false;
 ```
 
-It exposes read-only checks:
+It exposes read-only checks. `ScriptVM::IsMainThreadVM()` returns `false`;
+`MainThreadScriptVM` overrides it to return `true`.
 
 ```cpp
 bool IsOwnerThread() const noexcept;
-bool IsMainThreadVM() const noexcept;
+virtual bool IsMainThreadVM() const noexcept;
 ```
 
-The main-VM marker is private:
+The main-thread VM also enforces owner-thread calls at the centralized runtime
+binding entry points:
 
 ```cpp
-void MarkAsMainThreadVM() noexcept;
-friend void script::ExportAll(ScriptVM& vm, TimerManager& tm);
+void MainThreadScriptVM::ExportRuntimeBindings(TimerManager& timer_mgr);
+void MainThreadScriptVM::ShutdownNetworkBindings();
+void MainThreadScriptVM::ShutdownTimerBindings();
+void MainThreadScriptVM::ShutdownProfilerBindings();
 ```
 
-That keeps normal module exports from being able to promote an arbitrary VM.
+These functions throw if called from a non-owner thread before touching the Lua
+state.
 
 The Lua binding stores a small per-VM state in the Lua registry:
 
@@ -184,7 +190,7 @@ print(status.runtime_enabled, status.enabled_event_group_names)
 `Engine::Cleanup()` now calls:
 
 ```cpp
-script::ShutdownProfilerBindings(*script_vm_);
+script_vm_->ShutdownProfilerBindings();
 ```
 
 This removes the registry state and global `profiler` table before the VM is
@@ -199,11 +205,12 @@ New test target:
 
 Covered scenarios:
 
-- `ExportAll()` exposes `profiler` on the main VM.
+- `MainThreadScriptVM::ExportRuntimeBindings()` exposes `profiler` on the main VM.
 - Lua can update runtime enabled state and group masks.
 - Invalid Lua runtime/group/config arguments are rejected with Lua errors.
-- Direct `ExportProfiler()` on an unmarked VM is rejected.
+- Self-referential group tables are rejected instead of recursing indefinitely.
 - Calling `profiler` APIs from a non-owner thread raises a Lua error.
+- Runtime binding export from a non-owner thread is rejected before Lua state mutation.
 
 Verification run:
 
@@ -223,12 +230,16 @@ git diff --check
 
 Results:
 
-- Profiler ON `test_profiler_bind`: all tests passed, 9 assertions in 4 cases.
-- Profiler ON `test_script_bind`: all tests passed, 16 assertions in 7 cases.
-- Profiler OFF `test_profiler_bind`: all tests passed, 9 assertions in 4 cases.
+- Profiler ON `test_profiler_bind`: all tests passed, 14 assertions in 5 cases.
+- Profiler ON `test_script_bind`: all tests passed, 18 assertions in 8 cases.
+- Profiler OFF `test_profiler_bind`: all tests passed, 14 assertions in 5 cases.
 - Profiler OFF `test_profiler`: all tests passed, 20 assertions in 3 cases.
-- Profiler OFF `test_script_bind`: all tests passed, 16 assertions in 7 cases.
+- Profiler OFF `test_script_bind`: all tests passed, 18 assertions in 8 cases.
 - Profiler ON `test_profiler`: all tests passed, 33 assertions in 3 cases.
+- Additional same-day review coverage passed on the profiler-ON build:
+  `test_hotreload` (179 assertions in 50 cases), `test_vm_coverage`
+  (151 assertions in 48 cases), `test_space` (96 assertions in 43 cases),
+  and `test_game_config` (278 assertions in 45 cases).
 - `git diff --check`: no whitespace errors; only CRLF conversion warnings.
 
 MSVC emitted the existing `LNK4098` default-library warning during test links.

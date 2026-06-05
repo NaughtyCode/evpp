@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 
+#include "runtime/script/msgpack_bind.h"
 #include "runtime/vm/vm.h"
 
 namespace {
@@ -25,15 +26,12 @@ void FuzzEntry(const uint8_t* data, size_t size) {
 
 	// Create a sandboxed VM for safety (Strict level blocks dangerous APIs).
 	ScriptVM vm(LuaSandboxLevel::Strict);
+	engine::script::ExportMsgPack(vm);
 
 	// Push the raw bytes as a Lua string, then try to decode it.
-	// The msgpack library is loaded via ExportAll.
-	// We use pcall to catch any Lua errors.
+	// Use pcall to catch decoder errors; the fuzz target must not crash.
 	std::string lua_code;
-	lua_code += "local msgpack = require('msgpack') or {}\n";
-	lua_code += "if msgpack.decode then\n";
-	lua_code += "  local ok, err = pcall(msgpack.decode, input_bytes)\n";
-	lua_code += "end\n";
+	lua_code += "local ok, err = pcall(cmsgpack.unpack, input_bytes)\n";
 
 	// Push the input as a Lua string global.
 	lua_State* L = vm.GetState();

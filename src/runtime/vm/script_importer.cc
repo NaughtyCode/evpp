@@ -212,7 +212,8 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
 	// ── Load the Lua chunk ─────────────────────────────────────────
 	int rc = luaL_loadfilex(L, filepath.c_str(), nullptr);
 	if (rc != LUA_OK) {
-		std::string err_msg(lua_tostring(L, -1));
+		const char* msg = lua_tostring(L, -1);
+		std::string err_msg = msg ? msg : "unknown Lua load error";
 		lua_pop(L, 1);	// pop error message
 		lua_pop(L, 2);	// pop loaded, package
 		cleanup_importing();
@@ -223,7 +224,8 @@ int ScriptImporter::ImportSingle(lua_State* L, std::string_view name) {
 	auto before_keys = SnapshotGlobalKeys(L);
 	rc = lua_pcall(L, 0, 1, 0);
 	if (rc != LUA_OK) {
-		std::string err_msg(lua_tostring(L, -1));
+		const char* msg = lua_tostring(L, -1);
+		std::string err_msg = msg ? msg : "unknown Lua runtime error";
 		lua_pop(L, 1);	// pop error message
 		lua_pop(L, 2);	// pop loaded, package
 		cleanup_importing();

@@ -101,7 +101,7 @@ local id = config.on_change("log", function(changes)
     end
 end)
 
--- call once per frame or from update()
+-- call once per frame or from UpdateScript()
 config.flush_changes()
 ```
 

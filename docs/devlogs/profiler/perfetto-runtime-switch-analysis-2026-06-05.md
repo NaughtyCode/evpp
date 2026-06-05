@@ -502,4 +502,3 @@ event: PhysicsStep / Collision / Transform / Diff
 
 当前 group 位图已经满足“针对某一批桩”的运行时批量控制；event id 适合后续定位某个模块内部的
 单个热点事件时再加。
-

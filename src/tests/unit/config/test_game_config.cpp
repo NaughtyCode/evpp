@@ -841,16 +841,16 @@ TEST_CASE("Lua config.unregister cannot remove callbacks owned by another VM", "
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Lua config bindings — integration with ExportAll
+// Lua config bindings — runtime export integration
 // ═══════════════════════════════════════════════════════════════════════════
 
-TEST_CASE("ExportAll includes config module", "[game_config][lua]") {
+TEST_CASE("runtime bindings include config module", "[game_config][lua]") {
     ConfigFixture f;
     f.LoadFromStrings();
 
     ScriptVM vm;
-    // ExportAll should include config bindings.
-    // We test the individual export, which is also called by ExportAll.
+    // MainThreadScriptVM::ExportRuntimeBindings includes config bindings.
+    // We test the individual export to keep this config test isolated.
     script::ExportConfigBindings(vm);
 
     std::string result;

@@ -1,105 +1,146 @@
 # Engine API
 
-## 执行环境
+Last synced: 2026-06-05.
 
-| 属性 | 值 |
-|------|-----|
-| **调用线程** | 主线程（EventLoop 线程）。`Init()` / `Start()` / `Run()` / `Tick()` / `Cleanup()` 必须在单个 EventLoop 线程上串行调用。`Shutdown()` 是唯一的线程安全方法——可从任意线程调用以请求优雅关闭。 |
-| **线程安全** | 部分。`Shutdown()` 使用原子操作设置 `running_` 标志，线程安全。`running()` / `frame_count()` 读取原子变量，线程安全。其他所有方法必须在主线程调用，不可跨线程使用。 |
-| **回调线程** | 主线程。EventLoop 驱动信号处理（`SIGINT`/`SIGTERM`）、帧定时器、以及所有通过 `RunInLoop` 排队的回调。 |
+`Engine` is the central runtime orchestrator. It owns the event loop, timer
+manager, main script VM, hot-reload support, monitoring server, and subsystem
+shutdown order.
 
-## Overview
+## Threading Model
 
-The Engine is the central application orchestrator. It manages the event loop, frame timing, script VM lifecycle, and coordinates all subsystems (logging, timers, networking, physics, profiling).
+| Property | Value |
+|----------|-------|
+| Main thread | The EventLoop thread that initializes and drives the engine. |
+| Thread-safe method | `Shutdown()` can be requested from any thread. |
+| Main-thread methods | `Init()`, `Start()`, `Run()`, `Tick()`, `Cleanup()`, and most accessors must be used from the engine owner thread. |
+| Lua callbacks | Lua lifecycle and binding callbacks execute on the main script VM owner thread unless a subsystem explicitly queues work back there. |
 
 ## Module
 
-C++ API via `Engine` singleton. Not directly exposed to Lua, but drives the Lua runtime via `InitScript()`, `UpdateScript()`, and `DestroyScript()`.
+C++ API via `Engine::Instance()`. There is no `engine` Lua global. The engine
+drives Lua by owning a `MainThreadScriptVM` and calling
+`InitScript()`, `UpdateScript()`, and `DestroyScript()`.
 
 ## Lifecycle
 
 ### Standalone Mode
 
-```
+```cpp
 engine.Init(runtime_cfg, entry_scripts_dir);
-engine.Run();  // Init → Start → event loop → Cleanup (blocks until Shutdown)
+engine.Run();  // Start + event loop + Cleanup
 ```
 
-### Library Mode (host-driven)
+### Library Mode
 
-```
-engine.Init(config, &my_loop);
+```cpp
+engine.Init(runtime_cfg, entry_scripts_dir, external_loop);
 while (running) {
-    my_loop_dispatch_pending();  // host drives IO
-    engine.Tick();               // per-frame engine work
+    drive_external_loop_once();
+    engine.Tick();
 }
 engine.Cleanup();
 ```
 
-## Engine Methods (C++)
+## Methods
 
 ### `Init(runtime_cfg, entry_scripts_dir [, external_loop])`
 
-Initializes the engine with configuration. In library mode, pass the host's EventLoop.
+Initializes the engine.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `runtime_cfg` | `RuntimeConfig` | Runtime configuration |
-| `entry_scripts_dir` | `string` | Role-specific scripts directory |
-| `external_loop` | `EventLoop*` | External event loop for library mode (optional) |
+| `runtime_cfg` | `RuntimeConfig` | Runtime configuration. |
+| `entry_scripts_dir` | `std::string` | Role-specific script directory, such as `resources/script/server`. |
+| `external_loop` | `evpp::EventLoop*` | Optional host-owned event loop for library mode. |
+
+During script setup, `Init()` creates `MainThreadScriptVM`, configures import
+paths and script roots, calls
+`MainThreadScriptVM::ExportRuntimeBindings(timer_mgr)`, loads entry scripts,
+and calls `InitScript()`.
 
 ### `Start()`
 
-Arms the frame timer and signal watchers on the engine's own loop. Standalone mode only.
+Arms the frame timer and signal watchers on the engine-owned loop. Standalone
+mode only. Does not enter the event loop.
 
 ### `Run()`
 
-Convenience: `Start()` + enter event loop + `Cleanup()`. Blocks until `Shutdown()` is called.
+Calls `Start()`, enters the event loop, and calls `Cleanup()` after shutdown.
+Standalone mode only.
 
 ### `Tick()`
 
-Processes one frame: timer update + Lua update. Enforces frame rate limit — if called faster than `target_fps`, the call is a no-op.
+Processes one frame in library mode or from the standalone frame timer.
 
-- In standalone mode: called by the frame timer
-- In library mode: the host calls this at its own cadence
+Frame work:
+
+1. Timer manager update.
+2. Config callback flush on the main Lua VM.
+3. Lua `UpdateScript()` call.
+4. Deferred RPC callback drain.
+5. Frame-rate enforcement using runtime frame config.
 
 ### `Shutdown()`
 
-Requests graceful shutdown. Thread-safe — can be called from any thread.
+Requests graceful shutdown. This is the method intended for cross-thread
+shutdown requests.
 
 ### `Cleanup()`
 
-Releases all resources (Lua, timers, net bindings, timer manager). In standalone mode called automatically after the event loop exits. In library mode the host must call this before destroying the engine.
+Releases subsystems in the required order. The main script VM remains alive
+while binding shutdown code releases registry references and callback state.
+
+Current cleanup order:
+
+1. Physics shutdown.
+2. Database shutdown.
+3. Connection drain phase.
+4. `MainThreadScriptVM::ShutdownNetworkBindings()`.
+5. `MainThreadScriptVM::ShutdownTimerBindings()`.
+6. `DestroyScript()`.
+7. `MainThreadScriptVM::ShutdownProfilerBindings()`.
+8. Lua memory report and script VM destruction.
+9. Entity/timer manager shutdown.
+10. Final runtime resources and logs.
+
+### `ApplyConfigChanges()`
+
+Applies pending config changes on the main thread.
 
 ### Accessors
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `running()` | `bool` | Whether the engine is running |
-| `frame_count()` | `uint64_t` | Total frames processed |
-| `GetScriptVM()` | `ScriptVM&` | The main script VM |
-| `GetEventLoop()` | `EventLoop*` | Active event loop |
+| `running()` | `bool` | Whether the engine is running. |
+| `initialized()` | `bool` | Whether initialization completed. |
+| `cleanup_phase()` | `CleanupPhase` | Current cleanup phase. |
+| `frame_count()` | `uint64_t` | Total frames processed. |
+| `GetScriptVM()` | `ScriptVM&` | Main script VM returned as the base type. |
+| `GetTimerManager()` | `TimerManager&` | Engine timer manager. |
+| `GetEventLoop()` | `evpp::EventLoop*` | Active event loop. |
+| `SetPhysicsResultHandler(handler)` | none | Registers a per-frame physics result consumer. |
 
-## Frame Processing
+## Cleanup Phases
 
-Each frame:
-1. Timer management (high-resolution timer wheel update)
-2. Lua script update (`UpdateScript()` — calls a global `update()` function if defined)
-3. Frame rate enforcement (frame interval from config)
+```cpp
+enum class CleanupPhase {
+    NotStarted,
+    PhysicsShutdown,
+    DatabaseShutdown,
+    NetworkShutdown,
+    TimerShutdown,
+    ScriptDestroyed,
+    FinalLogs,
+    Complete
+};
+```
 
-## Shutdown Sequence
+The phase enum is used for diagnostics and timeout reporting during cleanup.
 
-1. `Shutdown()` sets `running_ = false`
-2. Event loop exits (standalone) or host stops calling `Tick()` (library)
-3. `Cleanup()`:
-   - Signal watchers destroyed
-   - Frame timer cancelled
-   - `DestroyScript()` called on ScriptVM
-   - `ShutdownNetBindings()` — stops all TCP/UDP/KCP servers, releases HTTP callbacks
-   - `TimerManager` shutdown
-   - ScriptVM destroyed
+## Signal Handling
 
-## Signal Handling (Standalone Mode)
+Standalone mode installs signal watchers on the engine loop:
 
-- `SIGINT` (Ctrl+C) → calls `Shutdown()`
-- `SIGTERM` (Unix only) → calls `Shutdown()`
+- `SIGINT` requests `Shutdown()`.
+- `SIGTERM` requests `Shutdown()` on Unix-like platforms.
+- `SIGHUP` is used for config reload on Unix-like platforms when enabled.

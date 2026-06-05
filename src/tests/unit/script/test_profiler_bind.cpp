@@ -93,6 +93,22 @@ TEST_CASE("main-thread Lua VM has explicit type semantics", "[script][profiler_b
 	REQUIRE(result == "true");
 }
 
+TEST_CASE("profiler export rejects direct non-owner thread calls without Lua mutation",
+		  "[script][profiler_bind]") {
+	MainThreadScriptVM vm;
+	bool exported = true;
+
+	std::thread worker([&] {
+		exported = script::ExportProfiler(vm);
+	});
+	worker.join();
+
+	std::string result;
+	REQUIRE_FALSE(exported);
+	REQUIRE(vm.DoString("return tostring(profiler == nil)", "test_profiler_bind", nullptr, &result));
+	REQUIRE(result == "true");
+}
+
 TEST_CASE("profiler Lua module rejects invalid runtime control arguments",
 		  "[script][profiler_bind]") {
 	ProfilerBindFixture f;
@@ -112,12 +128,15 @@ checks[#checks + 1] = tostring(pcall(profiler.set_group_enabled, combined_group,
 checks[#checks + 1] = tostring(pcall(profiler.set_group_enabled, 'physics') == false)
 checks[#checks + 1] = tostring(pcall(profiler.initialize, { runtime_enabled = 'yes' }) == false)
 checks[#checks + 1] = tostring(pcall(profiler.initialize, { buffer_size_kb = -1 }) == false)
+local recursive_groups = {}
+recursive_groups[1] = recursive_groups
+checks[#checks + 1] = tostring(pcall(profiler.set_enabled_groups, recursive_groups) == false)
 
 return table.concat(checks, ',')
 )lua",
 		result));
 
-	REQUIRE(result == "true,true,true,true,true,true,true,true,true");
+	REQUIRE(result == "true,true,true,true,true,true,true,true,true,true");
 }
 
 TEST_CASE("profiler Lua APIs reject calls from non-owner thread", "[script][profiler_bind]") {

@@ -450,7 +450,7 @@ Include 策略:
     - ScriptVM 构造 / 析构
     - DoFile / DoDirectory
     - InitScript / UpdateScript / DestroyScript
-    - script::ExportAll (以及内部 ExportLog, ExportTimer 等)
+    - MainThreadScriptVM::ExportRuntimeBindings (以及内部 ExportLog, ExportTimer 等)
 
 7.4 定时器 (engine/core/timer/):
     - TimerManager::update() 内部遍历

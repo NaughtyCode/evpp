@@ -7,9 +7,12 @@ The engine exports the Glaze-backed JSON binding as two global Lua modules:
 
 The binding is registered in all engine script VMs that run project Lua code:
 
-- Main script VM through `script::ExportAll`.
+- Main script VM through `MainThreadScriptVM::ExportRuntimeBindings`.
 - Data-service thread VM in `DBThread::EventLoop`.
 - Physics script VM in `PhysicsSystem::Initialize`.
+
+For the complete main-thread runtime binding surface, see
+[Lua Runtime API](lua-runtime-api.md).
 
 ## Data Model
 
